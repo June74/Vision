@@ -20,6 +20,7 @@ The secretary should turn commitments into an understandable, reversible loop:
 
 - Serve school, work, and personal life through one shared planning engine.
 - Keep the source, domain, and privacy level attached to every event, task, note, and recommendation.
+- Share planning facts across domains by default while keeping detailed content separated unless the user explicitly links it.
 - Treat permissions and hard calendar constraints as absolute; recommendation scores cannot override them.
 - Start with approval-based actions and introduce narrow, reversible autonomy later.
 - Explain why each recommendation was made and what trade-off it creates.
@@ -85,7 +86,6 @@ Agree on exactly who the first version serves, what it must do, what it must not
 
 ### Decisions to make
 
-- Domain and cross-domain privacy rules
 - Priority and conflict-resolution behavior
 - Recommendation categories and ranking principles
 - Alert channels and notification limits
@@ -102,7 +102,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - [x] Define the long-term calendar target: provider-created calendars plus Vision-native calendars.
 - [x] Define the initial non-calendar capture sources: chat, pasted text, and document or image uploads.
 - [ ] Define the canonical product objects: event, task, note, commitment, recommendation, preference, policy, and audit event.
-- [ ] Define cross-domain visibility and privacy behavior.
+- [x] Define cross-domain visibility and privacy behavior: shared planning facts, separated detailed content, and explicit reversible links.
 - [ ] Define priority and conflict-resolution rules.
 - [ ] Define recommendation categories, evidence, feedback, and ranking contract.
 - [ ] Define autonomy levels and always-confirm actions.
@@ -111,6 +111,15 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - [ ] Define measurable MVP acceptance criteria.
 - [ ] Record first-release non-goals.
 - [ ] Review and approve the completed product contract.
+
+### Cross-domain privacy model
+
+- Use one shared planner for school, work, and personal scheduling.
+- Share availability, deadlines, priority, duration, flexibility, location or travel needs, and protected-time status with the planner by default.
+- Keep note bodies, attachments, event descriptions, meeting details, and other sensitive content inside their original domain by default.
+- Allow the user to create explicit, inspectable, and reversible links when detailed information should cross domains.
+- Reveal only the minimum necessary information in external actions; for example, say the user is unavailable without exposing a private event title.
+- Preserve source, domain, privacy level, and permission provenance on every derived item.
 
 ## Preliminary MVP boundary
 
@@ -121,6 +130,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - Google Calendar as the first provider, with the exact calendars selected during onboarding
 - Chat and pasted-text capture for tasks, commitments, and notes
 - Document and image uploads
+- Cross-domain planning with domain-separated detailed content
 - Proposed calendar changes with approval and undo
 - Conflict and protected-time detection
 - Morning and evening briefings
@@ -163,6 +173,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 
 | Date | Decision | Reason | Status |
 |---|---|---|---|
+| 2026-07-21 | Use one planner with shared planning facts, separated detailed memories, and explicit reversible cross-domain links. | Vision can coordinate the user's whole life without freely mixing or externally exposing sensitive school, work, and personal content. | Agreed |
 | 2026-07-21 | Version 1 captures chat, pasted text, and document or image uploads; email and voice arrive later. | This supports useful note and commitment capture without making the first release depend on inbox access, audio processing, or background listening. | Agreed |
 | 2026-07-21 | Long-term calendar coverage includes provider-created calendars and calendars created directly inside Vision. | Both sources are necessary for Vision to become the user's complete scheduling home rather than only an external-calendar viewer. | Agreed |
 | 2026-07-21 | Use Google Calendar as the first provider; expand to broader calendar coverage later. | One provider keeps the first integration testable while preserving comprehensive calendar support as a later goal. | Agreed |
