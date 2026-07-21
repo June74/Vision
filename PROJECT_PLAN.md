@@ -31,6 +31,7 @@ The secretary should turn commitments into an understandable, reversible loop:
 - Require confirmation every time for connected-calendar writes, external sharing or communication, deletion, permission or policy changes, and other high-impact actions in version 1.
 - Treat safety, privacy, permission, and hard-constraint metrics as non-compensating release gates; strong productivity results cannot offset a failed gate.
 - Measure version 1 with a balanced scorecard covering accuracy, reliability, usefulness, time saved, and notification burden after the gates pass.
+- Lock the first private-pilot scope; deferred capabilities stay on the roadmap but cannot delay the pilot unless they pass the documented scope-exception gate.
 - Explain why each recommendation was made and what trade-off it creates.
 - Keep an audit history and an undo path for every calendar-changing action.
 - Use AI for interpretation, extraction, summarization, and explanations—not as the final authority for permissions or calendar writes.
@@ -94,10 +95,13 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - It includes a recommendation system for next actions, preparation, schedule repair, and protected time.
 - It uses risk-tiered, per-category autonomy: automatic read-only analysis, optional guarded Vision-only organization, and always-confirm high-impact actions.
 - Version 1 succeeds only if hard safety gates pass and the private pilot meets balanced quality and user-value targets.
+- Version 1 uses a locked private-pilot boundary; attractive future features do not enter merely because they are useful or technically convenient.
 
 ### Decisions to make
 
-- Explicit non-goals for the first release
+- Canonical product object model
+- Representative acceptance scenarios
+- Final product contract approval
 
 ### Phase A completion checklist
 
@@ -117,7 +121,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - [x] Define notification rate limits and repeated-alert escalation: one initial alert plus at most one escalation per unchanged episode, with deduplication and per-item overrides.
 - [ ] Write representative school, work, personal, and cross-domain scenarios.
 - [x] Define measurable MVP acceptance criteria: non-compensating safety gates plus accuracy, reliability, usefulness, time-saved, and notification-burden targets.
-- [ ] Record first-release non-goals.
+- [x] Record and lock first-release non-goals, with a narrow documented exception gate.
 - [ ] Review and approve the completed product contract.
 
 ### Cross-domain privacy model
@@ -180,7 +184,9 @@ Feedback distinguishes accept, edit, dismiss, snooze, undo, and eventual complet
 - Explainable secretary-focused recommendations for scheduling, next tasks, preparation, follow-ups, protected time, and deadline risk
 - In-app and browser or push alerts with urgency levels, configurable quiet hours, and morning and evening digests
 
-### Defer
+### Locked first-release non-goals
+
+The following capabilities are outside the Version 1 private-pilot release. They remain legitimate roadmap items, but they are not pilot prerequisites and cannot delay the core secretary loop:
 
 - Autonomous communication or negotiation with attendees
 - Meeting recording and transcription
@@ -193,6 +199,19 @@ Feedback distinguishes accept, edit, dismiss, snooze, undo, and eventual complet
 - Unrestricted background autonomy
 - A recommendation model trained across users
 - Broad discovery recommendations for activities, venues, products, courses, entertainment, or purchases
+
+### Scope-change gate
+
+New feature requests default to the post-pilot backlog. A first-release exception is eligible only when the smallest possible addition is demonstrably required to:
+
+- Satisfy an already-approved core Version 1 requirement that otherwise cannot work
+- Correct a safety, security, privacy, authorization, or data-loss blocker
+- Meet a mandatory Google Calendar or platform requirement for the approved integration
+- Execute or measure the agreed MVP success scorecard
+
+An eligible exception must be approved and added to the decision log before implementation begins. Its record must identify the blocking requirement, the smallest proposed scope, schedule impact, new risks, required tests, and which non-goal is being partially superseded. Convenience, competitive parity, visual polish, anticipated future demand, or the fact that a feature is appealing does not qualify by itself.
+
+No exception may weaken the privacy model, hard constraints, always-confirm actions, alert protections, audit requirements, or success gates. After the private pilot passes its scorecard, reassess the deferred list as a new release-planning decision rather than silently extending Version 1.
 
 ### Future distribution target
 
@@ -333,6 +352,7 @@ The private pilot qualifies as successful only when every hard gate passes, ever
 
 | Date | Decision | Reason | Status |
 |---|---|---|---|
+| 2026-07-21 | Lock the Version 1 private-pilot non-goals; deferred features cannot delay the pilot unless a documented exception is required by an approved core requirement, a safety or privacy blocker, a provider mandate, or the evaluation plan. | A firm boundary protects the first complete secretary loop from scope creep while preserving future mobile, desktop, provider, capture, communication, and recommendation expansion. | Agreed |
 | 2026-07-21 | Measure version 1 with a balanced scorecard: non-compensating safety gates, core accuracy and reliability targets, and private-pilot usefulness, time-saved, trust, and notification-burden targets. | A secretary is successful only when it is both trustworthy and materially useful; averaging these dimensions would allow a severe safety failure to hide behind convenience gains. | Agreed |
 | 2026-07-21 | Use risk-tiered, per-category autonomy: automatic read-only analysis, opt-in reversible Vision-only organization, and confirmation every time for connected-calendar, external, destructive, permission-changing, or other high-impact actions in version 1. | This lets Vision remove private administrative work without allowing model confidence or a broad permission switch to authorize consequential actions. | Agreed |
 | 2026-07-21 | Use balanced notification repetition: one initial alert and at most one deadline-proximity escalation per unchanged episode, with deduplication and per-item overrides. | This provides a second chance to prevent a missed obligation without creating an acknowledgment loop or notification fatigue. | Agreed |
