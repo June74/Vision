@@ -23,6 +23,7 @@ The secretary should turn commitments into an understandable, reversible loop:
 - Share planning facts across domains by default while keeping detailed content separated unless the user explicitly links it.
 - Treat permissions and hard calendar constraints as absolute; recommendation scores cannot override them.
 - Let quiet-hours alerts through only for user-marked critical items or verified imminent risk to a fixed commitment or hard deadline.
+- Limit each unchanged alert episode to one initial interruption and at most one deadline-proximity escalation; merge related signals and allow per-item overrides.
 - Rank only feasible flexible items contextually; do not give school, work, or personal items a permanent default advantage.
 - Keep version 1 recommendations secretary-focused rather than mixing in broad commercial or entertainment discovery.
 - Start with approval-based actions and introduce narrow, reversible autonomy later.
@@ -79,6 +80,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - Long-term calendar coverage includes calendars created in supported providers and calendars created directly inside Vision.
 - Version 1 accepts chat messages, pasted text, and document or image uploads; email and voice capture follow later.
 - Version 1 delivers in-app and browser or push alerts with urgency levels, configurable quiet hours, and morning and evening digests; SMS and email delivery follow later.
+- Unresolved alerts use balanced repetition: one initial alert, at most one automatic escalation near the deadline, deduplication, and per-item reminder controls.
 - The secretary covers school, work, and personal life.
 - The core MVP collects calendar events, tasks, and notes.
 - Users can request scheduling changes conversationally.
@@ -90,7 +92,6 @@ Agree on exactly who the first version serves, what it must do, what it must not
 
 ### Decisions to make
 
-- Notification rate limits and repeated-alert escalation
 - Autonomy boundaries by action type
 - MVP success measures
 - Explicit non-goals for the first release
@@ -110,7 +111,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - [ ] Define autonomy levels and always-confirm actions.
 - [x] Define version 1 alert channels and briefing cadence: in-app plus browser or push alerts, with morning and evening digests.
 - [x] Define quiet-hours exceptions: user-marked critical items or verified imminent risk to a fixed commitment or hard deadline.
-- [ ] Define notification rate limits and repeated-alert escalation.
+- [x] Define notification rate limits and repeated-alert escalation: one initial alert plus at most one escalation per unchanged episode, with deduplication and per-item overrides.
 - [ ] Write representative school, work, personal, and cross-domain scenarios.
 - [ ] Define measurable MVP acceptance criteria.
 - [ ] Record first-release non-goals.
@@ -215,7 +216,7 @@ Feedback distinguishes accept, edit, dismiss, snooze, undo, and eventual complet
 - Deliver morning and evening digests for non-immediate planning information.
 - Apply the cross-domain privacy model to notification previews and reveal only necessary details.
 - Add SMS and email delivery after the initial notification system is reliable.
-- Define rate limits and repeated-alert escalation separately before completing the alert policy.
+- Limit automatic repetition to one initial alert and at most one deadline-proximity escalation for each unchanged alert episode.
 
 ### Quiet-hours exception contract
 
@@ -226,10 +227,23 @@ Feedback distinguishes accept, edit, dismiss, snooze, undo, and eventual complet
 - Let the user disable all quiet-hours overrides.
 - Log why each interruption qualified and retain only the minimum details needed in its notification preview.
 
+### Notification repetition and escalation contract
+
+- Treat all notifications about the same underlying event, task, commitment, conflict, or unchanged risk as one alert episode.
+- Permit at most one initial interruptive alert and one automatic escalation for that episode. A delivery mirrored across in-app and browser or push channels counts as one interruption, not two.
+- Send the escalation only if the item remains unresolved and enters a deterministic, user-configurable deadline or commitment risk window. Lack of acknowledgment alone is not enough.
+- Merge related signals into the existing alert instead of creating separate interruptions; update its explanation when the supporting facts change.
+- Stop automatic repetition when the user completes, dismisses, edits, or acknowledges the item. A snooze or custom reminder replaces the next automatic timing with the user's chosen timing.
+- Start a new episode only after a material change such as a new deadline, changed commitment time, newly detected conflict, or meaningfully higher verified risk, and record which change reopened it.
+- Allow the user to override repetition for an individual item, including disabling further alerts or setting custom reminders, without changing the global default.
+- Keep routine unresolved information in the next digest after the automatic escalation is used; never repeat indefinitely merely because an alert remains unacknowledged.
+- Apply quiet-hours eligibility independently to both the initial alert and escalation; escalation status does not itself authorize a quiet-hours interruption.
+
 ## Decision log
 
 | Date | Decision | Reason | Status |
 |---|---|---|---|
+| 2026-07-21 | Use balanced notification repetition: one initial alert and at most one deadline-proximity escalation per unchanged episode, with deduplication and per-item overrides. | This provides a second chance to prevent a missed obligation without creating an acknowledgment loop or notification fatigue. | Agreed |
 | 2026-07-21 | Allow quiet-hours interruptions only for user-marked critical items or verified imminent risk to a fixed commitment or hard deadline. | This protects rest while still surfacing the narrow set of alerts whose delay could cause a concrete missed obligation. | Agreed |
 | 2026-07-21 | Use in-app and browser or push alerts with urgency levels, quiet hours, and morning and evening digests in version 1; add SMS and email later. | This provides timely web-first alerts without making the initial release depend on phone-number or email-delivery infrastructure. | Agreed |
 | 2026-07-21 | Limit version 1 to secretary-focused recommendations. | Scheduling, next tasks, preparation, follow-ups, conflict repair, protected time, and risk warnings directly support the core secretary loop without adding an unrelated discovery product. | Agreed |
