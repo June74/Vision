@@ -72,6 +72,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - Downloadable mobile and desktop clients are a later distribution target.
 - Future desktop clients support optional launch at login and on-cue access; mobile clients use on-cue access and notifications.
 - Google Calendar is the first calendar provider for version 1.
+- Long-term calendar coverage includes calendars created in supported providers and calendars created directly inside Vision.
 - The secretary covers school, work, and personal life.
 - The core MVP collects calendar events, tasks, and notes.
 - Users can request scheduling changes conversationally.
@@ -84,7 +85,6 @@ Agree on exactly who the first version serves, what it must do, what it must not
 ### Decisions to make
 
 - Initial non-calendar capture sources
-- Meaning and scope of personally made calendars for later expansion
 - Domain and cross-domain privacy rules
 - Priority and conflict-resolution behavior
 - Recommendation categories and ranking principles
@@ -99,6 +99,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - [x] Select the primary interaction surface: web app with chat and a Today dashboard.
 - [x] Define future client activation: optional desktop auto-start plus on-cue access; mobile on-cue access and notifications.
 - [x] Select the first calendar provider: Google Calendar.
+- [x] Define the long-term calendar target: provider-created calendars plus Vision-native calendars.
 - [ ] Define the initial non-calendar capture sources.
 - [ ] Define the canonical product objects: event, task, note, commitment, recommendation, preference, policy, and audit event.
 - [ ] Define cross-domain visibility and privacy behavior.
@@ -132,7 +133,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - Meeting recording and transcription
 - Purchases, reservations, and travel booking
 - Team or shared-secretary workflows
-- Multiple calendar providers and comprehensive user-created calendar support
+- Multiple calendar providers and Vision-native user-created calendars
 - Native mobile and desktop application packaging
 - Unrestricted background autonomy
 - A recommendation model trained across users
@@ -147,12 +148,14 @@ Agree on exactly who the first version serves, what it must do, what it must not
 ### Future calendar expansion target
 
 - Expand beyond Google Calendar after the first provider integration is validated.
-- Include the user's personally made calendars; clarify whether this means provider-created calendars, calendars created inside Vision, or both.
+- Include every calendar the user selects from each supported external provider, including calendars the user created there.
+- Allow the user to create and manage calendars directly inside Vision.
 
 ## Decision log
 
 | Date | Decision | Reason | Status |
 |---|---|---|---|
+| 2026-07-21 | Long-term calendar coverage includes provider-created calendars and calendars created directly inside Vision. | Both sources are necessary for Vision to become the user's complete scheduling home rather than only an external-calendar viewer. | Agreed |
 | 2026-07-21 | Use Google Calendar as the first provider; expand to broader calendar coverage later. | One provider keeps the first integration testable while preserving comprehensive calendar support as a later goal. | Agreed |
 | 2026-07-21 | Future clients combine optional desktop launch at login with on-cue access; mobile uses on-cue access and notifications. | This keeps the secretary readily available without requiring continuous background activity on every device. | Agreed |
 | 2026-07-21 | Start version 1 as a web app with chat and a Today dashboard; add downloadable mobile and desktop clients later. | A web foundation reaches the first usable version sooner while keeping the core experience portable to future clients. | Agreed |
