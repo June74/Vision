@@ -22,6 +22,7 @@ The secretary should turn commitments into an understandable, reversible loop:
 - Keep the source, domain, and privacy level attached to every event, task, note, and recommendation.
 - Share planning facts across domains by default while keeping detailed content separated unless the user explicitly links it.
 - Treat permissions and hard calendar constraints as absolute; recommendation scores cannot override them.
+- Rank only feasible flexible items contextually; do not give school, work, or personal items a permanent default advantage.
 - Start with approval-based actions and introduce narrow, reversible autonomy later.
 - Explain why each recommendation was made and what trade-off it creates.
 - Keep an audit history and an undo path for every calendar-changing action.
@@ -86,7 +87,6 @@ Agree on exactly who the first version serves, what it must do, what it must not
 
 ### Decisions to make
 
-- Priority and conflict-resolution behavior
 - Recommendation categories and ranking principles
 - Alert channels and notification limits
 - Autonomy boundaries by action type
@@ -103,7 +103,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - [x] Define the initial non-calendar capture sources: chat, pasted text, and document or image uploads.
 - [ ] Define the canonical product objects: event, task, note, commitment, recommendation, preference, policy, and audit event.
 - [x] Define cross-domain visibility and privacy behavior: shared planning facts, separated detailed content, and explicit reversible links.
-- [ ] Define priority and conflict-resolution rules.
+- [x] Define priority and conflict-resolution rules: hard constraints first, then context-aware proposals for flexible items.
 - [ ] Define recommendation categories, evidence, feedback, and ranking contract.
 - [ ] Define autonomy levels and always-confirm actions.
 - [ ] Define alerts, briefings, and notification limits.
@@ -121,6 +121,15 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - Reveal only the minimum necessary information in external actions; for example, say the user is unavailable without exposing a private event title.
 - Preserve source, domain, privacy level, and permission provenance on every derived item.
 
+### Priority and conflict-resolution model
+
+- Reject any option that violates permissions, privacy rules, immovable events, travel feasibility, hard deadlines, or time the user marked non-negotiable.
+- Rank only the remaining flexible options using user-stated importance, urgency and deadline risk, protected-time impact, preparation value, schedule fit, and disruption to accepted plans.
+- Do not impose a fixed school-over-work-over-personal hierarchy.
+- Present the recommended option, the reasons it ranked highest, the trade-off it creates, and at least one feasible alternative when available.
+- Ask the user before resolving a materially uncertain or high-impact trade-off.
+- Allow later feedback to tune preference-sensitive ranking without weakening hard constraints.
+
 ## Preliminary MVP boundary
 
 ### Include
@@ -133,6 +142,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - Cross-domain planning with domain-separated detailed content
 - Proposed calendar changes with approval and undo
 - Conflict and protected-time detection
+- Context-aware conflict proposals with explanations and feasible alternatives
 - Morning and evening briefings
 - Meeting decision and follow-up extraction
 - Explainable schedule and next-action recommendations
@@ -173,6 +183,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 
 | Date | Decision | Reason | Status |
 |---|---|---|---|
+| 2026-07-21 | Resolve flexible-item conflicts contextually rather than through a fixed domain hierarchy. | Hard constraints stay absolute, while urgency, importance, deadline risk, protected time, schedule fit, and disruption determine explained proposals that the user can approve. | Agreed |
 | 2026-07-21 | Use one planner with shared planning facts, separated detailed memories, and explicit reversible cross-domain links. | Vision can coordinate the user's whole life without freely mixing or externally exposing sensitive school, work, and personal content. | Agreed |
 | 2026-07-21 | Version 1 captures chat, pasted text, and document or image uploads; email and voice arrive later. | This supports useful note and commitment capture without making the first release depend on inbox access, audio processing, or background listening. | Agreed |
 | 2026-07-21 | Long-term calendar coverage includes provider-created calendars and calendars created directly inside Vision. | Both sources are necessary for Vision to become the user's complete scheduling home rather than only an external-calendar viewer. | Agreed |
