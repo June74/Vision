@@ -68,6 +68,8 @@ Agree on exactly who the first version serves, what it must do, what it must not
 ### Already agreed
 
 - Version 1 is a private, single-user assistant for June74, designed so it can expand later.
+- Version 1 starts as a web app with conversational chat and a Today dashboard.
+- Downloadable mobile and desktop clients are a later distribution target.
 - The secretary covers school, work, and personal life.
 - The core MVP collects calendar events, tasks, and notes.
 - Users can request scheduling changes conversationally.
@@ -80,7 +82,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 ### Decisions to make
 
 - First user and release audience
-- Main interaction surface
+- Future mobile and desktop activation behavior
 - First calendar provider and capture sources
 - Domain and cross-domain privacy rules
 - Priority and conflict-resolution behavior
@@ -93,7 +95,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 ### Phase A completion checklist
 
 - [x] Select the first user and release audience: June74 only for version 1.
-- [ ] Select the primary interaction surface.
+- [x] Select the primary interaction surface: web app with chat and a Today dashboard.
 - [ ] Define the first provider and supported input sources.
 - [ ] Define the canonical product objects: event, task, note, commitment, recommendation, preference, policy, and audit event.
 - [ ] Define cross-domain visibility and privacy behavior.
@@ -111,6 +113,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 ### Include
 
 - One private user: June74
+- Web app with conversational chat and a Today dashboard
 - One calendar provider with separate school, work, and personal calendars
 - Text capture for tasks, commitments, and pasted notes
 - Proposed calendar changes with approval and undo
@@ -127,13 +130,21 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - Purchases, reservations, and travel booking
 - Team or shared-secretary workflows
 - Multiple calendar providers
+- Native mobile and desktop application packaging
 - Unrestricted background autonomy
 - A recommendation model trained across users
+
+### Future distribution target
+
+- Provide downloadable mobile and desktop clients after the web MVP is validated.
+- Reuse the same secretary backend, policies, and synchronized data across every client.
+- Define whether clients launch automatically, stay in the background, or activate only on a user cue before selecting application technology.
 
 ## Decision log
 
 | Date | Decision | Reason | Status |
 |---|---|---|---|
+| 2026-07-21 | Start version 1 as a web app with chat and a Today dashboard; add downloadable mobile and desktop clients later. | A web foundation reaches the first usable version sooner while keeping the core experience portable to future clients. | Agreed |
 | 2026-07-21 | Version 1 serves June74 only, while preserving a path to future expansion. | A private single-user release reduces authentication, tenancy, privacy, and onboarding scope while the core secretary loop is validated. | Agreed |
 | 2026-07-21 | Serve school, work, and personal life in one product. | The secretary should coordinate the user's whole schedule. | Agreed |
 | 2026-07-21 | Use autonomy levels. | Different actions carry different risk and should not share one permission switch. | Agreed |
