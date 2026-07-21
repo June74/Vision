@@ -19,6 +19,7 @@ The secretary should turn commitments into an understandable, reversible loop:
 ## Agreed product principles
 
 - Serve school, work, and personal life through one shared planning engine.
+- Represent the secretary's logical state as a bounded, typed knowledge graph whose nodes and relationships retain provenance and privacy controls.
 - Keep the source, domain, and privacy level attached to every event, task, note, and recommendation.
 - Share planning facts across domains by default while keeping detailed content separated unless the user explicitly links it.
 - Treat permissions and hard calendar constraints as absolute; recommendation scores cannot override them.
@@ -93,13 +94,13 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - It produces morning and evening briefings.
 - It extracts and tracks meeting decisions and follow-ups.
 - It includes a recommendation system for next actions, preparation, schedule repair, and protected time.
+- Its canonical product model is a typed knowledge graph rather than a collection of unrelated records.
 - It uses risk-tiered, per-category autonomy: automatic read-only analysis, optional guarded Vision-only organization, and always-confirm high-impact actions.
 - Version 1 succeeds only if hard safety gates pass and the private pilot meets balanced quality and user-value targets.
 - Version 1 uses a locked private-pilot boundary; attractive future features do not enter merely because they are useful or technically convenient.
 
 ### Decisions to make
 
-- Canonical product object model
 - Representative acceptance scenarios
 - Final product contract approval
 
@@ -111,7 +112,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - [x] Select the first calendar provider: Google Calendar.
 - [x] Define the long-term calendar target: provider-created calendars plus Vision-native calendars.
 - [x] Define the initial non-calendar capture sources: chat, pasted text, and document or image uploads.
-- [ ] Define the canonical product objects: event, task, note, commitment, recommendation, preference, policy, and audit event.
+- [x] Define the canonical product objects as typed knowledge-graph nodes with governed, provenance-bearing relationships.
 - [x] Define cross-domain visibility and privacy behavior: shared planning facts, separated detailed content, and explicit reversible links.
 - [x] Define priority and conflict-resolution rules: hard constraints first, then context-aware proposals for flexible items.
 - [x] Define recommendation categories, evidence, feedback, and ranking contract for the secretary-focused version 1 scope.
@@ -132,6 +133,67 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - Allow the user to create explicit, inspectable, and reversible links when detailed information should cross domains.
 - Reveal only the minimum necessary information in external actions; for example, say the user is unavailable without exposing a private event title.
 - Preserve source, domain, privacy level, and permission provenance on every derived item.
+
+### Canonical knowledge-graph model
+
+Vision's canonical product model is a bounded, typed knowledge graph. This is a logical contract, not a commitment to a particular database engine. Phase B will select the physical persistence approach only after comparing a native graph database, relational node-and-edge tables, and a hybrid projection against this contract.
+
+#### Version 1 node types
+
+| Node | Meaning |
+|---|---|
+| `Event` | A time-bound occurrence or calendar block, including a source-backed Google Calendar event or a proposed draft |
+| `Task` | An actionable unit of work with status, effort, deadline, and scheduling flexibility |
+| `Note` | User-authored or captured content whose detailed body remains inside its privacy domain |
+| `Commitment` | A first-class obligation or promise, distinct from the note that revealed it, the task that fulfills it, and the event that reserves time for it |
+| `Recommendation` | A time-sensitive, explainable proposal linked to its evidence, alternatives, trade-off, confidence, and autonomy requirement |
+| `Preference` | A user-stated or learned soft tendency that may influence ranking but cannot override a policy or hard constraint |
+| `Policy` | A user-controlled privacy, permission, priority, alert, quiet-hours, or autonomy rule evaluated deterministically |
+| `AuditEvent` | An immutable record of a policy decision, approval, attempted or completed change, result, and undo or compensating action |
+| `Person` | The user or another person referenced by a permitted source, without implying communication authority |
+| `Calendar` | A selected provider calendar and its ownership, access, synchronization, and display context |
+| `SourceArtifact` | Raw evidence such as a chat capture, pasted passage, uploaded document or image, or provider payload |
+| `AlertEpisode` | The deduplicated notification lifecycle for one underlying item or unchanged risk state |
+
+Every node has a common envelope containing a stable Vision ID, type, owner, source system and source ID when applicable, domain, privacy level, provenance, lifecycle status, created and updated timestamps, version, and validity interval. Model confidence is stored only for inferred or derived facts; it is evidence quality, never permission.
+
+#### Version 1 relationship families
+
+Relationships are directed, typed, and schema-validated. Version 1 uses a closed registry rather than allowing arbitrary relationship names in planning or policy paths.
+
+- **Evidence:** `DERIVED_FROM`, `SUPPORTED_BY`, `MENTIONS`
+- **Planning:** `FULFILLS`, `SCHEDULED_AS`, `DEPENDS_ON`, `PREPARES_FOR`, `FOLLOWS_UP`, `CONFLICTS_WITH`, `SUPERSEDES`
+- **Recommendation:** `PROPOSES`, `OFFERS_ALTERNATIVE_TO`, `AFFECTS`
+- **Governance:** `GOVERNED_BY`, `INFORMED_BY_PREFERENCE`, `APPROVED_BY`, `RECORDED_BY`, `UNDONE_BY`
+- **Context:** `PARTICIPATES_IN`, `BELONGS_TO_CALENDAR`, `HAS_ATTACHMENT`, `ABOUT`, `POSSIBLY_SAME_AS`
+
+Each relationship records its own stable ID, allowed source and destination types, origin (`provider`, `user`, `system`, or `model`), source evidence, confidence when inferred, lifecycle state (`proposed`, `confirmed`, `rejected`, or `retracted`), privacy level, creation time, validity interval, and version.
+
+```mermaid
+flowchart LR
+    N["Note"] -->|"DERIVED_FROM"| S["SourceArtifact"]
+    C["Commitment"] -->|"SUPPORTED_BY"| N
+    T["Task"] -->|"FULFILLS"| C
+    T -->|"SCHEDULED_AS"| E["Event"]
+    R["Recommendation"] -->|"PROPOSES"| T
+    R -->|"SUPPORTED_BY"| C
+    R -->|"GOVERNED_BY"| P["Policy"]
+    R -->|"INFORMED_BY_PREFERENCE"| F["Preference"]
+    R -->|"RECORDED_BY"| A["AuditEvent"]
+    L["AlertEpisode"] -->|"ABOUT"| C
+```
+
+#### Graph safety and lifecycle rules
+
+- A relationship can add context but cannot transfer access, lower a node's privacy level, or grant authority. Every traversal is filtered per node and edge, and the most restrictive applicable privacy rule wins.
+- Cross-domain edges may share the already-approved planning facts by default. An edge that exposes detailed content across domains must be explicit, inspectable, reversible, and user-approved.
+- Model-inferred nodes and edges begin as `proposed`. They may support an explained recommendation, but they cannot create a hard constraint, permission, attendee identity, external disclosure, or connected-system write without the confirmation required by the existing policies.
+- Provider-backed fields retain the provider record as their source of truth. Vision stores local annotations and relationships separately and revalidates the source version before any confirmed write.
+- Derived nodes and edges list their dependencies. A material source change invalidates, expires, or recomputes dependent recommendations, risks, and alert episodes.
+- Nodes are merged automatically only when a deterministic source identity proves they are the same. Otherwise Vision keeps both and may create a proposed `POSSIBLY_SAME_AS` relationship for user review; inferred similarity never destroys a record.
+- Retraction or deletion tombstones the affected graph element and closes active relationships without cascading into source evidence or immutable audit history.
+- Policy-sensitive traversals use only registered node types, registered relationships, allowed direction, and bounded paths. Generic or unknown relationships cannot participate in permissions, ranking, alerts, or automatic actions.
+- Every graph mutation passes the same privacy and autonomy gate as any other action, and guarded mutations retain an audit and undo path.
 
 ### Priority and conflict-resolution model
 
@@ -174,6 +236,7 @@ Feedback distinguishes accept, edit, dismiss, snooze, undo, and eventual complet
 - Google Calendar as the first provider, with the exact calendars selected during onboarding
 - Chat and pasted-text capture for tasks, commitments, and notes
 - Document and image uploads
+- A bounded typed knowledge graph connecting events, tasks, notes, commitments, recommendations, preferences, policies, audit records, sources, and alert episodes
 - Cross-domain planning with domain-separated detailed content
 - Risk-tiered autonomy with category-level opt-in for private, reversible Vision-only organization
 - Proposed calendar changes with approval and undo
@@ -352,6 +415,7 @@ The private pilot qualifies as successful only when every hard gate passes, ever
 
 | Date | Decision | Reason | Status |
 |---|---|---|---|
+| 2026-07-21 | Use a bounded, typed knowledge graph as Vision's canonical logical product model; choose the physical storage engine in Phase B. | First-class nodes and governed relationships can represent commitments, evidence, schedules, recommendations, policies, and audit history without collapsing their distinct meanings, while a closed schema and privacy-filtered traversal contain graph complexity. | Agreed |
 | 2026-07-21 | Lock the Version 1 private-pilot non-goals; deferred features cannot delay the pilot unless a documented exception is required by an approved core requirement, a safety or privacy blocker, a provider mandate, or the evaluation plan. | A firm boundary protects the first complete secretary loop from scope creep while preserving future mobile, desktop, provider, capture, communication, and recommendation expansion. | Agreed |
 | 2026-07-21 | Measure version 1 with a balanced scorecard: non-compensating safety gates, core accuracy and reliability targets, and private-pilot usefulness, time-saved, trust, and notification-burden targets. | A secretary is successful only when it is both trustworthy and materially useful; averaging these dimensions would allow a severe safety failure to hide behind convenience gains. | Agreed |
 | 2026-07-21 | Use risk-tiered, per-category autonomy: automatic read-only analysis, opt-in reversible Vision-only organization, and confirmation every time for connected-calendar, external, destructive, permission-changing, or other high-impact actions in version 1. | This lets Vision remove private administrative work without allowing model confidence or a broad permission switch to authorize consequential actions. | Agreed |
