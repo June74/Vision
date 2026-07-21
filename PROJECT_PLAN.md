@@ -70,6 +70,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - Version 1 is a private, single-user assistant for June74, designed so it can expand later.
 - Version 1 starts as a web app with conversational chat and a Today dashboard.
 - Downloadable mobile and desktop clients are a later distribution target.
+- Future desktop clients support optional launch at login and on-cue access; mobile clients use on-cue access and notifications.
 - The secretary covers school, work, and personal life.
 - The core MVP collects calendar events, tasks, and notes.
 - Users can request scheduling changes conversationally.
@@ -82,7 +83,6 @@ Agree on exactly who the first version serves, what it must do, what it must not
 ### Decisions to make
 
 - First user and release audience
-- Future mobile and desktop activation behavior
 - First calendar provider and capture sources
 - Domain and cross-domain privacy rules
 - Priority and conflict-resolution behavior
@@ -96,6 +96,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 
 - [x] Select the first user and release audience: June74 only for version 1.
 - [x] Select the primary interaction surface: web app with chat and a Today dashboard.
+- [x] Define future client activation: optional desktop auto-start plus on-cue access; mobile on-cue access and notifications.
 - [ ] Define the first provider and supported input sources.
 - [ ] Define the canonical product objects: event, task, note, commitment, recommendation, preference, policy, and audit event.
 - [ ] Define cross-domain visibility and privacy behavior.
@@ -138,12 +139,14 @@ Agree on exactly who the first version serves, what it must do, what it must not
 
 - Provide downloadable mobile and desktop clients after the web MVP is validated.
 - Reuse the same secretary backend, policies, and synchronized data across every client.
-- Define whether clients launch automatically, stay in the background, or activate only on a user cue before selecting application technology.
+- Let desktop users optionally launch the client at login while retaining voice, hotkey, and icon cues.
+- Use on-cue access and notifications on mobile rather than requiring continuous background operation.
 
 ## Decision log
 
 | Date | Decision | Reason | Status |
 |---|---|---|---|
+| 2026-07-21 | Future clients combine optional desktop launch at login with on-cue access; mobile uses on-cue access and notifications. | This keeps the secretary readily available without requiring continuous background activity on every device. | Agreed |
 | 2026-07-21 | Start version 1 as a web app with chat and a Today dashboard; add downloadable mobile and desktop clients later. | A web foundation reaches the first usable version sooner while keeping the core experience portable to future clients. | Agreed |
 | 2026-07-21 | Version 1 serves June74 only, while preserving a path to future expansion. | A private single-user release reduces authentication, tenancy, privacy, and onboarding scope while the core secretary loop is validated. | Agreed |
 | 2026-07-21 | Serve school, work, and personal life in one product. | The secretary should coordinate the user's whole schedule. | Agreed |
