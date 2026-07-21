@@ -22,6 +22,7 @@ The secretary should turn commitments into an understandable, reversible loop:
 - Keep the source, domain, and privacy level attached to every event, task, note, and recommendation.
 - Share planning facts across domains by default while keeping detailed content separated unless the user explicitly links it.
 - Treat permissions and hard calendar constraints as absolute; recommendation scores cannot override them.
+- Let quiet-hours alerts through only for user-marked critical items or verified imminent risk to a fixed commitment or hard deadline.
 - Rank only feasible flexible items contextually; do not give school, work, or personal items a permanent default advantage.
 - Keep version 1 recommendations secretary-focused rather than mixing in broad commercial or entertainment discovery.
 - Start with approval-based actions and introduce narrow, reversible autonomy later.
@@ -89,7 +90,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 
 ### Decisions to make
 
-- Quiet-hours override policy and notification rate limits
+- Notification rate limits and repeated-alert escalation
 - Autonomy boundaries by action type
 - MVP success measures
 - Explicit non-goals for the first release
@@ -108,7 +109,8 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - [x] Define recommendation categories, evidence, feedback, and ranking contract for the secretary-focused version 1 scope.
 - [ ] Define autonomy levels and always-confirm actions.
 - [x] Define version 1 alert channels and briefing cadence: in-app plus browser or push alerts, with morning and evening digests.
-- [ ] Define urgency criteria, quiet-hours exceptions, and notification rate limits.
+- [x] Define quiet-hours exceptions: user-marked critical items or verified imminent risk to a fixed commitment or hard deadline.
+- [ ] Define notification rate limits and repeated-alert escalation.
 - [ ] Write representative school, work, personal, and cross-domain scenarios.
 - [ ] Define measurable MVP acceptance criteria.
 - [ ] Record first-release non-goals.
@@ -213,12 +215,22 @@ Feedback distinguishes accept, edit, dismiss, snooze, undo, and eventual complet
 - Deliver morning and evening digests for non-immediate planning information.
 - Apply the cross-domain privacy model to notification previews and reveal only necessary details.
 - Add SMS and email delivery after the initial notification system is reliable.
-- Define quiet-hours overrides and rate limits separately before completing the alert policy.
+- Define rate limits and repeated-alert escalation separately before completing the alert policy.
+
+### Quiet-hours exception contract
+
+- Suppress ordinary alerts and recommendations during the user's configured quiet hours.
+- Allow an interruption only when the user explicitly marked the item critical or Vision verifies an imminent risk of missing a fixed commitment or hard deadline.
+- Do not let a recommendation score, inferred importance, or AI-generated urgency label qualify by itself.
+- Use deterministic, user-configurable timing rules to define the imminent window rather than an unconstrained model judgment.
+- Let the user disable all quiet-hours overrides.
+- Log why each interruption qualified and retain only the minimum details needed in its notification preview.
 
 ## Decision log
 
 | Date | Decision | Reason | Status |
 |---|---|---|---|
+| 2026-07-21 | Allow quiet-hours interruptions only for user-marked critical items or verified imminent risk to a fixed commitment or hard deadline. | This protects rest while still surfacing the narrow set of alerts whose delay could cause a concrete missed obligation. | Agreed |
 | 2026-07-21 | Use in-app and browser or push alerts with urgency levels, quiet hours, and morning and evening digests in version 1; add SMS and email later. | This provides timely web-first alerts without making the initial release depend on phone-number or email-delivery infrastructure. | Agreed |
 | 2026-07-21 | Limit version 1 to secretary-focused recommendations. | Scheduling, next tasks, preparation, follow-ups, conflict repair, protected time, and risk warnings directly support the core secretary loop without adding an unrelated discovery product. | Agreed |
 | 2026-07-21 | Resolve flexible-item conflicts contextually rather than through a fixed domain hierarchy. | Hard constraints stay absolute, while urgency, importance, deadline risk, protected time, schedule fit, and disruption determine explained proposals that the user can approve. | Agreed |
