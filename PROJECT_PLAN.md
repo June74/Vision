@@ -73,6 +73,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - Future desktop clients support optional launch at login and on-cue access; mobile clients use on-cue access and notifications.
 - Google Calendar is the first calendar provider for version 1.
 - Long-term calendar coverage includes calendars created in supported providers and calendars created directly inside Vision.
+- Version 1 accepts chat messages, pasted text, and document or image uploads; email and voice capture follow later.
 - The secretary covers school, work, and personal life.
 - The core MVP collects calendar events, tasks, and notes.
 - Users can request scheduling changes conversationally.
@@ -84,7 +85,6 @@ Agree on exactly who the first version serves, what it must do, what it must not
 
 ### Decisions to make
 
-- Initial non-calendar capture sources
 - Domain and cross-domain privacy rules
 - Priority and conflict-resolution behavior
 - Recommendation categories and ranking principles
@@ -100,7 +100,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - [x] Define future client activation: optional desktop auto-start plus on-cue access; mobile on-cue access and notifications.
 - [x] Select the first calendar provider: Google Calendar.
 - [x] Define the long-term calendar target: provider-created calendars plus Vision-native calendars.
-- [ ] Define the initial non-calendar capture sources.
+- [x] Define the initial non-calendar capture sources: chat, pasted text, and document or image uploads.
 - [ ] Define the canonical product objects: event, task, note, commitment, recommendation, preference, policy, and audit event.
 - [ ] Define cross-domain visibility and privacy behavior.
 - [ ] Define priority and conflict-resolution rules.
@@ -119,7 +119,8 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - One private user: June74
 - Web app with conversational chat and a Today dashboard
 - Google Calendar as the first provider, with the exact calendars selected during onboarding
-- Text capture for tasks, commitments, and pasted notes
+- Chat and pasted-text capture for tasks, commitments, and notes
+- Document and image uploads
 - Proposed calendar changes with approval and undo
 - Conflict and protected-time detection
 - Morning and evening briefings
@@ -131,6 +132,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 
 - Autonomous communication or negotiation with attendees
 - Meeting recording and transcription
+- Email ingestion and voice capture or commands
 - Purchases, reservations, and travel booking
 - Team or shared-secretary workflows
 - Multiple calendar providers and Vision-native user-created calendars
@@ -151,10 +153,17 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - Include every calendar the user selects from each supported external provider, including calendars the user created there.
 - Allow the user to create and manage calendars directly inside Vision.
 
+### Future capture expansion target
+
+- Add email ingestion after the initial text and file capture flow is reliable.
+- Add voice notes and voice commands for on-cue interaction after the web MVP.
+- Keep meeting recording and transcription separate because they require additional consent and privacy controls.
+
 ## Decision log
 
 | Date | Decision | Reason | Status |
 |---|---|---|---|
+| 2026-07-21 | Version 1 captures chat, pasted text, and document or image uploads; email and voice arrive later. | This supports useful note and commitment capture without making the first release depend on inbox access, audio processing, or background listening. | Agreed |
 | 2026-07-21 | Long-term calendar coverage includes provider-created calendars and calendars created directly inside Vision. | Both sources are necessary for Vision to become the user's complete scheduling home rather than only an external-calendar viewer. | Agreed |
 | 2026-07-21 | Use Google Calendar as the first provider; expand to broader calendar coverage later. | One provider keeps the first integration testable while preserving comprehensive calendar support as a later goal. | Agreed |
 | 2026-07-21 | Future clients combine optional desktop launch at login with on-cue access; mobile uses on-cue access and notifications. | This keeps the secretary readily available without requiring continuous background activity on every device. | Agreed |
