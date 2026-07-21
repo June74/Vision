@@ -22,6 +22,7 @@ The secretary should turn commitments into an understandable, reversible loop:
 - Represent the secretary's logical state as a bounded, typed knowledge graph whose nodes and relationships retain provenance and privacy controls.
 - Keep the source, domain, and privacy level attached to every event, task, note, and recommendation.
 - Share planning facts across domains by default while keeping detailed content separated unless the user explicitly links it.
+- Preserve a later path to privacy-safe organization calendars that combine consented availability constraints without copying private calendar content.
 - Treat permissions and hard calendar constraints as absolute; recommendation scores cannot override them.
 - Let quiet-hours alerts through only for user-marked critical items or verified imminent risk to a fixed commitment or hard deadline.
 - Limit each unchanged alert episode to one initial interruption and at most one deadline-proximity escalation; merge related signals and allow per-item overrides.
@@ -85,6 +86,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - Future desktop clients support optional launch at login and on-cue access; mobile clients use on-cue access and notifications.
 - Google Calendar is the first calendar provider for version 1.
 - Long-term calendar coverage includes calendars created in supported providers and calendars created directly inside Vision.
+- Privacy-preserving organization calendars are a later phase and do not expand the single-user Version 1 private pilot.
 - Version 1 accepts chat messages, pasted text, and document or image uploads; email and voice capture follow later.
 - Version 1 delivers in-app and browser or push alerts with urgency levels, configurable quiet hours, and morning and evening digests; SMS and email delivery follow later.
 - Unresolved alerts use balanced repetition: one initial alert, at most one automatic escalation near the deadline, deduplication, and per-item reminder controls.
@@ -111,7 +113,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - [x] Select the primary interaction surface: web app with chat and a Today dashboard.
 - [x] Define future client activation: optional desktop auto-start plus on-cue access; mobile on-cue access and notifications.
 - [x] Select the first calendar provider: Google Calendar.
-- [x] Define the long-term calendar target: provider-created calendars plus Vision-native calendars.
+- [x] Define the long-term calendar target: provider-created calendars, Vision-native calendars, and later privacy-preserving organization calendars.
 - [x] Define the initial non-calendar capture sources: chat, pasted text, and document or image uploads.
 - [x] Define the canonical product objects as typed knowledge-graph nodes with governed, provenance-bearing relationships.
 - [x] Define cross-domain visibility and privacy behavior: shared planning facts, separated detailed content, and explicit reversible links.
@@ -257,7 +259,7 @@ The following capabilities are outside the Version 1 private-pilot release. They
 - Email ingestion and voice capture or commands
 - SMS and email alert delivery
 - Purchases, reservations, and travel booking
-- Team or shared-secretary workflows
+- Team or shared-secretary workflows, including organization-wide shared calendars
 - Multiple calendar providers and Vision-native user-created calendars
 - Native mobile and desktop application packaging
 - Unrestricted background autonomy
@@ -289,6 +291,38 @@ No exception may weaken the privacy model, hard constraints, always-confirm acti
 - Expand beyond Google Calendar after the first provider integration is validated.
 - Include every calendar the user selects from each supported external provider, including calendars the user created there.
 - Allow the user to create and manage calendars directly inside Vision.
+
+### Future shared organization calendar target
+
+After the single-user private pilot is validated, Vision may add a separate **Organization Calendar** for a company or other group. This is a later release track, not a Version 1 exception or prerequisite.
+
+The Organization Calendar is a distinct shared calendar owned by an organization workspace. It does not physically merge, copy, or expose members' personal, school, or individual work events. "Merge" means building a privacy-preserving availability overlay for scheduling while keeping every private source record in its original calendar and privacy domain.
+
+#### Privacy-safe availability projection
+
+- Each member explicitly opts in, chooses which source calendars may contribute, and can revoke access later.
+- Vision projects only planning-safe constraints needed to find meeting times: free or busy intervals, working hours, time zone, permitted meeting windows, required travel or transition buffers, and protected or unavailable status without its reason.
+- The organization must not receive private event titles, descriptions, notes, attachments, tasks, domain labels, precise locations, attendee lists, or reasons for unavailability.
+- The scheduling service evaluates permitted availability projections and returns feasible time windows or aggregate conflicts, not members' underlying private event records.
+- A private event remains indistinguishable from any other unavailable interval to organization users. Even organization administrators cannot traverse from a busy interval to its source content.
+- Revocation stops future scheduling use immediately. Cached availability projections are deleted within a declared deletion window; only non-sensitive consent and audit metadata may be retained, and the member's source events are never deleted.
+
+#### Shared scheduling and propagation
+
+- Authorized organizer roles may ask Vision to find an appropriate time across required participants using their consented projections, organization working rules, time zones, and existing Organization Calendar events.
+- Vision proposes feasible times and explains aggregate constraints without identifying whose private event caused a conflict.
+- Creating, moving, or cancelling an organization event follows an organization-specific approval and role policy; the single-user Version 1 autonomy settings do not silently authorize organization writes.
+- After an authorized write, the Organization Calendar becomes the source of truth for the shared meeting's company-visible title, time, location or meeting link, description, and participant scope.
+- Members receive the event and later updates through their access to or subscription to the shared calendar, so an organizer does not need to distribute a manual email for every change. Provider-generated notifications remain optional and configurable.
+- One update to the shared event propagates through normal calendar synchronization; Vision records the initiating organizer, policy decision, prior and new values, outcome, and recovery path.
+- If permissions or availability are insufficient to find or write a valid meeting, Vision stops, states the aggregate blocker, and requests the missing authorization or a scheduling decision without revealing private details.
+
+#### Future graph extension and acceptance gates
+
+- Extend the knowledge graph with typed `Organization`, `Membership`, `SharedCalendar`, and `AvailabilityProjection` nodes only in the later organization phase.
+- Membership and availability relationships carry tenant, role, consent, provenance, privacy, validity, and revocation state. No relationship may create a traversal path into private source content.
+- Organization-calendar release gates include zero observed private-detail disclosures, zero writes by unauthorized roles, correct removal of revoked projections, and successful propagation of an authorized shared-event update without a manual email workflow.
+- Test mixed time zones, partial participation, missing availability, concurrent updates, revoked consent, stale projections, and attempts by administrators or uploaded content to obtain private event details.
 
 ### Future capture expansion target
 
@@ -467,6 +501,7 @@ The private pilot qualifies as successful only when every hard gate passes, ever
 
 | Date | Decision | Reason | Status |
 |---|---|---|---|
+| 2026-07-21 | Add privacy-preserving shared organization calendars in a later phase while keeping Version 1 single-user. | A separate organization calendar can schedule and propagate company-wide meetings from consented availability projections without copying titles, notes, or other sensitive content from personal, school, or individual work calendars. | Agreed |
 | 2026-07-21 | Use a balanced set of sixteen acceptance anchors: two ordinary and two boundary scenarios for each of school, work, personal, and cross-domain use, expanded into labeled benchmark variations later. | Equal coverage verifies that Vision is useful in routine secretary work while still exercising ambiguity, stale state, privacy, alert, graph, and permission failures that could undermine trust. | Agreed |
 | 2026-07-21 | Use a bounded, typed knowledge graph as Vision's canonical logical product model; choose the physical storage engine in Phase B. | First-class nodes and governed relationships can represent commitments, evidence, schedules, recommendations, policies, and audit history without collapsing their distinct meanings, while a closed schema and privacy-filtered traversal contain graph complexity. | Agreed |
 | 2026-07-21 | Lock the Version 1 private-pilot non-goals; deferred features cannot delay the pilot unless a documented exception is required by an approved core requirement, a safety or privacy blocker, a provider mandate, or the evaluation plan. | A firm boundary protects the first complete secretary loop from scope creep while preserving future mobile, desktop, provider, capture, communication, and recommendation expansion. | Agreed |
