@@ -23,6 +23,7 @@ The secretary should turn commitments into an understandable, reversible loop:
 - Share planning facts across domains by default while keeping detailed content separated unless the user explicitly links it.
 - Treat permissions and hard calendar constraints as absolute; recommendation scores cannot override them.
 - Rank only feasible flexible items contextually; do not give school, work, or personal items a permanent default advantage.
+- Keep version 1 recommendations secretary-focused rather than mixing in broad commercial or entertainment discovery.
 - Start with approval-based actions and introduce narrow, reversible autonomy later.
 - Explain why each recommendation was made and what trade-off it creates.
 - Keep an audit history and an undo path for every calendar-changing action.
@@ -87,7 +88,6 @@ Agree on exactly who the first version serves, what it must do, what it must not
 
 ### Decisions to make
 
-- Recommendation categories and ranking principles
 - Alert channels and notification limits
 - Autonomy boundaries by action type
 - MVP success measures
@@ -104,7 +104,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - [ ] Define the canonical product objects: event, task, note, commitment, recommendation, preference, policy, and audit event.
 - [x] Define cross-domain visibility and privacy behavior: shared planning facts, separated detailed content, and explicit reversible links.
 - [x] Define priority and conflict-resolution rules: hard constraints first, then context-aware proposals for flexible items.
-- [ ] Define recommendation categories, evidence, feedback, and ranking contract.
+- [x] Define recommendation categories, evidence, feedback, and ranking contract for the secretary-focused version 1 scope.
 - [ ] Define autonomy levels and always-confirm actions.
 - [ ] Define alerts, briefings, and notification limits.
 - [ ] Write representative school, work, personal, and cross-domain scenarios.
@@ -130,6 +130,29 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - Ask the user before resolving a materially uncertain or high-impact trade-off.
 - Allow later feedback to tune preference-sensitive ranking without weakening hard constraints.
 
+### Recommendation system version 1 contract
+
+Version 1 may recommend:
+
+- Creating, moving, splitting, or repairing schedule blocks
+- The next task to work on
+- Meeting and event preparation
+- Follow-ups and unfulfilled commitments
+- Conflict-resolution options
+- Focus time and protected personal time
+- Deadline-risk and insufficient-preparation warnings
+
+Every recommendation must:
+
+- Link to the source facts that triggered it.
+- Pass privacy, permission, and hard-constraint filters before ranking.
+- Use the context-aware priority model only to order feasible actions.
+- State the proposed action, why it matters now, its trade-off, confidence, and approval requirement.
+- Offer a feasible alternative when one exists.
+- Expire or be recomputed when its source state changes.
+
+Feedback distinguishes accept, edit, dismiss, snooze, undo, and eventual completion. Explicit corrections outweigh inferred behavior, and ignoring a suggestion does not automatically mean rejection. Initial ranking remains inspectable and rules-based; numerical weights are product hypotheses until evaluated. A recommendation never executes directly and must pass through the separate autonomy gate.
+
 ## Preliminary MVP boundary
 
 ### Include
@@ -145,7 +168,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - Context-aware conflict proposals with explanations and feasible alternatives
 - Morning and evening briefings
 - Meeting decision and follow-up extraction
-- Explainable schedule and next-action recommendations
+- Explainable secretary-focused recommendations for scheduling, next tasks, preparation, follow-ups, protected time, and deadline risk
 - In-app alerts, with additional channels decided during Phase A
 
 ### Defer
@@ -159,6 +182,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - Native mobile and desktop application packaging
 - Unrestricted background autonomy
 - A recommendation model trained across users
+- Broad discovery recommendations for activities, venues, products, courses, entertainment, or purchases
 
 ### Future distribution target
 
@@ -183,6 +207,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 
 | Date | Decision | Reason | Status |
 |---|---|---|---|
+| 2026-07-21 | Limit version 1 to secretary-focused recommendations. | Scheduling, next tasks, preparation, follow-ups, conflict repair, protected time, and risk warnings directly support the core secretary loop without adding an unrelated discovery product. | Agreed |
 | 2026-07-21 | Resolve flexible-item conflicts contextually rather than through a fixed domain hierarchy. | Hard constraints stay absolute, while urgency, importance, deadline risk, protected time, schedule fit, and disruption determine explained proposals that the user can approve. | Agreed |
 | 2026-07-21 | Use one planner with shared planning facts, separated detailed memories, and explicit reversible cross-domain links. | Vision can coordinate the user's whole life without freely mixing or externally exposing sensitive school, work, and personal content. | Agreed |
 | 2026-07-21 | Version 1 captures chat, pasted text, and document or image uploads; email and voice arrive later. | This supports useful note and commitment capture without making the first release depend on inbox access, audio processing, or background listening. | Agreed |
