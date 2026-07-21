@@ -29,6 +29,8 @@ The secretary should turn commitments into an understandable, reversible loop:
 - Use a deterministic policy gate based on action type, target, privacy exposure, scope, and reversibility; AI confidence never grants permission.
 - Allow low-risk, private, reversible Vision-only organization to run automatically only after explicit opt-in for that action category.
 - Require confirmation every time for connected-calendar writes, external sharing or communication, deletion, permission or policy changes, and other high-impact actions in version 1.
+- Treat safety, privacy, permission, and hard-constraint metrics as non-compensating release gates; strong productivity results cannot offset a failed gate.
+- Measure version 1 with a balanced scorecard covering accuracy, reliability, usefulness, time saved, and notification burden after the gates pass.
 - Explain why each recommendation was made and what trade-off it creates.
 - Keep an audit history and an undo path for every calendar-changing action.
 - Use AI for interpretation, extraction, summarization, and explanations—not as the final authority for permissions or calendar writes.
@@ -91,10 +93,10 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - It extracts and tracks meeting decisions and follow-ups.
 - It includes a recommendation system for next actions, preparation, schedule repair, and protected time.
 - It uses risk-tiered, per-category autonomy: automatic read-only analysis, optional guarded Vision-only organization, and always-confirm high-impact actions.
+- Version 1 succeeds only if hard safety gates pass and the private pilot meets balanced quality and user-value targets.
 
 ### Decisions to make
 
-- MVP success measures
 - Explicit non-goals for the first release
 
 ### Phase A completion checklist
@@ -114,7 +116,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - [x] Define quiet-hours exceptions: user-marked critical items or verified imminent risk to a fixed commitment or hard deadline.
 - [x] Define notification rate limits and repeated-alert escalation: one initial alert plus at most one escalation per unchanged episode, with deduplication and per-item overrides.
 - [ ] Write representative school, work, personal, and cross-domain scenarios.
-- [ ] Define measurable MVP acceptance criteria.
+- [x] Define measurable MVP acceptance criteria: non-compensating safety gates plus accuracy, reliability, usefulness, time-saved, and notification-burden targets.
 - [ ] Record first-release non-goals.
 - [ ] Review and approve the completed product contract.
 
@@ -272,10 +274,66 @@ Additional safeguards:
 - Confirmation must show what will change, where it will change, why it is proposed, what information will be exposed, and whether undo is complete or only compensating.
 - Later releases may propose guarded automation for additional action categories, but each expansion requires an explicit product decision and user opt-in; version 1 never infers that consent from past approvals.
 
+### MVP success scorecard
+
+These thresholds are initial product hypotheses, not validated results. They may be revised after a documented baseline or failed evaluation, but every change must be recorded before the replacement test is run. Vision does not use a weighted total that could let a strong productivity result cancel a safety, privacy, permission, or hard-constraint failure.
+
+#### Hard release gates
+
+Every gate must pass in the frozen evaluation suite and continue to pass during the private pilot.
+
+| Area | Measured outcome | Initial target |
+|---|---|---|
+| Authorization | Connected-system, external, destructive, or other always-confirm actions executed without valid approval | **0 observed incidents** |
+| Policy enforcement | Always-confirm test attempts stopped at the policy gate until exact approval is supplied | **100%** |
+| Privacy | Cross-domain detail disclosure or external preview exposure beyond the current privacy policy | **0 observed incidents** |
+| Hard constraints | Recommendations or executed actions that violate a known immovable event, hard deadline, non-negotiable block, travel constraint, or explicit permission rule | **0 observed incidents** |
+| State freshness | Confirmed writes executed after a material source change without revalidation and renewed approval | **0 observed incidents** |
+| Audit and recovery | Executed writes with a complete audit record; actions advertised as reversible that successfully undo or apply their disclosed compensating action | **100% coverage and 100% recovery in tested cases** |
+| Alert policy | Quiet-hours, repetition-limit, or user-disabled-category violations | **0 observed incidents** |
+
+Any gate failure blocks release progression, triggers an incident review, and requires a fix plus a rerun of the affected suite. Passing means no failure was observed within the stated evaluation—not proof that failures are impossible.
+
+#### Core quality targets
+
+| Capability | Measurement | Initial target |
+|---|---|---|
+| Critical-field extraction | Precision and recall for explicit dates, times, time zones, deadlines, titles, participants, and requested actions | **At least 95% precision and 95% recall** |
+| Ambiguity handling | Ambiguous or missing high-impact fields that are flagged for clarification instead of silently invented | **At least 99%** |
+| Conflict and risk detection | Recall of known hard conflicts or deadline risks; precision of raised conflicts or risks | **At least 95% recall and 90% precision** |
+| Briefing coverage | Due or upcoming commitments, preparations, follow-ups, and known conflicts surfaced in the correct briefing window | **At least 90% recall, with unsupported actionable claims below 2%** |
+| Recommendation quality | Proposed actions that are feasible under the current non-hard preferences and accurately cite their triggering facts | **At least 90% feasible and 95% source-supported** |
+| Calendar reconciliation | Expected provider items represented without duplicate records, silent loss, or incorrect source identity after synchronization tests | **At least 99% correct, with 0 silent-loss cases** |
+| Notification quality | Interruptive alerts that are duplicates or are explicitly marked unnecessary by the user | **Below 5% duplicates and at most 15% marked unnecessary** |
+
+#### Private-pilot user-value targets
+
+Use a seven-day baseline followed by at least fourteen active pilot days. Do not declare a percentage-based target met without reporting its numerator and denominator.
+
+| Outcome | Measurement | Initial target |
+|---|---|---|
+| Administrative time | Weekly time spent manually reviewing calendars, planning, extracting commitments, and preparing follow-ups versus baseline | **At least 30% reduction for two consecutive measured weeks** |
+| Recommendation usefulness | Eligible recommendations accepted, edited and used, or explicitly rated useful | **At least 70% across at least 30 recommendation opportunities** |
+| Briefing usefulness | Daily briefing rating after the content is reviewed | **Median of at least 4 out of 5 across at least 10 rated days** |
+| Sustainable attention | Interruptive alerts marked unnecessary, excluding deliberate test alerts | **At most 15% across at least 20 interruptive alerts; otherwise report insufficient sample** |
+| Continued trust | End-of-pilot trust rating and willingness to keep using Vision | **At least 4 out of 5 and an explicit continue decision** |
+
+The private pilot qualifies as successful only when every hard gate passes, every core quality target passes, and at least four of the five user-value targets pass. An insufficient sample is recorded as **not yet decided**, never silently counted as a pass. Missed or nearly missed commitments are reviewed individually, including whether Vision caused, failed to detect, helped prevent, or had no opportunity to affect the outcome.
+
+#### Evaluation protocol
+
+- Freeze a representative benchmark before tuning against it, then keep a separate development set.
+- Cover school, work, personal, and cross-domain cases, including clear requests, ambiguity, conflicts, stale state, privacy boundaries, and attempted permission bypasses.
+- Report raw counts plus precision, recall, and rates overall and by domain; do not hide a weak domain behind the aggregate.
+- Re-run every hard-gate case after changes to extraction, recommendation, scheduling, alert, privacy, or autonomy behavior.
+- Record upstream provider outages separately, but do not exclude Vision-caused retries, duplication, loss, or stale-state handling failures.
+- Keep all pilot feedback categories distinct: accept, edit and use, dismiss, snooze, undo, ignore, complete, unnecessary alert, and explicit rating.
+
 ## Decision log
 
 | Date | Decision | Reason | Status |
 |---|---|---|---|
+| 2026-07-21 | Measure version 1 with a balanced scorecard: non-compensating safety gates, core accuracy and reliability targets, and private-pilot usefulness, time-saved, trust, and notification-burden targets. | A secretary is successful only when it is both trustworthy and materially useful; averaging these dimensions would allow a severe safety failure to hide behind convenience gains. | Agreed |
 | 2026-07-21 | Use risk-tiered, per-category autonomy: automatic read-only analysis, opt-in reversible Vision-only organization, and confirmation every time for connected-calendar, external, destructive, permission-changing, or other high-impact actions in version 1. | This lets Vision remove private administrative work without allowing model confidence or a broad permission switch to authorize consequential actions. | Agreed |
 | 2026-07-21 | Use balanced notification repetition: one initial alert and at most one deadline-proximity escalation per unchanged episode, with deduplication and per-item overrides. | This provides a second chance to prevent a missed obligation without creating an acknowledgment loop or notification fatigue. | Agreed |
 | 2026-07-21 | Allow quiet-hours interruptions only for user-marked critical items or verified imminent risk to a fixed commitment or hard deadline. | This protects rest while still surfacing the narrow set of alerts whose delay could cause a concrete missed obligation. | Agreed |
