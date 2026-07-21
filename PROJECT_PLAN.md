@@ -26,7 +26,9 @@ The secretary should turn commitments into an understandable, reversible loop:
 - Limit each unchanged alert episode to one initial interruption and at most one deadline-proximity escalation; merge related signals and allow per-item overrides.
 - Rank only feasible flexible items contextually; do not give school, work, or personal items a permanent default advantage.
 - Keep version 1 recommendations secretary-focused rather than mixing in broad commercial or entertainment discovery.
-- Start with approval-based actions and introduce narrow, reversible autonomy later.
+- Use a deterministic policy gate based on action type, target, privacy exposure, scope, and reversibility; AI confidence never grants permission.
+- Allow low-risk, private, reversible Vision-only organization to run automatically only after explicit opt-in for that action category.
+- Require confirmation every time for connected-calendar writes, external sharing or communication, deletion, permission or policy changes, and other high-impact actions in version 1.
 - Explain why each recommendation was made and what trade-off it creates.
 - Keep an audit history and an undo path for every calendar-changing action.
 - Use AI for interpretation, extraction, summarization, and explanations—not as the final authority for permissions or calendar writes.
@@ -88,11 +90,10 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - It produces morning and evening briefings.
 - It extracts and tracks meeting decisions and follow-ups.
 - It includes a recommendation system for next actions, preparation, schedule repair, and protected time.
-- It supports autonomy levels rather than a single all-or-nothing permission setting.
+- It uses risk-tiered, per-category autonomy: automatic read-only analysis, optional guarded Vision-only organization, and always-confirm high-impact actions.
 
 ### Decisions to make
 
-- Autonomy boundaries by action type
 - MVP success measures
 - Explicit non-goals for the first release
 
@@ -108,7 +109,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - [x] Define cross-domain visibility and privacy behavior: shared planning facts, separated detailed content, and explicit reversible links.
 - [x] Define priority and conflict-resolution rules: hard constraints first, then context-aware proposals for flexible items.
 - [x] Define recommendation categories, evidence, feedback, and ranking contract for the secretary-focused version 1 scope.
-- [ ] Define autonomy levels and always-confirm actions.
+- [x] Define autonomy levels and always-confirm actions: read-only analysis is automatic, low-risk reversible Vision-only organization is opt-in by category, and high-impact or external actions always require confirmation.
 - [x] Define version 1 alert channels and briefing cadence: in-app plus browser or push alerts, with morning and evening digests.
 - [x] Define quiet-hours exceptions: user-marked critical items or verified imminent risk to a fixed commitment or hard deadline.
 - [x] Define notification rate limits and repeated-alert escalation: one initial alert plus at most one escalation per unchanged episode, with deduplication and per-item overrides.
@@ -168,6 +169,7 @@ Feedback distinguishes accept, edit, dismiss, snooze, undo, and eventual complet
 - Chat and pasted-text capture for tasks, commitments, and notes
 - Document and image uploads
 - Cross-domain planning with domain-separated detailed content
+- Risk-tiered autonomy with category-level opt-in for private, reversible Vision-only organization
 - Proposed calendar changes with approval and undo
 - Conflict and protected-time detection
 - Context-aware conflict proposals with explanations and feasible alternatives
@@ -239,10 +241,42 @@ Feedback distinguishes accept, edit, dismiss, snooze, undo, and eventual complet
 - Keep routine unresolved information in the next digest after the automatic escalation is used; never repeat indefinitely merely because an alert remains unacknowledged.
 - Apply quiet-hours eligibility independently to both the initial alert and escalation; escalation status does not itself authorize a quiet-hours interruption.
 
+### Autonomy and approval contract
+
+Vision evaluates every proposed action through a deterministic policy gate. The gate considers the action type, destination, affected domain, privacy exposure, number of affected items, reversibility, and the user's current permission for that exact category. Recommendation rank, urgency, or model confidence cannot raise an action's permission level, and an unknown action type is denied by default.
+
+Version 1 uses three action levels:
+
+1. **Automatic read-only work:** With source access already granted, Vision may sync and inspect permitted data, interpret or extract information, summarize, detect conflicts and deadline risk, calculate recommendations, prepare briefings, and deliver alerts under the separate alert policy. These actions do not modify a connected source or communicate with another person.
+2. **Guarded internal automation:** After explicit opt-in for a named category, Vision may make low-risk, private, reversible changes inside Vision, such as applying non-sensitive organizational tags, grouping items, updating derived planning metadata, linking non-sensitive planning facts within existing privacy boundaries, and creating or updating drafts. It must preserve original imported content, log the action and qualification reason, provide undo, and stay within user-set scope limits.
+3. **Confirmed action:** Vision prepares the exact action and explanation, but does not execute until the user approves it. Approval applies only to the displayed action; a material change to its target, timing, audience, content, privacy impact, or affected-item count requires new approval.
+
+The delivery sequence remains approval-first: the core MVP exposes automatic read-only work and confirmed actions before guarded internal categories are enabled. Guarded internal automation is introduced later in version 1 only after its policy checks, audit records, and undo behavior are validated.
+
+The following actions always require confirmation in version 1:
+
+- Creating, moving, rescheduling, cancelling, or deleting an event or time block in a connected calendar
+- Adding or removing attendees, sending invitations, or changing attendee-visible event details
+- Sending, sharing, exporting, publishing, submitting, or otherwise disclosing information outside Vision
+- Deleting or overwriting user-authored or source-system content, plus any bulk change outside an explicitly configured internal-organization scope limit
+- Changing domain or privacy labels, source access, calendar selection, permissions, quiet hours, alert rules, or autonomy settings
+- Any irreversible, financial, legal, account-security, identity-sensitive, or otherwise high-impact action, including capabilities deferred beyond version 1
+- Any action whose target, audience, authority, or user intent is materially uncertain
+
+Additional safeguards:
+
+- Vision cannot grant itself broader access, turn on an automatic category, or convert a one-time approval into standing permission.
+- Opt-in and revocation operate per action category; revocation is immediate and cancels pending automatic actions in that category.
+- Every guarded internal or confirmed write records the initiating facts, policy decision, exact change, outcome, timestamp, and undo or compensating-action path.
+- If a proposed automatic change is not reliably reversible, exceeds its configured scope, conflicts with newer source state, or fails any privacy or permission check, Vision must stop and request confirmation.
+- Confirmation must show what will change, where it will change, why it is proposed, what information will be exposed, and whether undo is complete or only compensating.
+- Later releases may propose guarded automation for additional action categories, but each expansion requires an explicit product decision and user opt-in; version 1 never infers that consent from past approvals.
+
 ## Decision log
 
 | Date | Decision | Reason | Status |
 |---|---|---|---|
+| 2026-07-21 | Use risk-tiered, per-category autonomy: automatic read-only analysis, opt-in reversible Vision-only organization, and confirmation every time for connected-calendar, external, destructive, permission-changing, or other high-impact actions in version 1. | This lets Vision remove private administrative work without allowing model confidence or a broad permission switch to authorize consequential actions. | Agreed |
 | 2026-07-21 | Use balanced notification repetition: one initial alert and at most one deadline-proximity escalation per unchanged episode, with deduplication and per-item overrides. | This provides a second chance to prevent a missed obligation without creating an acknowledgment loop or notification fatigue. | Agreed |
 | 2026-07-21 | Allow quiet-hours interruptions only for user-marked critical items or verified imminent risk to a fixed commitment or hard deadline. | This protects rest while still surfacing the narrow set of alerts whose delay could cause a concrete missed obligation. | Agreed |
 | 2026-07-21 | Use in-app and browser or push alerts with urgency levels, quiet hours, and morning and evening digests in version 1; add SMS and email later. | This provides timely web-first alerts without making the initial release depend on phone-number or email-delivery infrastructure. | Agreed |
