@@ -2,11 +2,11 @@
 
 This file is the project's editable source of truth. It records the agreed direction, current phase, open decisions, and completion gates. Update it whenever a decision changes or a phase is completed.
 
-**Status:** Phase A — Plan the product
+**Status:** Phase B — Build the data foundation
 
 **Last updated:** 2026-07-21
 
-**Current deliverable:** Product contract for the first usable version
+**Current deliverable:** Architecture and data-foundation plan for the first usable version
 
 ## Product vision
 
@@ -64,8 +64,8 @@ flowchart TD
 
 | Phase | Outcome | Status |
 |---|---|---|
-| A. Plan the product | Approved product contract and scope | **In progress** |
-| B. Build the data foundation | Trusted, read-only unified data model | Not started |
+| A. Plan the product | Approved product contract and scope | **Completed** |
+| B. Build the data foundation | Trusted, read-only unified data model | **In progress** |
 | C. Build the core MVP | First complete secretary loop | Not started |
 | D. Add recommendations | Explainable next-action recommendations | Not started |
 | E. Add safe autonomy | Guarded, reversible automatic actions | Not started |
@@ -105,7 +105,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 
 ### Decisions to make
 
-- Final product contract approval
+- None. The Version 1 product contract was approved by June74 on 2026-07-21.
 
 ### Phase A completion checklist
 
@@ -126,7 +126,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - [x] Write balanced representative scenarios: two ordinary and two boundary cases for each of school, work, personal, and cross-domain use.
 - [x] Define measurable MVP acceptance criteria: non-compensating safety gates plus accuracy, reliability, usefulness, time-saved, and notification-burden targets.
 - [x] Record and lock first-release non-goals, with a narrow documented exception gate.
-- [ ] Review and approve the completed product contract.
+- [x] Review and approve the completed product contract.
 
 ### Cross-domain privacy model
 
@@ -501,6 +501,7 @@ The private pilot qualifies as successful only when every hard gate passes, ever
 
 | Date | Decision | Reason | Status |
 |---|---|---|---|
+| 2026-07-21 | Approve the Phase A product contract and begin Phase B architecture planning. | The agreed Version 1 scope, privacy boundaries, autonomy policy, recommendation contract, scenarios, non-goals, and acceptance gates are complete enough to guide system design. | Approved |
 | 2026-07-21 | Add privacy-preserving shared organization calendars in a later phase while keeping Version 1 single-user. | A separate organization calendar can schedule and propagate company-wide meetings from consented availability projections without copying titles, notes, or other sensitive content from personal, school, or individual work calendars. | Agreed |
 | 2026-07-21 | Use a balanced set of sixteen acceptance anchors: two ordinary and two boundary scenarios for each of school, work, personal, and cross-domain use, expanded into labeled benchmark variations later. | Equal coverage verifies that Vision is useful in routine secretary work while still exercising ambiguity, stale state, privacy, alert, graph, and permission failures that could undermine trust. | Agreed |
 | 2026-07-21 | Use a bounded, typed knowledge graph as Vision's canonical logical product model; choose the physical storage engine in Phase B. | First-class nodes and governed relationships can represent commitments, evidence, schedules, recommendations, policies, and audit history without collapsing their distinct meanings, while a closed schema and privacy-filtered traversal contain graph complexity. | Agreed |
