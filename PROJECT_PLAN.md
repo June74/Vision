@@ -71,6 +71,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - Version 1 starts as a web app with conversational chat and a Today dashboard.
 - Downloadable mobile and desktop clients are a later distribution target.
 - Future desktop clients support optional launch at login and on-cue access; mobile clients use on-cue access and notifications.
+- Google Calendar is the first calendar provider for version 1.
 - The secretary covers school, work, and personal life.
 - The core MVP collects calendar events, tasks, and notes.
 - Users can request scheduling changes conversationally.
@@ -82,8 +83,8 @@ Agree on exactly who the first version serves, what it must do, what it must not
 
 ### Decisions to make
 
-- First user and release audience
-- First calendar provider and capture sources
+- Initial non-calendar capture sources
+- Meaning and scope of personally made calendars for later expansion
 - Domain and cross-domain privacy rules
 - Priority and conflict-resolution behavior
 - Recommendation categories and ranking principles
@@ -97,7 +98,8 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - [x] Select the first user and release audience: June74 only for version 1.
 - [x] Select the primary interaction surface: web app with chat and a Today dashboard.
 - [x] Define future client activation: optional desktop auto-start plus on-cue access; mobile on-cue access and notifications.
-- [ ] Define the first provider and supported input sources.
+- [x] Select the first calendar provider: Google Calendar.
+- [ ] Define the initial non-calendar capture sources.
 - [ ] Define the canonical product objects: event, task, note, commitment, recommendation, preference, policy, and audit event.
 - [ ] Define cross-domain visibility and privacy behavior.
 - [ ] Define priority and conflict-resolution rules.
@@ -115,7 +117,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 
 - One private user: June74
 - Web app with conversational chat and a Today dashboard
-- One calendar provider with separate school, work, and personal calendars
+- Google Calendar as the first provider, with the exact calendars selected during onboarding
 - Text capture for tasks, commitments, and pasted notes
 - Proposed calendar changes with approval and undo
 - Conflict and protected-time detection
@@ -130,7 +132,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - Meeting recording and transcription
 - Purchases, reservations, and travel booking
 - Team or shared-secretary workflows
-- Multiple calendar providers
+- Multiple calendar providers and comprehensive user-created calendar support
 - Native mobile and desktop application packaging
 - Unrestricted background autonomy
 - A recommendation model trained across users
@@ -142,10 +144,16 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - Let desktop users optionally launch the client at login while retaining voice, hotkey, and icon cues.
 - Use on-cue access and notifications on mobile rather than requiring continuous background operation.
 
+### Future calendar expansion target
+
+- Expand beyond Google Calendar after the first provider integration is validated.
+- Include the user's personally made calendars; clarify whether this means provider-created calendars, calendars created inside Vision, or both.
+
 ## Decision log
 
 | Date | Decision | Reason | Status |
 |---|---|---|---|
+| 2026-07-21 | Use Google Calendar as the first provider; expand to broader calendar coverage later. | One provider keeps the first integration testable while preserving comprehensive calendar support as a later goal. | Agreed |
 | 2026-07-21 | Future clients combine optional desktop launch at login with on-cue access; mobile uses on-cue access and notifications. | This keeps the secretary readily available without requiring continuous background activity on every device. | Agreed |
 | 2026-07-21 | Start version 1 as a web app with chat and a Today dashboard; add downloadable mobile and desktop clients later. | A web foundation reaches the first usable version sooner while keeping the core experience portable to future clients. | Agreed |
 | 2026-07-21 | Version 1 serves June74 only, while preserving a path to future expansion. | A private single-user release reduces authentication, tenancy, privacy, and onboarding scope while the core secretary loop is validated. | Agreed |
