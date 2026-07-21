@@ -77,6 +77,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - Google Calendar is the first calendar provider for version 1.
 - Long-term calendar coverage includes calendars created in supported providers and calendars created directly inside Vision.
 - Version 1 accepts chat messages, pasted text, and document or image uploads; email and voice capture follow later.
+- Version 1 delivers in-app and browser or push alerts with urgency levels, configurable quiet hours, and morning and evening digests; SMS and email delivery follow later.
 - The secretary covers school, work, and personal life.
 - The core MVP collects calendar events, tasks, and notes.
 - Users can request scheduling changes conversationally.
@@ -88,7 +89,7 @@ Agree on exactly who the first version serves, what it must do, what it must not
 
 ### Decisions to make
 
-- Alert channels and notification limits
+- Quiet-hours override policy and notification rate limits
 - Autonomy boundaries by action type
 - MVP success measures
 - Explicit non-goals for the first release
@@ -106,7 +107,8 @@ Agree on exactly who the first version serves, what it must do, what it must not
 - [x] Define priority and conflict-resolution rules: hard constraints first, then context-aware proposals for flexible items.
 - [x] Define recommendation categories, evidence, feedback, and ranking contract for the secretary-focused version 1 scope.
 - [ ] Define autonomy levels and always-confirm actions.
-- [ ] Define alerts, briefings, and notification limits.
+- [x] Define version 1 alert channels and briefing cadence: in-app plus browser or push alerts, with morning and evening digests.
+- [ ] Define urgency criteria, quiet-hours exceptions, and notification rate limits.
 - [ ] Write representative school, work, personal, and cross-domain scenarios.
 - [ ] Define measurable MVP acceptance criteria.
 - [ ] Record first-release non-goals.
@@ -169,13 +171,14 @@ Feedback distinguishes accept, edit, dismiss, snooze, undo, and eventual complet
 - Morning and evening briefings
 - Meeting decision and follow-up extraction
 - Explainable secretary-focused recommendations for scheduling, next tasks, preparation, follow-ups, protected time, and deadline risk
-- In-app alerts, with additional channels decided during Phase A
+- In-app and browser or push alerts with urgency levels, configurable quiet hours, and morning and evening digests
 
 ### Defer
 
 - Autonomous communication or negotiation with attendees
 - Meeting recording and transcription
 - Email ingestion and voice capture or commands
+- SMS and email alert delivery
 - Purchases, reservations, and travel booking
 - Team or shared-secretary workflows
 - Multiple calendar providers and Vision-native user-created calendars
@@ -203,10 +206,20 @@ Feedback distinguishes accept, edit, dismiss, snooze, undo, and eventual complet
 - Add voice notes and voice commands for on-cue interaction after the web MVP.
 - Keep meeting recording and transcription separate because they require additional consent and privacy controls.
 
+### Alert delivery roadmap
+
+- Use in-app and browser or push notifications in version 1.
+- Support user-configurable quiet hours and notification categories.
+- Deliver morning and evening digests for non-immediate planning information.
+- Apply the cross-domain privacy model to notification previews and reveal only necessary details.
+- Add SMS and email delivery after the initial notification system is reliable.
+- Define quiet-hours overrides and rate limits separately before completing the alert policy.
+
 ## Decision log
 
 | Date | Decision | Reason | Status |
 |---|---|---|---|
+| 2026-07-21 | Use in-app and browser or push alerts with urgency levels, quiet hours, and morning and evening digests in version 1; add SMS and email later. | This provides timely web-first alerts without making the initial release depend on phone-number or email-delivery infrastructure. | Agreed |
 | 2026-07-21 | Limit version 1 to secretary-focused recommendations. | Scheduling, next tasks, preparation, follow-ups, conflict repair, protected time, and risk warnings directly support the core secretary loop without adding an unrelated discovery product. | Agreed |
 | 2026-07-21 | Resolve flexible-item conflicts contextually rather than through a fixed domain hierarchy. | Hard constraints stay absolute, while urgency, importance, deadline risk, protected time, schedule fit, and disruption determine explained proposals that the user can approve. | Agreed |
 | 2026-07-21 | Use one planner with shared planning facts, separated detailed memories, and explicit reversible cross-domain links. | Vision can coordinate the user's whole life without freely mixing or externally exposing sensitive school, work, and personal content. | Agreed |
