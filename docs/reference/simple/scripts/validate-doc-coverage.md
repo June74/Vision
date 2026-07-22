@@ -36,7 +36,7 @@ Checks whether one code item has a JSDoc comment.
 
 ## `hasModuleJSDoc`
 
-Checks whether a source file has a distinct module comment instead of only a function comment.
+Checks whether a source file has a distinct module comment instead of only a named function comment. A normal import-free constant can use one leading module comment.
 
 ## `getReferencePath`
 

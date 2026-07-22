@@ -45,5 +45,12 @@ describe("validateDocumentationCoverage", () => {
     const violations = validateDocumentationCoverage(apiShapesFixtureRoot);
 
     expect(violations).toContain("src/imported-no-module-jsdoc.ts: missing module JSDoc");
+    expect(violations).not.toContain("src/import-with-module-jsdoc.ts: missing module JSDoc");
+  });
+
+  it("accepts module JSDoc before an import-free constant", () => {
+    const violations = validateDocumentationCoverage(apiShapesFixtureRoot);
+
+    expect(violations).not.toContain("src/module-constant.ts: missing module JSDoc");
   });
 });

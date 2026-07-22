@@ -107,11 +107,24 @@ function hasModuleJSDoc(sourceFile: ts.SourceFile): boolean {
   const leadingComments = ts.getLeadingCommentRanges(sourceFile.text, 0) ?? [];
   const jsDocCount = leadingComments.filter((comment) => sourceFile.text.slice(comment.pos, comment.end).startsWith("/**")).length;
   const firstStatement = sourceFile.statements[0];
+  const firstStatementIsNamedFunction =
+    !!firstStatement &&
+    (ts.isFunctionDeclaration(firstStatement) ||
+      (ts.isVariableStatement(firstStatement) &&
+        firstStatement.declarationList.declarations.some(
+          (declaration) =>
+            ts.isIdentifier(declaration.name) &&
+            !!declaration.initializer &&
+            (ts.isArrowFunction(declaration.initializer) || ts.isFunctionExpression(declaration.initializer)),
+        )));
 
   return (
     jsDocCount > 1 ||
     (jsDocCount === 1 &&
-      (!firstStatement || ts.isImportDeclaration(firstStatement) || ts.isImportEqualsDeclaration(firstStatement)))
+      (!firstStatement ||
+        ts.isImportDeclaration(firstStatement) ||
+        ts.isImportEqualsDeclaration(firstStatement) ||
+        !firstStatementIsNamedFunction))
   );
 }
 

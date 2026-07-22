@@ -36,7 +36,7 @@ Uses TypeScript JSDoc comment/tag discovery to require an attached documentation
 
 ## `hasModuleJSDoc`
 
-Requires a leading JSDoc comment before an import, or a separate comment before an import-free module's first documented function. This prevents a function contract from falsely satisfying module documentation.
+Uses leading-comment count and the first statement's AST shape. One leading JSDoc is valid before an import or a non-function import-free declaration, but a named function or function-valued variable needs a separate module comment. This prevents a function contract from falsely satisfying module documentation without imposing a new tag convention.
 
 ## `getReferencePath`
 
