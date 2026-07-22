@@ -40,4 +40,10 @@ describe("validateDocumentationCoverage", () => {
 
     expect(violations).toContain("src/function-jsdoc-only.ts: missing module JSDoc");
   });
+
+  it("requires module JSDoc when an import comes before a documented function", () => {
+    const violations = validateDocumentationCoverage(apiShapesFixtureRoot);
+
+    expect(violations).toContain("src/imported-no-module-jsdoc.ts: missing module JSDoc");
+  });
 });

@@ -110,9 +110,8 @@ function hasModuleJSDoc(sourceFile: ts.SourceFile): boolean {
 
   return (
     jsDocCount > 1 ||
-    !firstStatement ||
-    ts.isImportDeclaration(firstStatement) ||
-    ts.isImportEqualsDeclaration(firstStatement)
+    (jsDocCount === 1 &&
+      (!firstStatement || ts.isImportDeclaration(firstStatement) || ts.isImportEqualsDeclaration(firstStatement)))
   );
 }
 
