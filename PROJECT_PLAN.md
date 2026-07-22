@@ -6,7 +6,7 @@ This file is the project's editable source of truth. It records the agreed direc
 
 **Last updated:** 2026-07-22
 
-**Current deliverable:** Approved Phase B architecture specification and implementation-plan preparation
+**Current deliverable:** Phase B implementation plan
 
 ## Product vision
 
@@ -501,6 +501,8 @@ The private pilot qualifies as successful only when every hard gate passes, ever
 
 The detailed design is recorded in [Phase B data foundation design](docs/superpowers/specs/2026-07-22-phase-b-data-foundation-design.md).
 
+The execution sequence is recorded in the [Phase B implementation roadmap](docs/superpowers/plans/2026-07-22-phase-b-roadmap.md), with focused plans for runtime and CI, domain/data/privacy, authentication and calendar setup, Google read synchronization, AI budget and diagnostics, and recovery/release.
+
 ### Approved foundation
 
 - Keep Neon PostgreSQL authoritative using a bounded node-and-edge model; add a rebuildable native-graph projection only if later scale justifies it.
@@ -521,14 +523,15 @@ The detailed design is recorded in [Phase B data foundation design](docs/superpo
 - [x] Define near-real-time synchronization and repair behavior.
 - [x] Define the AI provider boundary, model routing, and spending contract.
 - [x] Define Phase B scope, failure behavior, tests, and completion gates.
-- [ ] Complete final review of the written Phase B specification.
-- [ ] Produce and approve the Phase B implementation plan.
+- [x] Complete final review of the written Phase B specification.
+- [x] Produce the Phase B implementation plan.
+- [ ] Approve the Phase B implementation plan for execution.
 
 ## Decision log
 
 | Date | Decision | Reason | Status |
 |---|---|---|---|
-| 2026-07-22 | Approve the Phase B data-foundation design, pending final review of the written specification. | The architecture now defines the service boundary, storage model, encryption, synchronization, AI routing, cost controls, recovery, operational states, verification gates, technology stack, and repository layout needed before implementation planning. | Approved design; written review pending |
+| 2026-07-22 | Approve the written Phase B data-foundation specification and begin implementation planning. | The reviewed specification captures the agreed architecture, service boundary, storage model, encryption, synchronization, AI routing, cost controls, recovery, operational states, verification gates, technology stack, and repository layout. | Approved |
 | 2026-07-22 | Use one Google secondary calendar named `Vision`, while storing school, work, and personal categories only inside Vision. | One calendar removes provider-side calendar switching while Vision preserves category, provenance, and privacy boundaries internally. | Agreed |
 | 2026-07-22 | Use Neon PostgreSQL as the authoritative bounded graph model in Version 1, with a derived native-graph projection available later if organization-scale traversal requires it. | One transactional authority keeps synchronization, approvals, audit, privacy, and recovery consistent within the private-pilot cost ceiling. | Agreed |
 | 2026-07-22 | Use a Cloudflare-native TypeScript application with React and Vite, Hono, Neon, Drizzle, Zod, R2, Queues, scheduled Workers, and OpenAI through Cloudflare AI Gateway. | A single edge-deployed repository minimizes Version 1 operational complexity while preserving clean boundaries for later native clients and provider expansion. | Agreed |

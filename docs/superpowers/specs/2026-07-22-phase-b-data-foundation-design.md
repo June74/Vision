@@ -1,10 +1,10 @@
 # Vision Phase B Data Foundation Design
 
-**Status:** Approved in design review; written-spec review pending
+**Status:** Approved
 
 **Approved by:** June74
 
-**Approval date:** 2026-07-22
+**Written-spec approval date:** 2026-07-22
 
 **Project:** Vision AI Secretary
 
