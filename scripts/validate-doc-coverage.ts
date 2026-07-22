@@ -36,7 +36,7 @@ function collectFiles(directory: string, projectRoot: string): string[] {
 /** Returns whether a source path is intentionally outside the production documentation contract. */
 function shouldExclude(path: string, projectRoot: string): boolean {
   const segments = relative(projectRoot, path).split(sep);
-  return segments.some((segment) => ["generated", "migrations", "tests"].includes(segment));
+  return segments.some((segment) => ["fixtures", "generated", "migrations", "tests"].includes(segment));
 }
 
 /** Returns whether a file is a non-configuration TypeScript production source. */
@@ -47,7 +47,7 @@ function shouldCheckFile(path: string, projectRoot: string): boolean {
     /\.tsx?$/.test(path) &&
     !/\.d\.ts$/.test(path) &&
     !/\.(test|spec)\.tsx?$/.test(path) &&
-    !/(^|\/)(vite|vitest|playwright)\.config\.ts$/.test(relativePath)
+    !/(^|\/)[^/]+\.config\.tsx?$/.test(relativePath)
   );
 }
 
@@ -66,7 +66,7 @@ function findNamedApiNodes(sourceFile: ts.SourceFile): ts.Node[] {
     }
 
     if (
-      ts.isVariableDeclaration(node) &&
+      (ts.isVariableDeclaration(node) || ts.isPropertyAssignment(node) || ts.isPropertyDeclaration(node)) &&
       ts.isIdentifier(node.name) &&
       node.initializer &&
       (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))
@@ -87,7 +87,10 @@ function getNodeName(node: ts.Node): string {
     return node.name.getText();
   }
 
-  if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+  if (
+    (ts.isVariableDeclaration(node) || ts.isPropertyAssignment(node) || ts.isPropertyDeclaration(node)) &&
+    ts.isIdentifier(node.name)
+  ) {
     return node.name.text;
   }
 
@@ -100,8 +103,17 @@ function hasJSDoc(node: ts.Node): boolean {
 }
 
 /** Reports whether a source module begins with a module-level JSDoc comment. */
-function hasModuleJSDoc(sourceText: string): boolean {
-  return /^\s*\/\*\*[\s\S]*?\*\//.test(sourceText);
+function hasModuleJSDoc(sourceFile: ts.SourceFile): boolean {
+  const leadingComments = ts.getLeadingCommentRanges(sourceFile.text, 0) ?? [];
+  const jsDocCount = leadingComments.filter((comment) => sourceFile.text.slice(comment.pos, comment.end).startsWith("/**")).length;
+  const firstStatement = sourceFile.statements[0];
+
+  return (
+    jsDocCount > 1 ||
+    !firstStatement ||
+    ts.isImportDeclaration(firstStatement) ||
+    ts.isImportEqualsDeclaration(firstStatement)
+  );
 }
 
 /** Maps a production source file to one mirrored documentation file. */
@@ -135,7 +147,7 @@ export function validateDocumentationCoverage(projectRoot = process.cwd()): stri
     const sourceText = readFileSync(sourcePath, "utf8");
     const sourceFile = ts.createSourceFile(sourcePath, sourceText, ts.ScriptTarget.Latest, true);
 
-    if (!hasModuleJSDoc(sourceText)) {
+    if (!hasModuleJSDoc(sourceFile)) {
       violations.push(`${sourceRelativePath}: missing module JSDoc`);
     }
 

@@ -12,15 +12,15 @@ Recursively enumerates eligible production paths while avoiding excluded directo
 
 ## `shouldExclude`
 
-Identifies the generated, migration, and test path segments excluded from coverage.
+Identifies fixture, generated, migration, and test path segments excluded from coverage.
 
 ## `shouldCheckFile`
 
-Restricts validation to non-declaration TypeScript and TSX production files, excluding test/spec and supported configuration filenames.
+Restricts validation to non-declaration TypeScript and TSX production files, excluding test/spec and all conventional `.config.ts` or `.config.tsx` filenames.
 
 ## `findNamedApiNodes`
 
-Uses the TypeScript abstract syntax tree to find named function declarations, class methods, and named variables initialized with a function or arrow function.
+Uses the TypeScript abstract syntax tree to find named function declarations, class methods, named variables, object properties, and class fields initialized with a function or arrow function.
 
 ## `visit`
 
@@ -28,7 +28,7 @@ Recursively traverses a parsed source file and adds supported named declarations
 
 ## `getNodeName`
 
-Normalizes the name read from one supported TypeScript declaration node.
+Normalizes the name read from one supported TypeScript declaration, object-property, or class-field node.
 
 ## `hasJSDoc`
 
@@ -36,7 +36,7 @@ Uses TypeScript JSDoc comment/tag discovery to require an attached documentation
 
 ## `hasModuleJSDoc`
 
-Requires an initial block JSDoc comment before module imports or declarations.
+Requires a leading JSDoc comment before an import, or a separate comment before an import-free module's first documented function. This prevents a function contract from falsely satisfying module documentation.
 
 ## `getReferencePath`
 

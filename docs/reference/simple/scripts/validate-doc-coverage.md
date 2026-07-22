@@ -12,15 +12,15 @@ Walks a production folder and keeps only files that the check should inspect.
 
 ## `shouldExclude`
 
-Skips generated, migration, and test paths.
+Skips fixture, generated, migration, and test paths.
 
 ## `shouldCheckFile`
 
-Decides whether one TypeScript file belongs to the production documentation check.
+Decides whether one non-configuration TypeScript file belongs to the production documentation check.
 
 ## `findNamedApiNodes`
 
-Finds named functions, React-style function values, and methods that need comments and headings.
+Finds named functions, methods, object-property functions, class-field functions, and React-style function values that need comments and headings.
 
 ## `visit`
 
@@ -28,7 +28,7 @@ Walks one source file's code structure and records supported named code items.
 
 ## `getNodeName`
 
-Reads the name of one documented code item.
+Reads the name of one documented function, method, object property, or class field.
 
 ## `hasJSDoc`
 
@@ -36,7 +36,7 @@ Checks whether one code item has a JSDoc comment.
 
 ## `hasModuleJSDoc`
 
-Checks whether a source file begins with a module comment.
+Checks whether a source file has a distinct module comment instead of only a function comment.
 
 ## `getReferencePath`
 
