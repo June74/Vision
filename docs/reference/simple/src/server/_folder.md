@@ -1,3 +1,3 @@
 # `src/server`
 
-This folder contains code that runs in the Cloudflare Worker. The initial file defines the non-secret runtime bindings the Worker is allowed to use.
+This folder contains code that runs in the Cloudflare Worker. It defines non-secret runtime bindings, opaque request IDs, safe errors, and structured audit events without request content.
