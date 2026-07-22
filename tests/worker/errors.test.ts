@@ -1,5 +1,7 @@
 import { SELF } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { Env } from "../../src/server/env";
+import { createApp } from "../../src/worker";
 
 describe("Vision Worker error envelopes", () => {
   it("returns a private JSON envelope for an unknown API route", async () => {
@@ -8,7 +10,7 @@ describe("Vision Worker error envelopes", () => {
     expect(response.status).toBe(404);
     expect(response.headers.get("content-type")).toContain("application/json");
     await expect(response.clone().text()).resolves.not.toContain("stack");
-    await expect(response.json()).resolves.toMatchObject({
+    await expect(response.json()).resolves.toEqual({
       error: {
         code: "NOT_FOUND",
         message: "API route not found.",
@@ -17,5 +19,31 @@ describe("Vision Worker error envelopes", () => {
         ),
       },
     });
+  });
+
+  it("preserves an error envelope when its injected logger fails", async () => {
+    const app = createApp({
+      createRequestId: () => "req_test",
+      logger: () => {
+        throw new Error("logger unavailable");
+      },
+    });
+
+    const response = await app.fetch(new Request("https://vision.test/api/unknown"), {} as Env);
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "NOT_FOUND", message: "API route not found.", requestId: "req_test" },
+    });
+  });
+
+  it("delegates non-API requests to static assets", async () => {
+    const assets = { fetch: vi.fn().mockResolvedValue(new Response("shell")) };
+    const app = createApp({ createRequestId: () => "req_test", logger: vi.fn() });
+
+    const response = await app.fetch(new Request("https://vision.test/"), { ASSETS: assets } as unknown as Env);
+
+    expect(await response.text()).toBe("shell");
+    expect(assets.fetch).toHaveBeenCalledTimes(1);
   });
 });

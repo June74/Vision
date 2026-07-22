@@ -4,7 +4,7 @@ This module owns the audit-event boundary. It validates an unknown input with Zo
 
 ## `SafeLogEventSchema`
 
-`SafeLogEventSchema` is a strict Zod object containing only `requestId`, `action`, `outcome`, optional `errorCategory`, `durationMs`, `provider`, `retryCount`, `entityId`, and `entityIds`. Entity values are opaque identifiers; callers must not place names or descriptions in them.
+`SafeLogEventSchema` is a strict Zod object containing only `requestId`, `action`, `outcome`, optional `errorCategory`, `durationMs`, `provider`, `retryCount`, `entityId`, and `entityIds`. `entityId` and every `entityIds` member must be UUIDs, preventing names and descriptions from entering the sink.
 
 ## `SafeLogEvent`
 
@@ -18,4 +18,4 @@ This module owns the audit-event boundary. It validates an unknown input with Zo
 
 **Signature:** `logEvent(logger: SafeLogger, event: unknown): void`
 
-The function checks object keys against the allowlist before parsing. If an unsupported key exists it throws `Unsupported audit field: <key>` without reading or serializing its value. Otherwise it parses with the strict schema and calls `logger` exactly once with the validated event.
+The function accepts only records whose direct prototype is `Object.prototype` or `null`. It inspects `Reflect.ownKeys` and each property descriptor before parsing, rejecting symbols, non-enumerable keys, and unallowlisted keys without reading their values. It then parses with the strict schema and calls `logger` exactly once with the validated event.

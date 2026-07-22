@@ -11,8 +11,8 @@ export const SafeLogEventSchema = z
     durationMs: z.number().finite().nonnegative().optional(),
     provider: z.string().min(1).optional(),
     retryCount: z.number().int().nonnegative().optional(),
-    entityId: z.string().min(1).optional(),
-    entityIds: z.array(z.string().min(1)).optional(),
+    entityId: z.string().uuid().optional(),
+    entityIds: z.array(z.string().uuid()).optional(),
   })
   .strict();
 
@@ -26,12 +26,21 @@ const SAFE_LOG_FIELDS = new Set(Object.keys(SafeLogEventSchema.shape));
 
 /** Sends a strictly allowlisted audit event to an injected logger. */
 export function logEvent(logger: SafeLogger, event: unknown): void {
-  if (typeof event === "object" && event !== null) {
-    const unsupportedField = Object.keys(event).find((field) => !SAFE_LOG_FIELDS.has(field));
+  if (typeof event !== "object" || event === null) {
+    SafeLogEventSchema.parse(event);
+    return;
+  }
 
-    if (unsupportedField) {
-      // Check keys before validation so private values are never formatted into an error or a log.
-      throw new Error(`Unsupported audit field: ${unsupportedField}`);
+  const prototype = Object.getPrototypeOf(event);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new Error("Unsupported audit event prototype");
+  }
+
+  for (const key of Reflect.ownKeys(event)) {
+    const descriptor = Object.getOwnPropertyDescriptor(event, key);
+    if (typeof key !== "string" || !SAFE_LOG_FIELDS.has(key) || !descriptor?.enumerable) {
+      // Reject hidden fields before parsing so private values cannot reach an error formatter or log sink.
+      throw new Error("Unsupported audit field");
     }
   }
 

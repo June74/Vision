@@ -10,6 +10,10 @@ The Vision Worker answers `GET /api/health` with `{ "status": "ok", "service": "
 
 `consoleLogger` writes one already-checked audit event to the Worker console.
 
+## `logErrorSafely`
+
+`logErrorSafely` tries to record a safe audit event without allowing a logger outage to change the API response.
+
 ## `createApp`
 
 `createApp` creates the Worker app and its privacy-safe error handling.
