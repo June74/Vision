@@ -4,9 +4,9 @@ This file is the project's editable source of truth. It records the agreed direc
 
 **Status:** Phase B — Build the data foundation
 
-**Last updated:** 2026-07-21
+**Last updated:** 2026-07-22
 
-**Current deliverable:** Architecture and data-foundation plan for the first usable version
+**Current deliverable:** Approved Phase B architecture specification and implementation-plan preparation
 
 ## Product vision
 
@@ -497,10 +497,42 @@ The private pilot qualifies as successful only when every hard gate passes, ever
 - Record upstream provider outages separately, but do not exclude Vision-caused retries, duplication, loss, or stale-state handling failures.
 - Keep all pilot feedback categories distinct: accept, edit and use, dismiss, snooze, undo, ignore, complete, unnecessary alert, and explicit rating.
 
+## Phase B — Build the data foundation
+
+The detailed design is recorded in [Phase B data foundation design](docs/superpowers/specs/2026-07-22-phase-b-data-foundation-design.md).
+
+### Approved foundation
+
+- Keep Neon PostgreSQL authoritative using a bounded node-and-edge model; add a rebuildable native-graph projection only if later scale justifies it.
+- Deploy one Cloudflare-native TypeScript application using React and Vite, Hono, Drizzle, Zod, R2, Queues, scheduled Workers, and OpenAI through Cloudflare AI Gateway.
+- Restrict Google sign-in to June74 and create one secondary Google calendar named `Vision` only after exact confirmation.
+- Keep school, work, and personal categories inside Vision instead of creating three provider calendars.
+- Encrypt protected content before storage, retain deleted encrypted content for 30 days, and maintain encrypted daily backups with a separate backup key.
+- Combine Google push notifications with incremental synchronization and a scheduled 15-minute repair pass.
+- Keep Phase B event synchronization read-only after calendar setup; event create, edit, move, cancel, and delete arrive in Phase C through previewed and verified writes.
+- Route structured AI proposals through deterministic privacy, permission, conflict, and freshness validation, with a strict sub-budget inside the approximately $20 monthly ceiling.
+
+### Phase B design checklist
+
+- [x] Select the authoritative data architecture and future graph-evolution path.
+- [x] Select the managed-service stack and repository structure.
+- [x] Define identity, calendar creation, category, and privacy boundaries.
+- [x] Define encryption, deletion, backup, and recovery behavior.
+- [x] Define near-real-time synchronization and repair behavior.
+- [x] Define the AI provider boundary, model routing, and spending contract.
+- [x] Define Phase B scope, failure behavior, tests, and completion gates.
+- [ ] Complete final review of the written Phase B specification.
+- [ ] Produce and approve the Phase B implementation plan.
+
 ## Decision log
 
 | Date | Decision | Reason | Status |
 |---|---|---|---|
+| 2026-07-22 | Approve the Phase B data-foundation design, pending final review of the written specification. | The architecture now defines the service boundary, storage model, encryption, synchronization, AI routing, cost controls, recovery, operational states, verification gates, technology stack, and repository layout needed before implementation planning. | Approved design; written review pending |
+| 2026-07-22 | Use one Google secondary calendar named `Vision`, while storing school, work, and personal categories only inside Vision. | One calendar removes provider-side calendar switching while Vision preserves category, provenance, and privacy boundaries internally. | Agreed |
+| 2026-07-22 | Use Neon PostgreSQL as the authoritative bounded graph model in Version 1, with a derived native-graph projection available later if organization-scale traversal requires it. | One transactional authority keeps synchronization, approvals, audit, privacy, and recovery consistent within the private-pilot cost ceiling. | Agreed |
+| 2026-07-22 | Use a Cloudflare-native TypeScript application with React and Vite, Hono, Neon, Drizzle, Zod, R2, Queues, scheduled Workers, and OpenAI through Cloudflare AI Gateway. | A single edge-deployed repository minimizes Version 1 operational complexity while preserving clean boundaries for later native clients and provider expansion. | Agreed |
+| 2026-07-22 | Cap the single-user managed-services pilot at approximately $20 monthly, including an enforced AI sub-budget and graceful non-AI operation when that budget is exhausted. | Strict limits make costs predictable without disabling core calendar access and synchronization. | Agreed |
 | 2026-07-21 | Approve the Phase A product contract and begin Phase B architecture planning. | The agreed Version 1 scope, privacy boundaries, autonomy policy, recommendation contract, scenarios, non-goals, and acceptance gates are complete enough to guide system design. | Approved |
 | 2026-07-21 | Add privacy-preserving shared organization calendars in a later phase while keeping Version 1 single-user. | A separate organization calendar can schedule and propagate company-wide meetings from consented availability projections without copying titles, notes, or other sensitive content from personal, school, or individual work calendars. | Agreed |
 | 2026-07-21 | Use a balanced set of sixteen acceptance anchors: two ordinary and two boundary scenarios for each of school, work, personal, and cross-domain use, expanded into labeled benchmark variations later. | Equal coverage verifies that Vision is useful in routine secretary work while still exercising ambiguity, stale state, privacy, alert, graph, and permission failures that could undermine trust. | Agreed |
