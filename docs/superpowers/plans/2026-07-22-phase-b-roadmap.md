@@ -27,6 +27,10 @@
 - Do not report external success until the resulting provider state has been verified.
 - Never log decrypted protected fields, credentials, tokens, keys, or raw queue payloads.
 - Use strict TypeScript, reviewed SQL migrations, Zod at external boundaries, test-driven development, and small commits.
+- Maintain two mirrored reference trees: `docs/reference/simple/` for concise plain-language explanations and `docs/reference/technical/` for in-depth contracts.
+- Document every production source file and every named production function, component, or class method in both trees; add `_folder.md` in both trees for each meaningful architectural folder.
+- Give every production source file that supports comments an appropriate module documentation comment and every named TypeScript production function, component, or class method a concise JSDoc contract; reserve inline comments for non-obvious reasons and safety invariants.
+- Run `pnpm docs:check` in every task and CI; documentation changes ship in the same commit as their code.
 
 ---
 
@@ -63,9 +67,10 @@ For every task in every plan:
 2. Write the named failing test and run the exact focused command.
 3. Implement only the code needed for that task's contract.
 4. Run the focused test, then the milestone verification command.
-5. Inspect `git diff --check`, staged file names, and the staged diff.
-6. Commit with the task's specified message.
-7. Stop for review if an external service behaves differently from the recorded contract; update the design or plan before improvising a new product rule.
+5. Update both documentation layers and run `pnpm docs:check`.
+6. Inspect `git diff --check`, staged file names, and the staged diff.
+7. Commit code, tests, and their documentation together with the task's specified message.
+8. Stop for review if an external service behaves differently from the recorded contract; update the design or plan before improvising a new product rule.
 
 ## Environment provisioning boundary
 

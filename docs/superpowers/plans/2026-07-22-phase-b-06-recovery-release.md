@@ -20,6 +20,8 @@
 - Measured managed-service usage must remain compatible with approximately $20 monthly.
 - Do not declare Phase B finished without fresh evidence for every approved completion gate.
 - At completion, provide the user a concise chat summary suitable for starting Phase C in a new chat.
+- For every production file and named function, maintain concise `docs/reference/simple/` and in-depth `docs/reference/technical/` entries at mirrored paths; document meaningful folders with `_folder.md` in both trees.
+- Require module/function JSDoc, comment non-obvious recovery and release invariants, run `pnpm docs:check`, and include documentation coverage in final evidence.
 
 ---
 

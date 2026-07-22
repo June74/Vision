@@ -6,7 +6,7 @@ This file is the project's editable source of truth. It records the agreed direc
 
 **Last updated:** 2026-07-22
 
-**Current deliverable:** Phase B implementation plan
+**Current deliverable:** Phase B runtime and CI implementation on `codex/phase-b-foundation`
 
 ## Product vision
 
@@ -513,6 +513,7 @@ The execution sequence is recorded in the [Phase B implementation roadmap](docs/
 - Combine Google push notifications with incremental synchronization and a scheduled 15-minute repair pass.
 - Keep Phase B event synchronization read-only after calendar setup; event create, edit, move, cancel, and delete arrive in Phase C through previewed and verified writes.
 - Route structured AI proposals through deterministic privacy, permission, conflict, and freshness validation, with a strict sub-budget inside the approximately $20 monthly ceiling.
+- Keep two synchronized implementation references: a concise plain-language layer and a separate in-depth technical layer covering every production file and named function, with folder guides where architectural boundaries need explanation.
 
 ### Phase B design checklist
 
@@ -525,12 +526,13 @@ The execution sequence is recorded in the [Phase B implementation roadmap](docs/
 - [x] Define Phase B scope, failure behavior, tests, and completion gates.
 - [x] Complete final review of the written Phase B specification.
 - [x] Produce the Phase B implementation plan.
-- [ ] Approve the Phase B implementation plan for execution.
+- [x] Approve the Phase B implementation plan for subagent-driven execution.
 
 ## Decision log
 
 | Date | Decision | Reason | Status |
 |---|---|---|---|
+| 2026-07-22 | Execute Phase B with fresh implementation subagents, independent task reviews, test-first development, and two synchronized documentation layers for every production file and named function. | Isolated task context and review gates improve implementation reliability, while separate concise and technical references keep the code understandable at two depths. | Approved and in progress |
 | 2026-07-22 | Approve the written Phase B data-foundation specification and begin implementation planning. | The reviewed specification captures the agreed architecture, service boundary, storage model, encryption, synchronization, AI routing, cost controls, recovery, operational states, verification gates, technology stack, and repository layout. | Approved |
 | 2026-07-22 | Use one Google secondary calendar named `Vision`, while storing school, work, and personal categories only inside Vision. | One calendar removes provider-side calendar switching while Vision preserves category, provenance, and privacy boundaries internally. | Agreed |
 | 2026-07-22 | Use Neon PostgreSQL as the authoritative bounded graph model in Version 1, with a derived native-graph projection available later if organization-scale traversal requires it. | One transactional authority keeps synchronization, approvals, audit, privacy, and recovery consistent within the private-pilot cost ceiling. | Agreed |

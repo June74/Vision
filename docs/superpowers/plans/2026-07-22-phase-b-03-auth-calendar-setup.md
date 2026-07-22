@@ -18,6 +18,8 @@
 - Never modify or create events on the primary calendar.
 - Re-running setup must not create a duplicate Vision calendar.
 - Live integration tests use a disposable test account/calendar, never production.
+- For every production file and named function, maintain concise `docs/reference/simple/` and in-depth `docs/reference/technical/` entries at mirrored paths; document meaningful folders with `_folder.md` in both trees.
+- Require module/function JSDoc, use inline comments for non-obvious authentication and setup constraints, and run `pnpm docs:check` before every task commit.
 
 ---
 

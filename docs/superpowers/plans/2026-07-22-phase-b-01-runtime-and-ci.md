@@ -16,6 +16,8 @@
 - Run Worker tests in the workerd-compatible Workers test pool.
 - Production deployment requires manual approval; pull requests receive checks and previews only.
 - Do not provision paid resources or production secrets without explicit approval.
+- Maintain mirrored `docs/reference/simple/` and `docs/reference/technical/` entries for every production file and named function; meaningful folders receive `_folder.md` in both trees.
+- Add module and function JSDoc, comment non-obvious reasons and safety invariants, and require `pnpm docs:check` in every task.
 
 ---
 
@@ -33,6 +35,20 @@
 - Create: `src/server/env.ts`
 - Create: `src/worker.ts`
 - Create: `worker-configuration.d.ts`
+- Create: `docs/reference/simple/src/client/_folder.md`
+- Create: `docs/reference/simple/src/client/App.md`
+- Create: `docs/reference/simple/src/client/main.md`
+- Create: `docs/reference/simple/src/client/styles.md`
+- Create: `docs/reference/simple/src/server/_folder.md`
+- Create: `docs/reference/simple/src/server/env.md`
+- Create: `docs/reference/simple/src/worker.md`
+- Create: `docs/reference/technical/src/client/_folder.md`
+- Create: `docs/reference/technical/src/client/App.md`
+- Create: `docs/reference/technical/src/client/main.md`
+- Create: `docs/reference/technical/src/client/styles.md`
+- Create: `docs/reference/technical/src/server/_folder.md`
+- Create: `docs/reference/technical/src/server/env.md`
+- Create: `docs/reference/technical/src/worker.md`
 - Modify: `.gitignore`
 - Test: `tests/unit/server/env.test.ts`
 
@@ -120,7 +136,7 @@ app.all("*", (c) => c.env.ASSETS.fetch(c.req.raw));
 export default app;
 ```
 
-Create a minimal `App.tsx` that renders `Vision` and `Foundation status`, then mount it from `main.tsx`. Configure `vite.config.ts` with `react()` and `cloudflare()`, configure `wrangler.jsonc` with `main: "src/worker.ts"`, `compatibility_date: "2026-07-22"`, SPA asset handling, `VISION_ENV: "local"`, and generated Worker types.
+Create a minimal `App.tsx` that renders `Vision` and `Foundation status`, then mount it from `main.tsx`. Configure `vite.config.ts` with `react()` and `cloudflare()`, configure `wrangler.jsonc` with `main: "src/worker.ts"`, `compatibility_date: "2026-07-22"`, SPA asset handling, `VISION_ENV: "local"`, and generated Worker types. Add module documentation comments, JSDoc for named functions/components, and both reference layers for every new production source file plus folder guides for `src/client` and `src/server`.
 
 - [ ] **Step 4: Verify the focused contract and build**
 
@@ -141,7 +157,7 @@ git add package.json pnpm-lock.yaml tsconfig.json vite.config.ts wrangler.jsonc 
 git commit -m "build: scaffold Vision Worker application"
 ```
 
-### Task 2: Add Worker-runtime and browser smoke tests
+### Task 2: Add documentation validation, Worker-runtime, and browser smoke tests
 
 **Files:**
 - Create: `vitest.config.ts`
@@ -149,11 +165,18 @@ git commit -m "build: scaffold Vision Worker application"
 - Create: `tests/worker/health.test.ts`
 - Create: `playwright.config.ts`
 - Create: `tests/e2e/shell.spec.ts`
+- Create: `scripts/validate-doc-coverage.ts`
+- Create: `tests/unit/docs/coverage.test.ts`
+- Create: `docs/reference/simple/_template.md`
+- Create: `docs/reference/technical/_template.md`
+- Create: `docs/reference/simple/scripts/validate-doc-coverage.md`
+- Create: `docs/reference/technical/scripts/validate-doc-coverage.md`
 - Modify: `package.json`
 
 **Interfaces:**
 - Consumes: default Worker export and `/api/health` from Task 1.
 - Produces: repeatable `unit`, `worker`, and `e2e` test projects.
+- Produces: `pnpm docs:check`, which fails for a missing simple/technical file, function heading, folder guide, module JSDoc, or function JSDoc.
 
 - [ ] **Step 1: Install the approved test runtime**
 
@@ -166,7 +189,9 @@ pnpm exec playwright install chromium
 
 Expected: pnpm exits `0`; Chromium is available to Playwright.
 
-- [ ] **Step 2: Write the failing Worker health test**
+- [ ] **Step 2: Write failing documentation and Worker health tests**
+
+Create a documentation test fixture with one undocumented production function and assert the validator reports its source path and function name. Run `pnpm exec vitest run tests/unit/docs/coverage.test.ts` and expect failure because the validator does not exist.
 
 Create `tests/worker/health.test.ts`:
 
@@ -197,6 +222,8 @@ cloudflareTest({ wrangler: { configPath: "./wrangler.jsonc" } })
 
 Set `tests/tsconfig.json` types to `vitest/globals` and `@cloudflare/vitest-pool-workers`. Configure Playwright to start `pnpm dev --host 127.0.0.1`, use Chromium, and target `http://127.0.0.1:5173`.
 
+Implement `scripts/validate-doc-coverage.ts` with the TypeScript compiler API. Scan production `.ts` and `.tsx` files, require mirrored reference files, require headings for every named function/component/method, require `_folder.md` for architectural folders, and verify module/function JSDoc. Exclude generated declarations, tests, migrations, and configuration. Add `"docs:check": "tsx scripts/validate-doc-coverage.ts"` and install `tsx` as a development dependency.
+
 Create `tests/e2e/shell.spec.ts`:
 
 ```ts
@@ -217,10 +244,11 @@ Run:
 pnpm test:unit
 pnpm test:worker
 pnpm test:e2e
+pnpm docs:check
 pnpm build
 ```
 
-Expected: each command exits `0`; the browser test confirms the rendered shell, not only bundle structure.
+Expected: each command exits `0`; documentation coverage passes and the browser test confirms the rendered shell, not only bundle structure.
 
 - [ ] **Step 5: Commit the test harness**
 
