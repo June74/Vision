@@ -112,3 +112,19 @@ Codex's restricted sandbox blocks Wrangler's normal AppData cache/log paths. The
 - Secret hygiene: root-secret parsing accepts the full canonical 256-bit base64url space, uses constant errors, and clears application-controlled decoded buffers in `finally`.
 - External state: no live root key, durable wrapped-key store, database adapter, or deployed crypto wiring was created; the future durable store must implement the reviewed atomic contracts.
 - Review result: initial review found two Critical and three Important issues; all fixes and the final Minor buffer cleanup passed final re-review with zero findings.
+
+## Domain Task 4 — Encrypted event persistence and privacy-safe audit
+
+- Status: complete; final independent acceptance approved with zero Critical, Important, or Minor findings.
+- Commit range: `cf89ca3..0b06602`.
+- Implementation/fix commits: `e2c345b`, `83719a3`, `a092d86`, and `0b06602`.
+- RED evidence: initial missing persistence behavior failed; final repair reproduced two remaining contract failures for concurrent node-lock ordering and the exact provider-order-key documentation.
+- GREEN evidence: focused event/graph/PGlite suite 22/22; graph/schema contracts 13/13; full check 100 main tests and 4 Worker tests; typecheck, documentation, builds, production-boundary checks, source/bundle scans, and diff checks passed.
+- Persistence boundary: protected event fields are encrypted before storage; planning projections exclude envelope columns; authorized protected reads re-check owner, privacy, domain, node, and version before decryption.
+- PostgreSQL adapter: strict Neon raw-result decoding, exact owner/node fact matching, monotonic exact 20-digit provider order keys, deterministic equal-version replay/conflict behavior, and a fresh winner query after empty conflict results.
+- Concurrency: the exact eligible node row is selected `FOR UPDATE OF node`, preventing a concurrent node-fact update from interleaving with the event statement; later node reclassification must coordinate event re-encryption.
+- Authorization boundary: repository construction and protected reads require private identity-registered decisions rather than caller-asserted owner/privacy objects.
+- Envelope compatibility: new writes use domain-bound v2 AAD while fixed legacy vectors preserve v1 decryption compatibility.
+- Audit boundary: durable audit persistence copies only own allowlisted data properties to a null-prototype record and rejects nested, inherited, accessor, hidden, symbol, or protected content.
+- External state: no live Neon request or real two-session Neon/PostgreSQL race was executed; those remain milestone acceptance gates.
+- Review result: all initial Critical/Important findings and the final row-lock/documentation findings were repaired; final spec compliance and task quality are approved with zero findings.

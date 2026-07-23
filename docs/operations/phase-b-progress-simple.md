@@ -90,10 +90,25 @@ bound hostile input sizes before decoding, and validate the Worker root key
 without exposing it. The task passed 36 focused crypto tests, 71 unit tests,
 and final independent review with no remaining findings.
 
-### Next — Encrypted persistence and safe audit
+### Domain Task 4 — Encrypted persistence and safe audit
 
-Connect the encryption boundary to event storage and prove that neither raw
-database rows nor audit facts contain protected plaintext.
+Vision now encrypts protected event content before PostgreSQL persistence,
+keeps planning queries free of encrypted payloads, and decrypts only after a
+private owner-and-privacy authorization decision. Safe audit records accept
+only a fixed metadata allowlist and reject protected or unexpected values.
+
+Database writes enforce strict provider ordering and exact node facts. The
+matching node is locked for the event write so a concurrent category, privacy,
+or version change cannot silently admit content under stale rules.
+
+The task passed 100 main tests and 4 Worker tests. Final independent review
+approved both the specification and implementation quality with no findings.
+A live Neon concurrency check remains a later external acceptance gate.
+
+### Next — Recoverable deletion
+
+Add the 30-day encrypted recovery window, restoration before its boundary,
+and irreversible ciphertext/relationship purging at or after the deadline.
 
 ## Not yet included
 
