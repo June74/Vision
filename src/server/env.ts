@@ -26,9 +26,58 @@ const keyEncryptionKeySchema = z.string().superRefine((keyEncryptionKey, context
   }
 });
 
+const visionEnvironmentSchema = z.enum(["local", "preview", "production"]);
+const googleClientIdSchema = z
+  .string()
+  .min(16)
+  .max(512)
+  .regex(/^[A-Za-z0-9._-]+\.apps\.googleusercontent\.com$/u);
+const googleClientSecretSchema = z.string().min(16).max(1_024);
+const googleAllowedSubjectSchema = z
+  .string()
+  .min(1)
+  .max(255)
+  .regex(/^[\x21-\x7e]+$/u);
+const googleRedirectSchema = z.string().url().max(2_048);
+
+/** Validates the server-only Google OAuth and private-pilot allowlist bindings as one exact unit. */
+export const GoogleAuthEnvSchema = z
+  .object({
+    VISION_ENV: visionEnvironmentSchema,
+    GOOGLE_CLIENT_ID: googleClientIdSchema,
+    GOOGLE_CLIENT_SECRET: googleClientSecretSchema,
+    GOOGLE_REDIRECT_URI: googleRedirectSchema,
+    GOOGLE_ALLOWED_SUB: googleAllowedSubjectSchema,
+    GOOGLE_ALLOWED_EMAIL: z.string().email().max(320),
+  })
+  .superRefine((environment, context) => {
+    const redirect = new URL(environment.GOOGLE_REDIRECT_URI);
+    const localHost =
+      redirect.hostname === "localhost" || redirect.hostname === "127.0.0.1";
+    if (
+      (environment.VISION_ENV === "local"
+        ? !(
+            redirect.protocol === "https:" ||
+            (redirect.protocol === "http:" && localHost)
+          )
+        : redirect.protocol !== "https:") ||
+      redirect.username !== "" ||
+      redirect.password !== "" ||
+      redirect.search !== "" ||
+      redirect.hash !== "" ||
+      redirect.pathname !== "/api/auth/google/callback"
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "GOOGLE_REDIRECT_URI must be the exact HTTPS callback URI; local may use HTTP loopback.",
+      });
+    }
+  });
+
 /** Validates deployment bindings, including the Worker-only least-privileged database credential. */
 export const RuntimeEnvSchema = z.object({
-  VISION_ENV: z.enum(["local", "preview", "production"]),
+  VISION_ENV: visionEnvironmentSchema,
   DATABASE_URL: z.string().url().superRefine((databaseUrl, context) => {
     // The username is safe configuration metadata; never include the URL or password in a validation message.
     if (new URL(databaseUrl).username !== "vision_app") {
@@ -36,6 +85,11 @@ export const RuntimeEnvSchema = z.object({
     }
   }),
   KEY_ENCRYPTION_KEY: keyEncryptionKeySchema,
+  GOOGLE_CLIENT_ID: googleClientIdSchema.optional(),
+  GOOGLE_CLIENT_SECRET: googleClientSecretSchema.optional(),
+  GOOGLE_REDIRECT_URI: googleRedirectSchema.optional(),
+  GOOGLE_ALLOWED_SUB: googleAllowedSubjectSchema.optional(),
+  GOOGLE_ALLOWED_EMAIL: z.string().email().max(320).optional(),
 });
 
 /** Safely validates a Worker-only database URL without including credential text in errors. */
@@ -49,6 +103,13 @@ export function parseVisionDatabaseUrl(databaseUrl: unknown): string {
  */
 export function parseVisionKeyEncryptionKey(keyEncryptionKey: unknown): string {
   return RuntimeEnvSchema.shape.KEY_ENCRYPTION_KEY.parse(keyEncryptionKey);
+}
+
+/** Validates the complete OAuth configuration before any provider request or auth persistence call. */
+export function parseGoogleAuthEnvironment(
+  environment: unknown,
+): z.infer<typeof GoogleAuthEnvSchema> {
+  return GoogleAuthEnvSchema.parse(environment);
 }
 
 /** Represents the validated server-only, secret-bearing Vision runtime environment. */

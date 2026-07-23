@@ -3,12 +3,19 @@ import { Hono } from "hono";
 import type { Env } from "./server/env";
 import { throwVisionError, toVisionErrorResponse, VisionError } from "./server/errors";
 import { logEvent, type SafeLogger } from "./server/logging";
-import { createRequestContextMiddleware, type RequestContext, type RequestIdFactory } from "./server/request-context";
+import { createRequestContextMiddleware, type RequestIdFactory } from "./server/request-context";
+import {
+  createProductionAuthDependencies,
+  registerOAuthRoutes,
+  type AuthRouteDependencies,
+} from "./server/auth/oauth-routes";
+import type { AuthRequestVariables } from "./server/auth/session";
 
 /** Supplies replaceable runtime boundaries for deterministic, side-effect-free application tests. */
 export interface AppDependencies {
   logger?: SafeLogger;
   createRequestId?: RequestIdFactory;
+  auth?: AuthRouteDependencies;
 }
 
 /** Writes only a previously validated, structured event to the Worker console. */
@@ -33,11 +40,16 @@ function logErrorSafely(logger: SafeLogger, requestId: string, errorCategory: st
 /** Creates the Vision Worker application with injected privacy-safe runtime dependencies. */
 export function createApp(dependencies: AppDependencies = {}) {
   const logger = dependencies.logger ?? consoleLogger;
-  const app = new Hono<{ Bindings: Env; Variables: RequestContext }>();
+  const app = new Hono<{ Bindings: Env; Variables: AuthRequestVariables }>();
 
   app.use("*", createRequestContextMiddleware(dependencies.createRequestId));
 
   app.get("/api/health", (context) => context.json({ status: "ok", service: "vision" } as const));
+  registerOAuthRoutes(
+    app,
+    dependencies.auth ??
+      ((environment) => createProductionAuthDependencies(environment, logger)),
+  );
   app.all("/api/*", () => {
     throwVisionError(new VisionError("NOT_FOUND", 404, "API route not found."));
   });

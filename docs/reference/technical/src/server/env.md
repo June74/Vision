@@ -24,6 +24,12 @@ Validates a runtime value at the database factory boundary through the same `DAT
 
 Validates a root wrapping secret through the same `KEY_ENCRYPTION_KEY` schema. It is a server-only helper, its constant failure message never serializes the provided key, and schema cleanup clears the application-controlled mutable decoded-byte buffer after acceptance or rejection. It cannot erase the immutable input string or runtime-internal copies.
 
+## `parseGoogleAuthEnvironment`
+
+**Signature:** `(environment: unknown) => GoogleAuthRuntimeEnv`
+
+Parses the Google OAuth client ID and secret, exact callback URI, allowed subject, allowed email, and environment together. Preview and production require HTTPS. Local permits HTTP only for loopback. Credentials, query, fragment, and any path other than `/api/auth/google/callback` are rejected with constant schema messages.
+
 ## `Env`
 
 **Signature:** `interface Env extends RuntimeEnv { ASSETS: Fetcher }`

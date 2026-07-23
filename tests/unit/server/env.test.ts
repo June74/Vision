@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { RuntimeEnvSchema } from "../../../src/server/env";
+import {
+  GoogleAuthEnvSchema,
+  RuntimeEnvSchema,
+} from "../../../src/server/env";
 
 function encodeBase64Url(bytes: Uint8Array): string {
   return btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
@@ -70,5 +73,39 @@ describe("RuntimeEnvSchema", () => {
         KEY_ENCRYPTION_KEY: "secret-root-key-that-must-never-appear-in-errors",
       }),
     ).not.toThrow(/secret-root-key-that-must-never-appear-in-errors/u);
+  });
+});
+
+describe("GoogleAuthEnvSchema", () => {
+  it("requires bounded server-only OAuth configuration and an HTTPS redirect outside local", () => {
+    expect(
+      GoogleAuthEnvSchema.parse({
+        VISION_ENV: "production",
+        GOOGLE_CLIENT_ID: "client-id.apps.googleusercontent.com",
+        GOOGLE_CLIENT_SECRET: "CLIENT_SECRET_SENTINEL",
+        GOOGLE_REDIRECT_URI:
+          "https://vision.example.test/api/auth/google/callback",
+        GOOGLE_ALLOWED_SUB: "google-subject",
+        GOOGLE_ALLOWED_EMAIL: "allowed@example.test",
+      }),
+    ).toMatchObject({
+      GOOGLE_ALLOWED_EMAIL: "allowed@example.test",
+      GOOGLE_REDIRECT_URI:
+        "https://vision.example.test/api/auth/google/callback",
+    });
+
+    const insecure = {
+      VISION_ENV: "production",
+      GOOGLE_CLIENT_ID: "client-id.apps.googleusercontent.com",
+      GOOGLE_CLIENT_SECRET: "CLIENT_SECRET_SENTINEL",
+      GOOGLE_REDIRECT_URI:
+        "http://vision.example.test/api/auth/google/callback",
+      GOOGLE_ALLOWED_SUB: "google-subject",
+      GOOGLE_ALLOWED_EMAIL: "allowed@example.test",
+    };
+    expect(() => GoogleAuthEnvSchema.parse(insecure)).toThrow(/https/iu);
+    expect(() => GoogleAuthEnvSchema.parse(insecure)).not.toThrow(
+      /CLIENT_SECRET_SENTINEL/u,
+    );
   });
 });

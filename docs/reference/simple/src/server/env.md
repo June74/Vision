@@ -16,6 +16,10 @@ Checks a server-only database URL and accepts only the `vision_app` role without
 
 Checks the server-only root wrapping key format without repeating the secret in errors. It also clears the temporary mutable decoded-byte buffer after either acceptance or rejection.
 
+## `parseGoogleAuthEnvironment`
+
+Requires the complete server-only Google client, exact callback, and private-pilot allowlist configuration.
+
 ## `Env`
 
 `Env` adds the static-asset binding. Its database URL and root key remain Worker-only, and the browser never receives them.
