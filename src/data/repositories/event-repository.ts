@@ -1,4 +1,5 @@
 /** Encrypts protected event content before persistence and gates every decrypted read. */
+import { sql } from "drizzle-orm";
 import {
   decryptProtectedFields,
   encryptProtectedFields,
@@ -15,9 +16,10 @@ import {
   type VisionEvent,
 } from "../../domain/events/event";
 import {
-  PrivacyLevelSchema,
-  type PrivacyLevel,
-} from "../../domain/privacy/privacy";
+  matchesEventContentAuthorizationDecision,
+  type EventContentAuthorizationPolicy,
+} from "../../server/authorization/event-content-authorization";
+import type { VisionDatabase } from "../db";
 
 /** Plaintext event content accepted only on the trusted side of the repository boundary. */
 export interface PlaintextEvent extends VisionEvent {
@@ -45,19 +47,26 @@ export interface StoredEventRow extends VisionEvent {
  * must compare `expectedVersion` in the same database statement that selects protected envelope columns.
  */
 export interface AtomicEventStore {
-  saveAtomically(row: StoredEventRow): Promise<StoredEventRow>;
+  saveAtomically(row: StoredEventRow): Promise<AtomicEventSaveResult>;
   selectPlanningEvent(nodeId: string, ownerId: string): Promise<VisionEvent | undefined>;
   selectProtectedEvent(
     nodeId: string,
     ownerId: string,
     expectedVersion: number,
+    expectedProviderVersion: string,
   ): Promise<StoredEventRow | undefined>;
 }
 
-/** Explicit owner and privacy capabilities supplied for one protected-content read. */
-export interface ProtectedEventReadAuthorization {
-  readonly ownerId: string;
-  readonly allowedPrivacyLevels: readonly PrivacyLevel[];
+/** Authoritative row and concurrency classification returned by one atomic save statement. */
+export interface AtomicEventSaveResult {
+  readonly outcome: "applied" | "equal" | "newer";
+  readonly row: StoredEventRow;
+}
+
+/** Server-owned construction facts for one authenticated owner-scoped repository. */
+export interface EventRepositoryOptions {
+  readonly authenticatedOwnerId: string;
+  readonly authorizationPolicy: EventContentAuthorizationPolicy;
 }
 
 /** Reports a denied protected-content read without including identities or content. */
@@ -74,6 +83,48 @@ export class EventReadStaleError extends Error {
     super("Event changed during the authorized read.");
     this.name = "EventReadStaleError";
   }
+}
+
+/** Reports a save attempted outside the authenticated repository owner scope. */
+export class EventOwnerMismatchError extends Error {
+  constructor() {
+    super("Event owner does not match the authenticated repository scope.");
+    this.name = "EventOwnerMismatchError";
+  }
+}
+
+/** Reports an equal-version non-idempotent write without exposing either event. */
+export class EventPersistenceConflictError extends Error {
+  constructor() {
+    super("Equal event version contains conflicting persisted facts.");
+    this.name = "EventPersistenceConflictError";
+  }
+}
+
+interface DatabaseEventRow extends Record<string, unknown> {
+  nodeId: string;
+  ownerId: string;
+  provider: string;
+  providerCalendarId: string;
+  providerEventId: string;
+  providerVersion: string;
+  startsAt: Date;
+  endsAt: Date;
+  timeZone: string;
+  busy: boolean;
+  status: string;
+  recurrenceId: string | null;
+  domain: string;
+  domainState: string;
+  privacy: string;
+  version: number;
+  titleEnvelope?: Uint8Array | null;
+  descriptionEnvelope?: Uint8Array | null;
+  attendeesEnvelope?: Uint8Array | null;
+  locationEnvelope?: Uint8Array | null;
+  meetingLinkEnvelope?: Uint8Array | null;
+  protectedKeyVersion?: number | null;
+  saveOutcome?: "applied" | "equal" | "newer" | "invalid";
 }
 
 const textEncoder = new TextEncoder();
@@ -109,16 +160,203 @@ type PlainProtectedEventFields = {
 
 type EncryptedProtectedEventFields = EncryptedProtectedFields<PlainProtectedEventFields>;
 
+/** Concrete Neon/Drizzle adapter using atomic PostgreSQL writes and owner-scoped projections. */
+export class DrizzleAtomicEventStore implements AtomicEventStore {
+  constructor(private readonly database: VisionDatabase) {}
+
+  /** Applies only a strictly newer provider version and returns the row PostgreSQL kept. */
+  async saveAtomically(row: StoredEventRow): Promise<AtomicEventSaveResult> {
+    const result = await this.database.execute<DatabaseEventRow>(sql`
+      with incoming (
+        node_id, owner_id, provider, provider_calendar_id, provider_event_id, provider_version,
+        starts_at, ends_at, time_zone, busy, status, recurrence_id, title_envelope,
+        description_envelope, attendees_envelope, location_envelope, meeting_link_envelope,
+        protected_key_version
+      ) as (
+        values (
+          ${row.nodeId}, ${row.ownerId}, ${row.identity.sourceSystem},
+          ${row.identity.sourceCalendarId}, ${row.identity.sourceEventId},
+          ${row.identity.sourceVersion}, ${row.startsAt}::timestamptz, ${row.endsAt}::timestamptz,
+          ${row.timeZone}, ${row.busy}::boolean, ${row.status}, ${row.recurrenceId ?? null},
+          ${row.titleEnvelope}::bytea, ${row.descriptionEnvelope}::bytea, ${row.attendeesEnvelope}::bytea,
+          ${row.locationEnvelope}::bytea, ${row.meetingLinkEnvelope}::bytea,
+          ${row.protectedKeyVersion}::integer
+        )
+      ),
+      write as (
+        insert into events as persisted (
+          node_id, owner_id, provider, provider_calendar_id, provider_event_id, provider_version,
+          starts_at, ends_at, time_zone, busy, status, recurrence_id, title_envelope,
+          description_envelope, attendees_envelope, location_envelope, meeting_link_envelope,
+          protected_key_version
+        )
+        select * from incoming
+        on conflict (provider, provider_calendar_id, provider_event_id) do update set
+          provider_version = excluded.provider_version,
+          starts_at = excluded.starts_at,
+          ends_at = excluded.ends_at,
+          time_zone = excluded.time_zone,
+          busy = excluded.busy,
+          status = excluded.status,
+          recurrence_id = excluded.recurrence_id,
+          title_envelope = excluded.title_envelope,
+          description_envelope = excluded.description_envelope,
+          attendees_envelope = excluded.attendees_envelope,
+          location_envelope = excluded.location_envelope,
+          meeting_link_envelope = excluded.meeting_link_envelope,
+          protected_key_version = excluded.protected_key_version
+        where persisted.owner_id = excluded.owner_id
+          and persisted.node_id = excluded.node_id
+          and persisted.provider_version < excluded.provider_version
+        returning persisted.*
+      ),
+      authoritative as (
+        select write.*, 'applied'::text as save_outcome from write
+        union all
+        select persisted.*,
+          case
+            when persisted.provider_version = incoming.provider_version then 'equal'
+            when persisted.provider_version > incoming.provider_version then 'newer'
+            else 'invalid'
+          end as save_outcome
+        from events persisted
+        cross join incoming
+        where not exists (select 1 from write)
+          and persisted.provider = incoming.provider
+          and persisted.provider_calendar_id = incoming.provider_calendar_id
+          and persisted.provider_event_id = incoming.provider_event_id
+      )
+      select
+        authoritative.node_id as "nodeId",
+        authoritative.owner_id as "ownerId",
+        authoritative.provider,
+        authoritative.provider_calendar_id as "providerCalendarId",
+        authoritative.provider_event_id as "providerEventId",
+        authoritative.provider_version as "providerVersion",
+        authoritative.starts_at as "startsAt",
+        authoritative.ends_at as "endsAt",
+        authoritative.time_zone as "timeZone",
+        authoritative.busy,
+        authoritative.status,
+        authoritative.recurrence_id as "recurrenceId",
+        node.domain,
+        node.domain_state as "domainState",
+        node.privacy,
+        node.version,
+        authoritative.title_envelope as "titleEnvelope",
+        authoritative.description_envelope as "descriptionEnvelope",
+        authoritative.attendees_envelope as "attendeesEnvelope",
+        authoritative.location_envelope as "locationEnvelope",
+        authoritative.meeting_link_envelope as "meetingLinkEnvelope",
+        authoritative.protected_key_version as "protectedKeyVersion",
+        authoritative.save_outcome as "saveOutcome"
+      from authoritative
+      inner join nodes node
+        on node.id = authoritative.node_id and node.owner_id = authoritative.owner_id
+    `);
+
+    const [persisted] = result.rows;
+    if (
+      !persisted ||
+      !["applied", "equal", "newer"].includes(persisted.saveOutcome ?? "")
+    ) {
+      throw new Error("PostgreSQL returned an invalid atomic event-save result.");
+    }
+    return {
+      outcome: persisted.saveOutcome as AtomicEventSaveResult["outcome"],
+      row: databaseRowToStoredEvent(persisted),
+    };
+  }
+
+  /** Selects only planning-safe columns for one node and owner. */
+  async selectPlanningEvent(
+    nodeId: string,
+    ownerId: string,
+  ): Promise<VisionEvent | undefined> {
+    const result = await this.database.execute<DatabaseEventRow>(sql`
+      select
+        event.node_id as "nodeId",
+        event.owner_id as "ownerId",
+        event.provider,
+        event.provider_calendar_id as "providerCalendarId",
+        event.provider_event_id as "providerEventId",
+        event.provider_version as "providerVersion",
+        event.starts_at as "startsAt",
+        event.ends_at as "endsAt",
+        event.time_zone as "timeZone",
+        event.busy,
+        event.status,
+        event.recurrence_id as "recurrenceId",
+        node.domain,
+        node.domain_state as "domainState",
+        node.privacy,
+        node.version
+      from events event
+      inner join nodes node on node.id = event.node_id and node.owner_id = event.owner_id
+      where event.node_id = ${nodeId} and event.owner_id = ${ownerId}
+      limit 1
+    `);
+    return result.rows[0] ? databaseRowToPlanningEvent(result.rows[0]) : undefined;
+  }
+
+  /** Selects envelopes only when owner, node version, and provider version match the authorized snapshot. */
+  async selectProtectedEvent(
+    nodeId: string,
+    ownerId: string,
+    expectedVersion: number,
+    expectedProviderVersion: string,
+  ): Promise<StoredEventRow | undefined> {
+    const result = await this.database.execute<DatabaseEventRow>(sql`
+      select
+        event.node_id as "nodeId",
+        event.owner_id as "ownerId",
+        event.provider,
+        event.provider_calendar_id as "providerCalendarId",
+        event.provider_event_id as "providerEventId",
+        event.provider_version as "providerVersion",
+        event.starts_at as "startsAt",
+        event.ends_at as "endsAt",
+        event.time_zone as "timeZone",
+        event.busy,
+        event.status,
+        event.recurrence_id as "recurrenceId",
+        node.domain,
+        node.domain_state as "domainState",
+        node.privacy,
+        node.version,
+        event.title_envelope as "titleEnvelope",
+        event.description_envelope as "descriptionEnvelope",
+        event.attendees_envelope as "attendeesEnvelope",
+        event.location_envelope as "locationEnvelope",
+        event.meeting_link_envelope as "meetingLinkEnvelope",
+        event.protected_key_version as "protectedKeyVersion"
+      from events event
+      inner join nodes node on node.id = event.node_id and node.owner_id = event.owner_id
+      where event.node_id = ${nodeId}
+        and event.owner_id = ${ownerId}
+        and node.version = ${expectedVersion}
+        and event.provider_version = ${expectedProviderVersion}
+      limit 1
+    `);
+    return result.rows[0] ? databaseRowToStoredEvent(result.rows[0]) : undefined;
+  }
+}
+
 /** Connects plaintext event objects to an atomic ciphertext store and authorization-gated reads. */
 export class EventRepository {
   constructor(
     private readonly store: AtomicEventStore,
     private readonly keyProvider: KeyProvider,
+    private readonly authenticatedOwnerId: string,
+    private readonly authorizationPolicy: EventContentAuthorizationPolicy,
   ) {}
 
   /** Encrypts every represented protected field before making the single atomic adapter call. */
   async save(event: PlaintextEvent): Promise<void> {
     const validated = validatePlaintextEvent(event);
+    if (validated.ownerId !== this.authenticatedOwnerId) {
+      throw new EventOwnerMismatchError();
+    }
     const planningEvent = toPlanningEvent(validated);
     const encrypted = await encryptProtectedFields(
       this.keyProvider,
@@ -138,14 +376,17 @@ export class EventRepository {
     const row = toStoredEventRow(planningEvent, encrypted);
 
     // No database adapter method is reachable until all plaintext fields have become authenticated envelopes.
-    const authoritative = await this.store.saveAtomically(row);
-    validateAuthoritativeSave(authoritative, row);
+    const result = await this.store.saveAtomically(row);
+    validateAuthoritativeSave(result.row, row);
+    if (result.outcome === "equal") {
+      await this.assertIdempotentReplay(result.row, validated);
+    }
   }
 
   /** Reads only planning-safe columns for an explicitly named owner. */
-  async getPlanning(nodeId: string, ownerId: string): Promise<VisionEvent | undefined> {
-    validateOpaqueLookup(nodeId, ownerId);
-    const event = await this.store.selectPlanningEvent(nodeId, ownerId);
+  async getPlanning(nodeId: string): Promise<VisionEvent | undefined> {
+    validateOpaqueLookup(nodeId, this.authenticatedOwnerId);
+    const event = await this.store.selectPlanningEvent(nodeId, this.authenticatedOwnerId);
     if (!event) {
       return undefined;
     }
@@ -154,7 +395,7 @@ export class EventRepository {
     if (
       !parsed.success ||
       parsed.data.nodeId !== nodeId ||
-      parsed.data.ownerId !== ownerId
+      parsed.data.ownerId !== this.authenticatedOwnerId
     ) {
       throw new Error("Planning event lookup returned an invalid owner-bound row.");
     }
@@ -164,22 +405,27 @@ export class EventRepository {
   /** Decrypts only after owner and privacy checks, using the authorized planning version as a read pin. */
   async get(
     nodeId: string,
-    authorization: ProtectedEventReadAuthorization,
   ): Promise<PlaintextEvent | undefined> {
-    const allowedPrivacyLevels = validateReadAuthorization(authorization);
-    const planningEvent = await this.getPlanning(nodeId, authorization.ownerId);
+    const planningEvent = await this.getPlanning(nodeId);
     if (!planningEvent) {
       return undefined;
     }
 
-    if (!allowedPrivacyLevels.has(planningEvent.privacy)) {
+    const request = {
+      authenticatedOwnerId: this.authenticatedOwnerId,
+      eventOwnerId: planningEvent.ownerId,
+      privacy: planningEvent.privacy,
+    };
+    const decision = this.authorizationPolicy.authorize(request);
+    if (!matchesEventContentAuthorizationDecision(decision, request)) {
       throw new EventContentAccessDeniedError();
     }
 
     const stored = await this.store.selectProtectedEvent(
       nodeId,
-      authorization.ownerId,
+      this.authenticatedOwnerId,
       planningEvent.version,
+      planningEvent.identity.sourceVersion,
     );
     if (!stored || !matchesAuthorizedSnapshot(stored, planningEvent)) {
       // A changed owner, privacy, domain, or version invalidates the authorization decision before decryption.
@@ -205,6 +451,46 @@ export class EventRepository {
       meetingLink: plaintext.meetingLink,
     };
   }
+
+  /** Owner/privacy-authorizes and compares an equal-version row to distinguish replay from conflict. */
+  private async assertIdempotentReplay(
+    stored: StoredEventRow,
+    requested: PlaintextEvent,
+  ): Promise<void> {
+    const request = {
+      authenticatedOwnerId: this.authenticatedOwnerId,
+      eventOwnerId: stored.ownerId,
+      privacy: stored.privacy,
+    };
+    const decision = this.authorizationPolicy.authorize(request);
+    if (!matchesEventContentAuthorizationDecision(decision, request)) {
+      throw new EventContentAccessDeniedError();
+    }
+    const persisted = await decryptStoredEvent(this.keyProvider, stored);
+    if (!plaintextEventsEqual(persisted, requested)) {
+      throw new EventPersistenceConflictError();
+    }
+  }
+}
+
+/** Wires the production Drizzle adapter and trusted server policy into one owner-scoped repository. */
+export function createEventRepository(
+  database: VisionDatabase,
+  keyProvider: KeyProvider,
+  options: EventRepositoryOptions,
+): EventRepository {
+  if (
+    typeof options.authenticatedOwnerId !== "string" ||
+    options.authenticatedOwnerId.length === 0
+  ) {
+    throw new EventOwnerMismatchError();
+  }
+  return new EventRepository(
+    new DrizzleAtomicEventStore(database),
+    keyProvider,
+    options.authenticatedOwnerId,
+    options.authorizationPolicy,
+  );
 }
 
 /** Validates the exact top-level event and protected value shapes without coercion. */
@@ -375,31 +661,93 @@ function validateAuthoritativeSave(
   }
 }
 
-/** Validates an explicit owner and closed set of privacy levels before any lookup. */
-function validateReadAuthorization(
-  authorization: ProtectedEventReadAuthorization,
-): ReadonlySet<PrivacyLevel> {
-  if (
-    typeof authorization !== "object" ||
-    authorization === null ||
-    Array.isArray(authorization) ||
-    Object.getPrototypeOf(authorization) !== Object.prototype ||
-    typeof authorization.ownerId !== "string" ||
-    authorization.ownerId.length === 0 ||
-    !Array.isArray(authorization.allowedPrivacyLevels)
-  ) {
-    throw new EventContentAccessDeniedError();
-  }
+/** Converts one PostgreSQL projection into the strict planning event contract. */
+function databaseRowToPlanningEvent(row: DatabaseEventRow): VisionEvent {
+  return VisionEventSchema.parse({
+    nodeId: row.nodeId,
+    ownerId: row.ownerId,
+    identity: {
+      sourceSystem: row.provider,
+      sourceCalendarId: row.providerCalendarId,
+      sourceEventId: row.providerEventId,
+      sourceVersion: row.providerVersion,
+    },
+    startsAt: new Date(row.startsAt).toISOString(),
+    endsAt: new Date(row.endsAt).toISOString(),
+    timeZone: row.timeZone,
+    busy: row.busy,
+    status: row.status,
+    recurrenceId: row.recurrenceId ?? undefined,
+    domain: row.domain,
+    domainState: row.domainState,
+    privacy: row.privacy,
+    version: row.version,
+  });
+}
 
-  const levels = new Set<PrivacyLevel>();
-  for (const level of authorization.allowedPrivacyLevels) {
-    const parsed = PrivacyLevelSchema.safeParse(level);
-    if (!parsed.success) {
-      throw new EventContentAccessDeniedError();
-    }
-    levels.add(parsed.data);
+/** Converts a complete protected PostgreSQL projection into the encrypted row contract. */
+function databaseRowToStoredEvent(row: DatabaseEventRow): StoredEventRow {
+  if (
+    !(row.attendeesEnvelope instanceof Uint8Array) ||
+    typeof row.protectedKeyVersion !== "number"
+  ) {
+    throw new Error("PostgreSQL returned invalid protected event columns.");
   }
-  return levels;
+  return {
+    ...databaseRowToPlanningEvent(row),
+    titleEnvelope: row.titleEnvelope ?? null,
+    descriptionEnvelope: row.descriptionEnvelope ?? null,
+    attendeesEnvelope: row.attendeesEnvelope,
+    locationEnvelope: row.locationEnvelope ?? null,
+    meetingLinkEnvelope: row.meetingLinkEnvelope ?? null,
+    protectedKeyVersion: row.protectedKeyVersion,
+  };
+}
+
+/** Decrypts one already-owner/privacy-authorized stored row. */
+async function decryptStoredEvent(
+  keyProvider: KeyProvider,
+  stored: StoredEventRow,
+): Promise<PlaintextEvent> {
+  const plaintext = await decryptProtectedFields(
+    keyProvider,
+    {
+      ownerId: stored.ownerId,
+      nodeId: stored.nodeId,
+      domain: stored.domain,
+    },
+    toEncryptedProtectedFields(stored),
+  );
+  return {
+    ...storedRowToPlanningEvent(stored),
+    title: plaintext.title,
+    description: plaintext.description,
+    attendees: parseAttendees(plaintext.attendees),
+    location: plaintext.location,
+    meetingLink: plaintext.meetingLink,
+  };
+}
+
+/** Removes encrypted persistence columns from a validated stored row. */
+function storedRowToPlanningEvent(stored: StoredEventRow): VisionEvent {
+  const {
+    titleEnvelope: _titleEnvelope,
+    descriptionEnvelope: _descriptionEnvelope,
+    attendeesEnvelope: _attendeesEnvelope,
+    locationEnvelope: _locationEnvelope,
+    meetingLinkEnvelope: _meetingLinkEnvelope,
+    protectedKeyVersion: _protectedKeyVersion,
+    ...planning
+  } = stored;
+  return planning;
+}
+
+/** Compares the complete normalized plaintext event for exact idempotent replay. */
+function plaintextEventsEqual(
+  left: PlaintextEvent,
+  right: PlaintextEvent,
+): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 /** Compares every policy-relevant field with the snapshot that was explicitly authorized. */
@@ -411,6 +759,7 @@ function matchesAuthorizedSnapshot(
     stored.nodeId === authorized.nodeId &&
     stored.ownerId === authorized.ownerId &&
     stored.version === authorized.version &&
+    stored.identity.sourceVersion === authorized.identity.sourceVersion &&
     stored.domain === authorized.domain &&
     stored.privacy === authorized.privacy
   );

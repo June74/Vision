@@ -10,9 +10,9 @@ import {
 
 const SENTINEL = "VISION_PROTECTED_SENTINEL_7F9A";
 const validAuditEvent = {
-  id: "c56a4180-65aa-42ec-a945-5fd21dec0538",
-  ownerId: "550e8400-e29b-41d4-a716-446655440000",
-  nodeId: "6ba7b810-9dad-41d1-80b4-00c04fd430c8",
+  id: "audit_1",
+  ownerId: "owner_1",
+  nodeId: "node_event_1",
   action: "event.saved",
   actorType: "system",
   occurredAt: "2026-07-23T12:00:00.000Z",
@@ -104,6 +104,10 @@ describe("privacy-safe audit event", () => {
 
 if (false) {
   const audit: SafeAuditEvent = validAuditEvent;
+  const writer = new AuditWriter(new RecordingAuditSink());
+  const unsafeVariable = { ...audit, title: SENTINEL };
+  // @ts-expect-error variables with protected extra keys are rejected, not only fresh object literals
+  void writer.write(unsafeVariable);
   const compileTimeRejections: SafeAuditEvent[] = [
     {
       ...audit,

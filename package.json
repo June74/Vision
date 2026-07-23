@@ -32,6 +32,7 @@
     "@cloudflare/vite-plugin": "^1.46.0",
     "@cloudflare/vitest-pool-workers": "^0.18.7",
     "@cloudflare/workers-types": "^5.20260721.1",
+    "@electric-sql/pglite": "^0.5.4",
     "@playwright/test": "^1.61.1",
     "@types/node": "^26.1.1",
     "@types/react": "^19.2.17",

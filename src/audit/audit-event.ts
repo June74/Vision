@@ -6,13 +6,18 @@ const safeCategoryCode = z
   .min(1)
   .max(64)
   .regex(/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/u);
+const opaqueAuditId = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[a-z0-9][a-z0-9_-]*$/u);
 
 /** Strict runtime schema for opaque identities and controlled audit categories. */
 export const SafeAuditEventSchema = z
   .object({
-    id: z.string().uuid(),
-    ownerId: z.string().uuid(),
-    nodeId: z.string().uuid().optional(),
+    id: opaqueAuditId,
+    ownerId: opaqueAuditId,
+    nodeId: opaqueAuditId.optional(),
     action: safeCategoryCode,
     actorType: z.enum(["user", "system", "provider", "model"]),
     occurredAt: z.string().datetime({ offset: true }),

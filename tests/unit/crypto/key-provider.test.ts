@@ -119,6 +119,7 @@ describe("WrappedKeyProvider active-version authority", () => {
     const envelope = await encryptText(overlappingKey.key, "linearizable", {
       ownerId: "owner-1",
       nodeId: "node-1",
+      domain: "school",
       fieldName: "title",
       keyVersion: overlappingKey.keyVersion,
     });
@@ -127,6 +128,7 @@ describe("WrappedKeyProvider active-version authority", () => {
       decryptText(historical.key, envelope, {
         ownerId: "owner-1",
         nodeId: "node-1",
+        domain: "school",
         fieldName: "title",
         keyVersion: overlappingKey.keyVersion,
       }),
@@ -142,6 +144,7 @@ describe("WrappedKeyProvider active-version authority", () => {
     const oldEnvelope = await encryptText(oldKey.key, "historical", {
       ownerId: "owner-1",
       nodeId: "node-1",
+      domain: "school",
       fieldName: "description",
       keyVersion: 1,
     });
@@ -155,6 +158,7 @@ describe("WrappedKeyProvider active-version authority", () => {
       decryptText(historical.key, oldEnvelope, {
         ownerId: "owner-1",
         nodeId: "node-1",
+        domain: "school",
         fieldName: "description",
         keyVersion: 1,
       }),

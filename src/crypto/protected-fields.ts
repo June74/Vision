@@ -46,6 +46,7 @@ export async function encryptProtectedFields<T extends PlainProtectedFields>(
         await encryptText(dataKey.key, value, {
           ownerId: context.ownerId,
           nodeId: context.nodeId,
+          domain: context.domain,
           fieldName,
           keyVersion: dataKey.keyVersion,
         }),
@@ -87,6 +88,7 @@ export async function decryptProtectedFields<T extends PlainProtectedFields>(
         await decryptText(resolvedKey.key, envelope, {
           ownerId: context.ownerId,
           nodeId: context.nodeId,
+          domain: context.domain,
           fieldName,
           keyVersion: envelope.keyVersion,
         }),

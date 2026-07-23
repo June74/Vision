@@ -1,6 +1,7 @@
 # `src/crypto/envelope.ts`
 
-This module encrypts one text field into a small JSON-safe envelope and decrypts it only in the same owner, node, field, and key-version context.
+This module encrypts one text field into a small JSON-safe envelope and decrypts it only in the same owner, node,
+domain, field, and key-version context.
 
 `CipherEnvelope` records the supported format, AES algorithm, key version, random IV, and ciphertext. `ProtectedFieldAad` describes the metadata that AES-GCM authenticates without exposing it as plaintext content.
 
@@ -40,7 +41,7 @@ Authenticates the exact field context before returning UTF-8 plaintext.
 
 ## `validateProtectedFieldAad`
 
-Requires non-empty owner, node, and field identifiers plus a valid key version.
+Requires non-empty owner, node, and field identifiers, a valid domain, and a valid key version.
 
 ## `encodeProtectedFieldAad`
 

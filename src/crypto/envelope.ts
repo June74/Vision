@@ -1,4 +1,5 @@
 /** Implements strict AES-256-GCM envelopes for Vision protected fields. */
+import { DomainSchema, type Domain } from "../domain/categorization/category";
 
 /** The only supported protected-field envelope format. */
 export interface CipherEnvelope {
@@ -13,6 +14,7 @@ export interface CipherEnvelope {
 export interface ProtectedFieldAad {
   readonly ownerId: string;
   readonly nodeId: string;
+  readonly domain: Domain;
   readonly fieldName: string;
   readonly keyVersion: number;
 }
@@ -271,6 +273,7 @@ function validateProtectedFieldAad(aad: ProtectedFieldAad): void {
     throw new Error("Protected-field authenticated metadata requires non-empty owner, node, and field identifiers.");
   }
 
+  DomainSchema.parse(aad.domain);
   validateKeyVersion(aad.keyVersion);
 }
 
@@ -278,7 +281,15 @@ function validateProtectedFieldAad(aad: ProtectedFieldAad): void {
 function encodeProtectedFieldAad(aad: ProtectedFieldAad): Uint8Array<ArrayBuffer> {
   // A fixed-purpose JSON tuple prevents concatenation collisions and makes every binding position unambiguous.
   return textEncoder.encode(
-    JSON.stringify(["vision-protected-field", 1, aad.ownerId, aad.nodeId, aad.fieldName, aad.keyVersion]),
+    JSON.stringify([
+      "vision-protected-field",
+      1,
+      aad.ownerId,
+      aad.nodeId,
+      aad.domain,
+      aad.fieldName,
+      aad.keyVersion,
+    ]),
   );
 }
 

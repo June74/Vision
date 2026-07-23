@@ -1,6 +1,6 @@
 # `src/audit/audit-event.ts`
 
-This file defines the only information Vision may keep in an audit record: opaque IDs, a controlled action and actor,
+This file defines the only information Vision may keep in an audit record: bounded lowercase opaque IDs, a controlled action and actor,
 the time, outcome, provider, and safe error category. Extra, hidden, inherited, accessor, symbol, or nested fields are
 rejected without exposing their values.
 

@@ -4,10 +4,9 @@
 extends the pure `VisionEvent` planning contract with the five represented protected fields. `StoredEventRow` replaces
 those values with serialized `CipherEnvelope` byte arrays and records the common active key version.
 
-`AtomicEventStore` separates three capabilities: an atomic monotonic save, a projection that cannot select protected
-columns, and a protected projection pinned to the planning version. A production database adapter must compare that
-version in the same statement that selects envelopes. This avoids both lost-update behavior and a privacy
-time-of-check/time-of-use race.
+`DrizzleAtomicEventStore` is the production Neon/Drizzle implementation of `AtomicEventStore`. It separates an atomic
+strictly-monotonic provider-version save, a projection that cannot select protected columns, and a protected projection
+pinned to both node and provider versions. PGlite integration tests execute the same SQL against the reviewed migration.
 
 ## `save`
 
@@ -21,18 +20,19 @@ must not be older than the request.
 
 ## `getPlanning`
 
-**Signature:** `(nodeId: string, ownerId: string) => Promise<VisionEvent | undefined>`
+**Signature:** `(nodeId: string) => Promise<VisionEvent | undefined>`
 
-Calls only `selectPlanningEvent`, validates the pure `VisionEvent` result, and checks its owner and node ID against the
-lookup. It has no access to envelope fields.
+Calls only `selectPlanningEvent`, validates the pure `VisionEvent` result, and checks its owner against the repository's
+authenticated owner scope. It has no access to envelope fields.
 
 ## `get`
 
-**Signature:** `(nodeId: string, authorization: ProtectedEventReadAuthorization) => Promise<PlaintextEvent | undefined>`
+**Signature:** `(nodeId: string) => Promise<PlaintextEvent | undefined>`
 
-Validates the explicit owner and closed privacy-level capability, obtains the planning projection, and checks privacy
-before calling `selectProtectedEvent`. The protected call is version-pinned. Owner, version, domain, and privacy must
-still match before envelope parsing, key lookup, or decryption. Missing or changed snapshots raise
+Obtains the planning projection, asks the injected server policy to issue a private-symbol-branded owner/privacy
+decision, and verifies that decision before calling `selectProtectedEvent`. The protected call is pinned to node and
+provider versions. Owner, version, domain, and privacy must still match before envelope parsing, key lookup, or
+decryption. Missing or changed snapshots raise
 `EventReadStaleError`; denied privacy raises `EventContentAccessDeniedError`.
 
 ## `validatePlaintextEvent`
@@ -83,13 +83,6 @@ Parses the five stored envelopes, requires attendees, and verifies every represe
 Rejects a storage result that crosses node, owner, stable provider identity, or monotonic version boundaries. Errors
 use constant text and do not include row values.
 
-## `validateReadAuthorization`
-
-**Signature:** `(authorization: ProtectedEventReadAuthorization) => ReadonlySet<PrivacyLevel>`
-
-Requires a plain authorization object, a non-empty explicit owner, and values accepted by `PrivacyLevelSchema`.
-Invalid capabilities fail closed as `EventContentAccessDeniedError`.
-
 ## `matchesAuthorizedSnapshot`
 
 **Signature:** `(stored: StoredEventRow, authorized: VisionEvent) => boolean`
@@ -122,3 +115,69 @@ plain copy.
 
 Parses authenticated attendee JSON and reuses `validateAttendees`. Any malformed content becomes a constant safe
 storage error.
+
+## `saveAtomically`
+
+**Signature:** `(row: StoredEventRow) => Promise<AtomicEventSaveResult>`
+
+Executes one data-modifying CTE. `ON CONFLICT` updates all planning and encrypted columns only when owner and stable node
+match and the provider version is strictly newer. The statement classifies `applied`, `equal`, or `newer` and returns
+the authoritative joined node/event row.
+
+## `selectPlanningEvent`
+
+**Signature:** `(nodeId: string, ownerId: string) => Promise<VisionEvent | undefined>`
+
+Selects an explicit planning-only column list and never mentions an envelope column.
+
+## `selectProtectedEvent`
+
+**Signature:** `(nodeId, ownerId, expectedVersion, expectedProviderVersion) => Promise<StoredEventRow | undefined>`
+
+Selects encrypted columns only after authorization and includes owner, node-version, and provider-version predicates in
+the same PostgreSQL statement.
+
+## `assertIdempotentReplay`
+
+**Signature:** `(stored: StoredEventRow, requested: PlaintextEvent) => Promise<void>`
+
+Reissues and verifies the branded owner/privacy decision, decrypts the authoritative equal-version row, and throws
+`EventPersistenceConflictError` unless the complete normalized plaintext event is identical.
+
+## `createEventRepository`
+
+**Signature:** `(database, keyProvider, options) => EventRepository`
+
+Wires `DrizzleAtomicEventStore`, the key provider, the server-supplied authenticated owner, and authorization policy.
+The authentication milestone must supply the verified owner; this factory does not authenticate a raw request.
+
+## `databaseRowToPlanningEvent`
+
+**Signature:** `(row: DatabaseEventRow) => VisionEvent`
+
+Maps aliased SQL fields, normalizes timestamps, and validates through `VisionEventSchema`.
+
+## `databaseRowToStoredEvent`
+
+**Signature:** `(row: DatabaseEventRow) => StoredEventRow`
+
+Requires binary attendees and numeric key metadata, then combines the validated planning event with nullable byte
+envelopes.
+
+## `decryptStoredEvent`
+
+**Signature:** `(keyProvider, stored) => Promise<PlaintextEvent>`
+
+Decrypts owner/node/domain/field-bound envelopes only after the caller has verified a branded policy decision.
+
+## `storedRowToPlanningEvent`
+
+**Signature:** `(stored: StoredEventRow) => VisionEvent`
+
+Explicitly removes every envelope and key-version persistence column.
+
+## `plaintextEventsEqual`
+
+**Signature:** `(left: PlaintextEvent, right: PlaintextEvent) => boolean`
+
+Compares normalized complete events to distinguish an idempotent replay from an equal-version conflict.

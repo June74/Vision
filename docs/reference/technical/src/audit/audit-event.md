@@ -1,6 +1,7 @@
 # `src/audit/audit-event.ts`
 
-`SafeAuditEventSchema` is a strict Zod object. IDs are UUIDs; action, provider, and error values are bounded lowercase
+`SafeAuditEventSchema` is a strict Zod object. IDs are bounded lowercase opaque tokens compatible with canonical IDs
+such as `owner_1` and `node_event_1`; action, provider, and error values are bounded lowercase
 category codes; actor and outcome are closed enums; and the timestamp is an offset-aware ISO datetime. There is no
 free-form content or payload field. `SafeAuditEventValidationError` uses one constant message.
 

@@ -11,6 +11,7 @@ import {
 const aad: ProtectedFieldAad = {
   ownerId: "owner-1",
   nodeId: "event-1",
+  domain: "work",
   fieldName: "title",
   keyVersion: 1,
 };
@@ -70,6 +71,7 @@ describe("AES-GCM protected-field envelopes", () => {
   it.each([
     [{ ...aad, ownerId: "owner-2" }, "owner"],
     [{ ...aad, nodeId: "event-2" }, "node"],
+    [{ ...aad, domain: "school" }, "domain"],
     [{ ...aad, fieldName: "description" }, "field"],
     [{ ...aad, keyVersion: 2 }, "key version"],
   ] satisfies Array<[ProtectedFieldAad, string]>)("rejects mismatched %s additional data", async (wrongAad) => {

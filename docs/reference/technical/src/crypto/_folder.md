@@ -1,6 +1,9 @@
 # `src/crypto`
 
-`src/crypto` implements the server-only cryptographic boundary for protected Vision content. Field values use AES-256-GCM with a new 96-bit IV per operation. Authenticated additional data (AAD) binds owner ID, node ID, field name, and data-key version, so ciphertext cannot be moved to another user, graph object, field, or version.
+`src/crypto` implements the server-only cryptographic boundary for protected Vision content. Field values use
+AES-256-GCM with a new 96-bit IV per operation. Authenticated additional data (AAD) binds owner ID, node ID, domain,
+field name, and data-key version, so ciphertext cannot be moved to another user, graph object, domain, field, or
+version.
 
 Data keys are random 256-bit values partitioned by owner and domain. They are stored only after AES-GCM wrapping under `KEY_ENCRYPTION_KEY`; the root key remains non-extractable. The store persists wrapped records and an atomic monotonic active-version high-water mark. Each active lookup snapshots the store version once; rotation raises it asynchronously, restart rollback is rejected, and historical lookup stays exact.
 

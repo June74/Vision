@@ -14,7 +14,9 @@ Validates the complete input before a key lookup. If any string exists, it resol
 
 **Signature:** `<T extends PlainProtectedFields>(keyProvider: KeyProvider, context: ProtectedObjectContext, fields: EncryptedProtectedFields<T>) => Promise<T>`
 
-Strictly validates each envelope before reading its `keyVersion`, caches exact historical key lookups by version, then decrypts with owner/node/field/version AAD. An explicit provider version never creates a missing record. Any invalid envelope or authentication failure rejects the whole operation.
+Strictly validates each envelope before reading its `keyVersion`, caches exact historical key lookups by version, then
+decrypts with owner/node/domain/field/version AAD. An explicit provider version never creates a missing record. Any
+invalid envelope or authentication failure rejects the whole operation.
 
 ## `validateProtectedObjectContext`
 

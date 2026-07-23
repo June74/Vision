@@ -1,6 +1,6 @@
 # `src/crypto/envelope.ts`
 
-This module is the JSON envelope and field-AAD boundary. `CipherEnvelope` is fixed to `{ version: 1; algorithm: "A256GCM"; keyVersion; iv; ciphertext }`; binary IV and ciphertext values are canonical unpadded base64url. `ProtectedFieldAad` carries `{ ownerId; nodeId; fieldName; keyVersion }`.
+This module is the JSON envelope and field-AAD boundary. `CipherEnvelope` is fixed to `{ version: 1; algorithm: "A256GCM"; keyVersion; iv; ciphertext }`; binary IV and ciphertext values are canonical unpadded base64url. `ProtectedFieldAad` carries `{ ownerId; nodeId; domain; fieldName; keyVersion }`.
 
 `MAX_PROTECTED_PLAINTEXT_BYTES` is 65,536 bytes. The maximum ciphertext is that value plus the 16-byte AES-GCM tag, and `MAX_SERIALIZED_CIPHER_ENVELOPE_CHARS` adds a fixed 512-character metadata allowance. `tests/unit/crypto/envelope.test.ts` and `size-limits.test.ts` cover round trips, tampering, AAD, closed formats, and pre-allocation rejection.
 
@@ -50,19 +50,23 @@ Rejects more than 65,536 JavaScript code units before encoding, then enforces th
 
 **Signature:** `(key: CryptoKey, envelope: CipherEnvelope, aad: ProtectedFieldAad) => Promise<string>`
 
-Validates the key, AAD, and complete envelope before decrypting. It explicitly rejects envelope/AAD key-version mismatch. AES-GCM rejects wrong owner, node, field, IV, key, version, or modified ciphertext; fatal UTF-8 decoding rejects authenticated non-text bytes.
+Validates the key, AAD, and complete envelope before decrypting. It explicitly rejects envelope/AAD key-version
+mismatch. AES-GCM rejects wrong owner, node, domain, field, IV, key, version, or modified ciphertext; fatal UTF-8
+decoding rejects authenticated non-text bytes.
 
 ## `validateProtectedFieldAad`
 
 **Signature:** `(aad: ProtectedFieldAad) => void`
 
-Rejects missing or empty owner, node, and field identifiers and delegates positive-version enforcement to `validateKeyVersion`. It runs before every field encryption and decryption.
+Rejects missing or empty owner, node, and field identifiers, rejects unknown domains, and delegates positive-version
+enforcement to `validateKeyVersion`. It runs before every field encryption and decryption.
 
 ## `encodeProtectedFieldAad`
 
 **Signature:** `(aad: ProtectedFieldAad) => Uint8Array<ArrayBuffer>`
 
-Encodes `["vision-protected-field", 1, ownerId, nodeId, fieldName, keyVersion]` as UTF-8. The fixed-purpose JSON tuple provides typed positions and prevents delimiter or concatenation collisions.
+Encodes `["vision-protected-field", 1, ownerId, nodeId, domain, fieldName, keyVersion]` as UTF-8. The fixed-purpose
+JSON tuple provides typed positions and prevents delimiter or concatenation collisions.
 
 ## `validateAes256GcmKey`
 

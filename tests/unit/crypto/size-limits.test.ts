@@ -26,6 +26,7 @@ describe("protected envelope size admission", () => {
       encryptText(key, "a".repeat(MAX_PROTECTED_PLAINTEXT_BYTES + 1), {
         ownerId: "owner-1",
         nodeId: "node-1",
+        domain: "work",
         fieldName: "description",
         keyVersion: 1,
       }),
@@ -37,6 +38,7 @@ describe("protected envelope size admission", () => {
     const valid = await encryptText(key, "bounded", {
       ownerId: "owner-1",
       nodeId: "node-1",
+      domain: "work",
       fieldName: "title",
       keyVersion: 1,
     });
@@ -46,6 +48,7 @@ describe("protected envelope size admission", () => {
       await expect(decryptText(key, { ...valid, iv: "A".repeat(18) } as CipherEnvelope, {
         ownerId: "owner-1",
         nodeId: "node-1",
+        domain: "work",
         fieldName: "title",
         keyVersion: 1,
       })).rejects.toThrow(/IV/u);
@@ -55,6 +58,7 @@ describe("protected envelope size admission", () => {
       await expect(decryptText(key, { ...valid, ciphertext: "A".repeat(90_000) } as CipherEnvelope, {
         ownerId: "owner-1",
         nodeId: "node-1",
+        domain: "work",
         fieldName: "title",
         keyVersion: 1,
       })).rejects.toThrow(/size/u);
