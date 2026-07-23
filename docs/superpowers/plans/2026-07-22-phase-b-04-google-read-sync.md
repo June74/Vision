@@ -20,6 +20,8 @@
 - On `410 Gone`, rebuild only Google-backed projection state and preserve Vision categories, annotations, and relationships.
 - Revoked authorization stops sync and reports `Disconnected`.
 - Phase B does not call Google event create, update, move, cancel, or delete methods.
+- For every production file and named function, maintain concise `docs/reference/simple/` and in-depth `docs/reference/technical/` entries at mirrored paths; document meaningful folders with `_folder.md` in both trees.
+- Require module/function JSDoc, comment non-obvious idempotency and provider invariants, and run `pnpm docs:check` before every task commit.
 
 ---
 

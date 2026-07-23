@@ -19,6 +19,8 @@
 - Use per-user/per-domain data keys wrapped by a root Worker secret and record key versions.
 - Deleted content remains encrypted and recoverable for 30 days, then is purged.
 - Audit records contain privacy-safe facts only.
+- For every production file and named function, maintain concise `docs/reference/simple/` and in-depth `docs/reference/technical/` entries at mirrored paths; document meaningful folders with `_folder.md` in both trees.
+- Require module/function JSDoc, use inline comments for non-obvious rules and invariants, and run `pnpm docs:check` before every task commit.
 
 ---
 

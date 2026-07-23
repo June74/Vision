@@ -1,0 +1,90 @@
+name: Vision production release
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to verify and release
+        required: true
+        default: main
+        type: string
+      confirmation:
+        description: Type DEPLOY VISION PRODUCTION to authorize this release
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vision-production-release
+  cancel-in-progress: false
+
+jobs:
+  confirm:
+    name: Confirm production release intent
+    runs-on: ubuntu-latest
+    outputs:
+      confirmed: ${{ steps.confirmation.outputs.confirmed }}
+    steps:
+      - name: Require exact release confirmation
+        id: confirmation
+        shell: bash
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [[ "$CONFIRMATION" != "DEPLOY VISION PRODUCTION" ]]; then
+            echo "## Production release blocked" >> "$GITHUB_STEP_SUMMARY"
+            echo "Type the exact confirmation phrase before a release can be verified." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "confirmed=true" >> "$GITHUB_OUTPUT"
+  verify:
+    name: Verify release candidate
+    runs-on: ubuntu-latest
+    needs: confirm
+    if: ${{ needs.confirm.outputs.confirmed == 'true' }}
+    outputs:
+      verified_sha: ${{ steps.verified-ref.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Resolve verified commit
+        id: verified-ref
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run application checks
+        run: pnpm check
+      - name: Install Chromium for browser smoke coverage
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run browser smoke coverage
+        run: pnpm test:e2e
+  deploy:
+    name: Release to production
+    needs: [confirm, verify]
+    if: ${{ needs.confirm.outputs.confirmed == 'true' && needs.verify.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.verify.outputs.verified_sha }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Deploy release Worker
+        run: pnpm exec wrangler deploy --var VISION_ENV:production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PRODUCTION }}

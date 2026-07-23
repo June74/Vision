@@ -18,6 +18,8 @@
 - Never modify or create events on the primary calendar.
 - Re-running setup must not create a duplicate Vision calendar.
 - Live integration tests use a disposable test account/calendar, never production.
+- For every production file and named function, maintain concise `docs/reference/simple/` and in-depth `docs/reference/technical/` entries at mirrored paths; document meaningful folders with `_folder.md` in both trees.
+- Require module/function JSDoc, use inline comments for non-obvious authentication and setup constraints, and run `pnpm docs:check` before every task commit.
 
 ---
 
@@ -129,8 +131,11 @@ git commit -m "feat: add allowlisted Google authentication"
 
 **Interfaces:**
 - Produces: `CalendarClient.listOwnedSecondaryCalendars`, `createSecondaryCalendar`, and `getCalendar`.
-- Produces: `GET /api/setup/calendar`.
-- Produces: `POST /api/setup/calendar/select` and `POST /api/setup/calendar/confirm-create`.
+- Produces: read-only `GET /api/setup/calendar`.
+- Produces: CSRF-protected `POST /api/setup/calendar/discover`.
+- Produces: CSRF-protected `POST /api/setup/calendar/select` and `POST /api/setup/calendar/confirm-create`.
+
+The UI consumer first reads the snapshot, then submits its exact `setupVersion` to discovery. It preserves each returned version for selection or exact confirmation. Discovery lists the provider before one atomic final-state compare-and-swap; the server never persists an intermediate unleased `discovering` state.
 
 - [ ] **Step 1: Write creation-safety tests**
 

@@ -19,6 +19,8 @@
 - Visibly mark inferred categories and keep ambiguous/mixed items unresolved.
 - Warn at $8.00, disable optional work at $9.00, and block new AI requests at $9.50 with concurrency one.
 - Direct calendar display, synchronization, deterministic conflict checks, and template status continue when AI is unavailable.
+- For every production file and named function, maintain concise `docs/reference/simple/` and in-depth `docs/reference/technical/` entries at mirrored paths; document meaningful folders with `_folder.md` in both trees.
+- Require module/function JSDoc, comment non-obvious model/privacy/budget invariants, and run `pnpm docs:check` before every task commit.
 
 ---
 

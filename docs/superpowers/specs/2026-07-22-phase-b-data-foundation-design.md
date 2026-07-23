@@ -372,6 +372,17 @@ Vision/
 
 The single deployable application avoids an unnecessary monorepo in Version 1. These module boundaries allow shared domain and API packages to be extracted when native desktop or mobile clients begin.
 
+## Documentation and code-comment contract
+
+Vision maintains two separate, synchronized references for the implementation:
+
+1. `docs/reference/simple/` explains every production source file, every named production function or component, and each meaningful architectural folder in concise plain language.
+2. `docs/reference/technical/` documents the same items in depth, including signatures, inputs, outputs, side effects, dependencies, failure behavior, privacy or security constraints, and covering tests.
+
+The reference trees mirror the production source path. A meaningful source folder receives `_folder.md` in both trees. Every production source file that supports comments begins with an appropriate short module documentation comment, and every named TypeScript production function, component, or class method receives a concise JSDoc contract. Inline comments explain non-obvious reasons, invariants, privacy boundaries, retry behavior, or provider limitations; they do not narrate obvious syntax.
+
+An automated documentation-coverage check must fail when a production file or named function lacks either reference layer. Documentation updates are part of the same task and commit as the code they describe.
+
 ## Deployment and operational design
 
 The private pilot uses one permanent production environment. GitHub Actions runs formatting, type checking, unit tests, Worker-runtime tests, contract tests, migration checks, and secret scanning. Successful changes produce a temporary preview. Production deployment requires manual approval.

@@ -1,0 +1,1052 @@
+{
+  "id": "ba51b02f-d560-464b-8606-9e0af4ad9b44",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.audit_events": {
+      "name": "audit_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "node_id": {
+          "name": "node_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actor_type": {
+          "name": "actor_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_category": {
+          "name": "error_category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "audit_events_node_owner_fk": {
+          "name": "audit_events_node_owner_fk",
+          "tableFrom": "audit_events",
+          "tableTo": "nodes",
+          "columnsFrom": [
+            "node_id",
+            "owner_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "audit_events_owner_non_empty": {
+          "name": "audit_events_owner_non_empty",
+          "value": "\"audit_events\".\"owner_id\" <> ''"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.operation_ledger": {
+      "name": "operation_ledger",
+      "schema": "",
+      "columns": {
+        "operation_id": {
+          "name": "operation_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_operation_id": {
+          "name": "provider_operation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "operation_kind": {
+          "name": "operation_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "requested_at": {
+          "name": "requested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "response_envelope": {
+          "name": "response_envelope",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "operation_ledger_provider_operation_unique": {
+          "name": "operation_ledger_provider_operation_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "owner_id",
+            "provider",
+            "provider_operation_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "operation_ledger_provider_non_empty": {
+          "name": "operation_ledger_provider_non_empty",
+          "value": "\"operation_ledger\".\"provider\" <> ''"
+        },
+        "operation_ledger_operation_non_empty": {
+          "name": "operation_ledger_operation_non_empty",
+          "value": "\"operation_ledger\".\"provider_operation_id\" <> ''"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.edges": {
+      "name": "edges",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_node_id": {
+          "name": "source_node_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_node_type": {
+          "name": "source_node_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "destination_node_id": {
+          "name": "destination_node_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "destination_node_type": {
+          "name": "destination_node_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "relation": {
+          "name": "relation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "origin": {
+          "name": "origin",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evidence": {
+          "name": "evidence",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "confidence": {
+          "name": "confidence",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lifecycle": {
+          "name": "lifecycle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "privacy": {
+          "name": "privacy",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "valid_from": {
+          "name": "valid_from",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "valid_to": {
+          "name": "valid_to",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "edges_source_owner_fk": {
+          "name": "edges_source_owner_fk",
+          "tableFrom": "edges",
+          "tableTo": "nodes",
+          "columnsFrom": [
+            "source_node_id",
+            "owner_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "edges_destination_owner_fk": {
+          "name": "edges_destination_owner_fk",
+          "tableFrom": "edges",
+          "tableTo": "nodes",
+          "columnsFrom": [
+            "destination_node_id",
+            "owner_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "edges_source_owner_type_fk": {
+          "name": "edges_source_owner_type_fk",
+          "tableFrom": "edges",
+          "tableTo": "nodes",
+          "columnsFrom": [
+            "source_node_id",
+            "owner_id",
+            "source_node_type"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_id",
+            "node_type"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "edges_destination_owner_type_fk": {
+          "name": "edges_destination_owner_type_fk",
+          "tableFrom": "edges",
+          "tableTo": "nodes",
+          "columnsFrom": [
+            "destination_node_id",
+            "owner_id",
+            "destination_node_type"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_id",
+            "node_type"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "edges_relation_valid": {
+          "name": "edges_relation_valid",
+          "value": "\"edges\".\"relation\" in ('event_in_calendar', 'task_from_source', 'note_about_event', 'commitment_for_person', 'recommendation_for_event', 'preference_for_policy', 'policy_governs_event', 'alert_episode_for_event')"
+        },
+        "edges_relation_endpoints_valid": {
+          "name": "edges_relation_endpoints_valid",
+          "value": "(\"edges\".\"relation\" = 'event_in_calendar' and \"edges\".\"source_node_type\" = 'event' and \"edges\".\"destination_node_type\" = 'calendar') or (\"edges\".\"relation\" = 'task_from_source' and \"edges\".\"source_node_type\" = 'task' and \"edges\".\"destination_node_type\" = 'source_artifact') or (\"edges\".\"relation\" = 'note_about_event' and \"edges\".\"source_node_type\" = 'note' and \"edges\".\"destination_node_type\" = 'event') or (\"edges\".\"relation\" = 'commitment_for_person' and \"edges\".\"source_node_type\" = 'commitment' and \"edges\".\"destination_node_type\" = 'person') or (\"edges\".\"relation\" = 'recommendation_for_event' and \"edges\".\"source_node_type\" = 'recommendation' and \"edges\".\"destination_node_type\" = 'event') or (\"edges\".\"relation\" = 'preference_for_policy' and \"edges\".\"source_node_type\" = 'preference' and \"edges\".\"destination_node_type\" = 'policy') or (\"edges\".\"relation\" = 'policy_governs_event' and \"edges\".\"source_node_type\" = 'policy' and \"edges\".\"destination_node_type\" = 'event') or (\"edges\".\"relation\" = 'alert_episode_for_event' and \"edges\".\"source_node_type\" = 'alert_episode' and \"edges\".\"destination_node_type\" = 'event')"
+        },
+        "edges_origin_valid": {
+          "name": "edges_origin_valid",
+          "value": "\"edges\".\"origin\" in ('provider', 'user', 'system', 'model')"
+        },
+        "edges_lifecycle_valid": {
+          "name": "edges_lifecycle_valid",
+          "value": "\"edges\".\"lifecycle\" in ('proposed', 'confirmed', 'rejected', 'retracted')"
+        },
+        "edges_privacy_valid": {
+          "name": "edges_privacy_valid",
+          "value": "\"edges\".\"privacy\" in ('planning', 'private', 'restricted')"
+        },
+        "edges_confidence_valid": {
+          "name": "edges_confidence_valid",
+          "value": "\"edges\".\"confidence\" is null or (\"edges\".\"confidence\" >= 0 and \"edges\".\"confidence\" <= 1000000)"
+        },
+        "edges_validity_valid": {
+          "name": "edges_validity_valid",
+          "value": "\"edges\".\"valid_to\" is null or (\"edges\".\"valid_from\" is not null and \"edges\".\"valid_to\" > \"edges\".\"valid_from\")"
+        },
+        "edges_version_positive": {
+          "name": "edges_version_positive",
+          "value": "\"edges\".\"version\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.events": {
+      "name": "events",
+      "schema": "",
+      "columns": {
+        "node_id": {
+          "name": "node_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "node_type": {
+          "name": "node_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'event'"
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_calendar_id": {
+          "name": "provider_calendar_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_event_id": {
+          "name": "provider_event_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_version": {
+          "name": "provider_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "starts_at": {
+          "name": "starts_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ends_at": {
+          "name": "ends_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "time_zone": {
+          "name": "time_zone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "busy": {
+          "name": "busy",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recurrence_id": {
+          "name": "recurrence_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "title_envelope": {
+          "name": "title_envelope",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description_envelope": {
+          "name": "description_envelope",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "attendees_envelope": {
+          "name": "attendees_envelope",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "location_envelope": {
+          "name": "location_envelope",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "meeting_link_envelope": {
+          "name": "meeting_link_envelope",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "protected_key_version": {
+          "name": "protected_key_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "events_node_owner_fk": {
+          "name": "events_node_owner_fk",
+          "tableFrom": "events",
+          "tableTo": "nodes",
+          "columnsFrom": [
+            "node_id",
+            "owner_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "events_node_owner_type_fk": {
+          "name": "events_node_owner_type_fk",
+          "tableFrom": "events",
+          "tableTo": "nodes",
+          "columnsFrom": [
+            "node_id",
+            "owner_id",
+            "node_type"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_id",
+            "node_type"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "events_node_id_pk": {
+          "name": "events_node_id_pk",
+          "columns": [
+            "node_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "events_node_owner_unique": {
+          "name": "events_node_owner_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "node_id",
+            "owner_id"
+          ]
+        },
+        "events_provider_identity_unique": {
+          "name": "events_provider_identity_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "provider",
+            "provider_calendar_id",
+            "provider_event_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "events_provider_non_empty": {
+          "name": "events_provider_non_empty",
+          "value": "\"events\".\"provider\" <> ''"
+        },
+        "events_calendar_non_empty": {
+          "name": "events_calendar_non_empty",
+          "value": "\"events\".\"provider_calendar_id\" <> ''"
+        },
+        "events_provider_event_non_empty": {
+          "name": "events_provider_event_non_empty",
+          "value": "\"events\".\"provider_event_id\" <> ''"
+        },
+        "events_provider_version_non_empty": {
+          "name": "events_provider_version_non_empty",
+          "value": "\"events\".\"provider_version\" <> ''"
+        },
+        "events_node_type_event": {
+          "name": "events_node_type_event",
+          "value": "\"events\".\"node_type\" = 'event'"
+        },
+        "events_end_after_start": {
+          "name": "events_end_after_start",
+          "value": "\"events\".\"ends_at\" > \"events\".\"starts_at\""
+        },
+        "events_status_valid": {
+          "name": "events_status_valid",
+          "value": "\"events\".\"status\" in ('confirmed', 'tentative', 'cancelled')"
+        },
+        "events_protected_key_positive": {
+          "name": "events_protected_key_positive",
+          "value": "\"events\".\"protected_key_version\" is null or \"events\".\"protected_key_version\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.nodes": {
+      "name": "nodes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "identity_kind": {
+          "name": "identity_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_node_id": {
+          "name": "provider_node_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "node_type": {
+          "name": "node_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "domain": {
+          "name": "domain",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "domain_state": {
+          "name": "domain_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "privacy": {
+          "name": "privacy",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provenance": {
+          "name": "provenance",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lifecycle": {
+          "name": "lifecycle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "valid_from": {
+          "name": "valid_from",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "valid_to": {
+          "name": "valid_to",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "model_confidence": {
+          "name": "model_confidence",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "nodes_id_pk": {
+          "name": "nodes_id_pk",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "nodes_id_owner_unique": {
+          "name": "nodes_id_owner_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "owner_id"
+          ]
+        },
+        "nodes_id_owner_type_unique": {
+          "name": "nodes_id_owner_type_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "owner_id",
+            "node_type"
+          ]
+        },
+        "nodes_owner_provider_identity_unique": {
+          "name": "nodes_owner_provider_identity_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "owner_id",
+            "provider",
+            "provider_node_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "nodes_owner_non_empty": {
+          "name": "nodes_owner_non_empty",
+          "value": "\"nodes\".\"owner_id\" <> ''"
+        },
+        "nodes_provider_non_empty": {
+          "name": "nodes_provider_non_empty",
+          "value": "\"nodes\".\"provider\" <> ''"
+        },
+        "nodes_provider_node_non_empty": {
+          "name": "nodes_provider_node_non_empty",
+          "value": "\"nodes\".\"provider_node_id\" <> ''"
+        },
+        "nodes_identity_kind_valid": {
+          "name": "nodes_identity_kind_valid",
+          "value": "\"nodes\".\"identity_kind\" in ('provider', 'first_party', 'system')"
+        },
+        "nodes_type_valid": {
+          "name": "nodes_type_valid",
+          "value": "\"nodes\".\"node_type\" in ('event', 'task', 'note', 'commitment', 'recommendation', 'preference', 'policy', 'audit_event', 'person', 'calendar', 'source_artifact', 'alert_episode')"
+        },
+        "nodes_domain_valid": {
+          "name": "nodes_domain_valid",
+          "value": "\"nodes\".\"domain\" in ('school', 'work', 'personal', 'unresolved')"
+        },
+        "nodes_domain_state_valid": {
+          "name": "nodes_domain_state_valid",
+          "value": "\"nodes\".\"domain_state\" in ('confirmed', 'inferred', 'unresolved') and ((\"nodes\".\"domain\" = 'unresolved') = (\"nodes\".\"domain_state\" = 'unresolved'))"
+        },
+        "nodes_privacy_valid": {
+          "name": "nodes_privacy_valid",
+          "value": "\"nodes\".\"privacy\" in ('planning', 'private', 'restricted')"
+        },
+        "nodes_provenance_valid": {
+          "name": "nodes_provenance_valid",
+          "value": "\"nodes\".\"provenance\" in ('provider', 'user', 'system', 'model')"
+        },
+        "nodes_lifecycle_valid": {
+          "name": "nodes_lifecycle_valid",
+          "value": "\"nodes\".\"lifecycle\" in ('active', 'deleted', 'purged')"
+        },
+        "nodes_timestamps_valid": {
+          "name": "nodes_timestamps_valid",
+          "value": "\"nodes\".\"updated_at\" >= \"nodes\".\"created_at\" and (\"nodes\".\"valid_to\" is null or \"nodes\".\"valid_to\" > \"nodes\".\"valid_from\")"
+        },
+        "nodes_version_positive": {
+          "name": "nodes_version_positive",
+          "value": "\"nodes\".\"version\" > 0"
+        },
+        "nodes_inference_confidence_valid": {
+          "name": "nodes_inference_confidence_valid",
+          "value": "((\"nodes\".\"domain_state\" = 'inferred') = (\"nodes\".\"model_confidence\" is not null)) and (\"nodes\".\"model_confidence\" is null or (\"nodes\".\"model_confidence\" >= 0 and \"nodes\".\"model_confidence\" <= 1000000))"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.recoverable_deletions": {
+      "name": "recoverable_deletions",
+      "schema": "",
+      "columns": {
+        "node_id": {
+          "name": "node_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "purge_after": {
+          "name": "purge_after",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recovery_envelope": {
+          "name": "recovery_envelope",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "recoverable_deletions_node_owner_fk": {
+          "name": "recoverable_deletions_node_owner_fk",
+          "tableFrom": "recoverable_deletions",
+          "tableTo": "nodes",
+          "columnsFrom": [
+            "node_id",
+            "owner_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "recoverable_deletions_node_id_pk": {
+          "name": "recoverable_deletions_node_id_pk",
+          "columns": [
+            "node_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "recoverable_deletions_purge_after_deleted": {
+          "name": "recoverable_deletions_purge_after_deleted",
+          "value": "\"recoverable_deletions\".\"purge_after\" > \"recoverable_deletions\".\"deleted_at\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.sync_channels": {
+      "name": "sync_channels",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_calendar_id": {
+          "name": "provider_calendar_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_channel_id": {
+          "name": "provider_channel_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_resource_id": {
+          "name": "provider_resource_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "verification_token_envelope": {
+          "name": "verification_token_envelope",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "sync_channels_provider_channel_unique": {
+          "name": "sync_channels_provider_channel_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "owner_id",
+            "provider",
+            "provider_channel_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "sync_channels_provider_non_empty": {
+          "name": "sync_channels_provider_non_empty",
+          "value": "\"sync_channels\".\"provider\" <> ''"
+        },
+        "sync_channels_calendar_non_empty": {
+          "name": "sync_channels_calendar_non_empty",
+          "value": "\"sync_channels\".\"provider_calendar_id\" <> ''"
+        },
+        "sync_channels_channel_non_empty": {
+          "name": "sync_channels_channel_non_empty",
+          "value": "\"sync_channels\".\"provider_channel_id\" <> ''"
+        },
+        "sync_channels_resource_non_empty": {
+          "name": "sync_channels_resource_non_empty",
+          "value": "\"sync_channels\".\"provider_resource_id\" <> ''"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.sync_checkpoints": {
+      "name": "sync_checkpoints",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_calendar_id": {
+          "name": "provider_calendar_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sync_token_envelope": {
+          "name": "sync_token_envelope",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key_version": {
+          "name": "key_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "committed_at": {
+          "name": "committed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "sync_checkpoints_provider_calendar_unique": {
+          "name": "sync_checkpoints_provider_calendar_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "owner_id",
+            "provider",
+            "provider_calendar_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "sync_checkpoints_provider_non_empty": {
+          "name": "sync_checkpoints_provider_non_empty",
+          "value": "\"sync_checkpoints\".\"provider\" <> ''"
+        },
+        "sync_checkpoints_calendar_non_empty": {
+          "name": "sync_checkpoints_calendar_non_empty",
+          "value": "\"sync_checkpoints\".\"provider_calendar_id\" <> ''"
+        },
+        "sync_checkpoints_key_version_non_empty": {
+          "name": "sync_checkpoints_key_version_non_empty",
+          "value": "\"sync_checkpoints\".\"key_version\" <> ''"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
