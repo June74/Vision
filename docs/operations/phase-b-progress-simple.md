@@ -32,9 +32,15 @@ Vision now automatically checks that:
 
 The task required several focused corrections to avoid missing or incorrectly rejecting valid documentation. After those corrections, independent review approved it with no remaining findings.
 
+### Runtime Task 3 — Safe errors and logs
+
+Vision now gives API errors a consistent, private response containing only a safe code, message, and random request ID. Its structured logger rejects unexpected or hidden fields before anything is written, and entity references must use opaque UUIDs instead of private text.
+
+Even if the logging destination fails, Vision still returns the safe API response. Independent review approved the hardened implementation with no remaining findings.
+
 ## In progress
 
-Runtime Task 3 will add privacy-safe request logging and consistent API error responses.
+Runtime Task 4 will add automated GitHub checks and guarded preview/production deployment workflows.
 
 ## Not yet included
 

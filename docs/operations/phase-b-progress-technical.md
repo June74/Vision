@@ -36,3 +36,15 @@ The Task 1 test-host concern is closed: Node unit tests remain isolated from the
 ### Environment note
 
 Codex's restricted sandbox blocks Wrangler's normal AppData cache/log paths. The same Worker, browser, and build commands pass cleanly with the required filesystem approval; no production configuration was weakened to suppress the sandbox behavior.
+
+## Runtime Task 3 — Privacy-safe server envelopes
+
+- Status: complete and independently approved.
+- Commit range: `7aa596b..1395673`.
+- Implementation/fix commits: `63eaa84` and `1395673`.
+- Test evidence: focused logger/error suite 12/12; full `pnpm check` reported 16 unit and 4 Worker tests; Chromium 1/1, docs, type checks, production build, and diff check passed.
+- Log boundary: accepts plain records only, inspects all own keys with `Reflect.ownKeys`, rejects symbols/non-enumerable/unsupported keys, and constrains entity IDs to UUIDs.
+- Error boundary: public `VisionError` has exactly `code`, `status`, and `safeMessage`; an unexported `Error` carrier transports it through Hono without widening the public contract.
+- Reliability: audit-sink failure is caught only inside the response-preservation path, so the required error envelope still returns while normal logger validation remains fail-fast.
+- Routing: unknown `/api/*` paths return safe JSON; `/api/health` remains exact; non-API paths retain the asset fallback.
+- Review result: final spec compliance and task quality approved; zero remaining findings.
