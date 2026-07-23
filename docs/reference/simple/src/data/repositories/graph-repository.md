@@ -12,8 +12,8 @@ stable Vision ID. Identity collisions become a safe `GraphIdentityConflictError`
 ## `upsertEvent`
 
 Makes planning-safe event facts current only when the existing provider event has the same owner and stable Vision
-ID. Provider version tokens must sort in change order, so an equal retry is safe and an older token cannot overwrite
-a newer event. Its matching event node must already exist for that owner.
+ID. Provider adapters must supply the branded, exactly 20-digit `ProviderOrderKeySchema` value. The database constraint
+is intentionally broad; validated repository input is authoritative. Its matching event node must already exist.
 
 ## `classifyAtomicUpsertResult`
 

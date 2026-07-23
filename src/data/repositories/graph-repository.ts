@@ -255,7 +255,8 @@ export class DrizzleGraphRepository implements GraphRepository {
    * Atomically makes an order-preserving provider version current unless a newer provider version already exists.
    *
    * Callers must persist the pre-existing same-owner event node with `upsertNode` before calling this method.
-   * Provider adapters must supply `sourceVersion` tokens whose PostgreSQL text order matches provider change order.
+   * Provider adapters must supply the branded, exactly 20-digit `ProviderOrderKeySchema` value.
+   * The database check is intentionally broad; validated repository input is the authoritative ordering boundary.
    */
   async upsertEvent(event: VisionEvent): Promise<UpsertOutcome> {
     try {

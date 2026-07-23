@@ -150,7 +150,12 @@ type EncryptedProtectedEventFields = EncryptedProtectedFields<PlainProtectedEven
 export class DrizzleAtomicEventStore implements AtomicEventStore {
   constructor(private readonly database: VisionDatabase) {}
 
-  /** Applies only a strictly newer provider version and returns the row PostgreSQL kept. */
+  /**
+   * Locks the exact eligible node snapshot through the statement, then applies only a strictly newer provider key.
+   *
+   * The row lock protects this event write transaction only. Later node reclassification must coordinate protected
+   * event re-encryption rather than assuming this statement permanently couples the rows.
+   */
   async saveAtomically(row: StoredEventRow): Promise<AtomicEventSaveResult> {
     const result = await this.database.execute<DatabaseEventRow>(sql`
       with incoming (
@@ -182,6 +187,7 @@ export class DrizzleAtomicEventStore implements AtomicEventStore {
           and node.domain_state = incoming.expected_domain_state
           and node.privacy = incoming.expected_privacy
           and node.version = incoming.expected_node_version
+        for update of node
       ),
       write as (
         insert into events as persisted (

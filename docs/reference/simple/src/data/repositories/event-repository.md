@@ -72,7 +72,11 @@ Rechecks the attendee array recovered from authenticated ciphertext.
 ## `saveAtomically`
 
 Requires the exact node snapshot in the write statement and returns only planning-safe facts. An empty conflict result
-causes a fresh planning-only winner query.
+causes a fresh planning-only winner query. The eligible node row is locked until this statement commits, so a node
+privacy/domain/version update cannot interleave with the event write.
+
+The lock lasts only for this transaction. A later node reclassification is still possible and must coordinate
+re-encryption of its protected events before changing cryptographic or privacy facts.
 
 ## `selectSaveWinner`
 

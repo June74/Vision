@@ -121,7 +121,13 @@ storage error.
 **Signature:** `(row: StoredEventRow) => Promise<AtomicEventSaveResult>`
 
 Executes one exact-node-snapshot data-modifying CTE. It returns planning columns only. An empty result triggers
-`selectSaveWinner` in a fresh statement snapshot so a just-committed conflict winner is visible.
+`selectSaveWinner` in a fresh statement snapshot so a just-committed conflict winner is visible. The `eligible` CTE
+uses `FOR UPDATE OF node`, holding an exclusive row lock on the exact owner/domain/domain-state/privacy/version node
+through completion of the event statement. The returned projection still contains no envelope columns.
+
+This is transaction-duration consistency, not a permanent coupling. Any later node reclassification that changes a
+key-partition or authorization fact must lock/coordinate the node and its events and re-encrypt protected envelopes
+before committing the new facts. That future workflow remains outside this persistence task.
 
 ## `selectSaveWinner`
 

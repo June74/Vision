@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { VisionDatabase } from "../../../src/data/db";
 import {
   DrizzleAtomicEventStore,
+  EventNodeSnapshotConflictError,
   type StoredEventRow,
 } from "../../../src/data/repositories/event-repository";
 import {
@@ -79,6 +80,53 @@ function render(statement: SQL): string {
   return dialect.sqlToQuery(statement).sql.replace(/\s+/gu, " ").toLowerCase();
 }
 
+class TwoLogicalSessionLockHarness {
+  readonly statements: SQL[] = [];
+  readonly order: string[] = [];
+  private nodeLocked = false;
+  private releaseEvent!: () => void;
+  private releaseNodeUpdate!: () => void;
+  private eligibleReached!: () => void;
+  private readonly eventMayCommit = new Promise<void>((resolve) => {
+    this.releaseEvent = resolve;
+  });
+  private readonly nodeMayUpdate = new Promise<void>((resolve) => {
+    this.releaseNodeUpdate = resolve;
+  });
+  readonly eligible = new Promise<void>((resolve) => {
+    this.eligibleReached = resolve;
+  });
+
+  readonly database = {
+    execute: async (statement: SQL) => {
+      this.statements.push(statement);
+      const rendered = render(statement);
+      this.nodeLocked = /\bfor update of node\b/u.test(rendered);
+      this.order.push(this.nodeLocked ? "eligible-locked" : "eligible-unlocked");
+      this.eligibleReached();
+      await this.eventMayCommit;
+      this.order.push("event-commit");
+      this.nodeLocked = false;
+      this.releaseNodeUpdate();
+      return { rows: [rawPlanning] };
+    },
+  } as unknown as VisionDatabase;
+
+  /** Models the node-reclassification session waiting on the row lock owned by the event statement. */
+  async updateNodeSnapshot(): Promise<void> {
+    this.order.push("node-update-attempt");
+    if (this.nodeLocked) {
+      await this.nodeMayUpdate;
+    }
+    this.order.push("node-update-commit");
+  }
+
+  /** Allows the event statement to commit and release its simulated row lock. */
+  commitEvent(): void {
+    this.releaseEvent();
+  }
+}
+
 describe("event repository Neon raw-response contract", () => {
   it("strictly decodes raw text booleans, integers, timestamps, and canonical bytea", async () => {
     const boundary = databaseWithRows([
@@ -149,5 +197,43 @@ describe("event repository Neon raw-response contract", () => {
     expect(winnerSql).not.toMatch(
       /title_envelope|description_envelope|attendees_envelope|location_envelope|meeting_link_envelope/u,
     );
+  });
+
+  it("locks the exact eligible node until event commit before a second logical session can reclassify it", async () => {
+    const harness = new TwoLogicalSessionLockHarness();
+    const save = new DrizzleAtomicEventStore(harness.database).saveAtomically(stored);
+    await harness.eligible;
+    let nodeUpdateSettled = false;
+    const nodeUpdate = harness.updateNodeSnapshot().then(() => {
+      nodeUpdateSettled = true;
+    });
+    await Promise.resolve();
+
+    expect(nodeUpdateSettled).toBe(false);
+    const saveSql = render(harness.statements[0]!);
+    expect(saveSql).toMatch(/\beligible as .* for update of node\b/u);
+    const returnedProjection = saveSql.slice(saveSql.lastIndexOf(" select "));
+    expect(returnedProjection).not.toMatch(
+      /title_envelope|description_envelope|attendees_envelope|location_envelope|meeting_link_envelope/u,
+    );
+
+    harness.commitEvent();
+    await expect(save).resolves.toEqual({ outcome: "applied", event: planning });
+    await nodeUpdate;
+    expect(harness.order).toEqual([
+      "eligible-locked",
+      "node-update-attempt",
+      "event-commit",
+      "node-update-commit",
+    ]);
+  });
+
+  it("returns the typed no-write conflict when the locked eligibility snapshot does not match", async () => {
+    const boundary = databaseWithRows([[], []]);
+
+    await expect(
+      new DrizzleAtomicEventStore(boundary.database).saveAtomically(stored),
+    ).rejects.toBeInstanceOf(EventNodeSnapshotConflictError);
+    expect(boundary.statements).toHaveLength(2);
   });
 });

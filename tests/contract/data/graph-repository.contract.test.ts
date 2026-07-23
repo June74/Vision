@@ -15,6 +15,14 @@ import {
 } from "../../../src/data/repositories/graph-repository";
 
 const repositorySource = readFileSync(resolve(process.cwd(), "src/data/repositories/graph-repository.ts"), "utf8");
+const simpleReference = readFileSync(
+  resolve(process.cwd(), "docs/reference/simple/src/data/repositories/graph-repository.md"),
+  "utf8",
+);
+const technicalReference = readFileSync(
+  resolve(process.cwd(), "docs/reference/technical/src/data/repositories/graph-repository.md"),
+  "utf8",
+);
 const dialect = new PgDialect();
 
 const node: NodeEnvelope = {
@@ -228,5 +236,18 @@ describe("GraphRepository atomic upsert boundary", () => {
       /titleEnvelope|descriptionEnvelope|attendeesEnvelope|locationEnvelope|meetingLinkEnvelope/,
     );
     expect(repositorySource).toMatch(/pre-existing same-owner event node/i);
+  });
+
+  it("documents the exact branded provider order key at code and database boundaries", () => {
+    const eventUpsert = repositorySource.slice(
+      repositorySource.indexOf("/**\n   * Atomically makes an order"),
+      repositorySource.indexOf("async replaceEdges"),
+    );
+    for (const contract of [eventUpsert, simpleReference, technicalReference]) {
+      expect(contract).toMatch(/ProviderOrderKeySchema/u);
+      expect(contract).toMatch(/20-digit/u);
+    }
+    expect(eventUpsert).toMatch(/database check is intentionally broad/iu);
+    expect(technicalReference).toMatch(/validated repository\s+input is authoritative/iu);
   });
 });

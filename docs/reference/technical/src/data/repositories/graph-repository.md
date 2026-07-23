@@ -20,9 +20,10 @@ protected content.
 
 Uses the globally unique provider event identity only as a conflict locator. The single atomic statement advances
 planning-safe fields only when owner and stable node ID match and the existing provider version sorts before the
-incoming provider version. Conflict updates never assign `owner_id` or `node_id`. Provider adapters must therefore
-supply non-empty `sourceVersion` tokens whose PostgreSQL text order matches the provider's change order; equal
-tokens are idempotent replays and lower tokens cannot overwrite newer state.
+incoming provider version. Conflict updates never assign `owner_id` or `node_id`. Provider adapters must supply the
+branded, exactly 20-digit `ProviderOrderKeySchema` value; equal keys are idempotent replays and lower keys cannot
+overwrite newer state. The database check is intentionally broad for schema compatibility, but validated repository
+input is authoritative for ordering.
 
 A pre-existing same-owner `event` node must be persisted through `upsertNode` before this call. The return semantics
 and privacy-safe identity-conflict handling match `upsertNode`.
