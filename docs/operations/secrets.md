@@ -22,7 +22,7 @@ No application data-service secret is currently configured in these workflows. T
 ## Technical controls
 
 - Bind a secret to the narrowest GitHub environment and require review for `production`.
-- Use a dedicated preview token with permission limited to the isolated preview Worker. Do not reuse a live token, even temporarily.
+- Use a dedicated preview token with permission limited to the isolated preview Worker. Do not reuse a live token, even temporarily. If it is absent, the manually requested preview workflow writes a summary explaining the missing token and fails before deployment.
 - Pass deployment tokens only through the action step environment. Do not use `VITE_*`, build arguments, checked-in `.env` files, or diagnostic output.
 - Change a token before its old value is revoked, update the environment secret, run a manually approved validation, then revoke the old value and record the rotation.
 - If a secret may have been exposed, revoke it immediately, inspect action logs and service access, and create a replacement under the same environment boundary.

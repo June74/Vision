@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Vision AI Secretary application foundation.",
   "private": true,
+  "packageManager": "pnpm@11.9.0",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -18,13 +19,6 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "^11.9.0",
-      "onFail": "download"
-    }
-  },
   "type": "module",
   "dependencies": {
     "hono": "^4.12.31",
