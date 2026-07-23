@@ -141,3 +141,59 @@ Corrected scans:
 - Durable `status = 'discovering'` write scan: zero matches.
 
 No live Google, Neon, Cloudflare, or other external service was used in the correction round.
+
+## Final I1/I3 adversarial correction evidence
+
+### Same-key in-flight ownership and definite terminalization
+
+- RED: a deterministic deferred Calendars.insert test showed that a same-key replay relisted immediately, moved the authoritative `in_progress` ledger to `retryable`, and advanced setup from `creating` to `failed`.
+- GREEN: an `in_progress` replay now reloads and returns the authoritative `creating` snapshot with HTTP 202. It neither relists nor mutates the ledger. Only the request that actually receives a completed uncertain create outcome may atomically move `in_progress` to reconciliation-only `retryable`.
+- Repository transitions are bound to the exact owner, subject, operation key, operation kind, stored confirmation version, expected setup version/status, and action-required flag.
+- Definite terminalization accepts matching `in_progress`, `retryable`, and `action_required` states, completes the ledger, and releases the unresolved partial-index claim. If ambiguity was already action-required, setup remains failed/action-required.
+- Deterministic Worker coverage exercises replay-before-definite and definite-before-replay ordering. PGlite coverage exercises definite terminalization from active, crash-marked retryable, and action-required states; release to a fresh discovery/version/key; and refusal when the setup version no longer matches.
+
+### Hostile stream cancellation
+
+- RED: a response stream whose `cancel()` promise never settled kept the public request pending beyond the configured provider deadline.
+- GREEN: deadline/overflow aborts the request, initiates best-effort reader cancellation, observes cancellation rejection, and never awaits the untrusted cleanup promise.
+- Never-resolving and rejecting cancellation algorithms are covered on both deadline and overflow paths. List/get remain `definite_failure`; insert remains `uncertain`.
+- The main request timer is still cleared in `finally`, byte/chunk ceilings remain enforced before accumulation, and adapter errors retain no token or hostile cancellation details.
+
+### Final verification
+
+Focused command:
+
+```powershell
+$env:XDG_CONFIG_HOME=(Resolve-Path '.wrangler').Path
+.\node_modules\.bin\vitest.CMD run tests/contract/google/calendar-setup.contract.test.ts tests/integration/data/calendar-repository-concurrency.test.ts tests/worker/calendar-setup.test.ts
+```
+
+Result: 3 files passed, 32 tests passed.
+
+Full command:
+
+```powershell
+$env:XDG_CONFIG_HOME=(Resolve-Path '.wrangler').Path
+pnpm.cmd check
+```
+
+Result:
+
+- Unit/integration: 29 files passed, 189 tests passed.
+- Worker: 4 files passed, 28 tests passed.
+- Production and test TypeScript: passed.
+- Mirrored documentation coverage: passed.
+- Worker and client production builds: passed.
+- Production crypto-boundary validation: passed.
+
+Final scans:
+
+- `git diff --check`: passed.
+- Task-scoped event-write endpoint/method scan: zero matches.
+- Production/docs/migrations token/client-secret sentinel scan: zero matches.
+- Calendar adapter `response.text()`/`response.json()` scan: zero matches.
+- Calendar adapter awaited `reader.cancel()` scan: zero matches.
+- Durable `status = 'discovering'` write scan: zero matches.
+- PGlite raw-row test still confirms stable metadata only and no token/provider/event payload plaintext.
+
+The first full-gate attempt after strengthening SQL state binding exposed an ambiguous `setup_version` expression. The target-table expression was qualified, the focused repository suite was rerun, and the complete gate above then passed. No live Google, Neon, Cloudflare, or other external service was used.

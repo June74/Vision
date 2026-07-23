@@ -166,6 +166,12 @@ class MemoryCalendarRepository implements CalendarRepositoryPort {
     outcome: "retryable" | "action_required",
   ): Promise<CalendarSetupSnapshot> {
     const operation = this.operations.get(idempotencyKey)!;
+    const expectedStatus =
+      outcome === "retryable" ? "in_progress" : "retryable";
+    if (operation.status !== expectedStatus) {
+      if (!this.snapshot) throw new Error("missing");
+      return this.snapshot;
+    }
     this.operations.set(idempotencyKey, { ...operation, status: outcome });
     this.snapshot = {
       ...this.state("failed", (this.snapshot?.setupVersion ?? 3) + 1),
@@ -178,6 +184,17 @@ class MemoryCalendarRepository implements CalendarRepositoryPort {
     idempotencyKey: string,
   ): Promise<CalendarSetupSnapshot> {
     const operation = this.operations.get(idempotencyKey)!;
+    if (operation.status === "definite_failure") {
+      if (!this.snapshot) throw new Error("missing");
+      return this.snapshot;
+    }
+    if (
+      !["in_progress", "retryable", "action_required"].includes(
+        operation.status,
+      )
+    ) {
+      throw new Error("invalid terminalization");
+    }
     this.operations.set(idempotencyKey, {
       ...operation,
       status: "definite_failure",
@@ -329,6 +346,16 @@ function post(path: string, body: unknown, csrf = CSRF): Request {
   });
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((accept, decline) => {
+    resolve = accept;
+    reject = decline;
+  });
+  return { promise, resolve, reject };
+}
+
 describe("Vision Worker calendar setup", () => {
   it("keeps cookie-only GET read-only and exposes the initial authenticated snapshot", async () => {
     const { app, client, repository } = createHarness();
@@ -458,6 +485,51 @@ describe("Vision Worker calendar setup", () => {
     expect(second.status).toBe(200);
     expect(createSecondaryCalendar).toHaveBeenCalledTimes(1);
     expect(createSecondaryCalendar).toHaveBeenCalledWith("America/Chicago");
+  });
+
+  it("keeps the original create authoritative while a same-key replay arrives in flight", async () => {
+    const { app, client, repository, createSecondaryCalendar } = createHarness({
+      lists: [[], [], []],
+    });
+    const create = deferred<CreatedSecondaryCalendar>();
+    createSecondaryCalendar.mockImplementation(() => create.promise);
+    await app.fetch(
+      post("/api/setup/calendar/discover", { setupVersion: 1 }),
+      {} as Env,
+    );
+    const body = {
+      setupVersion: 2,
+      confirmation: "CREATE VISION CALENDAR",
+      idempotencyKey: KEY,
+    };
+    const original = app.fetch(
+      post("/api/setup/calendar/confirm-create", body),
+      {} as Env,
+    );
+    await vi.waitFor(() =>
+      expect(createSecondaryCalendar).toHaveBeenCalledTimes(1),
+    );
+
+    const replay = await app.fetch(
+      post("/api/setup/calendar/confirm-create", body),
+      {} as Env,
+    );
+    expect(replay.status).toBe(202);
+    await expect(replay.json()).resolves.toMatchObject({
+      status: "creating",
+      setupVersion: 3,
+    });
+    expect(repository.operations.get(KEY)).toMatchObject({
+      status: "in_progress",
+    });
+    expect(client.listOwnedSecondaryCalendars).toHaveBeenCalledTimes(2);
+
+    create.reject(new CalendarProviderError("definite_failure"));
+    const rejected = await original;
+    expect(rejected.status).toBe(409);
+    expect(repository.operations.get(KEY)).toMatchObject({
+      status: "definite_failure",
+    });
   });
 
   it("requires explicit selection when a candidate appears after discovery but before confirmation", async () => {
@@ -593,6 +665,16 @@ describe("Vision Worker calendar setup", () => {
       setupVersion: 4,
       actionRequired: true,
     });
+    const rejectedReplay = await app.fetch(
+      post("/api/setup/calendar/confirm-create", {
+        setupVersion: 2,
+        confirmation: "CREATE VISION CALENDAR",
+        idempotencyKey: KEY,
+      }),
+      {} as Env,
+    );
+    expect(rejectedReplay.status).toBe(409);
+    expect(createSecondaryCalendar).toHaveBeenCalledTimes(1);
 
     createSecondaryCalendar.mockReset().mockResolvedValue({
       id: "created-after-correction",

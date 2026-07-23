@@ -263,7 +263,6 @@ async function readBoundedJson(
         chunkCount > MAX_PROVIDER_BODY_CHUNKS ||
         value.byteLength > maximumBytes - byteLength
       ) {
-        await reader.cancel().catch(() => {});
         throw new CalendarResponseRejected();
       }
       chunks.push(value);
@@ -271,7 +270,7 @@ async function readBoundedJson(
     }
   } catch (error) {
     controller.abort();
-    await reader.cancel().catch(() => {});
+    cancelReaderSafely(reader);
     throw error;
   }
   const bytes = new Uint8Array(byteLength);
@@ -285,6 +284,17 @@ async function readBoundedJson(
     return JSON.parse(text) as unknown;
   } catch {
     throw new CalendarResponseRejected();
+  }
+}
+
+/** Starts best-effort stream cleanup without letting a hostile cancel promise delay the request. */
+function cancelReaderSafely(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+): void {
+  try {
+    void reader.cancel().catch(() => undefined);
+  } catch {
+    // A non-conforming stream cannot make cleanup part of the request deadline.
   }
 }
 

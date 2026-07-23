@@ -274,12 +274,17 @@ export function registerCalendarSetupRoutes(
         noStore(context);
         return context.json(toSetupResponse(snapshot), 409);
       }
+      const uncertain = await recordCreationUncertain(
+        repository,
+        started.operation.idempotencyKey,
+        dependencies.now(),
+      );
       return reconcileCreation(
         context,
         dependencies,
         repository,
         client,
-        started.operation,
+        uncertain,
       );
     }
 
@@ -300,12 +305,17 @@ export function registerCalendarSetupRoutes(
       return context.json(toSetupResponse(snapshot));
     } catch {
       // A successful insert followed by verification/persistence uncertainty is always reconciled.
+      const uncertain = await recordCreationUncertain(
+        repository,
+        started.operation.idempotencyKey,
+        dependencies.now(),
+      );
       return reconcileCreation(
         context,
         dependencies,
         repository,
         client,
-        started.operation,
+        uncertain,
       );
     }
   });
@@ -352,6 +362,17 @@ async function reconcileCreation(
     noStore(context);
     return context.json(toSetupResponse(snapshot), 409);
   }
+  if (operation.status === "in_progress") {
+    const snapshot = await requireSetupSnapshot(repository);
+    noStore(context);
+    return context.json(
+      {
+        ...toSetupResponse(snapshot),
+        retryable: false,
+      },
+      202,
+    );
+  }
   const current = await client.listOwnedSecondaryCalendars().catch(() => {
     throw providerUnavailable();
   });
@@ -373,11 +394,13 @@ async function reconcileCreation(
     return context.json(toSetupResponse(snapshot));
   }
   const actionRequired = newOwnedCalendars.length > 1;
-  const snapshot = await repository.markCreationUncertain(
-    operation.idempotencyKey,
-    actionRequired ? "action_required" : "retryable",
-    dependencies.now(),
-  );
+  const snapshot = actionRequired
+    ? await repository.markCreationUncertain(
+        operation.idempotencyKey,
+        "action_required",
+        dependencies.now(),
+      )
+    : await requireSetupSnapshot(repository);
   logCalendarEventSafely(
     dependencies.logger,
     context.get("requestId"),
@@ -393,6 +416,22 @@ async function reconcileCreation(
     },
     actionRequired ? 409 : 202,
   );
+}
+
+/** Records that the authoritative create call settled uncertain before any replay may reconcile it. */
+async function recordCreationUncertain(
+  repository: CalendarRepositoryPort,
+  idempotencyKey: string,
+  now: Date,
+): Promise<CalendarCreationOperation> {
+  await repository
+    .markCreationUncertain(idempotencyKey, "retryable", now)
+    .catch(mapRepositoryFailure);
+  const operation = await repository.findCreationOperation(idempotencyKey);
+  if (!operation || operation.status === "in_progress") {
+    throw providerUnavailable();
+  }
+  return operation;
 }
 
 /** Resolves and validates one active server session without exposing its bearer. */

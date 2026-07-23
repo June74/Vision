@@ -281,4 +281,84 @@ describe("calendar setup persistence", () => {
       status: "retryable",
     });
   });
+
+  it("terminalizes a definite response after an uncertain crash marker and releases its claim", async () => {
+    await repository.discover(1, [], NOW);
+    await repository.beginCreation(2, OPERATION, [], NOW);
+    await expect(
+      repository.markCreationUncertain(OPERATION, "retryable", NOW),
+    ).resolves.toMatchObject({
+      status: "failed",
+      setupVersion: 4,
+      actionRequired: false,
+    });
+
+    await expect(
+      repository.markCreationDefiniteFailure(OPERATION, NOW),
+    ).resolves.toMatchObject({
+      status: "failed",
+      setupVersion: 5,
+      actionRequired: true,
+    });
+    await expect(repository.findCreationOperation(OPERATION)).resolves.toMatchObject({
+      status: "definite_failure",
+    });
+    await expect(repository.discover(5, [], NOW)).resolves.toMatchObject({
+      status: "awaiting_confirmation",
+      setupVersion: 6,
+    });
+    await expect(
+      repository.beginCreation(6, SECOND_OPERATION, [], NOW),
+    ).resolves.toMatchObject({ kind: "started" });
+  });
+
+  it("preserves an ambiguous action-required setup while terminalizing its ledger claim", async () => {
+    await repository.discover(1, [], NOW);
+    await repository.beginCreation(2, OPERATION, [], NOW);
+    await repository.markCreationUncertain(OPERATION, "retryable", NOW);
+    await expect(
+      repository.markCreationUncertain(OPERATION, "action_required", NOW),
+    ).resolves.toMatchObject({
+      status: "failed",
+      setupVersion: 5,
+      actionRequired: true,
+    });
+
+    await expect(
+      repository.markCreationDefiniteFailure(OPERATION, NOW),
+    ).resolves.toMatchObject({
+      status: "failed",
+      setupVersion: 6,
+      actionRequired: true,
+    });
+    await expect(repository.findCreationOperation(OPERATION)).resolves.toMatchObject({
+      status: "definite_failure",
+    });
+    const unresolved = await pglite.query<{ operation_id: string }>(
+      `select operation_id
+       from operation_ledger
+       where owner_id = $1
+         and operation_kind = 'vision_calendar_create'
+         and status in ('in_progress', 'retryable', 'action_required')`,
+      [OWNER],
+    );
+    expect(unresolved.rows).toEqual([]);
+  });
+
+  it("does not terminalize a ledger when its stored setup version no longer matches", async () => {
+    await repository.discover(1, [], NOW);
+    await repository.beginCreation(2, OPERATION, [], NOW);
+    await repository.markCreationUncertain(OPERATION, "retryable", NOW);
+    await pglite.query(
+      "update calendar_setup_states set setup_version = 99 where owner_id = $1",
+      [OWNER],
+    );
+
+    await expect(
+      repository.markCreationDefiniteFailure(OPERATION, NOW),
+    ).rejects.toMatchObject({ code: "CALENDAR_PERSISTENCE_FAILED" });
+    await expect(repository.findCreationOperation(OPERATION)).resolves.toMatchObject({
+      status: "retryable",
+    });
+  });
 });

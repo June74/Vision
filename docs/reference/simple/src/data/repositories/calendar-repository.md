@@ -15,9 +15,9 @@ Reads one scoped operation.
 ## `completeCreation`
 Persists created/reconciled evidence once.
 ## `markCreationUncertain`
-Records retryable or action-required without creating again.
+Moves a completed uncertain create to retry-only, then to manual review if reconciliation is ambiguous.
 ## `markCreationDefiniteFailure`
-Closes a known rejected create so corrected setup can use a fresh key.
+Closes a known rejected create while keeping any existing manual-review warning.
 ## `readSnapshot`
 Reads state, candidates, and connection.
 ## `getSnapshot`
