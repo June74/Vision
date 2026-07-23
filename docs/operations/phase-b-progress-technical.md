@@ -156,3 +156,17 @@ Codex's restricted sandbox blocks Wrangler's normal AppData cache/log paths. The
 - Setup boundary: all eight required states, exact creation confirmation, explicit existing-calendar selection, exact current-version checks, deterministic increments, and overflow rejection.
 - Carried Minors: remove stale references to deleted snapshot helpers; align `snapshotCalendarIds` documentation with non-enumerable-index behavior and document or replace its 10,000-ID bound.
 - External state: no Google token, allowlist secret, session store, provider call, or setup persistence was created or contacted.
+
+## Authentication Task 2 — Server-side Google OAuth and sessions
+
+- Status: complete; independent review approved spec compliance and task quality with zero Critical or Important findings and one carried Minor.
+- Commit range: `2c58fcd..274246a`.
+- Implementation/fix commits: `76b37d4` and `274246a`.
+- GREEN evidence: focused auth suite 43/43; full check 179 main tests and 15 Worker tests; documentation, typechecks, builds, crypto boundary, security scans, plaintext/secret scans, and diff checks passed.
+- OAuth boundary: authorization-code flow with PKCE S256, high-entropy state and nonce, exact redirect URI, single-use short-lived server records, offline access, and narrow discovery/create/read-only Calendar scopes.
+- Identity boundary: injected cryptographic token-verification port followed by trusted issuer, scalar audience, nonce, expiration, subject, verified email, and Task 1 allowlist validation.
+- Token boundary: retained refresh/access tokens use protected-field encryption; database-side atomic preservation prevents an omitted refresh token from overwriting a newly issued value; equal retries preserve ciphertext/version.
+- Admission boundary: server-derived HKDF-separated admission keys, atomic fixed-window/outstanding limits, privacy-safe 429 responses, expiry cleanup, physical consumed-row deletion, and supporting indexes.
+- Session boundary: opaque rotated server sessions, narrow HttpOnly cookies, Secure outside local, SameSite=Lax, logout invalidation, and CSRF protection for authenticated mutations.
+- Carried Minor: repair the hostile session-binary regression fixture so required admission fields are present and the test demonstrably reaches the byte decoder.
+- External state: no live Google OAuth/JWKS, Neon role/database, Cloudflare metadata, deployed cookie/header behavior, or external telemetry was exercised.

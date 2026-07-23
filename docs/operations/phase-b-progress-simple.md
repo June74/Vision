@@ -138,10 +138,26 @@ safely snapshots hostile inputs before evaluating them.
 The task passed 155 main tests and 4 Worker tests. Independent review approved
 both the specification and implementation quality with no blocking findings.
 
-### Next — Google OAuth and Vision sessions
+### Authentication Task 2 — Google OAuth and Vision sessions
 
-Add the server-owned OAuth exchange, encrypted token storage, private session
-cookie, logout, and CSRF protection.
+Vision now owns the complete Google sign-in exchange on the server. It uses
+state, PKCE, nonce, exact redirect and narrow Calendar scopes, verifies the
+Google identity before creating a session, and stores retained tokens only as
+encrypted database values.
+
+Sessions use private cookies, rotate after sign-in, support logout, and require
+CSRF protection for state-changing requests. OAuth starts are rate-limited and
+expired transactions are physically cleaned up. Concurrent callbacks cannot
+replace a newly issued refresh token with an older retained value.
+
+The task passed 179 main tests and 15 Worker tests. Independent review approved
+both the specification and implementation quality with no blocking findings.
+No live Google account, Neon database, or Cloudflare secret was used.
+
+### Next — Calendar discovery and setup APIs
+
+Discover owned secondary calendars, connect an explicitly selected existing
+Vision calendar, or create exactly one after current explicit confirmation.
 
 ## Not yet included
 
