@@ -4,7 +4,7 @@ This page explains Phase B progress in concise, plain language. It is updated af
 
 ## Current milestone
 
-Domain, data, and privacy.
+Authentication and calendar setup.
 
 ## Completed
 
@@ -105,10 +105,29 @@ The task passed 100 main tests and 4 Worker tests. Final independent review
 approved both the specification and implementation quality with no findings.
 A live Neon concurrency check remains a later external acceptance gate.
 
-### Next — Recoverable deletion
+### Domain Task 5 — Recoverable deletion
 
-Add the 30-day encrypted recovery window, restoration before its boundary,
-and irreversible ciphertext/relationship purging at or after the deadline.
+Vision now keeps confirmed deletions recoverable for exactly 30 days. A record
+can be restored only before the deadline without changing its encrypted
+content. At or after the deadline, an authorized background purge permanently
+removes ciphertext, relationships, and the recovery record in one database
+operation, while retaining only a non-sensitive audit fact.
+
+Owner-scoped deletion and restoration cannot cross user boundaries. Purge
+workers use a separate private system authorization, lock and re-check records
+under races, and stop safely if the required audit fact cannot be inserted.
+Repeated restores or purges are deterministic and idempotent.
+
+The task passed 121 main tests and 4 Worker tests. Final independent review
+approved both the specification and implementation quality with no findings.
+The Domain, data, and privacy milestone is complete. Live Neon migration,
+least-privilege, and true multi-session concurrency checks remain external
+acceptance gates.
+
+### Next — Authentication foundation
+
+Add the private-pilot identity and session boundary that will authorize the
+single Vision owner before connecting Google Calendar.
 
 ## Not yet included
 

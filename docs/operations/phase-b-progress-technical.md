@@ -128,3 +128,19 @@ Codex's restricted sandbox blocks Wrangler's normal AppData cache/log paths. The
 - Audit boundary: durable audit persistence copies only own allowlisted data properties to a null-prototype record and rejects nested, inherited, accessor, hidden, symbol, or protected content.
 - External state: no live Neon request or real two-session Neon/PostgreSQL race was executed; those remain milestone acceptance gates.
 - Review result: all initial Critical/Important findings and the final row-lock/documentation findings were repaired; final spec compliance and task quality are approved with zero findings.
+
+## Domain Task 5 — Recoverable deletion and permanent purge
+
+- Status: complete; final independent acceptance approved with zero Critical, Important, or Minor findings.
+- Commit range: `45b2156..b89252f`.
+- Implementation/fix commits: `396ad5b`, `334353e`, and `b89252f`.
+- RED evidence: initial lifecycle imports were absent; review fixes then reproduced owner-boundary, exact-deadline, concurrency, constructor-reachability, and complete audit-conflict failures before implementation.
+- GREEN evidence: final focused suite 18/18; unit lifecycle/authorization suite 74/74; contract/integration suite 41/41; full check 121 main tests and 4 Worker tests; typecheck, documentation, builds, production source/bundle reachability guards, crypto-boundary scans, and diff checks passed.
+- Time contract: deletion confirmation uses a UTC instant; `purgeAfter` is exactly `30 * 24` hours later; restoration requires `now < purgeAfter`; purge is due when `now >= purgeAfter`.
+- Restore boundary: owner-scoped restoration locks and revalidates the node and recovery rows, preserves protected content, rejects deadline equality, and has deterministic retry behavior.
+- Purge boundary: a private system-authorized repository claims rows in deterministic order, revalidates eligibility, removes ciphertext/event rows, related edges, and recovery rows transactionally, and is idempotent across workers.
+- Audit integrity: purge audit identity is deletion-episode-specific; every collision aborts the atomic statement, so deletion cannot succeed without inserting the complete required privacy-safe audit fact.
+- Authorization integrity: concrete owner and purge implementations are module-private, capabilities are identity-registered and rechecked, test/internal issuers are absent from production exports, and source/bundle guards reject production reachability.
+- Documentation: simple and technical mirrors cover lifecycle, repository, job, and authorization modules, including dependencies, inputs/outputs, side effects, failures, privacy, authority, and covering tests.
+- External state: no isolated Neon migration, checksum capture, least-privilege query, raw sentinel scan, or true multi-session PostgreSQL/Neon race was executed; these remain milestone acceptance gates.
+- Review result: three Important and two Minor initial findings plus two remaining Important re-review findings were repaired; final spec compliance and task quality are approved with zero findings.
