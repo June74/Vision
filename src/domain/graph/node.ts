@@ -1,6 +1,6 @@
 /** Defines the provider-independent canonical envelope shared by every Vision graph node. */
 import { z } from "zod";
-import { DomainSchema, DomainStateSchema } from "../categorization/category";
+import { DomainSchema, DomainStateSchema, isValidDomainStateCombination } from "../categorization/category";
 import { PrivacyLevelSchema } from "../privacy/privacy";
 
 /** Accepts the Version 1 object types registered in Vision's canonical graph. */
@@ -25,12 +25,18 @@ export const ProvenanceSchema = z.enum(["provider", "user", "system", "model"]);
 /** Identifies the retention state of a graph object. */
 export const NodeLifecycleSchema = z.enum(["active", "deleted", "purged"]);
 
+/** Validates the complete source identity retained by every canonical node. */
+export const NodeIdentitySchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("provider"), system: z.string().min(1), id: z.string().min(1) }).strict(),
+  z.object({ kind: z.literal("first_party"), system: z.literal("vision"), id: z.string().min(1) }).strict(),
+  z.object({ kind: z.literal("system"), system: z.literal("vision"), id: z.string().min(1) }).strict(),
+]);
+
 const NodeEnvelopeBaseSchema = z
   .object({
     id: z.string().min(1),
     ownerId: z.string().min(1),
-    sourceSystem: z.string().min(1).optional(),
-    sourceId: z.string().min(1).optional(),
+    identity: NodeIdentitySchema,
     domain: DomainSchema,
     domainState: DomainStateSchema,
     privacy: PrivacyLevelSchema,
@@ -62,6 +68,14 @@ export const NodeEnvelopeSchema = z
     NodeEnvelopeBaseSchema.extend({ nodeType: z.literal("alert_episode") }),
   ])
   .superRefine((node, context) => {
+    if (!isValidDomainStateCombination(node.domain, node.domainState)) {
+      context.addIssue({
+        code: "custom",
+        path: ["domainState"],
+        message: "Unresolved domains require unresolved state; concrete domains require confirmed or inferred state.",
+      });
+    }
+
     if (node.domainState === "inferred" && node.modelConfidence === undefined) {
       context.addIssue({ code: "custom", path: ["modelConfidence"], message: "Inferred nodes require model confidence." });
     }
@@ -73,6 +87,9 @@ export const NodeEnvelopeSchema = z
 
 /** A registered canonical object and the shared facts that govern it. */
 export type NodeEnvelope = z.infer<typeof NodeEnvelopeSchema>;
+
+/** A complete provider, first-party, or system identity for a canonical node. */
+export type NodeIdentity = z.infer<typeof NodeIdentitySchema>;
 
 /** A closed Version 1 graph object type. */
 export type NodeType = z.infer<typeof NodeTypeSchema>;

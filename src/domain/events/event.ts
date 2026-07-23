@@ -1,6 +1,6 @@
 /** Defines the provider-independent planning-safe event contract linked to a canonical event node. */
 import { z } from "zod";
-import { DomainSchema, DomainStateSchema } from "../categorization/category";
+import { DomainSchema, DomainStateSchema, isValidDomainStateCombination } from "../categorization/category";
 import { PrivacyLevelSchema } from "../privacy/privacy";
 
 /** Represents the lifecycle status that affects calendar planning. */
@@ -35,6 +35,14 @@ export const VisionEventSchema = z
   })
   .strict()
   .superRefine((event, context) => {
+    if (!isValidDomainStateCombination(event.domain, event.domainState)) {
+      context.addIssue({
+        code: "custom",
+        path: ["domainState"],
+        message: "Unresolved domains require unresolved state; concrete domains require confirmed or inferred state.",
+      });
+    }
+
     if (Date.parse(event.endsAt) <= Date.parse(event.startsAt)) {
       context.addIssue({ code: "custom", path: ["endsAt"], message: "Event end must be after its start." });
     }

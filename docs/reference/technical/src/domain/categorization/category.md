@@ -10,6 +10,12 @@ The closed stored values are `school`, `work`, `personal`, and `unresolved`.
 
 The state records confidence provenance independently from the category value: confirmed, inferred, or unresolved.
 
+## `isValidDomainStateCombination`
+
+**Signature:** `isValidDomainStateCombination(domain: Domain, state: DomainState): boolean`
+
+This shared pure constraint is true only for `unresolved` plus `unresolved`, or a concrete school/work/personal value plus `confirmed` or `inferred`. Node and event schemas compose it so persistence cannot receive contradictory category records.
+
 ## `resolveDomain`
 
 **Signature:** `resolveDomain(input: DomainResolutionInput): DomainDecision`

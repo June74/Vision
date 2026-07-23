@@ -7,6 +7,7 @@ const eventNode: NodeEnvelope = {
   id: "node_event_1",
   nodeType: "event",
   ownerId: "owner_1",
+  identity: { kind: "provider", system: "calendar", id: "provider_event_1" },
   domain: "work",
   domainState: "confirmed",
   privacy: "restricted",
@@ -23,6 +24,36 @@ const calendarNode: NodeEnvelope = { ...eventNode, id: "node_calendar_1", nodeTy
 describe("canonical graph contracts", () => {
   it("rejects unknown node types", () => {
     expect(NodeEnvelopeSchema.safeParse({ ...eventNode, nodeType: "unknown" }).success).toBe(false);
+  });
+
+  it("rejects a node without an explicit complete identity", () => {
+    const { identity: _identity, ...withoutIdentity } = eventNode;
+    expect(NodeEnvelopeSchema.safeParse(withoutIdentity).success).toBe(false);
+    expect(
+      NodeEnvelopeSchema.safeParse({
+        ...eventNode,
+        identity: { kind: "provider", system: "calendar" },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts a complete provider identity", () => {
+    expect(
+      NodeEnvelopeSchema.safeParse({
+        ...eventNode,
+        identity: { kind: "provider", system: "calendar", id: "provider_event_1" },
+      }).success,
+    ).toBe(true);
+  });
+
+  it("accepts explicit first-party and system identities", () => {
+    expect(NodeEnvelopeSchema.safeParse({ ...eventNode, identity: { kind: "first_party", system: "vision", id: "node_event_1" } }).success).toBe(true);
+    expect(NodeEnvelopeSchema.safeParse({ ...eventNode, identity: { kind: "system", system: "vision", id: "repair_job_1" } }).success).toBe(true);
+  });
+
+  it("rejects contradictory domain and domain-state combinations", () => {
+    expect(NodeEnvelopeSchema.safeParse({ ...eventNode, domain: "unresolved", domainState: "confirmed" }).success).toBe(false);
+    expect(NodeEnvelopeSchema.safeParse({ ...eventNode, domainState: "unresolved" }).success).toBe(false);
   });
 
   it("rejects a cross-owner edge", () => {

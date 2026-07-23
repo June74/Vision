@@ -4,4 +4,4 @@ This module describes a calendar event without tying it to a particular calendar
 
 ## `VisionEventSchema`
 
-`VisionEventSchema` checks the event identity, time range, status, category, privacy, and version.
+`VisionEventSchema` requires complete provider identity, rejects unknown fields and backwards times, and checks valid category/state and privacy metadata.

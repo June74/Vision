@@ -54,6 +54,11 @@ export type DomainResolutionInput = z.infer<typeof DomainResolutionInputSchema>;
 /** A category decision and the evidence tier that produced it. */
 export type DomainDecision = z.infer<typeof DomainDecisionSchema>;
 
+/** Returns whether a domain value and confidence state form a canonical category assignment. */
+export function isValidDomainStateCombination(domain: Domain, state: DomainState): boolean {
+  return domain === "unresolved" ? state === "unresolved" : state === "confirmed" || state === "inferred";
+}
+
 /** Resolves a domain using explicit choice, confirmed source, inference, then unresolved precedence. */
 export function resolveDomain(input: DomainResolutionInput): DomainDecision {
   const parsed = DomainResolutionInputSchema.parse(input);

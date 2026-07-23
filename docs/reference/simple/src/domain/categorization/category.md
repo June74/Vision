@@ -10,6 +10,10 @@ This module keeps Vision's internal categories predictable. A user's direct cate
 
 `DomainStateSchema` marks a category as confirmed, inferred, or unresolved.
 
+## `isValidDomainStateCombination`
+
+`isValidDomainStateCombination` allows unresolved only with unresolved, and a concrete category only with confirmed or inferred.
+
 ## `resolveDomain`
 
 `resolveDomain` applies the approved category order and returns the category plus the reason it was chosen.
