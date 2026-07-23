@@ -49,8 +49,22 @@ The Runtime and continuous integration milestone is complete.
 
 ## In progress
 
-Build Vision's provider-independent calendar rules, privacy boundaries, and
-database foundation.
+### Domain Task 1 — Canonical records and categories
+
+Vision now has provider-independent definitions for its graph, events,
+categories, and privacy levels. Every canonical record must have a complete
+provider or first-party identity, category values cannot contradict their
+confirmation state, and AI inference cannot lower privacy or authorize
+sharing.
+
+The task passed 17 focused tests and the full project check. Independent
+review initially found two contract gaps; both were corrected, tested, and
+approved with no remaining findings.
+
+### Next — PostgreSQL foundation
+
+Add the reviewed database schema, migration constraints, and repository
+transaction boundaries.
 
 ## Not yet included
 

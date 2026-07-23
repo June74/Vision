@@ -69,3 +69,16 @@ Codex's restricted sandbox blocks Wrangler's normal AppData cache/log paths. The
 - Reliability: audit-sink failure is caught only inside the response-preservation path, so the required error envelope still returns while normal logger validation remains fail-fast.
 - Routing: unknown `/api/*` paths return safe JSON; `/api/health` remains exact; non-API paths retain the asset fallback.
 - Review result: final spec compliance and task quality approved; zero remaining findings.
+
+## Domain Task 1 — Canonical domain contracts
+
+- Status: complete and independently approved after one fix round.
+- Commit range: `e18c315..8b08252`.
+- Implementation/fix commits: `525e726` and `8b08252`.
+- RED evidence: initial imports failed with both domain modules absent; the fix round then produced five expected failures for missing/partial identity and contradictory domain-state pairs.
+- GREEN evidence: focused domain suite 17/17; pure-domain dependency scan clean; typecheck and documentation checks passed; full check passed with 34 unit and 4 Worker tests plus production build.
+- Category rule: explicit user choice, confirmed source association, AI inference, then unresolved.
+- Privacy rule: inference cannot lower privacy and never authorizes sharing.
+- Canonical identity: strict provider, Vision first-party, or Vision system identity is mandatory; absent and partial identities are rejected.
+- State invariant: `unresolved` pairs only with `unresolved`; concrete domains pair only with `confirmed` or `inferred`.
+- Review result: initial review found two Important contract gaps and one Minor test gap; the re-review approved spec compliance and task quality with zero remaining findings.
