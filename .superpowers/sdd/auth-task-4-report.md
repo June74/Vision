@@ -34,3 +34,10 @@ The seven passing Chromium flows include the updated shell smoke test and all si
 - Confirmed the create button requires the exact uppercase phrase and an in-flight ref prevents duplicate mutation clicks.
 - Confirmed safe failure screens do not render raw response/provider errors.
 - The worker-test pool logs static-export-analysis warnings caused by sandbox parent-directory access, but its 30 tests and the full `pnpm.cmd check` command exit successfully. No Task 4 functional concern remains.
+
+## Consolidated review repair evidence
+
+- RED: replay/reload, truthful pending, focus, callback-denial, and narrow-viewport browser regressions were added. The pre-repair flow failed on replay, focus, and mobile assertions.
+- GREEN: focused `auth-setup.spec.ts` passed 9/9 with workspace-local `XDG_CONFIG_HOME`. It covers the real callback denial page, exact creation replay with the original version/key, live signal rail updates, keyboard focus on the named setup region, safe malformed-session handling, and narrow viewport behavior.
+- The browser now persists only one opaque active creation record (original setup version and UUID), reuses it for recovery, and clears it only after connection. Pending copy distinguishes discovery, verification, and request progress.
+- Full `pnpm.cmd check` was run after the repair. Typecheck passed, then two unrelated PGlite integration hooks timed out: `auth-token-concurrency` and `purge-expired-deletions` (191/193 unit tests passed). No Task 4 browser failure was reported by that command.

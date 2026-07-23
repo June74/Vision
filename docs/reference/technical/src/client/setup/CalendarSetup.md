@@ -40,3 +40,24 @@ Renders an explicit discovery retry after a transient failure.
 
 ## `readCreationKey`
 Uses `sessionStorage` only for an opaque UUID namespaced by setup version; it stores no provider response or token.
+
+## `run`
+Serializes one safe browser command.
+## `discover`
+Posts discovery with the current version.
+## `select`
+Posts an explicit calendar selection.
+## `createOrReplay`
+Posts the original operation version and key.
+## `refresh`
+Reads the authoritative setup snapshot.
+## `renderControls`
+Maps safe server states to controls.
+## `announcement`
+Creates concise live-region text.
+## `readActiveCreation`
+Validates the stored opaque replay record.
+## `startActiveCreation`
+Stores a UUID only after exact confirmation.
+## `updateOperation`
+Clears or updates replay context from server state.

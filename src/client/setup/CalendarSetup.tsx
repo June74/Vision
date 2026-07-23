@@ -1,140 +1,57 @@
-/** Renders the authenticated calendar setup controls using only safe server snapshots. */
-import { useRef, useState, type JSX } from "react";
+/** Renders accessible versioned calendar setup controls and safe creation recovery. */
+import { useLayoutEffect, useRef, useState, type JSX } from "react";
 import { StatusBanner } from "../status/StatusBanner";
-import {
-  confirmCalendarCreation,
-  discoverCalendars,
-  selectCalendar,
-  type BrowserSession,
-  type CalendarSetupSnapshot,
-} from "./api";
+import { confirmCalendarCreation, discoverCalendars, readCalendarSetup, selectCalendar, type BrowserSession, type CalendarSetupSnapshot } from "./api";
 
 const CONFIRMATION_PHRASE = "CREATE VISION CALENDAR";
+const OPERATION_STORAGE_KEY = "vision.calendar-setup.active-creation";
 
-/** Shows the authenticated setup state and submits only versioned, CSRF-protected setup commands. */
-export function CalendarSetup({ initialSnapshot, session }: { readonly initialSnapshot: CalendarSetupSnapshot; readonly session: BrowserSession }): JSX.Element {
-  const [snapshot, setSnapshot] = useState(initialSnapshot);
+/** Retains only the opaque replay context required by a server creation ledger. */
+interface ActiveCreation { readonly idempotencyKey: string; readonly setupVersion: number; readonly outcome: "creating" | "retryable" | "action_required" | "definite_failure"; }
+
+/** Shows setup state supplied by App and reports every accepted snapshot back to App. */
+export function CalendarSetup({ snapshot, session, onSnapshotChange }: { readonly snapshot: CalendarSetupSnapshot; readonly session: BrowserSession; readonly onSnapshotChange: (snapshot: CalendarSetupSnapshot) => void }): JSX.Element {
   const [confirmation, setConfirmation] = useState("");
-  const [pending, setPending] = useState(false);
-  const [requestProblem, setRequestProblem] = useState(false);
-  const inFlight = useRef(false);
-  const idempotencyKey = useRef(readCreationKey(initialSnapshot.setupVersion));
-  const actionRequired = snapshot.actionRequired || (snapshot.status === "failed" && snapshot.retryable === false);
-
-  /** Runs discovery again after a safe retryable failure. */
-  async function handleDiscovery(): Promise<void> {
-    await runCommand(() => discoverCalendars(session, snapshot.setupVersion));
-  }
-
-  /** Sends the explicit selected calendar ID to the verification route. */
-  async function handleSelection(calendarId: string): Promise<void> {
-    await runCommand(() => selectCalendar(session, snapshot.setupVersion, calendarId));
-  }
-
-  /** Creates or reconciles once with a stable same-version idempotency key. */
-  async function handleCreation(): Promise<void> {
-    if (confirmation !== CONFIRMATION_PHRASE || inFlight.current) return;
-    await runCommand(() => confirmCalendarCreation(session, snapshot.setupVersion, idempotencyKey.current));
-  }
-
-  /** Applies one server snapshot while preventing concurrent duplicate setup mutations. */
-  async function runCommand(command: () => Promise<CalendarSetupSnapshot>): Promise<void> {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    setPending(true);
-    setRequestProblem(false);
-    try {
-      const nextSnapshot = await command();
-      setSnapshot(nextSnapshot);
-      if (nextSnapshot.setupVersion !== initialSnapshot.setupVersion) {
-        idempotencyKey.current = readCreationKey(nextSnapshot.setupVersion);
-      }
-    } catch {
-      setRequestProblem(true);
-    } finally {
-      inFlight.current = false;
-      setPending(false);
-    }
-  }
-
-  if (pending || snapshot.status === "creating") return <CreatingState />;
-  if (snapshot.status === "connected" && snapshot.connection) return <ConnectedState snapshot={snapshot} />;
-  if (actionRequired) return <ActionRequiredState />;
-  if (snapshot.status === "awaiting_choice") return <ChoiceState candidates={snapshot.candidates} onSelect={handleSelection} />;
-  if (snapshot.status === "awaiting_confirmation") {
-    return <ConfirmationState confirmation={confirmation} onChange={setConfirmation} onCreate={handleCreation} />;
-  }
-  if (snapshot.status === "failed" || requestProblem) return <RetryState onRetry={handleDiscovery} />;
-  return <DiscoveryState onDiscover={handleDiscovery} />;
+  const [pending, setPending] = useState<"discovering" | "verifying" | "creating" | "reconciling" | undefined>();
+  const [problem, setProblem] = useState(false);
+  const panelRef = useRef<HTMLElement>(null);
+  const operation = readActiveCreation();
+  useLayoutEffect(() => { if (snapshot.status !== "authenticated") panelRef.current?.focus(); }, [snapshot.status, snapshot.setupVersion, pending, problem]);
+  /** Runs a truthful pending action and keeps unsafe failures beside the current state. */
+  async function run(action: NonNullable<typeof pending>, command: () => Promise<CalendarSetupSnapshot>): Promise<void> { setPending(action); setProblem(false); try { const next = await command(); onSnapshotChange(next); updateOperation(next); } catch { setProblem(true); } finally { setPending(undefined); } }
+  /** Starts owned-calendar discovery using the current server version. */
+  async function discover(): Promise<void> { await run("discovering", () => discoverCalendars(session, snapshot.setupVersion)); }
+  /** Verifies one explicit owned calendar. */
+  async function select(calendarId: string): Promise<void> { await run("verifying", () => selectCalendar(session, snapshot.setupVersion, calendarId)); }
+  /** Sends exact confirmation once, retaining its original server version and UUID. */
+  async function createOrReplay(): Promise<void> { const active = operation ?? startActiveCreation(snapshot.setupVersion); await run(operation ? "reconciling" : "creating", () => confirmCalendarCreation(session, active.setupVersion, active.idempotencyKey)); }
+  /** Re-reads server state when storage is absent, without enabling a new creation. */
+  async function refresh(): Promise<void> { await run("reconciling", readCalendarSetup); }
+  const title = pending === "discovering" ? "Finding your Vision calendars" : pending === "verifying" ? "Verifying your Vision calendar" : pending ? "Calendar request in progress" : snapshot.status === "creating" ? "Calendar request in progress" : snapshot.status === "connected" ? "Vision calendar connected" : snapshot.actionRequired ? "Calendar setup needs attention" : snapshot.status === "awaiting_choice" ? "Choose the Vision calendar to verify" : snapshot.status === "awaiting_confirmation" ? "Create a separate Vision calendar" : "Find your Vision calendar";
+  return <section ref={panelRef} role="region" tabIndex={-1} className="setup-card" aria-label="Calendar setup state"><p className="setup-card__eyebrow">Calendar connection</p><h2 id="setup-title">{title}</h2><StatusBanner message={announcement(snapshot, pending, problem)} tone={problem || snapshot.actionRequired ? "warning" : "neutral"} />{renderControls(snapshot, confirmation, setConfirmation, pending, problem, operation, discover, select, createOrReplay, refresh)}</section>;
 }
 
-/** Displays the intentional first step before Vision checks owned secondary calendars. */
-function DiscoveryState({ onDiscover }: { readonly onDiscover: () => Promise<void> }): JSX.Element {
-  return (
-    <section className="setup-card" aria-labelledby="discover-title">
-      <p className="setup-card__eyebrow">Calendar connection</p>
-      <h2 id="discover-title">Find your Vision calendar</h2>
-      <p>Vision checks only calendars you own. It will not add, change, or remove events during setup.</p>
-      <button className="button button--primary" type="button" onClick={() => void onDiscover()}>Find Vision calendars</button>
-    </section>
-  );
+/** Chooses controls and safe copy for the current authoritative setup outcome. */
+function renderControls(snapshot: CalendarSetupSnapshot, confirmation: string, setConfirmation: (value: string) => void, pending: string | undefined, problem: boolean, operation: ActiveCreation | undefined, discover: () => Promise<void>, select: (id: string) => Promise<void>, create: () => Promise<void>, refresh: () => Promise<void>): JSX.Element {
+  if (pending) return <p>Vision is waiting for this setup request. Keep this page open.</p>;
+  if (problem) return <><p>Vision could not confirm this request. No calendar changes were made by the browser.</p><button className="button button--primary" type="button" onClick={() => void (operation ? create() : refresh())}>Try again safely</button></>;
+  if (snapshot.status === "connected") return <><StatusBanner message={snapshot.connection?.connectionKind === "existing" ? "Verified existing calendar" : "Verified new secondary calendar"} /><p>{snapshot.connection?.connectionKind === "created" ? "A new secondary Vision calendar was verified with zero events." : "Setup did not add or change any events."}</p></>;
+  if (snapshot.status === "creating") return <>{operation ? <button className="button button--primary" type="button" onClick={() => void create()}>Check request status</button> : <button className="button button--primary" type="button" onClick={() => void refresh()}>Refresh setup status</button>}</>;
+  if (snapshot.actionRequired) return <p>Review your Vision calendars, then try again. Vision did not make changes automatically.</p>;
+  if (snapshot.status === "failed") return operation ? <button className="button button--primary" type="button" onClick={() => void create()}>Try request again</button> : <button className="button button--primary" type="button" onClick={() => void refresh()}>Refresh setup status</button>;
+  if (snapshot.status === "awaiting_choice") return <ul className="calendar-list">{snapshot.candidates.map((calendar) => <li key={calendar.calendarId}><button className="calendar-option" type="button" onClick={() => void select(calendar.calendarId)}><span>{calendar.summary}</span><small>{calendar.timeZone}</small><strong>Use {calendar.summary}</strong></button></li>)}</ul>;
+  if (snapshot.status === "awaiting_confirmation") return <><p>This creates a secondary calendar named Vision with zero events. Your other calendars stay unchanged.</p><label className="confirmation-label" htmlFor="calendar-confirmation">Type {CONFIRMATION_PHRASE} to confirm</label><input id="calendar-confirmation" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="off" spellCheck={false} /><button className="button button--primary" disabled={confirmation !== CONFIRMATION_PHRASE || !!operation} type="button" onClick={() => void create()}>Create Vision calendar</button></>;
+  return <><p>Vision checks only calendars you own. It will not add, change, or remove events during setup.</p><button className="button button--primary" type="button" onClick={() => void discover()}>Find Vision calendars</button></>;
 }
 
-/** Offers each discovered owned calendar as an explicit verification choice. */
-function ChoiceState({ candidates, onSelect }: { readonly candidates: readonly { readonly calendarId: string; readonly summary: string; readonly timeZone: string }[]; readonly onSelect: (calendarId: string) => Promise<void> }): JSX.Element {
-  return (
-    <section className="setup-card" aria-labelledby="choice-title">
-      <p className="setup-card__eyebrow">Owned calendars found</p>
-      <h2 id="choice-title">Choose the Vision calendar to verify</h2>
-      <p>Choose one calendar you own. Vision will verify it before connecting.</p>
-      <ul className="calendar-list">
-        {candidates.map((calendar) => <li key={calendar.calendarId}><button className="calendar-option" type="button" onClick={() => void onSelect(calendar.calendarId)}><span>{calendar.summary}</span><small>{calendar.timeZone}</small><strong>Use {calendar.summary}</strong></button></li>)}
-      </ul>
-    </section>
-  );
-}
+/** Returns a concise live announcement for every async setup transition. */
+function announcement(snapshot: CalendarSetupSnapshot, pending: string | undefined, problem: boolean): string { if (problem) return "Calendar setup needs attention."; if (pending) return "Calendar setup request in progress."; return snapshot.status.replaceAll("_", " "); }
 
-/** Requires an exact phrase before a secondary zero-event calendar can be created. */
-function ConfirmationState({ confirmation, onChange, onCreate }: { readonly confirmation: string; readonly onChange: (value: string) => void; readonly onCreate: () => Promise<void> }): JSX.Element {
-  return (
-    <section className="setup-card" aria-labelledby="confirmation-title">
-      <p className="setup-card__eyebrow">New calendar</p>
-      <h2 id="confirmation-title">Create a separate Vision calendar</h2>
-      <p>This creates a secondary calendar named Vision with zero events. Your other calendars stay unchanged.</p>
-      <label className="confirmation-label" htmlFor="calendar-confirmation">Type {CONFIRMATION_PHRASE} to confirm</label>
-      <input id="calendar-confirmation" value={confirmation} onChange={(event) => onChange(event.target.value)} autoComplete="off" spellCheck={false} />
-      <button className="button button--primary" disabled={confirmation !== CONFIRMATION_PHRASE} type="button" onClick={() => void onCreate()}>Create Vision calendar</button>
-    </section>
-  );
-}
+/** Reads the current opaque operation record without accepting untrusted storage shapes. */
+function readActiveCreation(): ActiveCreation | undefined { try { const value = JSON.parse(window.sessionStorage.getItem(OPERATION_STORAGE_KEY) ?? "null") as Partial<ActiveCreation>; return typeof value.idempotencyKey === "string" && Number.isInteger(value.setupVersion) && (value.outcome === "creating" || value.outcome === "retryable" || value.outcome === "action_required" || value.outcome === "definite_failure") ? value as ActiveCreation : undefined; } catch { return undefined; } }
 
-/** Explains that Vision is waiting for the versioned creation response. */
-function CreatingState(): JSX.Element {
-  return <section className="setup-card" aria-labelledby="creating-title"><p className="setup-card__eyebrow">Calendar connection</p><h2 id="creating-title">Creating your Vision calendar</h2><StatusBanner message="Vision is confirming the calendar. Keep this page open." /></section>;
-}
+/** Creates one opaque replay record only after the exact confirmation action. */
+function startActiveCreation(setupVersion: number): ActiveCreation { const active = { idempotencyKey: crypto.randomUUID(), outcome: "creating" as const, setupVersion }; window.sessionStorage.setItem(OPERATION_STORAGE_KEY, JSON.stringify(active)); return active; }
 
-/** Confirms a verified connection without displaying sensitive provider identifiers. */
-function ConnectedState({ snapshot }: { readonly snapshot: CalendarSetupSnapshot }): JSX.Element {
-  const existing = snapshot.connection?.connectionKind === "existing";
-  return <section className="setup-card" aria-labelledby="connected-title"><p className="setup-card__eyebrow">Calendar connection</p><h2 id="connected-title">Vision calendar connected</h2><StatusBanner message={existing ? "Verified existing calendar" : "Verified new secondary calendar"} /><p>Vision is connected to a secondary calendar with zero events.</p></section>;
-}
-
-/** Guides ambiguous provider results to a review instead of unsafe automatic repetition. */
-function ActionRequiredState(): JSX.Element {
-  return <section className="setup-card" aria-labelledby="action-required-title"><p className="setup-card__eyebrow">Calendar connection</p><h2 id="action-required-title">Calendar setup needs attention</h2><StatusBanner message="Review your Vision calendars, then try again." tone="warning" /><p>Vision did not make changes automatically.</p></section>;
-}
-
-/** Offers a safe retry path after a transient setup response. */
-function RetryState({ onRetry }: { readonly onRetry: () => Promise<void> }): JSX.Element {
-  return <section className="setup-card" aria-labelledby="retry-title"><p className="setup-card__eyebrow">Calendar connection</p><h2 id="retry-title">Calendar setup is paused</h2><StatusBanner message="Vision could not confirm the calendar yet. Try again." tone="warning" /><button className="button button--primary" type="button" onClick={() => void onRetry()}>Try setup again</button></section>;
-}
-
-/** Reads or creates a same-version UUID without storing a token or any provider response. */
-function readCreationKey(setupVersion: number): string {
-  const keyName = `vision.calendar-setup.create.${setupVersion}`;
-  const storedKey = window.sessionStorage.getItem(keyName);
-  if (storedKey) return storedKey;
-  const generatedKey = crypto.randomUUID();
-  window.sessionStorage.setItem(keyName, generatedKey);
-  return generatedKey;
-}
+/** Updates or clears the retained replay record only after an authoritative response. */
+function updateOperation(snapshot: CalendarSetupSnapshot): void { const active = readActiveCreation(); if (!active) return; if (snapshot.status === "connected") { window.sessionStorage.removeItem(OPERATION_STORAGE_KEY); return; } const outcome = snapshot.status === "creating" ? "creating" : snapshot.actionRequired ? "action_required" : snapshot.status === "failed" ? "retryable" : active.outcome; window.sessionStorage.setItem(OPERATION_STORAGE_KEY, JSON.stringify({ ...active, outcome })); }

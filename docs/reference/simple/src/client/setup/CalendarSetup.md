@@ -40,3 +40,24 @@ Offers a safe retry after a temporary setup problem.
 
 ## `readCreationKey`
 Keeps one temporary replay key for the same setup version, never a token.
+
+## `run`
+Runs one setup request safely.
+## `discover`
+Finds owned calendars.
+## `select`
+Verifies a chosen calendar.
+## `createOrReplay`
+Uses the same creation request safely.
+## `refresh`
+Checks current setup state.
+## `renderControls`
+Shows the correct controls.
+## `announcement`
+Announces the current step.
+## `readActiveCreation`
+Reads the temporary replay record.
+## `startActiveCreation`
+Creates one replay record after confirmation.
+## `updateOperation`
+Updates replay state from Vision.

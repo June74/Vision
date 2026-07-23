@@ -36,7 +36,7 @@ export function App(): JSX.Element {
         <section className="setup-surface" aria-label="Vision calendar setup">
           {view.kind === "loading" ? <p className="setup-loading" role="status">Checking your Vision session…</p> : null}
           {isSignInView(view) ? <SignIn state={view.kind} /> : null}
-          {view.kind === "setup" ? <CalendarSetup initialSnapshot={view.snapshot} session={view.session} /> : null}
+          {view.kind === "setup" ? <CalendarSetup snapshot={view.snapshot} session={view.session} onSnapshotChange={(snapshot) => setView((current) => current.kind === "setup" ? { ...current, snapshot } : current)} /> : null}
         </section>
         <SetupSignalRail view={view} />
       </div>
@@ -52,7 +52,7 @@ type AppView =
 
 /** Narrows a shell outcome to the entry states rendered by SignIn. */
 function isSignInView(view: AppView): view is { readonly kind: SignInState } {
-  return view.kind === "signed_out" || view.kind === "access_denied" || view.kind === "unavailable";
+  return view.kind === "signed_out" || view.kind === "unavailable";
 }
 
 /** Displays the signature non-sensitive signal rail for current setup state and version. */

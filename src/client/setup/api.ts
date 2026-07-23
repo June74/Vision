@@ -36,7 +36,6 @@ export interface CalendarSetupSnapshot {
 /** The small set of session outcomes that can safely alter the browser shell. */
 export type SessionResult =
   | { readonly kind: "authenticated"; readonly session: BrowserSession }
-  | { readonly kind: "access_denied" }
   | { readonly kind: "signed_out" }
   | { readonly kind: "unavailable" };
 
@@ -45,10 +44,9 @@ export async function readSession(): Promise<SessionResult> {
   const response = await fetch("/api/auth/session", { credentials: "same-origin" }).catch(() => undefined);
   if (!response) return { kind: "unavailable" };
   if (response.status === 401) return { kind: "signed_out" };
-  if (response.status === 403) return { kind: "access_denied" };
   if (!response.ok) return { kind: "unavailable" };
-  const payload = (await response.json()) as Partial<BrowserSession>;
-  return typeof payload.csrfToken === "string" && typeof payload.email === "string"
+  const payload = await response.json().catch(() => undefined) as Partial<BrowserSession> | undefined;
+  return payload && typeof payload.csrfToken === "string" && typeof payload.email === "string"
     ? { kind: "authenticated", session: { csrfToken: payload.csrfToken, email: payload.email } }
     : { kind: "unavailable" };
 }
