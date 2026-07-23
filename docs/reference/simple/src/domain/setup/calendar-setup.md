@@ -70,6 +70,10 @@ Copies allowed ordinary data fields without running getters.
 
 Checks that a state or command has no unexpected fields.
 
+## `snapshotCalendarIds`
+
+Copies a safe frozen list of calendar IDs without calling array methods.
+
 ## `rejectInvalidTransition`
 
 Stops a command that does not make sense in the current state.

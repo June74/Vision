@@ -300,8 +300,9 @@ function snapshotSetupState(value: unknown): CalendarSetupState | undefined {
     return undefined;
   }
   if (record.status === "awaiting_choice") {
-    return hasExactKeys(record, ["setupVersion", "status", "candidates"]) && isCalendarIdArray(record.candidates) && record.candidates.length > 0
-      ? Object.freeze({ candidates: Object.freeze([...record.candidates]), setupVersion: record.setupVersion, status: record.status })
+    const candidates = snapshotCalendarIds(record.candidates);
+    return hasExactKeys(record, ["setupVersion", "status", "candidates"]) && candidates && candidates.length > 0
+      ? Object.freeze({ candidates, setupVersion: record.setupVersion, status: record.status })
       : undefined;
   }
   if (record.status === "connected") {
@@ -328,8 +329,9 @@ function snapshotSetupCommand(value: unknown): CalendarSetupCommand | undefined 
         ? Object.freeze({ setupVersion: record.setupVersion, type: record.type }) as CalendarSetupCommand
         : undefined;
     case "discovery-complete": {
-      return hasExactKeys(record, ["setupVersion", "type", "calendarIds"]) && isCalendarIdArray(record.calendarIds)
-        ? Object.freeze({ calendarIds: Object.freeze([...record.calendarIds]), setupVersion: record.setupVersion, type: record.type })
+      const calendarIds = snapshotCalendarIds(record.calendarIds);
+      return hasExactKeys(record, ["setupVersion", "type", "calendarIds"]) && calendarIds
+        ? Object.freeze({ calendarIds, setupVersion: record.setupVersion, type: record.type })
         : undefined;
     }
     case "select-existing-calendar":
@@ -370,6 +372,25 @@ function snapshotRecord(value: unknown, allowedKeys: readonly string[]): Readonl
 function hasExactKeys(value: Readonly<Record<string, unknown>>, expectedKeys: readonly string[]): boolean {
   const names = Object.keys(value);
   return names.length === expectedKeys.length && expectedKeys.every((key) => names.includes(key));
+}
+
+/** Snapshots dense plain calendar-ID arrays from data descriptors without calling untrusted array methods. */
+function snapshotCalendarIds(value: unknown): readonly string[] | undefined {
+  try {
+    if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype || Object.getOwnPropertySymbols(value).length !== 0) return undefined;
+    const lengthDescriptor = Object.getOwnPropertyDescriptor(value, "length");
+    if (!lengthDescriptor || !("value" in lengthDescriptor) || !Number.isSafeInteger(lengthDescriptor.value) || lengthDescriptor.value < 0 || lengthDescriptor.value > 10_000) return undefined;
+    const length = lengthDescriptor.value as number;
+    const names = Object.getOwnPropertyNames(value);
+    if (names.length !== length + 1 || !names.includes("length")) return undefined;
+    const ids: string[] = [];
+    for (let index = 0; index < length; index += 1) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+      if (!descriptor || !("value" in descriptor) || !isNonEmptyCalendarId(descriptor.value)) return undefined;
+      ids.push(descriptor.value);
+    }
+    return Object.freeze(ids);
+  } catch { return undefined; }
 }
 
 /** Throws the constant safe error for a command that is not valid in the current state. */

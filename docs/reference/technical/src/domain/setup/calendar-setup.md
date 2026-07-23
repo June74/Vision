@@ -102,6 +102,10 @@ Copies only enumerable own data properties from a standard object prototype, rej
 
 Requires each state and command variant to have exactly its contract fields after snapshot extraction.
 
+## `snapshotCalendarIds`
+
+Reads only dense plain-array length and index data descriptors inside a guarded block, rejecting sparse, hidden, accessor, symbolic, exotic, and trapped nested input before copying a frozen ID list.
+
 ## `rejectInvalidTransition`
 
 **Signature:** `() => never`.

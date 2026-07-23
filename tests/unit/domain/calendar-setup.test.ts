@@ -245,4 +245,14 @@ describe("calendar setup state machine", () => {
       status: "authenticated",
     });
   });
+
+  it("converts a proxy-backed discovery ID array into the constant safe error", () => {
+    const ids = new Proxy(["calendar-1"], { ownKeys: () => { throw new Error("hostile nested keys"); } });
+    expect(() => transitionCalendarSetup(discovering, { calendarIds: ids as never, setupVersion: 2, type: "discovery-complete" })).toThrow("STALE_SETUP_VERSION");
+  });
+
+  it("converts a proxy-backed candidate ID array into the constant safe error", () => {
+    const ids = new Proxy(["calendar-1"], { getOwnPropertyDescriptor: () => { throw new Error("hostile nested descriptor"); } });
+    expect(() => transitionCalendarSetup({ candidates: ids as never, setupVersion: 3, status: "awaiting_choice" }, { setupVersion: 3, type: "sign-out" })).toThrow("STALE_SETUP_VERSION");
+  });
 });
