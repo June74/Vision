@@ -9,13 +9,19 @@ describe("GraphRepository ownership and data-minimization guards", () => {
     expect(repositorySource).toContain("target: [nodes.ownerId, nodes.provider, nodes.providerNodeId]");
     expect(repositorySource).toContain("eq(nodes.ownerId, node.ownerId)");
     expect(repositorySource).toContain("eq(nodes.id, node.id)");
+    expect(repositorySource).toContain("GraphIdentityConflictError");
+    expect(repositorySource).toContain("return \"no_newer_version\"");
+    expect(repositorySource).toContain(".returning({ id: nodes.id })");
   });
 
   it("updates a provider event only for its existing owner and never sets owner during conflict resolution", () => {
     const eventUpdate = repositorySource.slice(repositorySource.indexOf("async upsertEvent"), repositorySource.indexOf("async replaceEdges"));
 
     expect(eventUpdate).toContain("eq(events.ownerId, event.ownerId)");
-    expect(eventUpdate).not.toMatch(/set:\s*{[\s\S]*?ownerId:/);
+    const conflictSet = eventUpdate.slice(eventUpdate.indexOf("set:"), eventUpdate.indexOf("where:"));
+    expect(conflictSet).not.toContain("ownerId:");
+    expect(eventUpdate).toContain("Provider event identity is already owned by another account.");
+    expect(eventUpdate).toContain(".returning({ nodeId: events.nodeId })");
   });
 
   it("loads only planning-safe event columns and documents the required existing node", () => {

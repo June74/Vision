@@ -8,11 +8,17 @@ import { edges, events, nodes } from "../schema";
 
 /** Reads and writes canonical graph records without allowing providers to define Vision policy. */
 export interface GraphRepository {
-  upsertNode(node: NodeEnvelope): Promise<void>;
-  upsertEvent(event: VisionEvent): Promise<void>;
+  upsertNode(node: NodeEnvelope): Promise<UpsertOutcome>;
+  upsertEvent(event: VisionEvent): Promise<UpsertOutcome>;
   replaceEdges(ownerId: string, sourceNodeId: string, replacements: Edge[]): Promise<void>;
   getEventByProviderIdentity(ownerId: string, identity: VisionEvent["identity"]): Promise<VisionEvent | undefined>;
 }
+
+/** Describes the observable result of a safe graph upsert. */
+export type UpsertOutcome = "inserted" | "updated" | "no_newer_version";
+
+/** Signals an owner or stable-identity collision without including protected or credential data. */
+export class GraphIdentityConflictError extends Error {}
 
 /** Persists graph facts with atomic edge replacement and provider-identity lookups. */
 export class DrizzleGraphRepository implements GraphRepository {
@@ -24,8 +30,25 @@ export class DrizzleGraphRepository implements GraphRepository {
    *
    * The caller must keep one stable Vision ID for each `(ownerId, provider, providerNodeId)` identity.
    */
-  async upsertNode(node: NodeEnvelope): Promise<void> {
-    await this.database
+  async upsertNode(node: NodeEnvelope): Promise<UpsertOutcome> {
+    const [naturalIdentity] = await this.database
+      .select({ id: nodes.id, version: nodes.version })
+      .from(nodes)
+      .where(and(eq(nodes.ownerId, node.ownerId), eq(nodes.provider, node.identity.system), eq(nodes.providerNodeId, node.identity.id)))
+      .limit(1);
+    const [globalId] = await this.database.select({ ownerId: nodes.ownerId }).from(nodes).where(eq(nodes.id, node.id)).limit(1);
+
+    if (globalId && globalId.ownerId !== node.ownerId) {
+      throw new GraphIdentityConflictError("Node ID is already owned by another account.");
+    }
+    if (naturalIdentity && naturalIdentity.id !== node.id) {
+      throw new GraphIdentityConflictError("Node identity is already associated with a different stable ID.");
+    }
+    if (naturalIdentity && naturalIdentity.version >= node.version) {
+      return "no_newer_version";
+    }
+
+    const changed = await this.database
       .insert(nodes)
       .values({
         id: node.id,
@@ -61,7 +84,22 @@ export class DrizzleGraphRepository implements GraphRepository {
           modelConfidence: node.modelConfidence === undefined ? null : Math.round(node.modelConfidence * 1_000_000),
         },
         where: and(eq(nodes.ownerId, node.ownerId), eq(nodes.id, node.id), sql`${nodes.version} < ${node.version}`),
-      });
+      })
+      .returning({ id: nodes.id });
+
+    if (changed.length === 0) {
+      // Neon HTTP has no interactive transaction here; re-read only to classify a concurrent safe no-op or collision.
+      const [observed] = await this.database
+        .select({ id: nodes.id, version: nodes.version })
+        .from(nodes)
+        .where(and(eq(nodes.ownerId, node.ownerId), eq(nodes.provider, node.identity.system), eq(nodes.providerNodeId, node.identity.id)))
+        .limit(1);
+      if (observed && observed.id !== node.id) {
+        throw new GraphIdentityConflictError("Node identity is already associated with a different stable ID.");
+      }
+      return "no_newer_version";
+    }
+    return naturalIdentity ? "updated" : "inserted";
   }
 
   /**
@@ -69,8 +107,20 @@ export class DrizzleGraphRepository implements GraphRepository {
    *
    * Callers must persist the pre-existing same-owner event node with `upsertNode` before calling this method.
    */
-  async upsertEvent(event: VisionEvent): Promise<void> {
-    await this.database
+  async upsertEvent(event: VisionEvent): Promise<UpsertOutcome> {
+    const [existing] = await this.database
+      .select({ ownerId: events.ownerId, providerVersion: events.providerVersion })
+      .from(events)
+      .where(and(eq(events.provider, event.identity.sourceSystem), eq(events.providerCalendarId, event.identity.sourceCalendarId), eq(events.providerEventId, event.identity.sourceEventId)))
+      .limit(1);
+    if (existing && existing.ownerId !== event.ownerId) {
+      throw new GraphIdentityConflictError("Provider event identity is already owned by another account.");
+    }
+    if (existing && existing.providerVersion === event.identity.sourceVersion) {
+      return "no_newer_version";
+    }
+
+    const changed = await this.database
       .insert(events)
       .values({
         nodeId: event.nodeId,
@@ -99,7 +149,21 @@ export class DrizzleGraphRepository implements GraphRepository {
           recurrenceId: event.recurrenceId ?? null,
         },
         where: and(eq(events.ownerId, event.ownerId), sql`${events.providerVersion} <> ${event.identity.sourceVersion}`),
-      });
+      })
+      .returning({ nodeId: events.nodeId });
+
+    if (changed.length === 0) {
+      const [observed] = await this.database
+        .select({ ownerId: events.ownerId })
+        .from(events)
+        .where(and(eq(events.provider, event.identity.sourceSystem), eq(events.providerCalendarId, event.identity.sourceCalendarId), eq(events.providerEventId, event.identity.sourceEventId)))
+        .limit(1);
+      if (observed && observed.ownerId !== event.ownerId) {
+        throw new GraphIdentityConflictError("Provider event identity is already owned by another account.");
+      }
+      return "no_newer_version";
+    }
+    return existing ? "updated" : "inserted";
   }
 
   /** Atomically replaces one source node's relationships after checking their declared source. */

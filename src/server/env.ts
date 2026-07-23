@@ -12,7 +12,12 @@ export const RuntimeEnvSchema = z.object({
   }),
 });
 
-/** Represents the validated, non-secret Vision deployment environment. */
+/** Safely validates a Worker-only database URL without including credential text in errors. */
+export function parseVisionDatabaseUrl(databaseUrl: unknown): string {
+  return RuntimeEnvSchema.shape.DATABASE_URL.parse(databaseUrl);
+}
+
+/** Represents the validated server-only, secret-bearing Vision runtime environment. */
 export type RuntimeEnv = z.infer<typeof RuntimeEnvSchema>;
 
 /** Defines every Worker binding used by the initial Vision runtime. */

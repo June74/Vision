@@ -10,7 +10,13 @@ The schema accepts `VISION_ENV` and the Worker-only `DATABASE_URL`. It safely pa
 
 **Signature:** `z.infer<typeof RuntimeEnvSchema>`
 
-This type keeps TypeScript consumers aligned with the runtime schema. It has no side effects and does not validate values by itself.
+This server-only, secret-bearing type keeps TypeScript consumers aligned with the runtime schema. It has no side effects and does not validate values by itself.
+
+## `parseVisionDatabaseUrl`
+
+**Signature:** `(databaseUrl: unknown) => string`
+
+Validates a runtime value at the database factory boundary through the same `DATABASE_URL` schema. Its failure messages state only the required `vision_app` role and never serialize the URL or password.
 
 ## `Env`
 
