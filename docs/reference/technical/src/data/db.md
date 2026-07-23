@@ -4,6 +4,9 @@ This module creates the typed Drizzle Neon HTTP database.
 
 ## `createDb`
 
-**Signature:** `(environment: RuntimeEnv) => VisionDatabase`
+**Signature:** `(databaseUrl: unknown) => VisionDatabase`
 
-Builds a typed client only from `RuntimeEnvSchema` output. The schema safely parses the secret URL and accepts only the `vision_app` username, rejecting `neondb_owner` without exposing the URL.
+Treats the raw Worker binding as untrusted boundary input and passes it through `parseVisionDatabaseUrl` before
+constructing the Neon HTTP and Drizzle clients. The parser requires a valid PostgreSQL URL using the dedicated
+`vision_app` role and rejects privileged roles such as `neondb_owner`. Validation errors use fixed schema messages
+and never echo the secret URL, credentials, query parameters, or database contents.
