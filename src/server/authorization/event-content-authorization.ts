@@ -1,10 +1,12 @@
-/** Issues unforgeable repository decisions after server-owned owner and privacy policy checks. */
+/** Verifies non-forgeable server-composition authority before protected event access. */
+import type { PrivacyLevel } from "../../domain/privacy/privacy";
 import {
-  PrivacyLevelSchema,
-  type PrivacyLevel,
-} from "../../domain/privacy/privacy";
+  hasEventContentAuthorizationDecision,
+  hasVerifiedEventRepositoryAccess,
+} from "./event-content-capability-internal";
 
-const decisionBrand = Symbol("vision.event-content-authorization");
+const decisionTypeBrand: unique symbol = Symbol("vision.event-content-decision-type");
+const accessTypeBrand: unique symbol = Symbol("vision.event-repository-access-type");
 
 /** Facts the repository must authorize before selecting protected event columns. */
 export interface EventContentAuthorizationRequest {
@@ -13,48 +15,35 @@ export interface EventContentAuthorizationRequest {
   readonly privacy: PrivacyLevel;
 }
 
-/** Private-symbol-branded decision that ordinary repository callers cannot construct. */
+/** Private-symbol-branded decision issued only by verified server access. */
 export interface EventContentAuthorizationDecision
   extends EventContentAuthorizationRequest {
-  readonly [decisionBrand]: true;
+  readonly [decisionTypeBrand]: never;
 }
 
-/** Server-owned policy port used by the owner-scoped event repository. */
-export interface EventContentAuthorizationPolicy {
+/** Opaque access capability that a repository accepts from the server composition root. */
+export interface VerifiedEventRepositoryAccess {
+  readonly authenticatedOwnerId: string;
+  readonly [accessTypeBrand]: never;
   authorize(
     request: EventContentAuthorizationRequest,
   ): EventContentAuthorizationDecision | undefined;
 }
 
-/** Application policy callback supplied by the future authenticated server composition root. */
-export type EventPrivacyPolicy = (
-  ownerId: string,
-  privacy: PrivacyLevel,
-) => boolean;
-
-/** Creates an owner-enforcing policy that alone can attach the private runtime decision brand. */
-export function createEventContentAuthorizationPolicy(
-  canReadPrivacy: EventPrivacyPolicy,
-): EventContentAuthorizationPolicy {
-  return {
-    /** Returns a branded decision only after both owner equality and the injected privacy rule pass. */
-    authorize(
-      request: EventContentAuthorizationRequest,
-    ): EventContentAuthorizationDecision | undefined {
-      if (
-        !isValidRequest(request) ||
-        request.authenticatedOwnerId !== request.eventOwnerId ||
-        !canReadPrivacy(request.eventOwnerId, request.privacy)
-      ) {
-        return undefined;
-      }
-
-      return Object.freeze({
-        ...request,
-        [decisionBrand]: true as const,
-      });
-    },
-  };
+/** Rejects caller-shaped objects that were not issued by the server capability boundary. */
+export function isVerifiedEventRepositoryAccess(
+  value: unknown,
+): value is VerifiedEventRepositoryAccess {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as { authenticatedOwnerId?: unknown; authorize?: unknown };
+  return (
+    hasVerifiedEventRepositoryAccess(value) &&
+    typeof candidate.authenticatedOwnerId === "string" &&
+    candidate.authenticatedOwnerId.length > 0 &&
+    typeof candidate.authorize === "function"
+  );
 }
 
 /** Verifies both the private brand and exact authorized facts before protected selection. */
@@ -64,24 +53,9 @@ export function matchesEventContentAuthorizationDecision(
 ): decision is EventContentAuthorizationDecision {
   return (
     decision !== undefined &&
-    decision[decisionBrand] === true &&
+    hasEventContentAuthorizationDecision(decision) &&
     decision.authenticatedOwnerId === request.authenticatedOwnerId &&
     decision.eventOwnerId === request.eventOwnerId &&
     decision.privacy === request.privacy
-  );
-}
-
-/** Validates the closed owner and privacy request without coercion. */
-function isValidRequest(
-  request: EventContentAuthorizationRequest,
-): boolean {
-  return (
-    typeof request === "object" &&
-    request !== null &&
-    typeof request.authenticatedOwnerId === "string" &&
-    request.authenticatedOwnerId.length > 0 &&
-    typeof request.eventOwnerId === "string" &&
-    request.eventOwnerId.length > 0 &&
-    PrivacyLevelSchema.safeParse(request.privacy).success
   );
 }

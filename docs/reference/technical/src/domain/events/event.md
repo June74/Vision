@@ -1,6 +1,8 @@
 # `src/domain/events/event.ts`
 
-This module defines a strict planning-safe event contract linked to a canonical event node. It represents source identity structurally so synchronization and deduplication do not require opaque payload parsing.
+This module defines a strict planning-safe event contract linked to a canonical event node. `ProviderOrderKeySchema`
+brands exactly 20 decimal digits, so PostgreSQL text comparison equals unsigned numeric order. Provider adapters must
+derive this canonical key from provider revisions rather than passing opaque ETags.
 
 ## `VisionEventSchema`
 

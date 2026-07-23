@@ -1,6 +1,9 @@
 /** Implements the transaction boundary between pure Vision graph contracts and PostgreSQL rows. */
 import { and, eq, sql } from "drizzle-orm";
-import type { VisionEvent } from "../../domain/events/event";
+import {
+  VisionEventSchema,
+  type VisionEvent,
+} from "../../domain/events/event";
 import type { Edge } from "../../domain/graph/edge";
 import type { NodeEnvelope } from "../../domain/graph/node";
 import type { VisionDatabase } from "../db";
@@ -465,7 +468,7 @@ export class DrizzleGraphRepository implements GraphRepository {
 
     const { event, node } = row;
 
-    return {
+    return VisionEventSchema.parse({
       nodeId: event.nodeId,
       ownerId: event.ownerId,
       identity: {
@@ -484,6 +487,6 @@ export class DrizzleGraphRepository implements GraphRepository {
       domainState: node.domainState as VisionEvent["domainState"],
       privacy: node.privacy as VisionEvent["privacy"],
       version: node.version,
-    };
+    });
   }
 }

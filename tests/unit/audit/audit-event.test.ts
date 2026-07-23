@@ -100,6 +100,42 @@ describe("privacy-safe audit event", () => {
     ).rejects.toBeInstanceOf(SafeAuditEventValidationError);
     expect(sink.serialized).toEqual([]);
   });
+
+  it("rejects Object.prototype pollution without invoking inherited getters and restores the prototype", async () => {
+    const sink = new RecordingAuditSink();
+    const writer = new AuditWriter(sink);
+    let getterReads = 0;
+    let caught: unknown;
+    Object.defineProperty(Object.prototype, "provider", {
+      configurable: true,
+      enumerable: true,
+      get: () => {
+        getterReads += 1;
+        return "polluted_provider";
+      },
+    });
+    Object.defineProperty(Object.prototype, "title", {
+      configurable: true,
+      enumerable: true,
+      value: SENTINEL,
+    });
+
+    try {
+      const withoutOwnProvider = { ...validAuditEvent };
+      delete (withoutOwnProvider as { provider?: string }).provider;
+      try {
+        await writer.write(withoutOwnProvider);
+      } catch (error) {
+        caught = error;
+      }
+    } finally {
+      delete (Object.prototype as { provider?: unknown }).provider;
+      delete (Object.prototype as { title?: unknown }).title;
+    }
+    expect(caught).toBeInstanceOf(SafeAuditEventValidationError);
+    expect(getterReads).toBe(0);
+    expect(sink.serialized).toEqual([]);
+  });
 });
 
 if (false) {

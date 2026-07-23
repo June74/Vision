@@ -2,7 +2,7 @@
 
 This repository is the protected event-content gate. Its production Drizzle adapter executes atomic PostgreSQL writes.
 The repository accepts readable event content, encrypts it before storage, and returns it only for the authenticated
-owner after a server policy issues a privately marked privacy decision.
+owner only when a verified server access capability authorizes the privacy snapshot.
 
 ## `save`
 
@@ -46,7 +46,8 @@ Builds the protected-field map and checks its key metadata.
 
 ## `validateAuthoritativeSave`
 
-Checks the row returned by atomic storage still has the requested owner and stable identity and is not older.
+Checks exact owner, stable identity, node version, domain, domain state, and privacy. A mismatch has one typed safe
+error.
 
 ## `matchesAuthorizedSnapshot`
 
@@ -70,8 +71,12 @@ Rechecks the attendee array recovered from authenticated ciphertext.
 
 ## `saveAtomically`
 
-Uses one PostgreSQL statement to insert or update only a strictly newer provider version and returns the row the
-database kept.
+Requires the exact node snapshot in the write statement and returns only planning-safe facts. An empty conflict result
+causes a fresh planning-only winner query.
+
+## `selectSaveWinner`
+
+Reads only planning-safe winner facts in a fresh database snapshot after an empty conflict result.
 
 ## `selectPlanningEvent`
 
@@ -87,15 +92,15 @@ Checks owner/privacy again, decrypts an equal-version row, and rejects it unless
 
 ## `createEventRepository`
 
-Builds the owner-scoped repository with the production Drizzle store and server authorization policy.
+Builds the owner-scoped repository only from an opaque verified server access capability.
 
 ## `databaseRowToPlanningEvent`
 
-Turns one PostgreSQL planning projection into a validated Vision event.
+Strictly decodes raw Neon cells into a validated Vision event.
 
 ## `databaseRowToStoredEvent`
 
-Turns one PostgreSQL protected projection into the encrypted row contract.
+Strictly decodes raw Neon cells, including `bytea`, into the encrypted row contract.
 
 ## `decryptStoredEvent`
 
@@ -108,3 +113,31 @@ Removes all encrypted persistence columns from a stored row.
 ## `plaintextEventsEqual`
 
 Compares two normalized complete events for an exact retry.
+
+## `decodeDatabaseString`
+
+Accepts one required raw PostgreSQL text cell without coercion.
+
+## `decodeDatabaseNullableString`
+
+Accepts either a raw PostgreSQL text cell or database null.
+
+## `decodeDatabaseBoolean`
+
+Accepts Neon raw `t`/`f` or an already-decoded test-driver boolean.
+
+## `decodeDatabasePositiveInteger`
+
+Accepts a canonical positive safe decimal integer.
+
+## `decodeDatabaseTimestamp`
+
+Requires a timestamp with an explicit UTC offset and returns canonical ISO text.
+
+## `decodeDatabaseBytea`
+
+Decodes bounded canonical lowercase PostgreSQL `\x` hexadecimal text or validated driver bytes.
+
+## `decodeDatabaseNullableBytea`
+
+Accepts either a protected binary cell or database null.

@@ -6,13 +6,27 @@ import { PrivacyLevelSchema } from "../privacy/privacy";
 /** Represents the lifecycle status that affects calendar planning. */
 export const EventStatusSchema = z.enum(["confirmed", "tentative", "cancelled"]);
 
+/**
+ * Canonical provider order key whose ordinary text order is identical to unsigned integer order.
+ *
+ * Provider adapters must translate opaque ETags or revision tokens into this 20-digit decimal form before
+ * repository entry; raw provider tokens are not comparable versions.
+ */
+export const ProviderOrderKeySchema = z
+  .string()
+  .regex(/^\d{20}$/u)
+  .brand<"ProviderOrderKey">();
+
+/** Canonical monotonic provider order key accepted by event persistence. */
+export type ProviderOrderKey = z.infer<typeof ProviderOrderKeySchema>;
+
 /** Validates the planning-safe provider identity used for synchronization and deduplication. */
 export const ProviderEventIdentitySchema = z
   .object({
     sourceSystem: z.string().min(1),
     sourceCalendarId: z.string().min(1),
     sourceEventId: z.string().min(1),
-    sourceVersion: z.string().min(1),
+    sourceVersion: ProviderOrderKeySchema,
   })
   .strict();
 

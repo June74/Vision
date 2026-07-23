@@ -1,20 +1,12 @@
 # `src/server/authorization/event-content-authorization.ts`
 
-This file prevents a repository caller from choosing its own privacy permission. A server-owned policy checks the
-authenticated owner and event privacy, then attaches a hidden mark that only this module can create and verify.
+This file verifies an opaque access capability from the server composition root. Raw owner strings, ordinary objects,
+and arbitrary callbacks cannot construct a repository or authorize protected fields.
 
-## `createEventContentAuthorizationPolicy`
+## `isVerifiedEventRepositoryAccess`
 
-Builds the owner check around the application's privacy rule.
-
-## `authorize`
-
-Returns a marked decision only when the authenticated owner owns the event and the privacy rule allows access.
+Checks exact private-registry membership and the fixed authenticated owner before repository construction.
 
 ## `matchesEventContentAuthorizationDecision`
 
-Checks the hidden mark and every owner/privacy fact before decryption can continue.
-
-## `isValidRequest`
-
-Rejects empty owners and unknown privacy values.
+Checks exact private-registry membership and the authenticated owner, event owner, and privacy snapshot.

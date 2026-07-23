@@ -4,4 +4,6 @@ This module describes a calendar event without tying it to a particular calendar
 
 ## `VisionEventSchema`
 
-`VisionEventSchema` requires complete provider identity, rejects unknown fields and backwards times, and checks valid category/state and privacy metadata.
+`VisionEventSchema` requires complete provider identity, rejects unknown fields and backwards times, and checks valid
+category/state and privacy metadata. Provider adapters must translate revisions into an exactly 20-digit decimal order
+key; opaque ETags and variable-width numbers are rejected.

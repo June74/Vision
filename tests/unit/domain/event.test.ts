@@ -8,7 +8,7 @@ const event = {
     sourceSystem: "calendar",
     sourceCalendarId: "calendar_1",
     sourceEventId: "event_1",
-    sourceVersion: "version_1",
+    sourceVersion: "00000000000000000001",
   },
   startsAt: "2026-07-22T09:00:00.000Z",
   endsAt: "2026-07-22T10:00:00.000Z",
@@ -22,6 +22,17 @@ const event = {
 } as const;
 
 describe("VisionEventSchema", () => {
+  it("accepts only a canonical fixed-width provider order key", () => {
+    expect(VisionEventSchema.safeParse(event).success).toBe(true);
+    for (const sourceVersion of ["2", "10", "etag-opaque", "0000000000000000000x"]) {
+      expect(
+        VisionEventSchema.safeParse({
+          ...event,
+          identity: { ...event.identity, sourceVersion },
+        }).success,
+      ).toBe(false);
+    }
+  });
   it("requires a complete provider identity", () => {
     const { identity: _identity, ...withoutIdentity } = event;
     expect(VisionEventSchema.safeParse(withoutIdentity).success).toBe(false);

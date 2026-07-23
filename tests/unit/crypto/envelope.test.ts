@@ -43,8 +43,28 @@ describe("AES-GCM protected-field envelopes", () => {
 
     const encrypted = await encryptText(key, "private title", aad);
 
+    expect(encrypted.version).toBe(2);
     expect(JSON.stringify(encrypted)).not.toContain("private title");
     await expect(decryptText(key, encrypted, aad)).resolves.toBe("private title");
+  });
+
+  it("decrypts the fixed legacy version-1 AAD vector without weakening version-2 domain binding", async () => {
+    const key = await crypto.subtle.importKey(
+      "raw",
+      Uint8Array.from({ length: 32 }, (_, index) => index),
+      { name: "AES-GCM" },
+      false,
+      ["decrypt"],
+    );
+    const legacy: CipherEnvelope = {
+      version: 1,
+      algorithm: "A256GCM",
+      keyVersion: 1,
+      iv: "AAECAwQFBgcICQoL",
+      ciphertext: "K2exeqac4mv_KOHqxYxYGeqi61GVZfPJHYSNsg62TPPqEcyn",
+    };
+
+    await expect(decryptText(key, legacy, aad)).resolves.toBe("legacy private title");
   });
 
   it("uses a fresh random 96-bit IV for every encryption", async () => {
@@ -82,7 +102,7 @@ describe("AES-GCM protected-field envelopes", () => {
   });
 
   it.each([
-    [{ version: 2 }, "envelope version"],
+    [{ version: 3 }, "envelope version"],
     [{ algorithm: "AES-CBC" }, "algorithm"],
     [{ keyVersion: 0 }, "key version"],
     [{ iv: "not+padded/base64==" }, "IV base64url"],

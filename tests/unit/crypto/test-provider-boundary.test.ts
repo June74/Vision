@@ -6,7 +6,7 @@ import {
 } from "../../../scripts/validate-production-crypto-boundary";
 
 describe("production crypto build boundary", () => {
-  it("keeps the test provider unreachable from production source and absent from the Worker bundle", () => {
+  it("keeps test-only key and authorization issuers unreachable from production source and bundles", () => {
     expect(validateProductionCryptoBoundary(resolve(import.meta.dirname, "../../.."))).toEqual([]);
     expect(TEST_PROVIDER_BOUNDARY_MARKER).toMatch(/TEST_PROVIDER/u);
   });

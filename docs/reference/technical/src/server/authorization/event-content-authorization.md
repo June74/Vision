@@ -1,33 +1,18 @@
 # `src/server/authorization/event-content-authorization.ts`
 
-`EventContentAuthorizationPolicy` is injected into an owner-scoped repository by the server composition factory.
-`EventContentAuthorizationDecision` contains a module-private unique-symbol property, so structurally similar ordinary
-objects fail runtime verification. The future authentication milestone supplies `authenticatedOwnerId`; this module
-does not claim to authenticate users.
+`VerifiedEventRepositoryAccess` is registered by exact object identity and fixes one authenticated owner. No
+production issuer exists until the authentication/privacy-policy composition milestone. Repository construction is
+therefore fail-closed. A guarded Vitest-only issuer supports tests and is excluded by source and bundle scans.
 
-## `createEventContentAuthorizationPolicy`
+## `isVerifiedEventRepositoryAccess`
 
-**Signature:** `(canReadPrivacy: EventPrivacyPolicy) => EventContentAuthorizationPolicy`
+**Signature:** `(value: unknown) => value is VerifiedEventRepositoryAccess`
 
-Creates the only supported decision issuer. It hard-codes authenticated-owner equality before invoking the deterministic
-privacy callback and freezes successful decisions with the private runtime brand.
-
-## `authorize`
-
-**Signature:** `(request: EventContentAuthorizationRequest) => EventContentAuthorizationDecision | undefined`
-
-Validates request shape, requires subject/event owner equality, evaluates privacy, and returns either a branded frozen
-decision or `undefined`.
+Requires private-registry membership, a non-empty authenticated owner, and the authorization operation.
 
 ## `matchesEventContentAuthorizationDecision`
 
 **Signature:** `(decision, request) => decision is EventContentAuthorizationDecision`
 
-Checks the inaccessible symbol plus exact authenticated owner, event owner, and privacy facts. Repository code invokes
-this immediately before selecting protected columns.
-
-## `isValidRequest`
-
-**Signature:** `(request: EventContentAuthorizationRequest) => boolean`
-
-Requires non-empty string owners and a value accepted by `PrivacyLevelSchema`.
+Requires private-registry membership plus exact authenticated owner, event owner, and privacy facts immediately
+before protected selection.

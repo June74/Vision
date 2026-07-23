@@ -3,7 +3,9 @@
 This module encrypts one text field into a small JSON-safe envelope and decrypts it only in the same owner, node,
 domain, field, and key-version context.
 
-`CipherEnvelope` records the supported format, AES algorithm, key version, random IV, and ciphertext. `ProtectedFieldAad` describes the metadata that AES-GCM authenticates without exposing it as plaintext content.
+New writes use envelope version 2, which binds the domain. Version 1 remains readable with its original pre-domain
+metadata layout so existing ciphertext is not silently redefined. A future migration must re-encrypt every v1 row
+before v1 support is removed.
 
 One protected field may contain at most 64 KiB of UTF-8 plaintext. Ciphertext and serialized JSON have matching limits and are rejected before large decoding or parsing work.
 
@@ -21,7 +23,7 @@ Accepts only positive safe integers for cryptographic key versions.
 
 ## `validateCipherEnvelope`
 
-Checks every envelope field, allows only version 1 with `A256GCM`, and verifies encoded sizes before decoding.
+Checks every envelope field, allows legacy version 1 or domain-bound version 2 with `A256GCM`, and verifies sizes.
 
 ## `serializeCipherEnvelope`
 

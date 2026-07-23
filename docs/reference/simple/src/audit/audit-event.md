@@ -6,5 +6,5 @@ rejected without exposing their values.
 
 ## `validateSafeAuditEvent`
 
-Checks that an audit event is a plain object with only the approved fields and values. It returns a clean copy or
-throws the same safe error for every invalid input.
+Checks descriptors before values, rejects enumerable `Object.prototype` pollution without invoking getters, copies
+only own data properties into a fresh null-prototype record, and validates that closed copy.

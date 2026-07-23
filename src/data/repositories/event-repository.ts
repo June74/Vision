@@ -6,6 +6,7 @@ import {
   type EncryptedProtectedFields,
 } from "../../crypto/protected-fields";
 import {
+  MAX_SERIALIZED_CIPHER_ENVELOPE_CHARS,
   parseCipherEnvelope,
   serializeCipherEnvelope,
   type CipherEnvelope,
@@ -16,8 +17,9 @@ import {
   type VisionEvent,
 } from "../../domain/events/event";
 import {
+  isVerifiedEventRepositoryAccess,
   matchesEventContentAuthorizationDecision,
-  type EventContentAuthorizationPolicy,
+  type VerifiedEventRepositoryAccess,
 } from "../../server/authorization/event-content-authorization";
 import type { VisionDatabase } from "../db";
 
@@ -60,13 +62,14 @@ export interface AtomicEventStore {
 /** Authoritative row and concurrency classification returned by one atomic save statement. */
 export interface AtomicEventSaveResult {
   readonly outcome: "applied" | "equal" | "newer";
-  readonly row: StoredEventRow;
+  readonly event: VisionEvent;
 }
 
-/** Server-owned construction facts for one authenticated owner-scoped repository. */
-export interface EventRepositoryOptions {
-  readonly authenticatedOwnerId: string;
-  readonly authorizationPolicy: EventContentAuthorizationPolicy;
+/** Owner-scoped repository surface returned only after verified server composition. */
+export interface EventRepositoryPort {
+  save(event: PlaintextEvent): Promise<void>;
+  getPlanning(nodeId: string): Promise<VisionEvent | undefined>;
+  get(nodeId: string): Promise<PlaintextEvent | undefined>;
 }
 
 /** Reports a denied protected-content read without including identities or content. */
@@ -101,32 +104,15 @@ export class EventPersistenceConflictError extends Error {
   }
 }
 
-interface DatabaseEventRow extends Record<string, unknown> {
-  nodeId: string;
-  ownerId: string;
-  provider: string;
-  providerCalendarId: string;
-  providerEventId: string;
-  providerVersion: string;
-  startsAt: Date;
-  endsAt: Date;
-  timeZone: string;
-  busy: boolean;
-  status: string;
-  recurrenceId: string | null;
-  domain: string;
-  domainState: string;
-  privacy: string;
-  version: number;
-  titleEnvelope?: Uint8Array | null;
-  descriptionEnvelope?: Uint8Array | null;
-  attendeesEnvelope?: Uint8Array | null;
-  locationEnvelope?: Uint8Array | null;
-  meetingLinkEnvelope?: Uint8Array | null;
-  protectedKeyVersion?: number | null;
-  saveOutcome?: "applied" | "equal" | "newer" | "invalid";
+/** Reports that the supplied event was encrypted for a node snapshot that is no longer authoritative. */
+export class EventNodeSnapshotConflictError extends Error {
+  constructor() {
+    super("Event node snapshot does not match the authoritative node.");
+    this.name = "EventNodeSnapshotConflictError";
+  }
 }
 
+type DatabaseEventRow = Record<string, unknown>;
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder("utf-8", { fatal: true });
 const REQUIRED_EVENT_KEYS = new Set([
@@ -169,7 +155,9 @@ export class DrizzleAtomicEventStore implements AtomicEventStore {
     const result = await this.database.execute<DatabaseEventRow>(sql`
       with incoming (
         node_id, owner_id, provider, provider_calendar_id, provider_event_id, provider_version,
-        starts_at, ends_at, time_zone, busy, status, recurrence_id, title_envelope,
+        starts_at, ends_at, time_zone, busy, status, recurrence_id,
+        expected_domain, expected_domain_state, expected_privacy, expected_node_version,
+        title_envelope,
         description_envelope, attendees_envelope, location_envelope, meeting_link_envelope,
         protected_key_version
       ) as (
@@ -178,10 +166,22 @@ export class DrizzleAtomicEventStore implements AtomicEventStore {
           ${row.identity.sourceCalendarId}, ${row.identity.sourceEventId},
           ${row.identity.sourceVersion}, ${row.startsAt}::timestamptz, ${row.endsAt}::timestamptz,
           ${row.timeZone}, ${row.busy}::boolean, ${row.status}, ${row.recurrenceId ?? null},
+          ${row.domain}, ${row.domainState}, ${row.privacy}, ${row.version}::integer,
           ${row.titleEnvelope}::bytea, ${row.descriptionEnvelope}::bytea, ${row.attendeesEnvelope}::bytea,
           ${row.locationEnvelope}::bytea, ${row.meetingLinkEnvelope}::bytea,
           ${row.protectedKeyVersion}::integer
         )
+      ),
+      eligible as (
+        select incoming.*
+        from incoming
+        inner join nodes node
+          on node.id = incoming.node_id
+          and node.owner_id = incoming.owner_id
+          and node.domain = incoming.expected_domain
+          and node.domain_state = incoming.expected_domain_state
+          and node.privacy = incoming.expected_privacy
+          and node.version = incoming.expected_node_version
       ),
       write as (
         insert into events as persisted (
@@ -190,7 +190,12 @@ export class DrizzleAtomicEventStore implements AtomicEventStore {
           description_envelope, attendees_envelope, location_envelope, meeting_link_envelope,
           protected_key_version
         )
-        select * from incoming
+        select
+          node_id, owner_id, provider, provider_calendar_id, provider_event_id, provider_version,
+          starts_at, ends_at, time_zone, busy, status, recurrence_id, title_envelope,
+          description_envelope, attendees_envelope, location_envelope, meeting_link_envelope,
+          protected_key_version
+        from eligible
         on conflict (provider, provider_calendar_id, provider_event_id) do update set
           provider_version = excluded.provider_version,
           starts_at = excluded.starts_at,
@@ -209,63 +214,79 @@ export class DrizzleAtomicEventStore implements AtomicEventStore {
           and persisted.node_id = excluded.node_id
           and persisted.provider_version < excluded.provider_version
         returning persisted.*
-      ),
-      authoritative as (
-        select write.*, 'applied'::text as save_outcome from write
-        union all
-        select persisted.*,
-          case
-            when persisted.provider_version = incoming.provider_version then 'equal'
-            when persisted.provider_version > incoming.provider_version then 'newer'
-            else 'invalid'
-          end as save_outcome
-        from events persisted
-        cross join incoming
-        where not exists (select 1 from write)
-          and persisted.provider = incoming.provider
-          and persisted.provider_calendar_id = incoming.provider_calendar_id
-          and persisted.provider_event_id = incoming.provider_event_id
       )
       select
-        authoritative.node_id as "nodeId",
-        authoritative.owner_id as "ownerId",
-        authoritative.provider,
-        authoritative.provider_calendar_id as "providerCalendarId",
-        authoritative.provider_event_id as "providerEventId",
-        authoritative.provider_version as "providerVersion",
-        authoritative.starts_at as "startsAt",
-        authoritative.ends_at as "endsAt",
-        authoritative.time_zone as "timeZone",
-        authoritative.busy,
-        authoritative.status,
-        authoritative.recurrence_id as "recurrenceId",
+        write.node_id as "nodeId",
+        write.owner_id as "ownerId",
+        write.provider,
+        write.provider_calendar_id as "providerCalendarId",
+        write.provider_event_id as "providerEventId",
+        write.provider_version as "providerVersion",
+        write.starts_at as "startsAt",
+        write.ends_at as "endsAt",
+        write.time_zone as "timeZone",
+        write.busy,
+        write.status,
+        write.recurrence_id as "recurrenceId",
         node.domain,
         node.domain_state as "domainState",
         node.privacy,
-        node.version,
-        authoritative.title_envelope as "titleEnvelope",
-        authoritative.description_envelope as "descriptionEnvelope",
-        authoritative.attendees_envelope as "attendeesEnvelope",
-        authoritative.location_envelope as "locationEnvelope",
-        authoritative.meeting_link_envelope as "meetingLinkEnvelope",
-        authoritative.protected_key_version as "protectedKeyVersion",
-        authoritative.save_outcome as "saveOutcome"
-      from authoritative
+        node.version
+      from write
       inner join nodes node
-        on node.id = authoritative.node_id and node.owner_id = authoritative.owner_id
+        on node.id = write.node_id and node.owner_id = write.owner_id
     `);
 
     const [persisted] = result.rows;
-    if (
-      !persisted ||
-      !["applied", "equal", "newer"].includes(persisted.saveOutcome ?? "")
-    ) {
-      throw new Error("PostgreSQL returned an invalid atomic event-save result.");
+    if (persisted) {
+      const event = databaseRowToPlanningEvent(persisted);
+      validateAuthoritativeSave(event, row);
+      return { outcome: "applied", event };
     }
-    return {
-      outcome: persisted.saveOutcome as AtomicEventSaveResult["outcome"],
-      row: databaseRowToStoredEvent(persisted),
-    };
+
+    // A fresh statement sees a conflict winner committed after the write statement snapshot.
+    const winner = await this.selectSaveWinner(row);
+    if (!winner) {
+      throw new EventNodeSnapshotConflictError();
+    }
+    validateAuthoritativeSave(winner, row);
+    if (winner.identity.sourceVersion === row.identity.sourceVersion) {
+      return { outcome: "equal", event: winner };
+    }
+    if (winner.identity.sourceVersion > row.identity.sourceVersion) {
+      return { outcome: "newer", event: winner };
+    }
+    throw new Error("PostgreSQL returned an invalid atomic event-save result.");
+  }
+
+  /** Re-reads only nonprotected winner facts in a fresh snapshot after an empty write result. */
+  private async selectSaveWinner(row: StoredEventRow): Promise<VisionEvent | undefined> {
+    const result = await this.database.execute<DatabaseEventRow>(sql`
+      select
+        event.node_id as "nodeId",
+        event.owner_id as "ownerId",
+        event.provider,
+        event.provider_calendar_id as "providerCalendarId",
+        event.provider_event_id as "providerEventId",
+        event.provider_version as "providerVersion",
+        event.starts_at as "startsAt",
+        event.ends_at as "endsAt",
+        event.time_zone as "timeZone",
+        event.busy,
+        event.status,
+        event.recurrence_id as "recurrenceId",
+        node.domain,
+        node.domain_state as "domainState",
+        node.privacy,
+        node.version
+      from events event
+      inner join nodes node on node.id = event.node_id and node.owner_id = event.owner_id
+      where event.provider = ${row.identity.sourceSystem}
+        and event.provider_calendar_id = ${row.identity.sourceCalendarId}
+        and event.provider_event_id = ${row.identity.sourceEventId}
+      limit 1
+    `);
+    return result.rows[0] ? databaseRowToPlanningEvent(result.rows[0]) : undefined;
   }
 
   /** Selects only planning-safe columns for one node and owner. */
@@ -343,18 +364,17 @@ export class DrizzleAtomicEventStore implements AtomicEventStore {
 }
 
 /** Connects plaintext event objects to an atomic ciphertext store and authorization-gated reads. */
-export class EventRepository {
+class EventRepository implements EventRepositoryPort {
   constructor(
     private readonly store: AtomicEventStore,
     private readonly keyProvider: KeyProvider,
-    private readonly authenticatedOwnerId: string,
-    private readonly authorizationPolicy: EventContentAuthorizationPolicy,
+    private readonly access: VerifiedEventRepositoryAccess,
   ) {}
 
   /** Encrypts every represented protected field before making the single atomic adapter call. */
   async save(event: PlaintextEvent): Promise<void> {
     const validated = validatePlaintextEvent(event);
-    if (validated.ownerId !== this.authenticatedOwnerId) {
+    if (validated.ownerId !== this.access.authenticatedOwnerId) {
       throw new EventOwnerMismatchError();
     }
     const planningEvent = toPlanningEvent(validated);
@@ -377,16 +397,15 @@ export class EventRepository {
 
     // No database adapter method is reachable until all plaintext fields have become authenticated envelopes.
     const result = await this.store.saveAtomically(row);
-    validateAuthoritativeSave(result.row, row);
     if (result.outcome === "equal") {
-      await this.assertIdempotentReplay(result.row, validated);
+      await this.assertIdempotentReplay(result.event, validated);
     }
   }
 
   /** Reads only planning-safe columns for an explicitly named owner. */
   async getPlanning(nodeId: string): Promise<VisionEvent | undefined> {
-    validateOpaqueLookup(nodeId, this.authenticatedOwnerId);
-    const event = await this.store.selectPlanningEvent(nodeId, this.authenticatedOwnerId);
+    validateOpaqueLookup(nodeId, this.access.authenticatedOwnerId);
+    const event = await this.store.selectPlanningEvent(nodeId, this.access.authenticatedOwnerId);
     if (!event) {
       return undefined;
     }
@@ -395,7 +414,7 @@ export class EventRepository {
     if (
       !parsed.success ||
       parsed.data.nodeId !== nodeId ||
-      parsed.data.ownerId !== this.authenticatedOwnerId
+      parsed.data.ownerId !== this.access.authenticatedOwnerId
     ) {
       throw new Error("Planning event lookup returned an invalid owner-bound row.");
     }
@@ -412,18 +431,18 @@ export class EventRepository {
     }
 
     const request = {
-      authenticatedOwnerId: this.authenticatedOwnerId,
+      authenticatedOwnerId: this.access.authenticatedOwnerId,
       eventOwnerId: planningEvent.ownerId,
       privacy: planningEvent.privacy,
     };
-    const decision = this.authorizationPolicy.authorize(request);
+    const decision = this.access.authorize(request);
     if (!matchesEventContentAuthorizationDecision(decision, request)) {
       throw new EventContentAccessDeniedError();
     }
 
     const stored = await this.store.selectProtectedEvent(
       nodeId,
-      this.authenticatedOwnerId,
+      this.access.authenticatedOwnerId,
       planningEvent.version,
       planningEvent.identity.sourceVersion,
     );
@@ -454,17 +473,26 @@ export class EventRepository {
 
   /** Owner/privacy-authorizes and compares an equal-version row to distinguish replay from conflict. */
   private async assertIdempotentReplay(
-    stored: StoredEventRow,
+    planningEvent: VisionEvent,
     requested: PlaintextEvent,
   ): Promise<void> {
     const request = {
-      authenticatedOwnerId: this.authenticatedOwnerId,
-      eventOwnerId: stored.ownerId,
-      privacy: stored.privacy,
+      authenticatedOwnerId: this.access.authenticatedOwnerId,
+      eventOwnerId: planningEvent.ownerId,
+      privacy: planningEvent.privacy,
     };
-    const decision = this.authorizationPolicy.authorize(request);
+    const decision = this.access.authorize(request);
     if (!matchesEventContentAuthorizationDecision(decision, request)) {
-      throw new EventContentAccessDeniedError();
+      throw new EventPersistenceConflictError();
+    }
+    const stored = await this.store.selectProtectedEvent(
+      planningEvent.nodeId,
+      this.access.authenticatedOwnerId,
+      planningEvent.version,
+      planningEvent.identity.sourceVersion,
+    );
+    if (!stored || !matchesAuthorizedSnapshot(stored, planningEvent)) {
+      throw new EventPersistenceConflictError();
     }
     const persisted = await decryptStoredEvent(this.keyProvider, stored);
     if (!plaintextEventsEqual(persisted, requested)) {
@@ -477,19 +505,15 @@ export class EventRepository {
 export function createEventRepository(
   database: VisionDatabase,
   keyProvider: KeyProvider,
-  options: EventRepositoryOptions,
-): EventRepository {
-  if (
-    typeof options.authenticatedOwnerId !== "string" ||
-    options.authenticatedOwnerId.length === 0
-  ) {
+  access: VerifiedEventRepositoryAccess,
+): EventRepositoryPort {
+  if (!isVerifiedEventRepositoryAccess(access)) {
     throw new EventOwnerMismatchError();
   }
   return new EventRepository(
     new DrizzleAtomicEventStore(database),
     keyProvider,
-    options.authenticatedOwnerId,
-    options.authorizationPolicy,
+    access,
   );
 }
 
@@ -646,62 +670,148 @@ function toEncryptedProtectedFields(row: StoredEventRow): EncryptedProtectedEven
 
 /** Ensures an atomic save cannot cross owner, identity, or monotonic-version boundaries. */
 function validateAuthoritativeSave(
-  authoritative: StoredEventRow,
+  authoritative: VisionEvent,
   requested: StoredEventRow,
 ): void {
   if (
-    authoritative.nodeId !== requested.nodeId ||
     authoritative.ownerId !== requested.ownerId ||
+    authoritative.nodeId !== requested.nodeId ||
     authoritative.identity.sourceSystem !== requested.identity.sourceSystem ||
     authoritative.identity.sourceCalendarId !== requested.identity.sourceCalendarId ||
-    authoritative.identity.sourceEventId !== requested.identity.sourceEventId ||
-    authoritative.version < requested.version
+    authoritative.identity.sourceEventId !== requested.identity.sourceEventId
   ) {
-    throw new Error("Atomic event save returned an invalid owner-bound result.");
+    throw new EventPersistenceConflictError();
+  }
+  if (
+    authoritative.version !== requested.version ||
+    authoritative.domain !== requested.domain ||
+    authoritative.domainState !== requested.domainState ||
+    authoritative.privacy !== requested.privacy
+  ) {
+    throw new EventNodeSnapshotConflictError();
   }
 }
 
 /** Converts one PostgreSQL projection into the strict planning event contract. */
 function databaseRowToPlanningEvent(row: DatabaseEventRow): VisionEvent {
   return VisionEventSchema.parse({
-    nodeId: row.nodeId,
-    ownerId: row.ownerId,
+    nodeId: decodeDatabaseString(row.nodeId, "node ID"),
+    ownerId: decodeDatabaseString(row.ownerId, "owner ID"),
     identity: {
-      sourceSystem: row.provider,
-      sourceCalendarId: row.providerCalendarId,
-      sourceEventId: row.providerEventId,
-      sourceVersion: row.providerVersion,
+      sourceSystem: decodeDatabaseString(row.provider, "provider"),
+      sourceCalendarId: decodeDatabaseString(row.providerCalendarId, "provider calendar ID"),
+      sourceEventId: decodeDatabaseString(row.providerEventId, "provider event ID"),
+      sourceVersion: decodeDatabaseString(row.providerVersion, "provider order key"),
     },
-    startsAt: new Date(row.startsAt).toISOString(),
-    endsAt: new Date(row.endsAt).toISOString(),
-    timeZone: row.timeZone,
-    busy: row.busy,
-    status: row.status,
-    recurrenceId: row.recurrenceId ?? undefined,
-    domain: row.domain,
-    domainState: row.domainState,
-    privacy: row.privacy,
-    version: row.version,
+    startsAt: decodeDatabaseTimestamp(row.startsAt, "event start"),
+    endsAt: decodeDatabaseTimestamp(row.endsAt, "event end"),
+    timeZone: decodeDatabaseString(row.timeZone, "time zone"),
+    busy: decodeDatabaseBoolean(row.busy, "busy"),
+    status: decodeDatabaseString(row.status, "status"),
+    recurrenceId: decodeDatabaseNullableString(row.recurrenceId, "recurrence ID") ?? undefined,
+    domain: decodeDatabaseString(row.domain, "domain"),
+    domainState: decodeDatabaseString(row.domainState, "domain state"),
+    privacy: decodeDatabaseString(row.privacy, "privacy"),
+    version: decodeDatabasePositiveInteger(row.version, "node version"),
   });
 }
 
 /** Converts a complete protected PostgreSQL projection into the encrypted row contract. */
 function databaseRowToStoredEvent(row: DatabaseEventRow): StoredEventRow {
-  if (
-    !(row.attendeesEnvelope instanceof Uint8Array) ||
-    typeof row.protectedKeyVersion !== "number"
-  ) {
-    throw new Error("PostgreSQL returned invalid protected event columns.");
-  }
   return {
     ...databaseRowToPlanningEvent(row),
-    titleEnvelope: row.titleEnvelope ?? null,
-    descriptionEnvelope: row.descriptionEnvelope ?? null,
-    attendeesEnvelope: row.attendeesEnvelope,
-    locationEnvelope: row.locationEnvelope ?? null,
-    meetingLinkEnvelope: row.meetingLinkEnvelope ?? null,
-    protectedKeyVersion: row.protectedKeyVersion,
+    titleEnvelope: decodeDatabaseNullableBytea(row.titleEnvelope, "title envelope"),
+    descriptionEnvelope: decodeDatabaseNullableBytea(row.descriptionEnvelope, "description envelope"),
+    attendeesEnvelope: decodeDatabaseBytea(row.attendeesEnvelope, "attendees envelope"),
+    locationEnvelope: decodeDatabaseNullableBytea(row.locationEnvelope, "location envelope"),
+    meetingLinkEnvelope: decodeDatabaseNullableBytea(row.meetingLinkEnvelope, "meeting link envelope"),
+    protectedKeyVersion: decodeDatabasePositiveInteger(
+      row.protectedKeyVersion,
+      "protected key version",
+    ),
   };
+}
+
+/** Decodes one required raw PostgreSQL text cell without coercing other types. */
+function decodeDatabaseString(value: unknown, label: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`PostgreSQL returned invalid ${label}.`);
+  }
+  return value;
+}
+
+/** Decodes one nullable PostgreSQL text cell without treating missing values as null. */
+function decodeDatabaseNullableString(value: unknown, label: string): string | null {
+  if (value === null) {
+    return null;
+  }
+  return decodeDatabaseString(value, label);
+}
+
+/** Decodes Neon raw `t`/`f` cells and already-decoded PostgreSQL test-driver booleans. */
+function decodeDatabaseBoolean(value: unknown, label: string): boolean {
+  if (value === true || value === "t") {
+    return true;
+  }
+  if (value === false || value === "f") {
+    return false;
+  }
+  throw new Error(`PostgreSQL returned invalid ${label}.`);
+}
+
+/** Decodes a canonical positive safe integer from Neon raw text or a decoded driver number. */
+function decodeDatabasePositiveInteger(value: unknown, label: string): number {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) {
+    return value;
+  }
+  if (typeof value === "string" && /^[1-9]\d*$/u.test(value)) {
+    const parsed = Number(value);
+    if (Number.isSafeInteger(parsed)) {
+      return parsed;
+    }
+  }
+  throw new Error(`PostgreSQL returned invalid ${label}.`);
+}
+
+/** Decodes a timestamp cell into the canonical ISO representation used by the domain. */
+function decodeDatabaseTimestamp(value: unknown, label: string): string {
+  const timestamp =
+    value instanceof Date
+      ? value
+      : typeof value === "string" && /(?:Z|[+-]\d{2}(?::?\d{2})?)$/u.test(value)
+        ? new Date(value)
+        : undefined;
+  if (!timestamp || Number.isNaN(timestamp.getTime())) {
+    throw new Error(`PostgreSQL returned invalid ${label}.`);
+  }
+  return timestamp.toISOString();
+}
+
+/** Decodes canonical PostgreSQL hex `bytea` text with a strict allocation bound. */
+function decodeDatabaseBytea(value: unknown, label: string): Uint8Array {
+  if (value instanceof Uint8Array) {
+    if (value.byteLength > MAX_SERIALIZED_CIPHER_ENVELOPE_CHARS) {
+      throw new Error(`PostgreSQL returned invalid ${label}.`);
+    }
+    return value;
+  }
+  if (
+    typeof value !== "string" ||
+    !/^\\x(?:[0-9a-f]{2})*$/u.test(value) ||
+    (value.length - 2) / 2 > MAX_SERIALIZED_CIPHER_ENVELOPE_CHARS
+  ) {
+    throw new Error(`PostgreSQL returned invalid ${label}.`);
+  }
+  const decoded = new Uint8Array((value.length - 2) / 2);
+  for (let index = 0; index < decoded.length; index += 1) {
+    decoded[index] = Number.parseInt(value.slice(2 + index * 2, 4 + index * 2), 16);
+  }
+  return decoded;
+}
+
+/** Decodes a nullable protected `bytea` cell. */
+function decodeDatabaseNullableBytea(value: unknown, label: string): Uint8Array | null {
+  return value === null ? null : decodeDatabaseBytea(value, label);
 }
 
 /** Decrypts one already-owner/privacy-authorized stored row. */
@@ -761,6 +871,7 @@ function matchesAuthorizedSnapshot(
     stored.version === authorized.version &&
     stored.identity.sourceVersion === authorized.identity.sourceVersion &&
     stored.domain === authorized.domain &&
+    stored.domainState === authorized.domainState &&
     stored.privacy === authorized.privacy
   );
 }

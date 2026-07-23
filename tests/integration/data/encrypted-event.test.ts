@@ -8,14 +8,16 @@ import { createAuditWriter } from "../../../src/audit/audit-writer";
 import { encodeBase64Url } from "../../../src/crypto/envelope";
 import { createTestKeyProvider } from "../../../src/crypto/test-key-provider";
 import type { VisionDatabase } from "../../../src/data/db";
+import { ProviderOrderKeySchema } from "../../../src/domain/events/event";
 import {
   EventContentAccessDeniedError,
+  EventNodeSnapshotConflictError,
   EventOwnerMismatchError,
   EventPersistenceConflictError,
   createEventRepository,
   type PlaintextEvent,
 } from "../../../src/data/repositories/event-repository";
-import { createEventContentAuthorizationPolicy } from "../../../src/server/authorization/event-content-authorization";
+import { createTestEventRepositoryAccess } from "../../../src/server/authorization/test-event-content-authorization";
 
 const SENTINEL = "VISION_PROTECTED_SENTINEL_7F9A";
 const ownerId = "owner_1";
@@ -29,7 +31,7 @@ const event: PlaintextEvent = {
     sourceSystem: "google_calendar",
     sourceCalendarId: "calendar_1",
     sourceEventId: "event_1",
-    sourceVersion: "0000000001",
+    sourceVersion: ProviderOrderKeySchema.parse("00000000000000000001"),
   },
   startsAt: "2026-07-23T14:00:00.000Z",
   endsAt: "2026-07-23T15:00:00.000Z",
@@ -110,10 +112,11 @@ beforeEach(async () => {
   const keyProvider = await createTestKeyProvider({
     rootKeyBase64Url: encodeBase64Url(crypto.getRandomValues(new Uint8Array(32))),
   });
-  repository = createEventRepository(database, keyProvider, {
-    authenticatedOwnerId: ownerId,
-    authorizationPolicy: createEventContentAuthorizationPolicy(() => true),
-  });
+  repository = createEventRepository(
+    database,
+    keyProvider,
+    createTestEventRepositoryAccess(ownerId),
+  );
 });
 
 afterEach(async () => {
@@ -149,10 +152,7 @@ describe("encrypted event repository with production PostgreSQL adapter", () => 
       await createTestKeyProvider({
         rootKeyBase64Url: encodeBase64Url(crypto.getRandomValues(new Uint8Array(32))),
       }),
-      {
-        authenticatedOwnerId: "owner_2",
-        authorizationPolicy: createEventContentAuthorizationPolicy(() => true),
-      },
+      createTestEventRepositoryAccess("owner_2"),
     );
     await expect(wrongOwner.get(nodeId)).resolves.toBeUndefined();
     expect(countProtectedSelects()).toBe(protectedReads);
@@ -162,10 +162,7 @@ describe("encrypted event repository with production PostgreSQL adapter", () => 
       await createTestKeyProvider({
         rootKeyBase64Url: encodeBase64Url(crypto.getRandomValues(new Uint8Array(32))),
       }),
-      {
-        authenticatedOwnerId: ownerId,
-        authorizationPolicy: createEventContentAuthorizationPolicy(() => false),
-      },
+      createTestEventRepositoryAccess(ownerId, () => false),
     );
     await expect(denied.get(nodeId)).rejects.toBeInstanceOf(
       EventContentAccessDeniedError,
@@ -188,10 +185,11 @@ describe("encrypted event repository with production PostgreSQL adapter", () => 
     const keyProvider = await createTestKeyProvider({
       rootKeyBase64Url: encodeBase64Url(crypto.getRandomValues(new Uint8Array(32))),
     });
-    const wrongOwner = createEventRepository(database, keyProvider, {
-      authenticatedOwnerId: "owner_2",
-      authorizationPolicy: createEventContentAuthorizationPolicy(() => true),
-    });
+    const wrongOwner = createEventRepository(
+      database,
+      keyProvider,
+      createTestEventRepositoryAccess("owner_2"),
+    );
     const baseline = executedSql.length;
 
     await expect(wrongOwner.save(event)).rejects.toBeInstanceOf(
@@ -203,7 +201,10 @@ describe("encrypted event repository with production PostgreSQL adapter", () => 
   it("keeps the strictly newer provider version under concurrent saves", async () => {
     const newer = {
       ...event,
-      identity: { ...event.identity, sourceVersion: "0000000002" },
+      identity: {
+        ...event.identity,
+        sourceVersion: ProviderOrderKeySchema.parse("00000000000000000002"),
+      },
       version: 2,
       title: `new:${SENTINEL}`,
     };
@@ -212,9 +213,13 @@ describe("encrypted event repository with production PostgreSQL adapter", () => 
       ["2026-07-23T13:00:00.000Z", nodeId],
     );
 
-    await Promise.all([repository.save(newer), repository.save(event)]);
+    const olderAtCurrentNode = { ...event, version: 2 };
+    await Promise.all([
+      repository.save(newer),
+      repository.save(olderAtCurrentNode),
+    ]);
 
-    expect((await readRawEvent()).provider_version).toBe("0000000002");
+    expect((await readRawEvent()).provider_version).toBe("00000000000000000002");
     await expect(repository.get(nodeId)).resolves.toEqual(newer);
   });
 
@@ -230,6 +235,68 @@ describe("encrypted event repository with production PostgreSQL adapter", () => 
       repository.save({ ...event, title: `conflict:${SENTINEL}` }),
     ).rejects.toBeInstanceOf(EventPersistenceConflictError);
     expect((await readRawEvent()).title_envelope).toEqual(firstRaw.title_envelope);
+  });
+
+  it("rejects a stale node snapshot without changing the persisted event", async () => {
+    await repository.save(event);
+    const firstRaw = await readRawEvent();
+    await pglite.query(
+      "update nodes set version = 2, privacy = 'restricted', updated_at = $1 where id = $2",
+      ["2026-07-23T13:00:00.000Z", nodeId],
+    );
+
+    await expect(
+      repository.save({
+        ...event,
+        identity: {
+          ...event.identity,
+          sourceVersion: ProviderOrderKeySchema.parse("00000000000000000002"),
+        },
+      }),
+    ).rejects.toBeInstanceOf(EventNodeSnapshotConflictError);
+
+    expect(await readRawEvent()).toEqual(firstRaw);
+  });
+
+  it("returns a typed conflict for denied equal replay without selecting envelopes", async () => {
+    await repository.save(event);
+    const baseline = countProtectedSelects();
+    const denied = createEventRepository(
+      database,
+      await createTestKeyProvider({
+        rootKeyBase64Url: encodeBase64Url(crypto.getRandomValues(new Uint8Array(32))),
+      }),
+      createTestEventRepositoryAccess(ownerId, () => false),
+    );
+
+    await expect(denied.save(event)).rejects.toBeInstanceOf(
+      EventPersistenceConflictError,
+    );
+    expect(countProtectedSelects()).toBe(baseline);
+  });
+
+  it("never selects protected columns for a cross-owner provider collision", async () => {
+    const otherOwner = "owner_2";
+    const otherNode = "node_event_2";
+    await seedEventNode(otherNode, otherOwner);
+    const otherRepository = createEventRepository(
+      database,
+      await createTestKeyProvider({
+        rootKeyBase64Url: encodeBase64Url(crypto.getRandomValues(new Uint8Array(32))),
+      }),
+      createTestEventRepositoryAccess(otherOwner),
+    );
+    await otherRepository.save({
+      ...event,
+      nodeId: otherNode,
+      ownerId: otherOwner,
+    });
+    const baseline = countProtectedSelects();
+
+    await expect(repository.save(event)).rejects.toBeInstanceOf(
+      EventPersistenceConflictError,
+    );
+    expect(countProtectedSelects()).toBe(baseline);
   });
 
   it("writes the strict audit allowlist into the real audit table", async () => {

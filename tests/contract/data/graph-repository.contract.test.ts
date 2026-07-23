@@ -3,7 +3,10 @@ import { resolve } from "node:path";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
-import type { VisionEvent } from "../../../src/domain/events/event";
+import {
+  ProviderOrderKeySchema,
+  type VisionEvent,
+} from "../../../src/domain/events/event";
 import type { NodeEnvelope } from "../../../src/domain/graph/node";
 import type { VisionDatabase } from "../../../src/data/db";
 import {
@@ -41,7 +44,7 @@ const event: VisionEvent = {
     sourceSystem: "calendar",
     sourceCalendarId: "calendar_1",
     sourceEventId: "event_1",
-    sourceVersion: "0000000002",
+    sourceVersion: ProviderOrderKeySchema.parse("00000000000000000002"),
   },
   startsAt: "2026-07-22T09:00:00.000Z",
   endsAt: "2026-07-22T10:00:00.000Z",

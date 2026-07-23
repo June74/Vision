@@ -1,9 +1,9 @@
 /** Implements strict AES-256-GCM envelopes for Vision protected fields. */
 import { DomainSchema, type Domain } from "../domain/categorization/category";
 
-/** The only supported protected-field envelope format. */
+/** Supported protected-field envelope formats: legacy v1 and domain-bound v2. */
 export interface CipherEnvelope {
-  readonly version: 1;
+  readonly version: 1 | 2;
   readonly algorithm: "A256GCM";
   readonly keyVersion: number;
   readonly iv: string;
@@ -108,7 +108,7 @@ export function validateCipherEnvelope(value: unknown): CipherEnvelope {
     throw new Error("Cipher envelope contains missing or unknown fields.");
   }
 
-  if (record.version !== 1) {
+  if (record.version !== 1 && record.version !== 2) {
     throw new Error("Unsupported cipher envelope version.");
   }
 
@@ -148,7 +148,7 @@ export function validateCipherEnvelope(value: unknown): CipherEnvelope {
   }
 
   return {
-    version: 1,
+    version: record.version,
     algorithm: "A256GCM",
     keyVersion,
     iv: record.iv as string,
@@ -210,7 +210,7 @@ export async function encryptText(
     {
       name: "AES-GCM",
       iv,
-      additionalData: encodeProtectedFieldAad(aad),
+      additionalData: encodeProtectedFieldAad(aad, 2),
       tagLength: 128,
     },
     key,
@@ -218,7 +218,7 @@ export async function encryptText(
   );
 
   return {
-    version: 1,
+    version: 2,
     algorithm: "A256GCM",
     keyVersion: aad.keyVersion,
     iv: encodeBase64Url(iv),
@@ -244,7 +244,7 @@ export async function decryptText(
     {
       name: "AES-GCM",
       iv: decodeBase64Url(validatedEnvelope.iv, "Cipher envelope IV", AES_GCM_IV_BASE64URL_CHARS),
-      additionalData: encodeProtectedFieldAad(aad),
+      additionalData: encodeProtectedFieldAad(aad, validatedEnvelope.version),
       tagLength: 128,
     },
     key,
@@ -278,18 +278,32 @@ function validateProtectedFieldAad(aad: ProtectedFieldAad): void {
 }
 
 /** Creates an unambiguous versioned byte representation of protected-field AAD. */
-function encodeProtectedFieldAad(aad: ProtectedFieldAad): Uint8Array<ArrayBuffer> {
+function encodeProtectedFieldAad(
+  aad: ProtectedFieldAad,
+  envelopeVersion: CipherEnvelope["version"],
+): Uint8Array<ArrayBuffer> {
   // A fixed-purpose JSON tuple prevents concatenation collisions and makes every binding position unambiguous.
   return textEncoder.encode(
-    JSON.stringify([
-      "vision-protected-field",
-      1,
-      aad.ownerId,
-      aad.nodeId,
-      aad.domain,
-      aad.fieldName,
-      aad.keyVersion,
-    ]),
+    JSON.stringify(
+      envelopeVersion === 1
+        ? [
+            "vision-protected-field",
+            1,
+            aad.ownerId,
+            aad.nodeId,
+            aad.fieldName,
+            aad.keyVersion,
+          ]
+        : [
+            "vision-protected-field",
+            2,
+            aad.ownerId,
+            aad.nodeId,
+            aad.domain,
+            aad.fieldName,
+            aad.keyVersion,
+          ],
+    ),
   );
 }
 

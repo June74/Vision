@@ -4,9 +4,9 @@
 extends the pure `VisionEvent` planning contract with the five represented protected fields. `StoredEventRow` replaces
 those values with serialized `CipherEnvelope` byte arrays and records the common active key version.
 
-`DrizzleAtomicEventStore` is the production Neon/Drizzle implementation of `AtomicEventStore`. It separates an atomic
-strictly-monotonic provider-version save, a projection that cannot select protected columns, and a protected projection
-pinned to both node and provider versions. PGlite integration tests execute the same SQL against the reviewed migration.
+`DrizzleAtomicEventStore` is the production Neon/Drizzle implementation of `AtomicEventStore`. Its raw result adapter
+strictly decodes Neon text cells. Saves bind the exact node version/domain/domain-state/privacy snapshot, return no
+envelopes, and retry an empty conflict result with a fresh planning-only winner query.
 
 ## `save`
 
@@ -78,7 +78,7 @@ Parses the five stored envelopes, requires attendees, and verifies every represe
 
 ## `validateAuthoritativeSave`
 
-**Signature:** `(authoritative: StoredEventRow, requested: StoredEventRow) => void`
+**Signature:** `(authoritative: VisionEvent, requested: StoredEventRow) => void`
 
 Rejects a storage result that crosses node, owner, stable provider identity, or monotonic version boundaries. Errors
 use constant text and do not include row values.
@@ -120,9 +120,14 @@ storage error.
 
 **Signature:** `(row: StoredEventRow) => Promise<AtomicEventSaveResult>`
 
-Executes one data-modifying CTE. `ON CONFLICT` updates all planning and encrypted columns only when owner and stable node
-match and the provider version is strictly newer. The statement classifies `applied`, `equal`, or `newer` and returns
-the authoritative joined node/event row.
+Executes one exact-node-snapshot data-modifying CTE. It returns planning columns only. An empty result triggers
+`selectSaveWinner` in a fresh statement snapshot so a just-committed conflict winner is visible.
+
+## `selectSaveWinner`
+
+**Signature:** `(row: StoredEventRow) => Promise<VisionEvent | undefined>`
+
+Reads a provider-identity winner in a fresh snapshot and deliberately projects no protected columns.
 
 ## `selectPlanningEvent`
 
@@ -139,14 +144,14 @@ the same PostgreSQL statement.
 
 ## `assertIdempotentReplay`
 
-**Signature:** `(stored: StoredEventRow, requested: PlaintextEvent) => Promise<void>`
+**Signature:** `(planningEvent: VisionEvent, requested: PlaintextEvent) => Promise<void>`
 
 Reissues and verifies the branded owner/privacy decision, decrypts the authoritative equal-version row, and throws
 `EventPersistenceConflictError` unless the complete normalized plaintext event is identical.
 
 ## `createEventRepository`
 
-**Signature:** `(database, keyProvider, options) => EventRepository`
+**Signature:** `(database, keyProvider, access) => EventRepositoryPort`
 
 Wires `DrizzleAtomicEventStore`, the key provider, the server-supplied authenticated owner, and authorization policy.
 The authentication milestone must supply the verified owner; this factory does not authenticate a raw request.
@@ -181,3 +186,31 @@ Explicitly removes every envelope and key-version persistence column.
 **Signature:** `(left: PlaintextEvent, right: PlaintextEvent) => boolean`
 
 Compares normalized complete events to distinguish an idempotent replay from an equal-version conflict.
+
+## `decodeDatabaseString`
+
+Strict required-text decoder with no coercion.
+
+## `decodeDatabaseNullableString`
+
+Strict nullable-text decoder that does not treat missing values as null.
+
+## `decodeDatabaseBoolean`
+
+Accepts only Neon `t`/`f` text or an already-decoded boolean.
+
+## `decodeDatabasePositiveInteger`
+
+Accepts only positive safe integers or canonical decimal text without signs or leading zeroes.
+
+## `decodeDatabaseTimestamp`
+
+Accepts a valid `Date` or offset-bearing timestamp text and returns canonical ISO text.
+
+## `decodeDatabaseBytea`
+
+Accepts bounded bytes or canonical lowercase PostgreSQL `\x` hexadecimal text.
+
+## `decodeDatabaseNullableBytea`
+
+Delegates non-null cells to the strict bytea decoder.

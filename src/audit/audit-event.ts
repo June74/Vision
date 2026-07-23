@@ -52,6 +52,16 @@ export function validateSafeAuditEvent(event: unknown): SafeAuditEvent {
     throw new SafeAuditEventValidationError();
   }
 
+  if (prototype === Object.prototype) {
+    for (const inheritedKey of Reflect.ownKeys(Object.prototype)) {
+      if (Object.getOwnPropertyDescriptor(Object.prototype, inheritedKey)?.enumerable) {
+        // Inspect the inherited descriptor only. Never invoke a polluted getter.
+        throw new SafeAuditEventValidationError();
+      }
+    }
+  }
+
+  const ownData = Object.create(null) as Record<string, unknown>;
   for (const key of Reflect.ownKeys(event)) {
     const descriptor = Object.getOwnPropertyDescriptor(event, key);
     if (
@@ -63,9 +73,15 @@ export function validateSafeAuditEvent(event: unknown): SafeAuditEvent {
       // Inspect descriptors, never values, until symbols, hidden data, accessors, and unknown payloads are rejected.
       throw new SafeAuditEventValidationError();
     }
+    Object.defineProperty(ownData, key, {
+      value: descriptor.value,
+      enumerable: true,
+      configurable: false,
+      writable: false,
+    });
   }
 
-  const parsed = SafeAuditEventSchema.safeParse(event);
+  const parsed = SafeAuditEventSchema.safeParse(ownData);
   if (!parsed.success) {
     // Zod's detailed issue tree may retain rejected input; only a constant privacy-safe error crosses this boundary.
     throw new SafeAuditEventValidationError();

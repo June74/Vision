@@ -9,8 +9,9 @@ free-form content or payload field. `SafeAuditEventValidationError` uses one con
 
 **Signature:** `(event: unknown) => SafeAuditEvent`
 
-Requires a direct plain or null prototype, inspects every own property descriptor, and rejects symbols, unknown keys,
-non-enumerable properties, and accessors before reading any value. It then uses `SafeAuditEventSchema.safeParse`.
+Requires a direct plain or null prototype, rejects enumerable `Object.prototype` descriptors without invoking them,
+then inspects every own descriptor and copies only allowlisted enumerable data properties into a fresh null-prototype
+record. Zod parses only that closed copy.
 Detailed Zod issues are deliberately discarded because they may retain rejected input. Unit tests cover compile-time
 sensitive-key rejection, runtime protected keys, exotic properties, nested payloads, controlled values, and serialized
 sentinel absence.

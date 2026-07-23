@@ -1,6 +1,7 @@
 # `src/crypto/envelope.ts`
 
-This module is the JSON envelope and field-AAD boundary. `CipherEnvelope` is fixed to `{ version: 1; algorithm: "A256GCM"; keyVersion; iv; ciphertext }`; binary IV and ciphertext values are canonical unpadded base64url. `ProtectedFieldAad` carries `{ ownerId; nodeId; domain; fieldName; keyVersion }`.
+This module is the JSON envelope and field-AAD boundary. `CipherEnvelope` supports legacy v1 and domain-bound v2;
+new encryption always writes v2. Binary fields use canonical unpadded base64url.
 
 `MAX_PROTECTED_PLAINTEXT_BYTES` is 65,536 bytes. The maximum ciphertext is that value plus the 16-byte AES-GCM tag, and `MAX_SERIALIZED_CIPHER_ENVELOPE_CHARS` adds a fixed 512-character metadata allowance. `tests/unit/crypto/envelope.test.ts` and `size-limits.test.ts` cover round trips, tampering, AAD, closed formats, and pre-allocation rejection.
 
@@ -26,7 +27,8 @@ Rejects zero, negatives, fractions, infinities, and unsafe integers. The returne
 
 **Signature:** `(value: unknown) => CipherEnvelope`
 
-Requires exactly the five envelope properties, version `1`, algorithm `A256GCM`, a positive safe key version, an exactly 16-character encoded IV, and bounded ciphertext. IV and ciphertext encoded sizes are admitted before either is decoded; decoded lengths are then checked for 12 IV bytes and at least the 16-byte tag.
+Requires exactly five envelope properties, version `1` or `2`, `A256GCM`, a positive safe key version, an exactly
+16-character IV, and bounded ciphertext.
 
 ## `serializeCipherEnvelope`
 
@@ -65,8 +67,10 @@ enforcement to `validateKeyVersion`. It runs before every field encryption and d
 
 **Signature:** `(aad: ProtectedFieldAad) => Uint8Array<ArrayBuffer>`
 
-Encodes `["vision-protected-field", 1, ownerId, nodeId, domain, fieldName, keyVersion]` as UTF-8. The fixed-purpose
-JSON tuple provides typed positions and prevents delimiter or concatenation collisions.
+For legacy v1, encodes the original tuple without domain. For v2, encodes
+`["vision-protected-field", 2, ownerId, nodeId, domain, fieldName, keyVersion]`. The reader chooses by envelope
+version. Legacy support must remain until a measured re-encryption migration reports no v1 rows; only then may a
+separate reviewed change remove it.
 
 ## `validateAes256GcmKey`
 
