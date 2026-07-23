@@ -3,6 +3,7 @@
 This module encrypts a whole protected object one string field at a time. Null fields remain null. Every encrypted value is tied to its own field name, so moving a title envelope into a description field fails.
 
 `ProtectedObjectContext` contains the owner, graph node, and domain. `EncryptedProtectedFields<T>` keeps the same keys as the plaintext object.
+Each non-null string must fit the envelope module's 64 KiB UTF-8 limit.
 
 ## `encryptProtectedFields`
 

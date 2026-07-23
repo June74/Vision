@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { encodeBase64Url } from "../../../src/crypto/envelope";
 import { decryptProtectedFields, encryptProtectedFields } from "../../../src/crypto/protected-fields";
 import { createTestKeyProvider } from "../../../src/crypto/test-key-provider";
 
@@ -8,9 +9,13 @@ const context = {
   domain: "school",
 } as const;
 
+function createRandomTestRoot(): string {
+  return encodeBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+}
+
 describe("protected object fields", () => {
   it("encrypts every string field, preserves nulls, and restores the original object", async () => {
-    const provider = createTestKeyProvider({ environment: "test", activeKeyVersion: 1 });
+    const provider = await createTestKeyProvider({ rootKeyBase64Url: createRandomTestRoot(), activeKeyVersion: 1 });
     const plaintext = {
       title: "VISION_PROTECTED_SENTINEL_7F9A",
       description: null,
@@ -27,7 +32,7 @@ describe("protected object fields", () => {
   });
 
   it("rejects moving an encrypted value to another protected field", async () => {
-    const provider = createTestKeyProvider({ environment: "test", activeKeyVersion: 1 });
+    const provider = await createTestKeyProvider({ rootKeyBase64Url: createRandomTestRoot(), activeKeyVersion: 1 });
     const encrypted = await encryptProtectedFields(provider, context, {
       title: "private title",
       description: "private description",
@@ -42,7 +47,7 @@ describe("protected object fields", () => {
   });
 
   it("rejects the wrong node, owner, or domain context", async () => {
-    const provider = createTestKeyProvider({ environment: "test", activeKeyVersion: 1 });
+    const provider = await createTestKeyProvider({ rootKeyBase64Url: createRandomTestRoot(), activeKeyVersion: 1 });
     const encrypted = await encryptProtectedFields(provider, context, { title: "private title" });
 
     await expect(decryptProtectedFields(provider, { ...context, nodeId: "event-2" }, encrypted)).rejects.toThrow();
@@ -51,7 +56,7 @@ describe("protected object fields", () => {
   });
 
   it("creates distinct wrapped data keys for each user and domain", async () => {
-    const provider = createTestKeyProvider({ environment: "test", activeKeyVersion: 1 });
+    const provider = await createTestKeyProvider({ rootKeyBase64Url: createRandomTestRoot(), activeKeyVersion: 1 });
 
     await encryptProtectedFields(provider, context, { title: "school title" });
     await encryptProtectedFields(provider, { ...context, domain: "work" }, { title: "work title" });
@@ -70,10 +75,10 @@ describe("protected object fields", () => {
   });
 
   it("decrypts old versions but encrypts only with the active version after rotation", async () => {
-    const provider = createTestKeyProvider({ environment: "test", activeKeyVersion: 1 });
+    const provider = await createTestKeyProvider({ rootKeyBase64Url: createRandomTestRoot(), activeKeyVersion: 1 });
     const oldEnvelope = await encryptProtectedFields(provider, context, { title: "old private title" });
 
-    provider.rotateTo(2);
+    await provider.rotateTo(2);
 
     const newEnvelope = await encryptProtectedFields(provider, context, { title: "new private title" });
     expect(oldEnvelope.title?.keyVersion).toBe(1);
@@ -87,7 +92,7 @@ describe("protected object fields", () => {
   });
 
   it("rejects unknown data-key versions and non-string protected values", async () => {
-    const provider = createTestKeyProvider({ environment: "test", activeKeyVersion: 1 });
+    const provider = await createTestKeyProvider({ rootKeyBase64Url: createRandomTestRoot(), activeKeyVersion: 1 });
     const encrypted = await encryptProtectedFields(provider, context, { title: "private title" });
 
     await expect(
@@ -100,12 +105,20 @@ describe("protected object fields", () => {
     ).rejects.toThrow();
   });
 
-  it("cannot construct the test provider for a production environment", () => {
-    expect(() =>
-      createTestKeyProvider({
-        environment: "production",
-        activeKeyVersion: 1,
-      } as unknown as Parameters<typeof createTestKeyProvider>[0]),
-    ).toThrow(/test-only/u);
+  it("requires the actual Vitest runtime in addition to caller-supplied random test key material", async () => {
+    const originalVitest = process.env.VITEST;
+    delete process.env.VITEST;
+
+    try {
+      await expect(
+        createTestKeyProvider({ rootKeyBase64Url: createRandomTestRoot(), activeKeyVersion: 1 }),
+      ).rejects.toThrow(/Vitest/u);
+    } finally {
+      if (originalVitest === undefined) {
+        delete process.env.VITEST;
+      } else {
+        process.env.VITEST = originalVitest;
+      }
+    }
   });
 });

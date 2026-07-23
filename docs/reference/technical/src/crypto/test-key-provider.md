@@ -1,38 +1,32 @@
 # `src/crypto/test-key-provider.ts`
 
-This module is a unit-test adapter around the production `WrappedKeyProvider`. It uses a fixed zero-byte base64url root labeled `TEST_ONLY_ROOT_KEY` and an in-memory `WrappedDataKeyStore`; neither is accepted from `RuntimeEnv`.
+This module is a unit-test adapter around the production `WrappedKeyProvider`. It contains no root key. Each test supplies randomly generated or explicit test-only base64url key material, and the in-memory store implements the same wrapped-record and active-version contracts.
 
-`TestKeyProviderOptions.environment` has the only legal type `"test"`, while `RuntimeEnv.VISION_ENV` is closed to `local | preview | production`. The factory repeats the check at runtime to reject type-cast production input. The harness exposes encrypted records but never raw or extractable data keys.
+Construction requires both `NODE_ENV=test` and `VITEST=true`. More importantly, `scripts/validate-production-crypto-boundary.ts` rejects any other production source reference to this module, and `pnpm build` scans the actual Worker output for its unique marker, factory name, and module name.
 
 ## `createTestKeyProvider`
 
-**Signature:** `(options: TestKeyProviderOptions) => TestKeyProvider`
+**Signature:** `(options: TestKeyProviderOptions) => Promise<TestKeyProvider>`
 
-Rejects any runtime environment value other than `"test"` and returns a lazy test wrapper. `tests/unit/crypto/protected-fields.test.ts` directly exercises the production rejection.
+Runs the Vitest sentinel gate, constructs a fresh in-memory store, and awaits the real provider factory using caller-supplied key material. No known key exists in production source.
 
 ## `getDataKey`
 
 **Signature:** `(ownerId: string, domain: Domain, keyVersion?: number) => Promise<VersionedDataKey>`
 
-Initializes the real `WrappedKeyProvider` once and delegates the exact production key resolution behavior.
+Delegates exact production key resolution behavior.
 
 ## `rotateTo`
 
-**Signature:** `(activeKeyVersion: number) => void`
+**Signature:** `(activeKeyVersion: number) => Promise<void>`
 
-Queues rotation before lazy initialization or applies it to the initialized provider. Production version monotonicity checks still run in `WrappedKeyProvider.rotateTo`.
+Delegates asynchronous, store-authorized monotonic rotation.
 
 ## `readWrappedDataKeyForTest`
 
 **Signature:** `(ownerId: string, domain: Domain, keyVersion: number) => Promise<WrappedDataKeyRecord | undefined>`
 
 Reads only the wrapped ciphertext record. It exists for assertions about partitioning and does not expose root-key or plaintext data-key bytes.
-
-## `getProvider`
-
-**Signature:** `() => Promise<WrappedKeyProvider>`
-
-Private lazy initializer that imports the fixed test root, retains one initialization promise, applies any queued rotation, and returns the production provider.
 
 ## `get`
 
@@ -45,6 +39,24 @@ Reads the in-memory map using the full partition tuple. It performs no plaintext
 **Signature:** `(record: WrappedDataKeyRecord) => Promise<WrappedDataKeyRecord>`
 
 Implements the store's atomic-first-writer semantics for single-threaded unit tests and returns the existing record on a duplicate partition.
+
+## `getActiveKeyVersion`
+
+**Signature:** `() => Promise<number | undefined>`
+
+Reads the in-memory authoritative high-water mark used by every versionless provider lookup.
+
+## `activateKeyVersion`
+
+**Signature:** `(candidate: number) => Promise<number>`
+
+Atomically applies `max(current, candidate)` in the single-threaded test store and returns the authoritative result, matching the required durable-store contract.
+
+## `assertVitestRuntime`
+
+**Signature:** `() => void`
+
+Requires both process sentinels set by Vitest. Its constant failure includes the bundle marker so any accidental production inclusion is detectable after build.
 
 ## `createStoreKey`
 

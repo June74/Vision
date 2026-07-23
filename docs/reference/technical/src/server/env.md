@@ -4,7 +4,7 @@
 
 **Signature:** `z.ZodObject<{ VISION_ENV; DATABASE_URL; KEY_ENCRYPTION_KEY }>`
 
-The schema accepts `VISION_ENV`, Worker-only `DATABASE_URL`, and Worker-only `KEY_ENCRYPTION_KEY`. It safely parses the URL but never includes it in a validation message; the username must be exactly `vision_app`. The key must be a canonical unpadded base64url encoding of exactly 32 bytes: 43 allowed characters with a canonical final character. Error messages state only the contract and never copy either secret. `tests/unit/server/env.test.ts` covers missing, privileged, malformed, and secret-containing bindings.
+The schema accepts `VISION_ENV`, Worker-only `DATABASE_URL`, and Worker-only `KEY_ENCRYPTION_KEY`. The key is prebounded to 43 characters, canonically decoded, re-encoded by the shared decoder, and required to produce exactly 32 bytes. This accepts all 16 legal final-character classes while rejecting padding, noncanonical trailing bits, and incorrect lengths. Errors never copy either secret.
 
 ## `RuntimeEnv`
 

@@ -28,21 +28,29 @@ export interface WrappedDataKeyRecord {
 export interface WrappedDataKeyStore {
   get(ownerId: string, domain: Domain, keyVersion: number): Promise<WrappedDataKeyRecord | undefined>;
   putIfAbsent(record: WrappedDataKeyRecord): Promise<WrappedDataKeyRecord>;
+  getActiveKeyVersion(): Promise<number | undefined>;
+  activateKeyVersion(candidate: number): Promise<number>;
 }
 
 const wrappingTextEncoder = new TextEncoder();
+const ROOT_KEY_BASE64URL_CHARS = 43;
+const WRAPPED_KEY_IV_BASE64URL_CHARS = 16;
+const WRAPPED_KEY_BASE64URL_CHARS = 64;
 
-/** Production key provider backed by a Worker root secret and encrypted data-key records. */
-export class WrappedKeyProvider implements KeyProvider {
+/** Store-authorized key provider with asynchronous monotonic rotation. */
+export interface WrappedKeyProvider extends KeyProvider {
+  rotateTo(activeKeyVersion: number): Promise<void>;
+}
+
+/** Production implementation backed by a Worker root secret and authoritative wrapped-key store. */
+class StoreBackedWrappedKeyProvider implements WrappedKeyProvider {
   readonly #rootKey: CryptoKey;
   readonly #store: WrappedDataKeyStore;
-  #activeKeyVersion: number;
 
-  constructor(rootKey: CryptoKey, store: WrappedDataKeyStore, activeKeyVersion: number) {
+  constructor(rootKey: CryptoKey, store: WrappedDataKeyStore) {
     validateWrappingKey(rootKey);
     this.#rootKey = rootKey;
     this.#store = store;
-    this.#activeKeyVersion = validateKeyVersion(activeKeyVersion);
   }
 
   /** Returns the active key for encryption or an already-existing exact version for decryption. */
@@ -62,28 +70,34 @@ export class WrappedKeyProvider implements KeyProvider {
       };
     }
 
-    const existing = await this.#store.get(ownerId, domain, this.#activeKeyVersion);
+    // This immutable snapshot is the linearization point for the complete active-key resolution.
+    const activeKeyVersion = validateKeyVersion(await this.#store.getActiveKeyVersion());
+    const existing = await this.#store.get(ownerId, domain, activeKeyVersion);
     const record =
       existing ??
       (await this.#store.putIfAbsent(
-        await createWrappedDataKey(this.#rootKey, ownerId, domain, this.#activeKeyVersion),
+        await createWrappedDataKey(this.#rootKey, ownerId, domain, activeKeyVersion),
       ));
-    const validated = validateWrappedDataKey(record, ownerId, domain, this.#activeKeyVersion);
+    const validated = validateWrappedDataKey(record, ownerId, domain, activeKeyVersion);
 
     return {
       key: await unwrapDataKey(this.#rootKey, validated),
-      keyVersion: this.#activeKeyVersion,
+      keyVersion: activeKeyVersion,
     };
   }
 
-  /** Advances the encryption version while retaining access to stored historical versions. */
-  rotateTo(activeKeyVersion: number): void {
+  /** Atomically advances the authoritative store version while retaining historical keys. */
+  async rotateTo(activeKeyVersion: number): Promise<void> {
     const nextVersion = validateKeyVersion(activeKeyVersion);
-    if (nextVersion <= this.#activeKeyVersion) {
+    const currentVersion = validateKeyVersion(await this.#store.getActiveKeyVersion());
+    if (nextVersion <= currentVersion) {
       throw new Error("Active data-key rotation must move to a newer version.");
     }
 
-    this.#activeKeyVersion = nextVersion;
+    const authoritativeVersion = validateKeyVersion(await this.#store.activateKeyVersion(nextVersion));
+    if (authoritativeVersion !== nextVersion) {
+      throw new Error("Data-key activation lost to a newer authoritative version.");
+    }
   }
 }
 
@@ -93,7 +107,12 @@ export async function createWrappedKeyProvider(
   store: WrappedDataKeyStore,
   activeKeyVersion: number,
 ): Promise<WrappedKeyProvider> {
-  const rawRootKey = decodeBase64Url(rootKeyBase64Url, "Root key");
+  if (typeof rootKeyBase64Url !== "string" || rootKeyBase64Url.length !== ROOT_KEY_BASE64URL_CHARS) {
+    throw new Error("Root key must be a 256-bit canonical base64url Worker secret.");
+  }
+
+  const configuredVersion = validateKeyVersion(activeKeyVersion);
+  const rawRootKey = decodeBase64Url(rootKeyBase64Url, "Root key", ROOT_KEY_BASE64URL_CHARS);
   if (rawRootKey.byteLength !== 32) {
     throw new Error("Root key must be a 256-bit canonical base64url Worker secret.");
   }
@@ -106,7 +125,12 @@ export async function createWrappedKeyProvider(
       false,
       ["encrypt", "decrypt"],
     );
-    return new WrappedKeyProvider(rootKey, store, activeKeyVersion);
+    const authoritativeVersion = validateKeyVersion(await store.activateKeyVersion(configuredVersion));
+    if (authoritativeVersion !== configuredVersion) {
+      throw new Error("Configured data-key version is stale relative to the authoritative store.");
+    }
+
+    return new StoreBackedWrappedKeyProvider(rootKey, store);
   } finally {
     // The decoded root bytes are short-lived and never placed on the provider object, in storage, or in logs.
     rawRootKey.fill(0);
@@ -204,9 +228,18 @@ function validateWrappedDataKey(
     throw new Error("Wrapped data-key metadata does not match the requested owner, domain, and version.");
   }
 
+  if (typeof value.iv !== "string" || value.iv.length !== WRAPPED_KEY_IV_BASE64URL_CHARS) {
+    throw new Error("Wrapped data-key IV must be 96 bits.");
+  }
+
+  if (typeof value.wrappedKey !== "string" || value.wrappedKey.length !== WRAPPED_KEY_BASE64URL_CHARS) {
+    throw new Error("Wrapped data key exceeds or does not match the required encoded size.");
+  }
+
+  // Both exact encoded sizes are admitted before atob creates either decoded copy.
   if (
-    decodeBase64Url(value.iv, "Wrapped data-key IV").byteLength !== 12 ||
-    decodeBase64Url(value.wrappedKey, "Wrapped data key").byteLength !== 48
+    decodeBase64Url(value.iv, "Wrapped data-key IV", WRAPPED_KEY_IV_BASE64URL_CHARS).byteLength !== 12 ||
+    decodeBase64Url(value.wrappedKey, "Wrapped data key", WRAPPED_KEY_BASE64URL_CHARS).byteLength !== 48
   ) {
     throw new Error("Wrapped data-key envelope has invalid binary lengths.");
   }

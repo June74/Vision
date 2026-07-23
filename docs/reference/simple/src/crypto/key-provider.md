@@ -2,19 +2,19 @@
 
 This module gives each user and Vision domain a separate random data key. Data keys are encrypted, or “wrapped,” by the root Worker secret before a store can persist them.
 
-`KeyProvider` returns a non-extractable key plus its version. `WrappedDataKeyStore` is the future database adapter contract, and `WrappedDataKeyRecord` contains only encrypted key material.
+`KeyProvider` returns a non-extractable key plus its version. `WrappedDataKeyStore` stores encrypted records and the authoritative active-version high-water mark, which may move forward but never backward.
 
 ## `getDataKey`
 
-Without a version, returns or creates the active encryption key. With a version, reads only that already-existing historical key.
+Without a version, reads one immutable store version and uses it for the whole operation. With a version, reads only that already-existing historical key.
 
 ## `rotateTo`
 
-Moves future encryption to a newer key version without removing old wrapped keys.
+Atomically raises the store's active version without removing old wrapped keys.
 
 ## `createWrappedKeyProvider`
 
-Imports the 256-bit Worker secret as a non-extractable root key and creates the provider.
+Imports the 256-bit Worker secret, atomically activates the configured version, and rejects stale configuration.
 
 ## `createWrappedDataKey`
 
@@ -26,7 +26,7 @@ Authenticates a wrapped record and returns a non-extractable AES key.
 
 ## `validateWrappedDataKey`
 
-Rejects unknown formats, algorithms, mismatched partitions, and malformed binary values.
+Rejects unknown formats, algorithms, mismatched partitions, and wrong encoded sizes before base64 decoding.
 
 ## `encodeWrappingAad`
 

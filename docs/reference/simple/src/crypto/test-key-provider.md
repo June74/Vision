@@ -1,12 +1,12 @@
 # `src/crypto/test-key-provider.ts`
 
-This module makes the real wrapped-key behavior easy to exercise in unit tests. Its fixed root key and in-memory store are unmistakably test-only.
+This module makes the real wrapped-key behavior easy to exercise in unit tests without storing a known key in source.
 
-The factory requires `environment: "test"` at both the TypeScript and runtime boundaries. Vision's `RuntimeEnv` has no test value, so production configuration cannot select this provider.
+Tests must supply freshly generated or explicit test key material. Construction also requires the actual Vitest process sentinels. A repository scan forbids production imports, and every production build scans the Worker bundle for this module's marker and helper name.
 
 ## `createTestKeyProvider`
 
-Creates a guarded test harness with an initial active version.
+Asynchronously creates a guarded test harness from caller-provided test key material.
 
 ## `getDataKey`
 
@@ -14,15 +14,11 @@ Delegates test encryption and historical reads to the real wrapped-key provider.
 
 ## `rotateTo`
 
-Moves the test harness to a newer active key version.
+Atomically moves the test store to a newer active key version.
 
 ## `readWrappedDataKeyForTest`
 
 Lets tests inspect only encrypted wrapped records for separation checks.
-
-## `getProvider`
-
-Creates the real wrapped provider lazily with the fixed test-only root.
 
 ## `get`
 
@@ -31,6 +27,18 @@ Reads one encrypted in-memory record by owner, domain, and version.
 ## `putIfAbsent`
 
 Preserves the first encrypted record for a partition.
+
+## `getActiveKeyVersion`
+
+Reads the in-memory active-version high-water mark.
+
+## `activateKeyVersion`
+
+Raises the in-memory high-water mark without allowing rollback.
+
+## `assertVitestRuntime`
+
+Requires both Node test mode and Vitest's runtime sentinel.
 
 ## `createStoreKey`
 

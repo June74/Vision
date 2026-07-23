@@ -1,5 +1,25 @@
 /** Defines the validated runtime bindings available to the Vision Worker. */
 import { z } from "zod";
+import { decodeBase64Url } from "../crypto/envelope";
+
+const keyEncryptionKeySchema = z.string().superRefine((keyEncryptionKey, context) => {
+  try {
+    if (keyEncryptionKey.length !== 43) {
+      throw new Error("Incorrect encoded length.");
+    }
+
+    const decoded = decodeBase64Url(keyEncryptionKey, "Root key", 43);
+    if (decoded.byteLength !== 32) {
+      throw new Error("Incorrect decoded length.");
+    }
+  } catch {
+    // Never attach the supplied secret or decoder details to the externally visible Zod issue.
+    context.addIssue({
+      code: "custom",
+      message: "KEY_ENCRYPTION_KEY must be a canonical 256-bit base64url secret.",
+    });
+  }
+});
 
 /** Validates deployment bindings, including the Worker-only least-privileged database credential. */
 export const RuntimeEnvSchema = z.object({
@@ -10,10 +30,7 @@ export const RuntimeEnvSchema = z.object({
       context.addIssue({ code: "custom", message: "DATABASE_URL must authenticate as the vision_app role." });
     }
   }),
-  KEY_ENCRYPTION_KEY: z
-    .string()
-    // A 32-byte value has 43 unpadded base64url characters and one of four canonical final characters.
-    .regex(/^[A-Za-z0-9_-]{42}[AQgw]$/u, "KEY_ENCRYPTION_KEY must be a canonical 256-bit base64url secret."),
+  KEY_ENCRYPTION_KEY: keyEncryptionKeySchema,
 });
 
 /** Safely validates a Worker-only database URL without including credential text in errors. */

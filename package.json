@@ -6,7 +6,7 @@
   "packageManager": "pnpm@11.9.0",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && tsx scripts/validate-production-crypto-boundary.ts",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
     "test:unit": "vitest run --project unit",

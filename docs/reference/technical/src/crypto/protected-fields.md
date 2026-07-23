@@ -8,7 +8,7 @@ This module adapts generic protected objects to the field envelope API. `Protect
 
 **Signature:** `<T extends PlainProtectedFields>(keyProvider: KeyProvider, context: ProtectedObjectContext, fields: T) => Promise<EncryptedProtectedFields<T>>`
 
-Validates the complete input before a key lookup. If any string exists, it resolves the provider's active key once and independently encrypts each string with field-specific AAD and a fresh IV. Null-only objects do not create a key. It does not serialize arbitrary objects or log plaintext.
+Validates the complete input before a key lookup. If any string exists, it resolves one store-authorized active key and independently encrypts each field with fresh IV and field AAD. Each value is subject to the envelope's 65,536-byte UTF-8 limit. Null-only objects do not create a key.
 
 ## `decryptProtectedFields`
 

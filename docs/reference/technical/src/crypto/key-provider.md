@@ -1,28 +1,28 @@
 # `src/crypto/key-provider.ts`
 
-This module implements envelope encryption for data keys. `KeyProvider.getDataKey(ownerId, domain, keyVersion?)` returns `VersionedDataKey`. `WrappedDataKeyStore` supplies `get` and atomic `putIfAbsent`; persistence contains only `WrappedDataKeyRecord`, never the root key or a plaintext data key.
+This module implements envelope encryption for data keys. `WrappedDataKeyStore` supplies record `get`, atomic `putIfAbsent`, authoritative `getActiveKeyVersion`, and atomic monotonic `activateKeyVersion`. Persistence contains only wrapped records plus the numeric high-water mark, never the root or plaintext key.
 
-The active path may generate a missing random 256-bit key. An explicit version is a read-only historical lookup and fails if absent, preventing decryption under a wrong context from creating key state. Concurrent active-key creation uses `putIfAbsent` and unwraps whichever record won.
+The versionless path snapshots the authoritative active version exactly once after its first await, then uses that immutable number for record lookup, creation, validation, unwrap, and returned label. A concurrent rotation can linearize before or after that store read, but cannot relabel key material. Explicit historical lookup remains read-only.
 
-`tests/unit/crypto/protected-fields.test.ts` covers owner/domain separation, unknown versions, and old-key decryption after active rotation.
+`tests/unit/crypto/key-provider.test.ts` deterministically covers rotation during a deferred lookup, restart rollback, competing activation, historical decryption, and wrapped-record size admission.
 
 ## `getDataKey`
 
 **Signature:** `(ownerId: string, domain: Domain, keyVersion?: number) => Promise<VersionedDataKey>`
 
-Validates the key partition. With `keyVersion`, it fetches and authenticates exactly that stored version. Without it, it fetches the active record or generates and atomically stores a wrapped one. Returned data keys are non-extractable AES-256-GCM keys.
+With `keyVersion`, fetches exactly that stored version. Without it, awaits the authoritative store version once, captures it in a constant, and uses only that constant through every later await. Missing active records are generated through atomic `putIfAbsent`.
 
 ## `rotateTo`
 
-**Signature:** `(activeKeyVersion: number) => void`
+**Signature:** `(activeKeyVersion: number) => Promise<void>`
 
-Accepts only a strictly newer positive safe integer. It changes the version used by future versionless lookups; historical store records remain readable through explicit versions.
+Reads the authoritative current version, requires a strictly higher candidate, and atomically raises the store mark. It rejects if a competing higher activation wins. Historical records remain readable.
 
 ## `createWrappedKeyProvider`
 
 **Signature:** `(rootKeyBase64Url: string, store: WrappedDataKeyStore, activeKeyVersion: number) => Promise<WrappedKeyProvider>`
 
-Strictly decodes a 32-byte base64url Worker secret, imports it as non-extractable AES-GCM, zeroes the temporary decoded buffer, and returns the provider. It does not persist or log the secret.
+Prechecks the root's exact 43-character size, canonically decodes 32 bytes, imports it as non-extractable AES-GCM, and zeroes the temporary buffer. It atomically activates the configured version and rejects when the returned authoritative version is higher, preventing restart rollback.
 
 ## `createWrappedDataKey`
 
@@ -40,7 +40,7 @@ Authenticates and decrypts the 48-byte wrapped value, requires exactly 32 plaint
 
 **Signature:** `(value: WrappedDataKeyRecord, ownerId: string, domain: Domain, keyVersion: number) => WrappedDataKeyRecord`
 
-Requires the exact seven record fields, version `1`, `A256GCM`, exact partition metadata, a 12-byte IV, and a 48-byte wrapped value (32 key bytes plus 16 tag bytes). Unknown versions and algorithms are closed failures.
+Requires the exact seven fields, version `1`, `A256GCM`, exact partition metadata, exactly 16 encoded IV characters, and exactly 64 encoded wrapped-key characters before `atob`. Decoded values must be 12 and 48 bytes.
 
 ## `encodeWrappingAad`
 

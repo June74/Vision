@@ -2,7 +2,7 @@
 
 This module is the JSON envelope and field-AAD boundary. `CipherEnvelope` is fixed to `{ version: 1; algorithm: "A256GCM"; keyVersion; iv; ciphertext }`; binary IV and ciphertext values are canonical unpadded base64url. `ProtectedFieldAad` carries `{ ownerId; nodeId; fieldName; keyVersion }`.
 
-`tests/unit/crypto/envelope.test.ts` covers round trips, plaintext absence, IV uniqueness and size, ciphertext tampering, every AAD dimension, unknown versions and algorithms, invalid key versions, malformed base64url, and strict JSON parsing.
+`MAX_PROTECTED_PLAINTEXT_BYTES` is 65,536 bytes. The maximum ciphertext is that value plus the 16-byte AES-GCM tag, and `MAX_SERIALIZED_CIPHER_ENVELOPE_CHARS` adds a fixed 512-character metadata allowance. `tests/unit/crypto/envelope.test.ts` and `size-limits.test.ts` cover round trips, tampering, AAD, closed formats, and pre-allocation rejection.
 
 ## `encodeBase64Url`
 
@@ -12,9 +12,9 @@ Encodes bytes in bounded chunks to avoid argument-size limits, converts the resu
 
 ## `decodeBase64Url`
 
-**Signature:** `(value: unknown, label?: string) => Uint8Array<ArrayBuffer>`
+**Signature:** `(value: unknown, label?: string, maximumEncodedLength?: number) => Uint8Array<ArrayBuffer>`
 
-Requires the unpadded base64url alphabet and legal encoded length, decodes into an `ArrayBuffer`-backed view suitable for Workers Web Crypto, then re-encodes to prove canonical form. Failures report only the caller-supplied category label, never secret data.
+Requires the unpadded base64url alphabet and legal encoded length, rejects values beyond the caller's bound before `atob`, decodes into an `ArrayBuffer`-backed view, then re-encodes to prove canonical form. Failures report only the category label, never input data.
 
 ## `validateKeyVersion`
 
@@ -26,25 +26,25 @@ Rejects zero, negatives, fractions, infinities, and unsafe integers. The returne
 
 **Signature:** `(value: unknown) => CipherEnvelope`
 
-Requires exactly the five envelope properties, version `1`, algorithm `A256GCM`, a positive safe key version, a 12-byte IV, and at least the 16-byte authentication tag in ciphertext. Unknown properties are rejected to keep algorithm and format negotiation closed.
+Requires exactly the five envelope properties, version `1`, algorithm `A256GCM`, a positive safe key version, an exactly 16-character encoded IV, and bounded ciphertext. IV and ciphertext encoded sizes are admitted before either is decoded; decoded lengths are then checked for 12 IV bytes and at least the 16-byte tag.
 
 ## `serializeCipherEnvelope`
 
 **Signature:** `(envelope: CipherEnvelope) => string`
 
-Revalidates before `JSON.stringify`, preventing callers from serializing a type-cast malformed object. It returns JSON containing ciphertext metadata only.
+Revalidates before `JSON.stringify` and verifies the final JSON bound. It returns ciphertext metadata only.
 
 ## `parseCipherEnvelope`
 
 **Signature:** `(serialized: string) => CipherEnvelope`
 
-Parses one JSON string and delegates the complete closed-format check to `validateCipherEnvelope`. Syntax failures use a constant message; envelope validation never returns partially accepted data.
+Rejects more than `MAX_SERIALIZED_CIPHER_ENVELOPE_CHARS` before `JSON.parse`, then delegates the closed-format check. Syntax failures use a constant message.
 
 ## `encryptText`
 
 **Signature:** `(key: CryptoKey, plaintext: string, aad: ProtectedFieldAad) => Promise<CipherEnvelope>`
 
-Uses the Worker global `crypto.subtle.encrypt` with AES-GCM, a newly generated 12-byte IV, a 128-bit tag, and the canonical AAD tuple. The key must be non-extractable AES-256-GCM with encrypt usage. The function returns only the versioned JSON-safe envelope; it does not persist or log plaintext.
+Rejects more than 65,536 JavaScript code units before encoding, then enforces the same 65,536-byte UTF-8 limit. It uses Worker AES-GCM with a new 12-byte IV, 128-bit tag, and canonical AAD. It does not persist or log plaintext.
 
 ## `decryptText`
 
@@ -69,3 +69,9 @@ Encodes `["vision-protected-field", 1, ownerId, nodeId, fieldName, keyVersion]` 
 **Signature:** `(key: CryptoKey, usage: "encrypt" | "decrypt") => void`
 
 Requires a secret, non-extractable AES-GCM key with 256-bit length and the exact requested usage. This prevents accidental use of an extractable, weak, wrong-algorithm, or wrong-purpose key.
+
+## `getBase64UrlEncodedLength`
+
+**Signature:** `(byteLength: number) => number`
+
+Calculates exact unpadded base64url character count from complete three-byte groups and the final one- or two-byte remainder. Module constants use it to keep byte and encoded limits consistent.
