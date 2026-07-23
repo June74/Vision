@@ -54,6 +54,10 @@ Returns the same generic wrong-account page for every allowlist denial.
 
 Returns a generic callback failure page.
 
+## `authStartLimited`
+
+Returns the same generic wait response when the sign-in start bound is reached.
+
 ## `deriveOwnerId`
 
 Hashes the allowlisted Google subject into an opaque Vision owner ID.

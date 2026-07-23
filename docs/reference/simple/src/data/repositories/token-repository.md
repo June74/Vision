@@ -24,7 +24,7 @@ Reads one owner-and-subject token row.
 
 ## `upsert`
 
-Atomically stores encrypted tokens and increments token version.
+Atomically preserves an existing refresh token when Google omits one, or advances the version for a distinct provider token.
 
 ## `hasRefreshToken`
 
@@ -37,6 +37,18 @@ Decrypts retained tokens for trusted server use.
 ## `saveGoogleTokens`
 
 Encrypts provider tokens before the database call.
+
+## `validateTokenWrite`
+
+Checks token, subject, and timestamp bounds before encryption.
+
+## `digestRefreshToken`
+
+Creates a one-way equality marker so retries do not rotate ciphertext or version.
+
+## `isValidDate`
+
+Checks a real finite Date value.
 
 ## `tokenContext`
 
@@ -73,6 +85,10 @@ Reads canonical database bytea.
 ## `readPositiveInteger`
 
 Reads positive version metadata.
+
+## `readDigest`
+
+Reads the canonical refresh-token equality marker.
 
 ## `readDate`
 

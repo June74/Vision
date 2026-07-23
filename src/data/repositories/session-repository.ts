@@ -1,6 +1,7 @@
 /** Encrypts OAuth transaction and session secrets before an atomic persistence boundary. */
 import { sql } from "drizzle-orm";
 import {
+  MAX_SERIALIZED_CIPHER_ENVELOPE_CHARS,
   parseCipherEnvelope,
   serializeCipherEnvelope,
   type CipherEnvelope,
@@ -15,6 +16,8 @@ import type { VisionDatabase } from "../db";
 /** Ciphertext-only row for one short-lived, single-use OAuth transaction. */
 export interface OAuthTransactionRow {
   stateHash: string;
+  admissionKeyHash: string;
+  admissionSlot: number;
   verifierEnvelope: Uint8Array;
   nonceEnvelope: Uint8Array;
   createdAt: Date;
@@ -36,48 +39,151 @@ export interface ServerSessionRow {
 
 /** Atomic persistence operations required for OAuth replay protection and session revocation. */
 export interface SessionStore {
-  insertOAuthTransaction(row: OAuthTransactionRow): Promise<void>;
+  cleanupOAuthState(cleanedAt: Date, staleWindowAt: Date, limit: number): Promise<OAuthCleanupResult>;
+  admitOAuthStart(admissionKeyHash: string, admittedAt: Date, windowMs: number, maximum: number): Promise<boolean>;
+  insertOAuthTransaction(row: Omit<OAuthTransactionRow, "admissionSlot">): Promise<boolean>;
   consumeOAuthTransaction(stateHash: string, consumedAt: Date): Promise<OAuthTransactionRow | undefined>;
   insertSession(row: ServerSessionRow): Promise<void>;
   findSession(sessionIdHash: string, activeAt: Date): Promise<ServerSessionRow | undefined>;
   revokeSession(sessionIdHash: string, revokedAt: Date): Promise<boolean>;
 }
 
+/** Bounded physical cleanup counts returned without row identifiers or secret material. */
+export interface OAuthCleanupResult {
+  readonly transactionsDeleted: number;
+  readonly windowsDeleted: number;
+}
+
+/** Strict server-side auth-start resource policy. */
+export const OAUTH_START_WINDOW_MS = 10 * 60 * 1_000;
+export const OAUTH_START_MAXIMUM = 5;
+export const OAUTH_OUTSTANDING_MAXIMUM = 3;
+export const OAUTH_CLEANUP_BATCH_SIZE = 100;
+
 /** Neon/Drizzle adapter using parameterized SQL and atomic single-use/revocation statements. */
 export class DrizzleSessionStore implements SessionStore {
   /** Binds the store to Vision's least-privileged typed database client. */
   constructor(private readonly database: VisionDatabase) {}
 
-  /** Inserts only a state hash and ciphertext protocol values. */
-  async insertOAuthTransaction(row: OAuthTransactionRow): Promise<void> {
-    await this.database.execute(sql`
-      insert into oauth_transactions (
-        state_hash, verifier_envelope, nonce_envelope, created_at, expires_at, consumed_at
-      ) values (
-        ${row.stateHash}, ${row.verifierEnvelope}::bytea, ${row.nonceEnvelope}::bytea,
-        ${row.createdAt}, ${row.expiresAt}, null
+  /** Physically deletes one bounded batch of expired/consumed transactions and stale admission windows. */
+  async cleanupOAuthState(
+    cleanedAt: Date,
+    staleWindowAt: Date,
+    limit: number,
+  ): Promise<OAuthCleanupResult> {
+    const result = await this.database.execute<Record<string, unknown>>(sql`
+      with transaction_candidates as (
+        select state_hash
+        from oauth_transactions
+        where expires_at <= ${cleanedAt}
+          or consumed_at is not null
+        order by expires_at, state_hash
+        limit ${limit}
+      ),
+      deleted_transactions as (
+        delete from oauth_transactions as persisted
+        using transaction_candidates as candidate
+        where persisted.state_hash = candidate.state_hash
+        returning persisted.state_hash
+      ),
+      window_candidates as (
+        select admission_key_hash
+        from oauth_admission_windows
+        where window_started_at <= ${staleWindowAt}
+        order by window_started_at, admission_key_hash
+        limit ${limit}
+      ),
+      deleted_windows as (
+        delete from oauth_admission_windows as persisted
+        using window_candidates as candidate
+        where persisted.admission_key_hash = candidate.admission_key_hash
+        returning persisted.admission_key_hash
       )
+      select
+        (select count(*) from deleted_transactions) as "transactionsDeleted",
+        (select count(*) from deleted_windows) as "windowsDeleted"
     `);
+    const row = result.rows[0];
+    if (!row) throw new AuthPersistenceError();
+    return {
+      transactionsDeleted: readNonnegativeInteger(row.transactionsDeleted),
+      windowsDeleted: readNonnegativeInteger(row.windowsDeleted),
+    };
   }
 
-  /** Atomically marks one matching unexpired transaction consumed and returns its ciphertext once. */
+  /** Atomically admits one request into a fixed per-key window or returns false at the exact bound. */
+  async admitOAuthStart(
+    admissionKeyHash: string,
+    admittedAt: Date,
+    windowMs: number,
+    maximum: number,
+  ): Promise<boolean> {
+    const resetBefore = new Date(admittedAt.getTime() - windowMs);
+    const result = await this.database.execute<Record<string, unknown>>(sql`
+      insert into oauth_admission_windows (
+        admission_key_hash, window_started_at, request_count
+      ) values (
+        ${admissionKeyHash}, ${admittedAt}, 1
+      )
+      on conflict (admission_key_hash) do update set
+        window_started_at = case
+          when oauth_admission_windows.window_started_at <= ${resetBefore}
+          then ${admittedAt}
+          else oauth_admission_windows.window_started_at
+        end,
+        request_count = case
+          when oauth_admission_windows.window_started_at <= ${resetBefore}
+          then 1
+          else oauth_admission_windows.request_count + 1
+        end
+      where oauth_admission_windows.window_started_at <= ${resetBefore}
+        or oauth_admission_windows.request_count < ${maximum}
+      returning admission_key_hash as "admissionKeyHash"
+    `);
+    return result.rows[0]?.admissionKeyHash === admissionKeyHash;
+  }
+
+  /** Claims one of three unique per-key outstanding slots using bounded conflict retries. */
+  async insertOAuthTransaction(
+    row: Omit<OAuthTransactionRow, "admissionSlot">,
+  ): Promise<boolean> {
+    for (let slot = 1; slot <= OAUTH_OUTSTANDING_MAXIMUM; slot += 1) {
+      const result = await this.database.execute<Record<string, unknown>>(sql`
+        insert into oauth_transactions (
+          state_hash, admission_key_hash, admission_slot, verifier_envelope,
+          nonce_envelope, created_at, expires_at, consumed_at
+        ) values (
+          ${row.stateHash}, ${row.admissionKeyHash}, ${slot},
+          ${row.verifierEnvelope}::bytea, ${row.nonceEnvelope}::bytea,
+          ${row.createdAt}, ${row.expiresAt}, null
+        )
+        on conflict do nothing
+        returning state_hash as "stateHash"
+      `);
+      if (result.rows[0]?.stateHash === row.stateHash) return true;
+    }
+    return false;
+  }
+
+  /** Atomically deletes one matching unexpired transaction and returns its ciphertext exactly once. */
   async consumeOAuthTransaction(
     stateHash: string,
     consumedAt: Date,
   ): Promise<OAuthTransactionRow | undefined> {
     const result = await this.database.execute<Record<string, unknown>>(sql`
-      update oauth_transactions
-      set consumed_at = ${consumedAt}
+      delete from oauth_transactions
       where state_hash = ${stateHash}
         and consumed_at is null
         and expires_at > ${consumedAt}
       returning
         state_hash as "stateHash",
+        admission_key_hash as "admissionKeyHash",
+        admission_slot as "admissionSlot",
         verifier_envelope as "verifierEnvelope",
         nonce_envelope as "nonceEnvelope",
         created_at as "createdAt",
         expires_at as "expiresAt",
-        consumed_at as "consumedAt"
+        ${consumedAt} as "consumedAt"
     `);
     return result.rows[0] ? decodeOAuthTransactionRow(result.rows[0]) : undefined;
   }
@@ -142,6 +248,7 @@ export interface ConsumedOAuthTransaction {
 /** Plain inputs accepted at the trusted side of the OAuth transaction repository. */
 export interface NewOAuthTransaction {
   readonly state: string;
+  readonly admissionKey: string;
   readonly pkceVerifier: string;
   readonly nonce: string;
   readonly createdAt: Date;
@@ -189,8 +296,27 @@ export class EncryptedSessionRepository {
   ) {}
 
   /** Hashes state for lookup and encrypts verifier and nonce before the first store call. */
-  async createOAuthTransaction(transaction: NewOAuthTransaction): Promise<void> {
+  async createOAuthTransaction(transaction: NewOAuthTransaction): Promise<boolean> {
     try {
+      const admissionKeyHash = await hashOpaqueSecret(transaction.admissionKey);
+      const staleWindowAt = new Date(
+        transaction.createdAt.getTime() - OAUTH_START_WINDOW_MS,
+      );
+      await this.store.cleanupOAuthState(
+        transaction.createdAt,
+        staleWindowAt,
+        OAUTH_CLEANUP_BATCH_SIZE,
+      );
+      if (
+        !(await this.store.admitOAuthStart(
+          admissionKeyHash,
+          transaction.createdAt,
+          OAUTH_START_WINDOW_MS,
+          OAUTH_START_MAXIMUM,
+        ))
+      ) {
+        return false;
+      }
       const stateHash = await hashOpaqueSecret(transaction.state);
       const encrypted = await encryptProtectedFields(
         this.keyProvider,
@@ -204,8 +330,9 @@ export class EncryptedSessionRepository {
           nonce: transaction.nonce,
         },
       );
-      await this.store.insertOAuthTransaction({
+      return await this.store.insertOAuthTransaction({
         stateHash,
+        admissionKeyHash,
         verifierEnvelope: encodeEnvelope(encrypted.pkceVerifier),
         nonceEnvelope: encodeEnvelope(encrypted.nonce),
         createdAt: new Date(transaction.createdAt),
@@ -365,12 +492,44 @@ function decodeEnvelope(envelope: Uint8Array): CipherEnvelope {
 function decodeOAuthTransactionRow(row: Record<string, unknown>): OAuthTransactionRow {
   return {
     stateHash: readDatabaseText(row.stateHash, 128),
+    admissionKeyHash: readDatabaseText(row.admissionKeyHash, 128),
+    admissionSlot: readPositiveInteger(row.admissionSlot),
     verifierEnvelope: readDatabaseBytes(row.verifierEnvelope),
     nonceEnvelope: readDatabaseBytes(row.nonceEnvelope),
     createdAt: readDatabaseDate(row.createdAt),
     expiresAt: readDatabaseDate(row.expiresAt),
     consumedAt: row.consumedAt === null ? null : readDatabaseDate(row.consumedAt),
   };
+}
+
+/** Reads one positive safe integer database cell. */
+function readPositiveInteger(value: unknown): number {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && /^[1-9]\d*$/u.test(value)
+        ? Number(value)
+        : Number.NaN;
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new AuthPersistenceError();
+  }
+  return parsed;
+}
+
+/** Reads one nonnegative safe integer aggregate cell. */
+function readNonnegativeInteger(value: unknown): number {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "bigint"
+        ? Number(value)
+        : typeof value === "string" && /^(?:0|[1-9]\d*)$/u.test(value)
+          ? Number(value)
+          : Number.NaN;
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new AuthPersistenceError();
+  }
+  return parsed;
 }
 
 /** Strictly decodes an active server-session row returned by Neon. */
@@ -397,11 +556,24 @@ function readDatabaseText(value: unknown, maximum: number): string {
 
 /** Reads canonical PostgreSQL bytea hex or an already-decoded byte array. */
 function readDatabaseBytes(value: unknown): Uint8Array {
-  if (value instanceof Uint8Array) return new Uint8Array(value);
+  try {
+    if (Object.getPrototypeOf(value) === Uint8Array.prototype) {
+      const copied = Uint8Array.prototype.slice.call(value) as Uint8Array;
+      if (
+        copied.byteLength === 0 ||
+        copied.byteLength > MAX_SERIALIZED_CIPHER_ENVELOPE_CHARS
+      ) {
+        throw new AuthPersistenceError();
+      }
+      return copied;
+    }
+  } catch {
+    throw new AuthPersistenceError();
+  }
   if (
     typeof value !== "string" ||
     !/^\\x(?:[0-9a-f]{2})+$/u.test(value) ||
-    value.length > 256 * 1024
+    (value.length - 2) / 2 > MAX_SERIALIZED_CIPHER_ENVELOPE_CHARS
   ) {
     throw new AuthPersistenceError();
   }

@@ -4,6 +4,40 @@
 
 Callback pages and audit facts are constant and contain no provider body, claim, token, state, verifier, nonce, or database detail.
 
+## Signatures
+
+```ts
+registerOAuthRoutes(
+  app: Hono<{ Bindings: Env; Variables: AuthRequestVariables }>,
+  dependenciesOrResolver: AuthRouteDependencies | AuthDependencyResolver,
+): void;
+createProductionAuthDependencies(environment: Env, logger: SafeLogger): Promise<AuthRouteDependencies>;
+```
+
+## Dependencies
+
+Composes Hono, environment validation, the Google adapter/JWKS verifier, Task 1 identity allowlisting, admission HMACs, encrypted token/session repositories, wrapped keys, CSRF comparison, and safe logging.
+
+## Inputs and outputs
+
+Consumes Worker bindings plus request query/cookie/header data through bounded parsers. Produces fixed redirects/pages/JSON, an opaque cookie, or safe 401/403/429/503 responses; no provider token is returned.
+
+## Side effects
+
+Start derives admission identity from trusted edge/shared context before any session lookup, performs bounded cleanup/admission, persists encrypted state, then redirects to Google. Callback physically consumes state, exchanges/verifies, atomically persists tokens, rotates the session, and redirects `/`. Logout revokes and clears.
+
+## Failure behavior
+
+Configuration/provider/storage/claim/scope failures use constant pages or safe error envelopes. Admission denial is a no-store 429 with `Retry-After: 600`. Safe log sink failures never change route outcomes.
+
+## Privacy and authorization
+
+Session creation requires signed claims, exact issuer/scalar audience/nonce/expiry/subject/verified email, exact scopes, and the Task 1 allowlist. Admission/logging never emits owner, IP, session, state, verifier, nonce, claims, or tokens.
+
+## Covering tests
+
+`tests/worker/auth.test.ts` covers every route, claims, replay, cookies, CSRF, safe 429, rotation, and raw/log privacy. `tests/unit/server/auth/admission.test.ts` covers admission trust.
+
 ## `registerOAuthRoutes`
 
 Accepts static deterministic dependencies for tests or a per-request production resolver. Routes resolve dependencies before use and map configuration/provider failures to safe outcomes.
@@ -55,6 +89,10 @@ Returns a no-store 403 HTML page and no identity-specific explanation.
 ## `authenticationFailurePage`
 
 Returns a no-store 400 HTML page with no provider or persistence details.
+
+## `authStartLimited`
+
+Returns the fixed no-store 429 JSON envelope and ten-minute retry hint without an admission identifier.
 
 ## `deriveOwnerId`
 

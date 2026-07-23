@@ -4,6 +4,40 @@ Refresh and retained access tokens are encrypted through `protected-fields.ts`; 
 
 Wrapped per-owner/per-domain data keys are protected by the Worker root key. `data_key_state` is the monotonic rotation authority and `wrapped_data_keys` retains historical versions for decryption.
 
+## Signatures
+
+```ts
+find(ownerId: string, googleSubject: string): Promise<GoogleTokenRow | undefined>;
+upsert(row: GoogleTokenWriteRow): Promise<GoogleTokenRow>;
+hasRefreshToken(googleSubject: string): Promise<boolean>;
+getGoogleTokens(googleSubject: string): Promise<RetainedGoogleTokens | undefined>;
+saveGoogleTokens(tokens: NewGoogleTokens): Promise<RetainedGoogleTokens>;
+```
+
+## Dependencies
+
+Uses Drizzle parameterized SQL, Web Crypto SHA-256, protected-field encryption, the owner-bound key-provider port, and wrapped-key persistence.
+
+## Inputs and outputs
+
+The repository fixes `ownerId` at construction. Writes accept a subject, optional newly issued refresh token, optional access token, expiry, exact scopes, and update time. Reads return plaintext only inside the trusted server caller.
+
+## Side effects
+
+Writes encrypt provider values and execute one atomic PostgreSQL CTE. Reads select owner/subject metadata and decrypt only the returned ciphertext. Wrapped-key methods read, insert, or monotonically activate durable key versions.
+
+## Failure behavior
+
+Omission without an existing row, owner/subject mismatch, malformed metadata, overbound/noncanonical bytes, crypto failure, or SQL failure rejects with constant application errors. Provider-token plaintext and SQL detail are absent.
+
+## Privacy and authorization
+
+Refresh/access tokens are ciphertext; the SHA-256 refresh digest is only an equality marker for high-entropy tokens. Omission preserves the database envelope/version. A distinct provider digest replaces it and advances the version; an equal retry preserves both. Every token statement is owner-and-subject scoped.
+
+## Covering tests
+
+`tests/integration/data/auth-token-concurrency.test.ts` covers both completion orders, equal retry, owner isolation, versioning, and raw plaintext absence. `tests/contract/data/auth-row-bounds.contract.test.ts` covers binary bounds.
+
 ## `get`
 
 Selects one `(owner_id, domain, key_version)` wrapped-key tuple.
@@ -26,7 +60,7 @@ Selects only the exact owner and Google subject with parameterized predicates.
 
 ## `upsert`
 
-Conflicts on owner, permits update only when the subject is unchanged, replaces ciphertext, and increments `token_version` atomically.
+Uses an atomic update/insert CTE. Null refresh fields preserve the database winner; a distinct digest replaces ciphertext and increments `token_version`; equal retry preserves envelope and version.
 
 ## `hasRefreshToken`
 
@@ -38,7 +72,19 @@ Validates owner/subject/version, decrypts refresh and optional access token with
 
 ## `saveGoogleTokens`
 
-Snapshots scopes, encrypts both provider token fields, and verifies the returned row remains owner/subject bound.
+Validates bounded inputs, encrypts supplied provider fields, hashes a supplied refresh token for equality only, persists atomically, then decrypts the authoritative returned row.
+
+## `validateTokenWrite`
+
+Bounds subject, optional provider tokens, and genuine Date inputs before cryptographic or database work.
+
+## `digestRefreshToken`
+
+Calculates canonical SHA-256 base64url for equality/idempotency; the high-entropy provider token itself remains encrypted.
+
+## `isValidDate`
+
+Uses the intrinsic Date getter to reject invalid or hostile date inputs.
 
 ## `tokenContext`
 
@@ -70,11 +116,15 @@ Rejects non-string, empty, and oversized database values.
 
 ## `readBytes`
 
-Copies decoded bytes or parses bounded lowercase canonical PostgreSQL bytea hex.
+Accepts only exact decoded `Uint8Array` values or canonical lowercase PostgreSQL bytea hex, applies the same shared nonzero maximum, and returns a mutation-independent copy.
 
 ## `readPositiveInteger`
 
 Accepts a positive safe integer or canonical positive decimal text.
+
+## `readDigest`
+
+Requires exactly 43 canonical base64url characters for the SHA-256 equality marker.
 
 ## `readDate`
 

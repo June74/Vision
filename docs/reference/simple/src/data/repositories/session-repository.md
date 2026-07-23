@@ -6,9 +6,17 @@ Hashes browser bearers and encrypts OAuth verifier, nonce, session email, and CS
 
 Stores only a state hash and encrypted protocol values.
 
+## `cleanupOAuthState`
+
+Removes one bounded batch of expired/used sign-in rows and old limit windows.
+
+## `admitOAuthStart`
+
+Atomically enforces the five-start, ten-minute window for one opaque client key.
+
 ## `consumeOAuthTransaction`
 
-Atomically marks one unexpired OAuth transaction used.
+Atomically removes and returns one unexpired OAuth transaction, freeing its outstanding slot.
 
 ## `insertSession`
 
@@ -65,3 +73,11 @@ Reads canonical PostgreSQL bytea.
 ## `readDatabaseDate`
 
 Reads a valid timezone-aware timestamp.
+
+## `readPositiveInteger`
+
+Reads positive slot metadata.
+
+## `readNonnegativeInteger`
+
+Reads cleanup counts.

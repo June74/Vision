@@ -1,6 +1,8 @@
 /** Protects retained Google OAuth tokens behind owner-scoped ciphertext persistence. */
 import { sql } from "drizzle-orm";
 import {
+  encodeBase64Url,
+  MAX_SERIALIZED_CIPHER_ENVELOPE_CHARS,
   parseCipherEnvelope,
   serializeCipherEnvelope,
   type CipherEnvelope,
@@ -21,6 +23,7 @@ export interface GoogleTokenRow {
   ownerId: string;
   googleSubject: string;
   refreshTokenEnvelope: Uint8Array;
+  refreshTokenDigest: string;
   accessTokenEnvelope: Uint8Array | null;
   accessExpiresAt: Date;
   grantedScopes: string;
@@ -31,7 +34,17 @@ export interface GoogleTokenRow {
 /** Parameterized owner-scoped persistence operations for encrypted Google token rows. */
 export interface TokenStore {
   find(ownerId: string, googleSubject: string): Promise<GoogleTokenRow | undefined>;
-  upsert(row: Omit<GoogleTokenRow, "tokenVersion">): Promise<GoogleTokenRow>;
+  upsert(row: GoogleTokenWriteRow): Promise<GoogleTokenRow>;
+}
+
+/** Atomic token write whose null refresh fields mean preserve the database winner. */
+export interface GoogleTokenWriteRow
+  extends Omit<
+    GoogleTokenRow,
+    "refreshTokenEnvelope" | "refreshTokenDigest" | "tokenVersion"
+  > {
+  refreshTokenEnvelope: Uint8Array | null;
+  refreshTokenDigest: string | null;
 }
 
 /** Durable wrapped-key store supporting per-owner/domain keys and monotonic rotation state. */
@@ -137,6 +150,7 @@ export class DrizzleTokenStore implements TokenStore {
         owner_id as "ownerId",
         google_subject as "googleSubject",
         refresh_token_envelope as "refreshTokenEnvelope",
+        refresh_token_digest as "refreshTokenDigest",
         access_token_envelope as "accessTokenEnvelope",
         access_expires_at as "accessExpiresAt",
         granted_scopes as "grantedScopes",
@@ -152,35 +166,75 @@ export class DrizzleTokenStore implements TokenStore {
 
   /** Atomically inserts or rotates ciphertext while advancing queryable token version metadata. */
   async upsert(
-    row: Omit<GoogleTokenRow, "tokenVersion">,
+    row: GoogleTokenWriteRow,
   ): Promise<GoogleTokenRow> {
     const result = await this.database.execute<Record<string, unknown>>(sql`
-      insert into google_oauth_tokens as persisted (
-        owner_id, google_subject, refresh_token_envelope, access_token_envelope,
-        access_expires_at, granted_scopes, token_version, updated_at
-      ) values (
-        ${row.ownerId}, ${row.googleSubject}, ${row.refreshTokenEnvelope}::bytea,
-        ${row.accessTokenEnvelope}::bytea, ${row.accessExpiresAt},
-        ${row.grantedScopes}, 1, ${row.updatedAt}
+      with updated as (
+        update google_oauth_tokens as persisted
+        set
+          refresh_token_envelope = case
+            when ${row.refreshTokenDigest}::text is null
+              or ${row.refreshTokenDigest}::text = persisted.refresh_token_digest
+            then persisted.refresh_token_envelope
+            else ${row.refreshTokenEnvelope}::bytea
+          end,
+          refresh_token_digest = case
+            when ${row.refreshTokenDigest}::text is null
+            then persisted.refresh_token_digest
+            else ${row.refreshTokenDigest}::text
+          end,
+          access_token_envelope = ${row.accessTokenEnvelope}::bytea,
+          access_expires_at = ${row.accessExpiresAt},
+          granted_scopes = ${row.grantedScopes},
+          token_version = case
+            when ${row.refreshTokenDigest}::text is not null
+              and ${row.refreshTokenDigest}::text <> persisted.refresh_token_digest
+            then persisted.token_version + 1
+            else persisted.token_version
+          end,
+          updated_at = ${row.updatedAt}
+        where persisted.owner_id = ${row.ownerId}
+          and persisted.google_subject = ${row.googleSubject}
+        returning
+          owner_id as "ownerId",
+          google_subject as "googleSubject",
+          refresh_token_envelope as "refreshTokenEnvelope",
+          refresh_token_digest as "refreshTokenDigest",
+          access_token_envelope as "accessTokenEnvelope",
+          access_expires_at as "accessExpiresAt",
+          granted_scopes as "grantedScopes",
+          token_version as "tokenVersion",
+          updated_at as "updatedAt"
+      ),
+      inserted as (
+        insert into google_oauth_tokens (
+          owner_id, google_subject, refresh_token_envelope, refresh_token_digest,
+          access_token_envelope, access_expires_at, granted_scopes, token_version,
+          updated_at
+        )
+        select
+          ${row.ownerId}, ${row.googleSubject}, ${row.refreshTokenEnvelope}::bytea,
+          ${row.refreshTokenDigest}::text, ${row.accessTokenEnvelope}::bytea,
+          ${row.accessExpiresAt}, ${row.grantedScopes}, 1, ${row.updatedAt}
+        where not exists (select 1 from updated)
+          and ${row.refreshTokenEnvelope}::bytea is not null
+          and ${row.refreshTokenDigest}::text is not null
+        on conflict (owner_id) do nothing
+        returning
+          owner_id as "ownerId",
+          google_subject as "googleSubject",
+          refresh_token_envelope as "refreshTokenEnvelope",
+          refresh_token_digest as "refreshTokenDigest",
+          access_token_envelope as "accessTokenEnvelope",
+          access_expires_at as "accessExpiresAt",
+          granted_scopes as "grantedScopes",
+          token_version as "tokenVersion",
+          updated_at as "updatedAt"
       )
-      on conflict (owner_id) do update set
-        google_subject = excluded.google_subject,
-        refresh_token_envelope = excluded.refresh_token_envelope,
-        access_token_envelope = excluded.access_token_envelope,
-        access_expires_at = excluded.access_expires_at,
-        granted_scopes = excluded.granted_scopes,
-        token_version = persisted.token_version + 1,
-        updated_at = excluded.updated_at
-      where persisted.google_subject = excluded.google_subject
-      returning
-        owner_id as "ownerId",
-        google_subject as "googleSubject",
-        refresh_token_envelope as "refreshTokenEnvelope",
-        access_token_envelope as "accessTokenEnvelope",
-        access_expires_at as "accessExpiresAt",
-        granted_scopes as "grantedScopes",
-        token_version as "tokenVersion",
-        updated_at as "updatedAt"
+      select * from updated
+      union all
+      select * from inserted
+      limit 1
     `);
     if (!result.rows[0]) {
       throw new Error("Token upsert lost owner-subject scope.");
@@ -208,7 +262,7 @@ export interface RetainedGoogleTokens {
 /** Validated provider-token inputs accepted after identity authorization. */
 export interface NewGoogleTokens {
   readonly googleSubject: string;
-  readonly refreshToken: string;
+  readonly refreshToken?: string;
   readonly accessToken: string | null;
   readonly accessExpiresAt: Date;
   readonly grantedScopes: readonly string[];
@@ -283,18 +337,26 @@ export class EncryptedTokenRepository implements TokenRepositoryPort {
   /** Encrypts both retained provider tokens before the owner-scoped atomic upsert. */
   async saveGoogleTokens(tokens: NewGoogleTokens): Promise<RetainedGoogleTokens> {
     const grantedScopes = validateScopes(tokens.grantedScopes);
+    validateTokenWrite(tokens);
     const encrypted = await encryptProtectedFields(
       this.keyProvider,
       tokenContext(this.ownerId),
       {
-        refreshToken: tokens.refreshToken,
+        refreshToken: tokens.refreshToken ?? null,
         accessToken: tokens.accessToken,
       },
     );
+    const refreshTokenDigest =
+      tokens.refreshToken === undefined
+        ? null
+        : await digestRefreshToken(tokens.refreshToken);
     const persisted = await this.store.upsert({
       ownerId: this.ownerId,
       googleSubject: tokens.googleSubject,
-      refreshTokenEnvelope: encodeEnvelope(encrypted.refreshToken),
+      refreshTokenEnvelope: encrypted.refreshToken
+        ? encodeEnvelope(encrypted.refreshToken)
+        : null,
+      refreshTokenDigest,
       accessTokenEnvelope: encrypted.accessToken
         ? encodeEnvelope(encrypted.accessToken)
         : null,
@@ -308,14 +370,62 @@ export class EncryptedTokenRepository implements TokenRepositoryPort {
     ) {
       throw new Error("Token persistence returned an invalid owner-bound row.");
     }
+    const decrypted = await decryptProtectedFields(
+      this.keyProvider,
+      tokenContext(this.ownerId),
+      {
+        refreshToken: decodeEnvelope(persisted.refreshTokenEnvelope),
+        accessToken: persisted.accessTokenEnvelope
+          ? decodeEnvelope(persisted.accessTokenEnvelope)
+          : null,
+      },
+    );
     return {
-      refreshToken: tokens.refreshToken,
-      accessToken: tokens.accessToken,
-      accessExpiresAt: new Date(tokens.accessExpiresAt),
-      grantedScopes,
+      refreshToken: decrypted.refreshToken as string,
+      accessToken: decrypted.accessToken,
+      accessExpiresAt: new Date(persisted.accessExpiresAt),
+      grantedScopes: parseScopes(persisted.grantedScopes),
       tokenVersion: persisted.tokenVersion,
     };
   }
+}
+
+/** Validates bounded provider-token inputs before encryption or database work. */
+function validateTokenWrite(tokens: NewGoogleTokens): void {
+  if (
+    typeof tokens.googleSubject !== "string" ||
+    tokens.googleSubject.length === 0 ||
+    tokens.googleSubject.length > 255 ||
+    (tokens.refreshToken !== undefined &&
+      (typeof tokens.refreshToken !== "string" ||
+        tokens.refreshToken.length === 0 ||
+        tokens.refreshToken.length > 16 * 1024)) ||
+    (tokens.accessToken !== null &&
+      (typeof tokens.accessToken !== "string" ||
+        tokens.accessToken.length === 0 ||
+        tokens.accessToken.length > 16 * 1024)) ||
+    !isValidDate(tokens.accessExpiresAt) ||
+    !isValidDate(tokens.updatedAt)
+  ) {
+    throw new Error("Invalid Google token write.");
+  }
+}
+
+/** Hashes only a high-entropy provider token so equal retries preserve the durable version. */
+async function digestRefreshToken(refreshToken: string): Promise<string> {
+  return encodeBase64Url(
+    new Uint8Array(
+      await crypto.subtle.digest("SHA-256", textEncoder.encode(refreshToken)),
+    ),
+  );
+}
+
+/** Checks a genuine finite date without invoking a caller-overridden method. */
+function isValidDate(value: unknown): value is Date {
+  return (
+    value instanceof Date &&
+    !Number.isNaN(Date.prototype.getTime.call(value))
+  );
 }
 
 /** Binds provider token ciphertext to a stable owner-specific protected-field node. */
@@ -370,6 +480,7 @@ function decodeGoogleTokenRow(row: Record<string, unknown>): GoogleTokenRow {
     ownerId: readText(row.ownerId, 128),
     googleSubject: readText(row.googleSubject, 255),
     refreshTokenEnvelope: readBytes(row.refreshTokenEnvelope),
+    refreshTokenDigest: readDigest(row.refreshTokenDigest),
     accessTokenEnvelope:
       row.accessTokenEnvelope === null ? null : readBytes(row.accessTokenEnvelope),
     accessExpiresAt: readDate(row.accessExpiresAt),
@@ -377,6 +488,14 @@ function decodeGoogleTokenRow(row: Record<string, unknown>): GoogleTokenRow {
     tokenVersion: readPositiveInteger(row.tokenVersion),
     updatedAt: readDate(row.updatedAt),
   };
+}
+
+/** Reads a canonical SHA-256 base64url equality marker from one token row. */
+function readDigest(value: unknown): string {
+  if (typeof value !== "string" || !/^[A-Za-z0-9_-]{43}$/u.test(value)) {
+    throw new Error("Invalid Google token database row.");
+  }
+  return value;
 }
 
 /** Reads one bounded non-empty text database cell. */
@@ -389,11 +508,24 @@ function readText(value: unknown, maximum: number): string {
 
 /** Reads canonical PostgreSQL bytea hex or copies a decoded byte array. */
 function readBytes(value: unknown): Uint8Array {
-  if (value instanceof Uint8Array) return new Uint8Array(value);
+  try {
+    if (Object.getPrototypeOf(value) === Uint8Array.prototype) {
+      const copied = Uint8Array.prototype.slice.call(value) as Uint8Array;
+      if (
+        copied.byteLength === 0 ||
+        copied.byteLength > MAX_SERIALIZED_CIPHER_ENVELOPE_CHARS
+      ) {
+        throw new Error("Invalid Google token database row.");
+      }
+      return copied;
+    }
+  } catch {
+    throw new Error("Invalid Google token database row.");
+  }
   if (
     typeof value !== "string" ||
     !/^\\x(?:[0-9a-f]{2})+$/u.test(value) ||
-    value.length > 256 * 1024
+    (value.length - 2) / 2 > MAX_SERIALIZED_CIPHER_ENVELOPE_CHARS
   ) {
     throw new Error("Invalid Google token database row.");
   }

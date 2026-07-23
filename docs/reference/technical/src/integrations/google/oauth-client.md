@@ -6,6 +6,39 @@ The requested scope set is `openid`, `email`, Calendar-list read, calendar prope
 
 Sources consulted: [Google web-server OAuth](https://developers.google.com/identity/protocols/oauth2/web-server), [Google OpenID Connect](https://developers.google.com/identity/openid-connect/openid-connect), and [Google Calendar scopes](https://developers.google.com/workspace/calendar/api/auth).
 
+## Signatures
+
+```ts
+createAuthorizationUrl(request: GoogleAuthorizationRequest): string;
+exchangeCode(code: string, codeVerifier: string): Promise<GoogleTokenSet>;
+verifyIdToken(idToken: string): Promise<unknown>;
+verify(idToken: string): Promise<unknown>;
+```
+
+## Dependencies
+
+Uses injected `fetch`, an injected/narrow `IdTokenVerifier`, Web Crypto RSA verification, Zod response schemas, and the shared canonical base64url decoder.
+
+## Inputs and outputs
+
+Inputs are exact snapshotted client configuration, bounded authorization code/PKCE values, and compact ID tokens. Outputs are a fixed Google authorization URL, a bounded token set retained server-side, or a signature-verified claim payload.
+
+## Side effects
+
+Authorization URL creation is pure. Code exchange POSTs only to Google's fixed token endpoint. JWKS refresh GETs only Google's fixed certificate endpoint and caches public keys for a bounded lifetime.
+
+## Failure behavior
+
+All provider, parse, size, key, signature, status, and hostile-object failures collapse to `GOOGLE_OAUTH_FAILED` or `GOOGLE_ID_TOKEN_INVALID`; response bodies, credentials, codes, and tokens are never copied into errors.
+
+## Privacy and authorization
+
+The client secret is included only in the server-to-server exchange. The adapter requests exactly the five V1 scopes and no event-write/broad Calendar scope. Signature verification precedes claim parsing returned to route authorization.
+
+## Covering tests
+
+`tests/contract/google/oauth.contract.test.ts` covers the exact authorization request, bounded/hostile inputs, token exchange, generated-key RS256 verification, JWKS behavior, and scope exclusions.
+
 ## `verify`
 
 Parses the three compact JWT segments, requires `RS256` plus a bounded `kid`, verifies the signature, and only then parses the payload. A failed cached-key verification triggers one forced JWKS refresh for normal key rotation.

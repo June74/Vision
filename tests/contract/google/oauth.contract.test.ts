@@ -248,6 +248,8 @@ describe("Google OAuth adapter", () => {
       [
         {
           stateHash: "state-hash",
+          admissionKeyHash: "admission-hash",
+          admissionSlot: "1",
           verifierEnvelope: "\\x00ff",
           nonceEnvelope: "\\x01fe",
           createdAt: "2026-07-23T12:00:00.000Z",
@@ -260,6 +262,7 @@ describe("Google OAuth adapter", () => {
           ownerId: "usr_private_pilot",
           googleSubject: "google-subject",
           refreshTokenEnvelope: "\\x00ff",
+          refreshTokenDigest: "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
           accessTokenEnvelope: "\\x01fe",
           accessExpiresAt: "2026-07-23T13:00:00.000Z",
           grantedScopes: GOOGLE_OAUTH_SCOPES.join(" "),
@@ -300,7 +303,7 @@ describe("Google OAuth adapter", () => {
       .sqlToQuery(statements[0] as SQL)
       .sql.replace(/\s+/gu, " ")
       .toLowerCase();
-    expect(consumeSql).toContain("update oauth_transactions");
+    expect(consumeSql).toContain("delete from oauth_transactions");
     expect(consumeSql).toContain("consumed_at is null");
     expect(consumeSql).toContain("expires_at >");
     expect(consumeSql).toContain("returning");

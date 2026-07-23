@@ -1,5 +1,37 @@
 # `src/server/env.ts`
 
+## Signatures
+
+```ts
+parseVisionDatabaseUrl(databaseUrl: unknown): string;
+parseVisionKeyEncryptionKey(keyEncryptionKey: unknown): string;
+parseGoogleAuthEnvironment(environment: unknown): z.infer<typeof GoogleAuthEnvSchema>;
+```
+
+## Dependencies
+
+Uses Zod plus the shared canonical base64url decoder for the 256-bit root key. It has no database, provider, logger, or filesystem dependency.
+
+## Inputs and outputs
+
+Consumes unknown Worker binding values and returns validated strings or the complete Google auth environment. `RuntimeEnv`/`Env` expose the corresponding server-only TypeScript contracts.
+
+## Side effects
+
+Validation is local. The key schema best-effort clears its mutable decoded-byte copy in `finally`; no external call or persistent write occurs.
+
+## Failure behavior
+
+Malformed URLs, wrong role, noncanonical key, partial OAuth configuration, insecure callback, credentialed URL, query/fragment, or wrong path reject through bounded schema messages that do not serialize secrets.
+
+## Privacy and authorization
+
+All bindings are Worker-only. `GOOGLE_ALLOWED_SUB` and email define the private-pilot server allowlist; browser code cannot choose them. Secrets are never copied into validation messages.
+
+## Covering tests
+
+`tests/unit/server/env.test.ts` covers database/key and complete Google environment acceptance/rejection. `tests/worker/auth.test.ts` covers safe missing-binding behavior.
+
 ## `RuntimeEnvSchema`
 
 **Signature:** `z.ZodObject<{ VISION_ENV; DATABASE_URL; KEY_ENCRYPTION_KEY }>`

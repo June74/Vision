@@ -32,6 +32,10 @@ import { throwVisionError, VisionError } from "../errors";
 import { logEvent, type SafeLogger } from "../logging";
 import { verifyCsrfToken } from "./csrf";
 import {
+  createAuthAdmissionKeyFactory,
+  type AuthAdmissionKeyFactory,
+} from "./admission";
+import {
   clearSessionCookie,
   createSessionCookie,
   readSessionCookie,
@@ -45,6 +49,7 @@ export type AuthRandomPurpose = "state" | "pkceVerifier" | "nonce" | "sessionId"
 
 /** Complete injected server boundaries used by authentication routes. */
 export interface AuthRouteDependencies {
+  readonly admissionKey: AuthAdmissionKeyFactory;
   readonly environment: "local" | "preview" | "production";
   readonly identityAllowlist: IdentityAllowlist;
   readonly logger: SafeLogger;
@@ -80,17 +85,29 @@ export function registerOAuthRoutes(
       const dependencies = await resolveDependencies(context.env);
       resolved = dependencies;
       const createdAt = dependencies.now();
+      const admissionKey = await dependencies.admissionKey(context.req.raw);
       const state = readGeneratedProtocolValue(dependencies.randomToken("state"));
       const pkceVerifier = readGeneratedProtocolValue(dependencies.randomToken("pkceVerifier"));
       const nonce = readGeneratedProtocolValue(dependencies.randomToken("nonce"));
       const expiresAt = new Date(createdAt.getTime() + OAUTH_TRANSACTION_LIFETIME_MS);
-      await dependencies.sessions.createOAuthTransaction({
+      const admitted = await dependencies.sessions.createOAuthTransaction({
         state,
+        admissionKey,
         pkceVerifier,
         nonce,
         createdAt,
         expiresAt,
       });
+      if (!admitted) {
+        logAuthEventSafely(
+          dependencies.logger,
+          context.get("requestId"),
+          "denied",
+          "auth.start",
+          "authentication_failed",
+        );
+        return authStartLimited(context);
+      }
       const requestConsent = !(await dependencies.tokens.hasRefreshToken(
         dependencies.identityAllowlist.sub,
       ));
@@ -150,24 +167,12 @@ export function registerOAuthRoutes(
         dependencies.identityAllowlist,
         dependencies.now(),
       );
-      const retained = tokenSet.refreshToken
-        ? undefined
-        : await dependencies.tokens.getGoogleTokens(identity.subject);
-      const refreshToken = tokenSet.refreshToken ?? retained?.refreshToken;
-      if (!refreshToken) {
-        logAuthEventSafely(
-          dependencies.logger,
-          requestId,
-          "failed",
-          "auth.callback",
-          "authentication_failed",
-        );
-        return authenticationFailurePage(context, 400);
-      }
       const issuedAt = dependencies.now();
       await dependencies.tokens.saveGoogleTokens({
         googleSubject: identity.subject,
-        refreshToken,
+        ...(tokenSet.refreshToken
+          ? { refreshToken: tokenSet.refreshToken }
+          : {}),
         accessToken: tokenSet.accessToken,
         accessExpiresAt: new Date(
           issuedAt.getTime() + tokenSet.expiresInSeconds * 1_000,
@@ -319,7 +324,12 @@ export async function createProductionAuthDependencies(
     1,
   );
   const ownerId = await deriveOwnerId(authEnvironment.GOOGLE_ALLOWED_SUB);
+  const admissionKey = await createAuthAdmissionKeyFactory(
+    environment.KEY_ENCRYPTION_KEY,
+    authEnvironment.VISION_ENV,
+  );
   return {
+    admissionKey,
     environment: authEnvironment.VISION_ENV,
     identityAllowlist: {
       email: authEnvironment.GOOGLE_ALLOWED_EMAIL,
@@ -541,6 +551,23 @@ function authenticationFailurePage(
   return context.html(
     "<!doctype html><html><body><h1>Authentication failed</h1><p>Please try again.</p></body></html>",
     status,
+  );
+}
+
+/** Returns one fixed rate-limit response without an admission key, IP, session, or OAuth value. */
+function authStartLimited(
+  context: Context<{ Bindings: Env; Variables: AuthRequestVariables }>,
+) {
+  context.header("Cache-Control", "no-store");
+  context.header("Retry-After", "600");
+  return context.json(
+    {
+      error: {
+        code: "AUTH_START_LIMITED",
+        message: "Please wait before trying to sign in again.",
+      },
+    },
+    429,
   );
 }
 

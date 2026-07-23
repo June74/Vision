@@ -10,6 +10,7 @@ import {
 import {
   EncryptedTokenRepository,
   type GoogleTokenRow,
+  type GoogleTokenWriteRow,
   type TokenStore,
 } from "../../src/data/repositories/token-repository";
 import {
@@ -28,9 +29,75 @@ const nonce = "NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN";
 class MemorySessionStore implements SessionStore {
   readonly oauthRows: OAuthTransactionRow[] = [];
   readonly sessionRows: ServerSessionRow[] = [];
+  readonly admissionWindows = new Map<
+    string,
+    { requestCount: number; windowStartedAt: Date }
+  >();
 
-  async insertOAuthTransaction(row: OAuthTransactionRow): Promise<void> {
-    this.oauthRows.push(structuredClone(row));
+  async cleanupOAuthState(
+    cleanedAt: Date,
+    staleWindowAt: Date,
+    limit: number,
+  ) {
+    const removable = this.oauthRows
+      .filter(
+        (row) => row.expiresAt <= cleanedAt || row.consumedAt !== null,
+      )
+      .slice(0, limit);
+    for (const row of removable) {
+      this.oauthRows.splice(this.oauthRows.indexOf(row), 1);
+    }
+    const staleKeys = [...this.admissionWindows]
+      .filter(([, window]) => window.windowStartedAt <= staleWindowAt)
+      .slice(0, limit)
+      .map(([key]) => key);
+    for (const key of staleKeys) this.admissionWindows.delete(key);
+    return {
+      transactionsDeleted: removable.length,
+      windowsDeleted: staleKeys.length,
+    };
+  }
+
+  async admitOAuthStart(
+    admissionKeyHash: string,
+    admittedAt: Date,
+    windowMs: number,
+    maximum: number,
+  ): Promise<boolean> {
+    const existing = this.admissionWindows.get(admissionKeyHash);
+    if (
+      !existing ||
+      existing.windowStartedAt.getTime() + windowMs <= admittedAt.getTime()
+    ) {
+      this.admissionWindows.set(admissionKeyHash, {
+        requestCount: 1,
+        windowStartedAt: new Date(admittedAt),
+      });
+      return true;
+    }
+    if (existing.requestCount >= maximum) return false;
+    existing.requestCount += 1;
+    return true;
+  }
+
+  async insertOAuthTransaction(
+    row: Omit<OAuthTransactionRow, "admissionSlot">,
+  ): Promise<boolean> {
+    if (this.oauthRows.some((candidate) => candidate.stateHash === row.stateHash)) {
+      return false;
+    }
+    const occupied = new Set(
+      this.oauthRows
+        .filter(
+          (candidate) =>
+            candidate.admissionKeyHash === row.admissionKeyHash,
+        )
+        .map((candidate) => candidate.admissionSlot),
+    );
+    const admissionSlot = [1, 2, 3].find((slot) => !occupied.has(slot));
+    if (!admissionSlot) return false;
+    this.oauthRows.push(structuredClone({ ...row, admissionSlot }));
+    return true;
   }
 
   async consumeOAuthTransaction(
@@ -44,8 +111,8 @@ class MemorySessionStore implements SessionStore {
         candidate.expiresAt > consumedAt,
     );
     if (!row) return undefined;
-    row.consumedAt = consumedAt;
-    return structuredClone(row);
+    this.oauthRows.splice(this.oauthRows.indexOf(row), 1);
+    return structuredClone({ ...row, consumedAt });
   }
 
   async insertSession(row: ServerSessionRow): Promise<void> {
@@ -85,15 +152,29 @@ class MemoryTokenStore implements TokenStore {
     return row ? structuredClone(row) : undefined;
   }
 
-  async upsert(row: Omit<GoogleTokenRow, "tokenVersion">): Promise<GoogleTokenRow> {
+  async upsert(row: GoogleTokenWriteRow): Promise<GoogleTokenRow> {
     const existing = this.rows.find(
       (candidate) =>
         candidate.ownerId === row.ownerId &&
         candidate.googleSubject === row.googleSubject,
     );
+    if (!existing && (!row.refreshTokenEnvelope || !row.refreshTokenDigest)) {
+      throw new Error("Token upsert lost owner-subject scope.");
+    }
+    const distinctRefresh =
+      row.refreshTokenDigest !== null &&
+      row.refreshTokenDigest !== existing?.refreshTokenDigest;
     const persisted = structuredClone({
       ...row,
-      tokenVersion: (existing?.tokenVersion ?? 0) + 1,
+      refreshTokenEnvelope:
+        row.refreshTokenEnvelope && distinctRefresh
+          ? row.refreshTokenEnvelope
+          : existing?.refreshTokenEnvelope ?? row.refreshTokenEnvelope!,
+      refreshTokenDigest:
+        row.refreshTokenDigest ?? existing?.refreshTokenDigest ?? "",
+      tokenVersion: existing
+        ? existing.tokenVersion + (distinctRefresh ? 1 : 0)
+        : 1,
     });
     if (existing) {
       this.rows.splice(this.rows.indexOf(existing), 1, persisted);
@@ -116,6 +197,7 @@ async function createKeyProvider(): Promise<KeyProvider> {
 }
 
 async function createHarness(options: {
+  dynamicProtocolValues?: boolean;
   environment?: "local" | "preview" | "production";
   claims?: unknown;
   tokenResponse?: unknown;
@@ -167,8 +249,11 @@ async function createHarness(options: {
     idTokenVerifier,
   );
   const logger = vi.fn();
+  let protocolValueIndex = 0;
   const app = createApp({
     auth: {
+      admissionKey: async () =>
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
       environment: options.environment ?? "preview",
       identityAllowlist: {
         email: "allowed@example.test",
@@ -180,14 +265,22 @@ async function createHarness(options: {
       now: () => now,
       oauthClient,
       ownerId: "usr_private_pilot",
-      randomToken: (purpose) =>
-        ({
+      randomToken: (purpose) => {
+        if (options.dynamicProtocolValues) {
+          const alphabet =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+          const character = alphabet[protocolValueIndex % alphabet.length]!;
+          protocolValueIndex += 1;
+          return character.repeat(43);
+        }
+        return ({
           csrfToken: "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
           nonce,
           pkceVerifier: verifier,
           sessionId: "IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII",
           state,
-        })[purpose],
+        })[purpose];
+      },
       sessions,
       tokens,
     },
@@ -247,6 +340,58 @@ describe("Vision Worker Google authentication", () => {
     expect(rawRows).not.toContain("CLIENT_SECRET_SENTINEL");
   });
 
+  it("returns one identifier-free 429 after the strict auth-start window is exhausted", async () => {
+    const { app, logger, sessionStore } = await createHarness({
+      dynamicProtocolValues: true,
+    });
+    const responses: Response[] = [];
+
+    for (let index = 0; index < 4; index += 1) {
+      responses.push(
+        await app.fetch(
+          new Request("https://vision.example.test/api/auth/google/start"),
+          {} as Env,
+        ),
+      );
+    }
+
+    expect(responses.slice(0, 3).every((response) => response.status === 302)).toBe(
+      true,
+    );
+    expect(responses[3]?.status).toBe(429);
+    expect(responses[3]?.headers.get("retry-after")).toBe("600");
+    await expect(responses[3]?.json()).resolves.toEqual({
+      error: {
+        code: "AUTH_START_LIMITED",
+        message: "Please wait before trying to sign in again.",
+      },
+    });
+    const output = `${JSON.stringify(logger.mock.calls)}${JSON.stringify(
+      sessionStore.oauthRows,
+    )}`;
+    expect(output).not.toContain(
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    );
+  });
+
+  it("does not spend a session lookup on an unadmitted start cookie", async () => {
+    const { app, sessionStore } = await createHarness();
+    const findSession = vi.spyOn(sessionStore, "findSession");
+
+    const response = await app.fetch(
+      new Request("https://vision.example.test/api/auth/google/start", {
+        headers: {
+          cookie:
+            "vision_session=FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+        },
+      }),
+      {} as Env,
+    );
+
+    expect(response.status).toBe(302);
+    expect(findSession).not.toHaveBeenCalled();
+  });
+
   it("consumes the callback once, allowlists verified claims, encrypts tokens, and creates a secure server session", async () => {
     const { app, logger, sessionStore, tokenStore } = await createHarness();
     await app.fetch(
@@ -273,7 +418,7 @@ describe("Vision Worker Google authentication", () => {
     expect(setCookie).not.toContain("REFRESH_TOKEN_SENTINEL");
     expect(setCookie).not.toContain("ACCESS_TOKEN_SENTINEL");
 
-    expect(sessionStore.oauthRows[0]?.consumedAt).toEqual(now);
+    expect(sessionStore.oauthRows).toHaveLength(0);
     expect(sessionStore.sessionRows).toHaveLength(1);
     expect(tokenStore.rows).toHaveLength(1);
     expect(tokenStore.rows[0]).toMatchObject({
@@ -478,7 +623,16 @@ describe("Vision Worker Google authentication", () => {
   });
 
   it("reuses an encrypted refresh token without repeated consent and omits Secure only for local cookies", async () => {
-    const { app, tokens } = await createHarness({ environment: "local" });
+    const { app, tokens } = await createHarness({
+      environment: "local",
+      tokenResponse: {
+        access_token: "ACCESS_TOKEN_SENTINEL",
+        expires_in: 3_600,
+        id_token: "SIGNED_ID_TOKEN_SENTINEL",
+        scope: GOOGLE_OAUTH_SCOPES.join(" "),
+        token_type: "Bearer",
+      },
+    });
     await tokens.saveGoogleTokens({
       googleSubject: "google-subject",
       refreshToken: "EXISTING_REFRESH_TOKEN_SENTINEL",
