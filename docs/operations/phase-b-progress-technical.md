@@ -145,7 +145,7 @@ Codex's restricted sandbox blocks Wrangler's normal AppData cache/log paths. The
 - External state: no isolated Neon migration, checksum capture, least-privilege query, raw sentinel scan, or true multi-session PostgreSQL/Neon race was executed; these remain milestone acceptance gates.
 - Review result: three Important and two Minor initial findings plus two remaining Important re-review findings were repaired; final spec compliance and task quality are approved with zero findings.
 
-## Authentication Task 1 — Identity and calendar-setup state machines
+## Authentication Task 1 - Identity and calendar-setup state machines
 
 - Status: complete; independent review approved spec compliance and task quality with zero Critical or Important findings and two carried Minors.
 - Commit range: `2fbc6ab..37330d2`.
@@ -170,3 +170,16 @@ Codex's restricted sandbox blocks Wrangler's normal AppData cache/log paths. The
 - Session boundary: opaque rotated server sessions, narrow HttpOnly cookies, Secure outside local, SameSite=Lax, logout invalidation, and CSRF protection for authenticated mutations.
 - Carried Minor: repair the hostile session-binary regression fixture so required admission fields are present and the test demonstrably reaches the byte decoder.
 - External state: no live Google OAuth/JWKS, Neon role/database, Cloudflare metadata, deployed cookie/header behavior, or external telemetry was exercised.
+
+## Authentication Task 3 - Calendar discovery and idempotent setup APIs
+
+- Status: complete; independent review approved spec compliance and task quality with zero Critical or Important findings and one carried Minor.
+- Commit range: `e40cce6..b1e0a66`.
+- GREEN evidence: focused suite 38/38; full check 193 unit/integration and 30 Worker tests; typechecks, docs, builds, crypto validation, event-write, secret/plaintext, adapter-boundary, and diff scans passed.
+- Candidate boundary: stable nonempty, non-primary, non-deleted calendars named exactly `Vision` with owner access and verified account evidence are eligible.
+- Creation boundary: exact setup version, confirmation, UUID idempotency key, atomic owner-scoped ledger and pre-create ID snapshot; exact summary/timezone body.
+- Liveness boundary: bounded provider headers/streams, safe cancellation, and 120-second owner/key/version-bound takeover for abandoned operations.
+- CSRF/state boundary: GET is read-only; discovery mutations use CSRF-protected POST and owner/version CAS.
+- Event boundary: no event insert/update/delete API or provider method is reachable.
+- Carried Minor: a takeover CAS loser may return a transient generic error instead of reloading the concurrent durable winner; no duplicate creation is possible.
+- External state: no live Google, Neon, or Cloudflare execution was performed.

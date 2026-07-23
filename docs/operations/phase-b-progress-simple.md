@@ -159,6 +159,29 @@ No live Google account, Neon database, or Cloudflare secret was used.
 Discover owned secondary calendars, connect an explicitly selected existing
 Vision calendar, or create exactly one after current explicit confirmation.
 
+### Authentication Task 3 - Calendar discovery and setup APIs
+
+Vision now discovers calendars through stable IDs, excludes the primary and
+non-owned calendars, and requires explicit selection of an existing `Vision`
+calendar. New creation requires exact confirmation, the current setup version,
+and one idempotency key. Lost provider responses are reconciled without a
+second create.
+
+Provider timeouts and streamed responses are bounded, discovery is
+CSRF-protected and crash-recoverable, and abandoned operations can be safely
+reconciled after their lease expires. No event insert, update, or delete path
+is reachable.
+
+The task passed 193 main tests and 30 Worker tests. Independent review
+approved both the specification and implementation quality with no blocking
+findings. One non-blocking minor remains for a takeover CAS loser to reload
+the durable winner instead of returning a transient generic error.
+
+### Next - Authenticated setup interface
+
+Build the browser states for sign-in, discovery, explicit choice, exact
+confirmation, creation, connection, and action-required recovery.
+
 ## Not yet included
 
 No Google login, calendar connection, database, AI, alerts, or production deployment exists yet.
