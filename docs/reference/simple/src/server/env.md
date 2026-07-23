@@ -2,7 +2,7 @@
 
 ## `RuntimeEnvSchema`
 
-`RuntimeEnvSchema` checks the deployment environment and private database URL. It accepts only the `vision_app` database role.
+`RuntimeEnvSchema` checks the deployment environment, private database URL, and root wrapping key. It accepts only the `vision_app` database role and a canonical 256-bit base64url key.
 
 ## `RuntimeEnv`
 
@@ -12,6 +12,10 @@
 
 Checks a server-only database URL and accepts only the `vision_app` role without repeating the secret in errors.
 
+## `parseVisionKeyEncryptionKey`
+
+Checks the server-only root wrapping key format without repeating the secret in errors.
+
 ## `Env`
 
-`Env` adds the static-asset binding. Its database URL is checked before database setup, and the browser never receives it.
+`Env` adds the static-asset binding. Its database URL and root key remain Worker-only, and the browser never receives them.
