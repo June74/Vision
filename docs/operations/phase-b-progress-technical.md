@@ -31,7 +31,7 @@ Cloudflare's Vite plugin is active for production builds but omitted in Node-onl
 
 ## Runtime Task 4 — Guarded delivery pipeline
 
-- Status: repository implementation complete and independently approved; hosted acceptance pending.
+- Status: complete and independently approved; hosted acceptance passed.
 - Commit range: `dd58f7c..6b5d0ba`.
 - Implementation/fix commits: `28e7027` and `6b5d0ba`.
 - Test evidence: frozen install, focused workflow policy 1/1, `pnpm check` with 17 unit and 4 Worker tests, Chromium 1/1, standalone build, PyYAML parse, and diff checks passed.
@@ -43,9 +43,12 @@ Cloudflare's Vite plugin is active for production builds but omitted in Node-onl
 ### External acceptance state
 
 - GitHub CLI is authenticated as June74.
-- Cloudflare Wrangler is not authenticated; `wrangler deploy --temporary` is available for an isolated hosted preview.
+- Cloudflare Wrangler was authenticated manually by the user.
+- The reviewed preview candidate was deployed as `vision-preview` at `https://vision-preview.june74.workers.dev`.
+- Hosted health acceptance: `GET /api/health` returned HTTP `200` with exact body `{ "status": "ok", "service": "vision" }`.
+- Hosted browser acceptance: the rendered page title was `Vision`, with exactly one `Vision` heading and one `Foundation status` label.
 - GitHub production required reviewers, no-bypass, branch policy, environment-only secret scope, and required `Check` status remain unconfigured release prerequisites.
-- No workflow, preview deployment, hosted shell request, or hosted health request has run yet.
+- No production deployment or GitHub deployment workflow has run.
 
 ### Closed technical note
 

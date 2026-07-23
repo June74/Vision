@@ -4,7 +4,7 @@ This page explains Phase B progress in concise, plain language. It is updated af
 
 ## Current milestone
 
-Runtime and continuous integration.
+Domain, data, and privacy.
 
 ## Completed
 
@@ -42,11 +42,15 @@ Even if the logging destination fails, Vision still returns the safe API respons
 
 GitHub can now check every proposed change automatically. Preview and production workflows verify one exact commit and deploy that same commit, so a branch cannot change while approval is waiting. Production also requires an exact confirmation phrase in addition to its GitHub environment gate.
 
-The repository implementation passed review. A real hosted preview still needs to be created and checked before this milestone is complete.
+The repository implementation passed review. The hosted preview is live at
+`https://vision-preview.june74.workers.dev`: its page renders `Vision` and
+`Foundation status`, and its health endpoint returns the expected safe response.
+The Runtime and continuous integration milestone is complete.
 
 ## In progress
 
-Create a temporary Cloudflare preview, then verify its Vision screen and health endpoint. Cloudflare is not currently signed in; GitHub is connected as June74.
+Build Vision's provider-independent calendar rules, privacy boundaries, and
+database foundation.
 
 ## Not yet included
 
