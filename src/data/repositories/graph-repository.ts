@@ -19,7 +19,11 @@ export class DrizzleGraphRepository implements GraphRepository {
   /** Creates a repository over the typed, server-only authoritative database. */
   constructor(private readonly database: VisionDatabase) {}
 
-  /** Inserts a node or advances it only when the supplied version is newer. */
+  /**
+   * Inserts a node or advances its owner-scoped natural identity when the stable ID and version agree.
+   *
+   * The caller must keep one stable Vision ID for each `(ownerId, provider, providerNodeId)` identity.
+   */
   async upsertNode(node: NodeEnvelope): Promise<void> {
     await this.database
       .insert(nodes)
@@ -43,7 +47,7 @@ export class DrizzleGraphRepository implements GraphRepository {
         modelConfidence: node.modelConfidence === undefined ? null : Math.round(node.modelConfidence * 1_000_000),
       })
       .onConflictDoUpdate({
-        target: nodes.id,
+        target: [nodes.ownerId, nodes.provider, nodes.providerNodeId],
         set: {
           domain: node.domain,
           domainState: node.domainState,
@@ -56,11 +60,15 @@ export class DrizzleGraphRepository implements GraphRepository {
           version: node.version,
           modelConfidence: node.modelConfidence === undefined ? null : Math.round(node.modelConfidence * 1_000_000),
         },
-        where: sql`${nodes.version} < ${node.version}`,
+        where: and(eq(nodes.ownerId, node.ownerId), eq(nodes.id, node.id), sql`${nodes.version} < ${node.version}`),
       });
   }
 
-  /** Inserts planning-safe event data or advances it only when the provider version changes. */
+  /**
+   * Inserts planning-safe event data or advances it only when the provider version changes for the same owner.
+   *
+   * Callers must persist the pre-existing same-owner event node with `upsertNode` before calling this method.
+   */
   async upsertEvent(event: VisionEvent): Promise<void> {
     await this.database
       .insert(events)
@@ -82,7 +90,6 @@ export class DrizzleGraphRepository implements GraphRepository {
         target: [events.provider, events.providerCalendarId, events.providerEventId],
         set: {
           nodeId: event.nodeId,
-          ownerId: event.ownerId,
           providerVersion: event.identity.sourceVersion,
           startsAt: new Date(event.startsAt),
           endsAt: new Date(event.endsAt),
@@ -91,7 +98,7 @@ export class DrizzleGraphRepository implements GraphRepository {
           status: event.status,
           recurrenceId: event.recurrenceId ?? null,
         },
-        where: sql`${events.providerVersion} <> ${event.identity.sourceVersion}`,
+        where: and(eq(events.ownerId, event.ownerId), sql`${events.providerVersion} <> ${event.identity.sourceVersion}`),
       });
   }
 
@@ -133,7 +140,28 @@ export class DrizzleGraphRepository implements GraphRepository {
   /** Returns one planning-safe event selected by its complete provider identity for its owner. */
   async getEventByProviderIdentity(ownerId: string, identity: VisionEvent["identity"]): Promise<VisionEvent | undefined> {
     const [row] = await this.database
-      .select()
+      .select({
+        event: {
+          nodeId: events.nodeId,
+          ownerId: events.ownerId,
+          provider: events.provider,
+          providerCalendarId: events.providerCalendarId,
+          providerEventId: events.providerEventId,
+          providerVersion: events.providerVersion,
+          startsAt: events.startsAt,
+          endsAt: events.endsAt,
+          timeZone: events.timeZone,
+          busy: events.busy,
+          status: events.status,
+          recurrenceId: events.recurrenceId,
+        },
+        node: {
+          domain: nodes.domain,
+          domainState: nodes.domainState,
+          privacy: nodes.privacy,
+          version: nodes.version,
+        },
+      })
       .from(events)
       .innerJoin(nodes, and(eq(events.nodeId, nodes.id), eq(events.ownerId, nodes.ownerId)))
       .where(
@@ -150,7 +178,7 @@ export class DrizzleGraphRepository implements GraphRepository {
       return undefined;
     }
 
-    const { events: event, nodes: node } = row;
+    const { event, node } = row;
 
     return {
       nodeId: event.nodeId,

@@ -2,9 +2,9 @@
 
 ## `RuntimeEnvSchema`
 
-**Signature:** `z.ZodObject<{ VISION_ENV: z.ZodEnum<["local", "preview", "production"]> }>`
+**Signature:** `z.ZodObject<{ VISION_ENV: z.ZodEnum<["local", "preview", "production"]>; DATABASE_URL: z.ZodString }>`
 
-The schema accepts exactly one required non-secret binding, `VISION_ENV`. `parse` returns a validated value or throws a Zod validation error for missing or unsupported deployment values. `tests/unit/server/env.test.ts` covers the missing-binding failure.
+The schema accepts `VISION_ENV` and the Worker-only `DATABASE_URL`. It safely parses the URL but never includes it in a validation message; the username must be exactly `vision_app`, rejecting `neondb_owner` and every other role. `tests/unit/server/env.test.ts` covers missing and privileged bindings.
 
 ## `RuntimeEnv`
 
@@ -16,4 +16,4 @@ This type keeps TypeScript consumers aligned with the runtime schema. It has no 
 
 **Signature:** `interface Env extends RuntimeEnv { ASSETS: Fetcher }`
 
-`Env` is the Hono binding contract for the Worker. `ASSETS.fetch` serves static browser routes and `DATABASE_URL` is a Worker-only secret consumed by the data boundary. It must authenticate as a least-privileged application role, never `neondb_owner`; the runtime schema intentionally validates only non-secret bindings.
+`Env` is the Hono binding contract for the Worker. `ASSETS.fetch` serves static browser routes. `DATABASE_URL` is part of the validated runtime environment and is consumed only by the server-side data boundary.

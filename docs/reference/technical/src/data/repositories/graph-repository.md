@@ -4,11 +4,11 @@ The repository translates pure domain types at the database boundary. It uses Ne
 
 ## `upsertNode`
 
-Writes the canonical envelope only when its supplied version is newer.
+Uses `(ownerId, provider, providerNodeId)` as the upsert target. The update predicate also requires the same owner and stable node ID before accepting a newer version; a global-ID collision with another owner remains a database integrity failure.
 
 ## `upsertEvent`
 
-Upserts explicit provider event identity and planning-safe timing fields.
+Uses the globally unique provider event identity only as a conflict locator. Its update predicate requires the existing `owner_id` to equal the incoming owner, and conflict updates deliberately never set `owner_id`. A pre-existing same-owner `event` node must be persisted through `upsertNode` before this call.
 
 ## `replaceEdges`
 
@@ -16,4 +16,4 @@ Deletes existing source-owner edges then inserts replacements in one transaction
 
 ## `getEventByProviderIdentity`
 
-Looks up the complete owner-scoped provider identity and returns its planning-safe event.
+Selects only the planning-safe event and node columns used by `VisionEvent`; protected ciphertext envelopes never enter this query result.

@@ -2,7 +2,7 @@
 
 ## `RuntimeEnvSchema`
 
-`RuntimeEnvSchema` checks that the deployment environment is `local`, `preview`, or `production`.
+`RuntimeEnvSchema` checks the deployment environment and private database URL. It accepts only the `vision_app` database role.
 
 ## `RuntimeEnv`
 
@@ -10,4 +10,4 @@
 
 ## `Env`
 
-`Env` adds the static-asset binding and the Worker-only database URL secret. The browser never receives this secret.
+`Env` adds the static-asset binding. Its database URL is checked before database setup, and the browser never receives it.

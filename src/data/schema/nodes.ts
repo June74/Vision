@@ -1,5 +1,6 @@
 /** Defines the shared PostgreSQL envelope for every authoritative Vision graph node. */
-import { customType, integer, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { check, customType, integer, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
 
 /** Maps authenticated ciphertext envelopes to PostgreSQL's binary `bytea` storage type. */
 export const ciphertext = customType<{ data: Uint8Array; driverData: Uint8Array }>({
@@ -34,5 +35,18 @@ export const nodes = pgTable(
     unique("nodes_id_owner_unique").on(table.id, table.ownerId),
     unique("nodes_id_owner_type_unique").on(table.id, table.ownerId, table.nodeType),
     unique("nodes_owner_provider_identity_unique").on(table.ownerId, table.provider, table.providerNodeId),
+    check("nodes_owner_non_empty", sql`${table.ownerId} <> ''`),
+    check("nodes_provider_non_empty", sql`${table.provider} <> ''`),
+    check("nodes_provider_node_non_empty", sql`${table.providerNodeId} <> ''`),
+    check("nodes_identity_kind_valid", sql`${table.identityKind} in ('provider', 'first_party', 'system')`),
+    check("nodes_type_valid", sql`${table.nodeType} in ('event', 'task', 'note', 'commitment', 'recommendation', 'preference', 'policy', 'audit_event', 'person', 'calendar', 'source_artifact', 'alert_episode')`),
+    check("nodes_domain_valid", sql`${table.domain} in ('school', 'work', 'personal', 'unresolved')`),
+    check("nodes_domain_state_valid", sql`${table.domainState} in ('confirmed', 'inferred', 'unresolved') and ((${table.domain} = 'unresolved') = (${table.domainState} = 'unresolved'))`),
+    check("nodes_privacy_valid", sql`${table.privacy} in ('planning', 'private', 'restricted')`),
+    check("nodes_provenance_valid", sql`${table.provenance} in ('provider', 'user', 'system', 'model')`),
+    check("nodes_lifecycle_valid", sql`${table.lifecycle} in ('active', 'deleted', 'purged')`),
+    check("nodes_timestamps_valid", sql`${table.updatedAt} >= ${table.createdAt} and (${table.validTo} is null or ${table.validTo} > ${table.validFrom})`),
+    check("nodes_version_positive", sql`${table.version} > 0`),
+    check("nodes_inference_confidence_valid", sql`((${table.domainState} = 'inferred') = (${table.modelConfidence} is not null)) and (${table.modelConfidence} is null or (${table.modelConfidence} >= 0 and ${table.modelConfidence} <= 1000000))`),
   ],
 );

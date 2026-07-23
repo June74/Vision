@@ -1,5 +1,6 @@
 /** Defines planning-safe event columns and nullable binary envelopes for protected event content. */
-import { boolean, foreignKey, integer, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, check, foreignKey, integer, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { ciphertext, nodes } from "./nodes";
 
 /** Stores one provider-backed event with explicit identity and no plaintext protected payload columns. */
@@ -40,5 +41,13 @@ export const events = pgTable(
       foreignColumns: [nodes.id, nodes.ownerId, nodes.nodeType],
       name: "events_node_owner_type_fk",
     }),
+    check("events_provider_non_empty", sql`${table.provider} <> ''`),
+    check("events_calendar_non_empty", sql`${table.providerCalendarId} <> ''`),
+    check("events_provider_event_non_empty", sql`${table.providerEventId} <> ''`),
+    check("events_provider_version_non_empty", sql`${table.providerVersion} <> ''`),
+    check("events_node_type_event", sql`${table.nodeType} = 'event'`),
+    check("events_end_after_start", sql`${table.endsAt} > ${table.startsAt}`),
+    check("events_status_valid", sql`${table.status} in ('confirmed', 'tentative', 'cancelled')`),
+    check("events_protected_key_positive", sql`${table.protectedKeyVersion} is null or ${table.protectedKeyVersion} > 0`),
   ],
 );

@@ -4,6 +4,6 @@ This module creates the typed Drizzle Neon HTTP database.
 
 ## `createDb`
 
-**Signature:** `(databaseUrl: string) => VisionDatabase`
+**Signature:** `(environment: RuntimeEnv) => VisionDatabase`
 
-Builds a typed client from a Worker secret. Production must use a least-privileged application role, never `neondb_owner`.
+Builds a typed client only from `RuntimeEnvSchema` output. The schema safely parses the secret URL and accepts only the `vision_app` username, rejecting `neondb_owner` without exposing the URL.
