@@ -61,10 +61,26 @@ The task passed 17 focused tests and the full project check. Independent
 review initially found two contract gaps; both were corrected, tested, and
 approved with no remaining findings.
 
-### Next — PostgreSQL foundation
+### Domain Task 2 — PostgreSQL foundation
 
-Add the reviewed database schema, migration constraints, and repository
-transaction boundaries.
+Vision now has a reviewed eight-table PostgreSQL design for canonical records,
+events, relationships, audit facts, synchronization state, operation records,
+and recoverable deletion. Automated checks compare the reviewed SQL, Vision's
+typed schema, and generated migration snapshot so a weakened constraint or
+protected-field type cannot drift silently.
+
+Database writes now protect owner boundaries even when two synchronizations
+race. Vision accepts only a dedicated `vision_app` database credential and
+returns safe identity conflicts without exposing private values.
+
+The task required several review and repair rounds. Final independent review
+approved both the specification and implementation quality with no remaining
+findings. No live Neon database has been created or contacted yet.
+
+### Next — Protected-field encryption
+
+Add per-user/per-category data keys and authenticated encryption envelopes for
+private calendar and note content.
 
 ## Not yet included
 

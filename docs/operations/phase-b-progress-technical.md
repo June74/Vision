@@ -82,3 +82,18 @@ Codex's restricted sandbox blocks Wrangler's normal AppData cache/log paths. The
 - Canonical identity: strict provider, Vision first-party, or Vision system identity is mandatory; absent and partial identities are rejected.
 - State invariant: `unresolved` pairs only with `unresolved`; concrete domains pair only with `confirmed` or `inferred`.
 - Review result: initial review found two Important contract gaps and one Minor test gap; the re-review approved spec compliance and task quality with zero remaining findings.
+
+## Domain Task 2 — PostgreSQL schema and repository boundary
+
+- Status: complete; final independent acceptance approved with zero Critical, Important, or Minor findings.
+- Commit range: `6e89a29..5f0a03e`.
+- Implementation/fix commits: `51e7ddc`, `1ccaf62`, `86685c8`, `c863efa`, and `5f0a03e`.
+- RED evidence: missing migration contract failed with `ENOENT`; subsequent repair rounds captured unsafe owner/upsert, privileged-role, incomplete-drift, and stale preflight concurrency failures.
+- GREEN evidence: focused factory/environment/repository/schema suite 17/17; complete structural comparator 5/5; full check 38 unit and 4 Worker tests; typecheck, documentation, production builds, generated/reviewed migration diffs, and diff hygiene passed.
+- Schema authority: reviewed `0001_phase_b_foundation.sql` covers eight tables; a migration-derived normalized manifest independently compares every column/type, key, foreign-key endpoint, and check expression against live Drizzle metadata and the retained generated snapshot.
+- Protected storage: provider identities and sync tokens are scalar/binary rather than JSON; protected payload columns are `bytea`.
+- Credential boundary: `createDb(databaseUrl)` validates internally and accepts only the dedicated `vision_app` role without echoing rejected secrets.
+- Repository boundary: one-statement CTE upserts preserve owner/stable identity, enforce monotonic versions, return truthful `applied`/`no_newer_version` outcomes, and translate PostgreSQL uniqueness races into privacy-safe typed conflicts.
+- Data minimization: provider event lookup projects planning-safe columns only and never selects protected ciphertext envelopes.
+- External state: no live Neon database, role, migration apply, or concurrent-load test has run; those remain milestone acceptance work.
+- Review result: early reviews exposed three Critical and multiple Important gaps; all were repaired. Final acceptance approved both spec compliance and task quality with zero findings.
