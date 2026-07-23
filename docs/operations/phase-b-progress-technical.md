@@ -97,3 +97,18 @@ Codex's restricted sandbox blocks Wrangler's normal AppData cache/log paths. The
 - Data minimization: provider event lookup projects planning-safe columns only and never selects protected ciphertext envelopes.
 - External state: no live Neon database, role, migration apply, or concurrent-load test has run; those remain milestone acceptance work.
 - Review result: early reviews exposed three Critical and multiple Important gaps; all were repaired. Final acceptance approved both spec compliance and task quality with zero findings.
+
+## Domain Task 3 — Protected-field cryptography
+
+- Status: complete; final independent acceptance approved with zero Critical, Important, or Minor findings.
+- Commit range: `4d75aa0..3aaa982`.
+- Implementation/fix commits: `7e81886`, `543b92b`, and `3aaa982`.
+- RED evidence: absent crypto modules and undersized root-secret acceptance failed initially; security review fixes then reproduced test-provider reachability, rotation overlap mismatch, stale reconstruction, incomplete base64url acceptance, unbounded inputs, and uncleared validation-buffer paths.
+- GREEN evidence: focused crypto/environment suite 36/36; full check 71 unit and 4 Worker tests; typecheck, documentation, Worker/client builds, production-boundary validator, bundle scan, secret/plaintext scan, and diff checks passed.
+- Cipher contract: Web Crypto AES-256-GCM, fresh 96-bit IV, explicit 128-bit tag, strict `v1/A256GCM` envelope, canonical base64url JSON boundary, and AAD binding owner/node/field/key version.
+- Key contract: per-owner/domain/version non-extractable data keys, root-wrapped records only, atomic `putIfAbsent`, persisted monotonic active-version high-water mark, exact historical lookup, and linearizable rotation snapshots.
+- Production boundary: no fixed test root exists; source-import validation and post-build Worker bundle scanning reject the test provider from production artifacts.
+- Admission boundary: 64 KiB protected plaintext limit plus pre-JSON/pre-base64 bounds for envelopes, ciphertext, IVs, and wrapped keys.
+- Secret hygiene: root-secret parsing accepts the full canonical 256-bit base64url space, uses constant errors, and clears application-controlled decoded buffers in `finally`.
+- External state: no live root key, durable wrapped-key store, database adapter, or deployed crypto wiring was created; the future durable store must implement the reviewed atomic contracts.
+- Review result: initial review found two Critical and three Important issues; all fixes and the final Minor buffer cleanup passed final re-review with zero findings.

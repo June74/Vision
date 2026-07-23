@@ -77,10 +77,23 @@ The task required several review and repair rounds. Final independent review
 approved both the specification and implementation quality with no remaining
 findings. No live Neon database has been created or contacted yet.
 
-### Next — Protected-field encryption
+### Domain Task 3 — Protected-field encryption
 
-Add per-user/per-category data keys and authenticated encryption envelopes for
-private calendar and note content.
+Vision can now encrypt private calendar and note fields with authenticated
+AES-256-GCM envelopes. Each field is bound to its owner, record, field name,
+category, and key version, so encrypted values cannot be moved to another
+context. Per-user/category keys support safe rotation and historical
+decryption without allowing version rollback.
+
+Security checks also keep the test key provider out of production builds,
+bound hostile input sizes before decoding, and validate the Worker root key
+without exposing it. The task passed 36 focused crypto tests, 71 unit tests,
+and final independent review with no remaining findings.
+
+### Next — Encrypted persistence and safe audit
+
+Connect the encryption boundary to event storage and prove that neither raw
+database rows nor audit facts contain protected plaintext.
 
 ## Not yet included
 
