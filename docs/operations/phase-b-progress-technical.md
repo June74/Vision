@@ -29,6 +29,24 @@ Cloudflare's Vite plugin is active for production builds but omitted in Node-onl
 - Dependency decision: TypeScript is pinned to stable `5.9.3` because the installed `7.0.2` package did not expose the compiler API required by the validator.
 - Review result: final spec compliance and task quality approved; zero remaining findings.
 
+## Runtime Task 4 — Guarded delivery pipeline
+
+- Status: repository implementation complete and independently approved; hosted acceptance pending.
+- Commit range: `dd58f7c..6b5d0ba`.
+- Implementation/fix commits: `28e7027` and `6b5d0ba`.
+- Test evidence: frozen install, focused workflow policy 1/1, `pnpm check` with 17 unit and 4 Worker tests, Chromium 1/1, standalone build, PyYAML parse, and diff checks passed.
+- CI: pull-request-only least-permission verification with frozen pnpm install, full check, and browser smoke.
+- Preview/production: verify resolves an immutable SHA and deploy checks out that exact SHA; missing preview token fails explicitly; production requires `DEPLOY VISION PRODUCTION` and references the `production` environment.
+- Review result: repository spec compliance approved; no Critical or Important findings remain.
+- Carried Minor: official GitHub Action references use mutable major tags until verified commit provenance is recorded.
+
+### External acceptance state
+
+- GitHub CLI is authenticated as June74.
+- Cloudflare Wrangler is not authenticated; `wrangler deploy --temporary` is available for an isolated hosted preview.
+- GitHub production required reviewers, no-bypass, branch policy, environment-only secret scope, and required `Check` status remain unconfigured release prerequisites.
+- No workflow, preview deployment, hosted shell request, or hosted health request has run yet.
+
 ### Closed technical note
 
 The Task 1 test-host concern is closed: Node unit tests remain isolated from the Cloudflare Vite plugin, while Worker behavior is now tested separately through `@cloudflare/vitest-pool-workers` and production builds retain the Cloudflare plugin.

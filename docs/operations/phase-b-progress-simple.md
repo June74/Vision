@@ -38,9 +38,15 @@ Vision now gives API errors a consistent, private response containing only a saf
 
 Even if the logging destination fails, Vision still returns the safe API response. Independent review approved the hardened implementation with no remaining findings.
 
+### Runtime Task 4 — Delivery safeguards
+
+GitHub can now check every proposed change automatically. Preview and production workflows verify one exact commit and deploy that same commit, so a branch cannot change while approval is waiting. Production also requires an exact confirmation phrase in addition to its GitHub environment gate.
+
+The repository implementation passed review. A real hosted preview still needs to be created and checked before this milestone is complete.
+
 ## In progress
 
-Runtime Task 4 will add automated GitHub checks and guarded preview/production deployment workflows.
+Create a temporary Cloudflare preview, then verify its Vision screen and health endpoint. Cloudflare is not currently signed in; GitHub is connected as June74.
 
 ## Not yet included
 
