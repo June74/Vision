@@ -73,9 +73,13 @@ describe("calendar setup state machine", () => {
     });
   });
 
-  it("rejects creating a second calendar when discovery found an owned calendar to connect", () => {
+  it("rejects exact creation confirmation when discovery found an owned calendar to connect", () => {
     expect(() =>
-      transitionCalendarSetup(awaitingChoice, { setupVersion: 3, type: "choose-create" } as never),
+      transitionCalendarSetup(awaitingChoice, {
+        phrase: CREATE_VISION_CALENDAR_CONFIRMATION,
+        setupVersion: 3,
+        type: "confirm-create",
+      }),
     ).toThrow("INVALID_SETUP_TRANSITION");
   });
 
@@ -151,6 +155,50 @@ describe("calendar setup state machine", () => {
         calendarIds: null as unknown as string[],
         setupVersion: 2,
         type: "discovery-complete",
+      }),
+    ).toThrow("STALE_SETUP_VERSION");
+  });
+
+  it("rejects an unknown command type before the state transition table", () => {
+    expect(() =>
+      transitionCalendarSetup(authenticated, { setupVersion: 1, type: "unknown-command" } as never),
+    ).toThrow("STALE_SETUP_VERSION");
+  });
+
+  it("rejects an accessor-backed command without invoking the accessor or leaking its value", () => {
+    const hostileCommand = Object.defineProperty({ setupVersion: 1 }, "type", {
+      get: () => {
+        throw new Error("hostile command accessor");
+      },
+    });
+
+    expect(() => transitionCalendarSetup(authenticated, hostileCommand as never)).toThrow(
+      "STALE_SETUP_VERSION",
+    );
+  });
+
+  it("rejects a proxy-backed command when descriptor lookup is hostile", () => {
+    const hostileCommand = new Proxy({ setupVersion: 1, type: "sign-in" }, {
+      getOwnPropertyDescriptor: () => {
+        throw new Error("hostile descriptor trap");
+      },
+    });
+
+    expect(() => transitionCalendarSetup(authenticated, hostileCommand as never)).toThrow(
+      "STALE_SETUP_VERSION",
+    );
+  });
+
+  it("rejects an otherwise valid command at the maximum safe setup version", () => {
+    const maximumVersionState: CalendarSetupState = {
+      setupVersion: Number.MAX_SAFE_INTEGER,
+      status: "authenticated",
+    };
+
+    expect(() =>
+      transitionCalendarSetup(maximumVersionState, {
+        setupVersion: Number.MAX_SAFE_INTEGER,
+        type: "start-discovery",
       }),
     ).toThrow("STALE_SETUP_VERSION");
   });

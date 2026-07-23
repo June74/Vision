@@ -78,7 +78,13 @@ Validates the common version/status fields and state-specific candidate or conne
 
 **Signature:** `(value) => value is CalendarSetupCommand`.
 
-Validates the common command version/type fields and payload shapes required by discovery, selection, confirmation, and creation-completion commands.
+Enumerates only the nine command literals in `CalendarSetupCommand`, validates their common version/type fields and payload shapes, and rejects unknown or accessor-backed values before they reach transition logic.
+
+## `getOwnDataProperty`
+
+**Signature:** `(value, key) => { found, value }`.
+
+Uses an own-property descriptor to accept only data properties and converts descriptor-trap failures to an absent property. This keeps hostile getters and proxies from leaking errors while validating untrusted command-shaped input.
 
 ## `rejectInvalidTransition`
 
@@ -88,4 +94,4 @@ Throws the constant invalid-transition code for an unavailable state-table edge.
 
 ## Test coverage
 
-`tests/unit/domain/calendar-setup.test.ts` covers every named state, deterministic versions, stale commands, exact confirmation, duplicate suppression, existing-calendar selection, sign-out, and malformed state/command inputs.
+`tests/unit/domain/calendar-setup.test.ts` covers every named state, deterministic versions including the safe-integer maximum, stale commands, exact confirmation, existing-calendar selection, sign-out, unknown/accessor/proxy-backed commands, and malformed state/command inputs.

@@ -317,16 +317,53 @@ function isValidCalendarSetupState(value: unknown): value is CalendarSetupState 
 
 /** Validates runtime command fields before transition logic consumes command-specific payloads. */
 function isValidCalendarSetupCommand(value: unknown): value is CalendarSetupCommand {
-  if (!isRecord(value) || !isSetupVersion(value.setupVersion) || typeof value.type !== "string") {
+  if (!isRecord(value)) {
     return false;
   }
-  if (value.type === "discovery-complete") {
-    return isCalendarIdArray(value.calendarIds);
+  const setupVersion = getOwnDataProperty(value, "setupVersion");
+  const type = getOwnDataProperty(value, "type");
+  if (!setupVersion.found || !isSetupVersion(setupVersion.value) || !type.found) {
+    return false;
   }
-  if (value.type === "select-existing-calendar" || value.type === "creation-complete") {
-    return isNonEmptyCalendarId(value.calendarId);
+
+  switch (type.value) {
+    case "sign-in":
+    case "start-discovery":
+    case "fail":
+    case "retry":
+    case "sign-out":
+      return true;
+    case "discovery-complete": {
+      const calendarIds = getOwnDataProperty(value, "calendarIds");
+      return calendarIds.found && isCalendarIdArray(calendarIds.value);
+    }
+    case "select-existing-calendar":
+    case "creation-complete": {
+      const calendarId = getOwnDataProperty(value, "calendarId");
+      return calendarId.found && isNonEmptyCalendarId(calendarId.value);
+    }
+    case "confirm-create": {
+      const phrase = getOwnDataProperty(value, "phrase");
+      return phrase.found && typeof phrase.value === "string";
+    }
+    default:
+      return false;
   }
-  return value.type !== "confirm-create" || typeof value.phrase === "string";
+}
+
+/** Reads an own data property without evaluating a getter on hostile command input. */
+function getOwnDataProperty(
+  value: Record<string, unknown>,
+  key: string,
+): { readonly found: boolean; readonly value: unknown } {
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return descriptor && "value" in descriptor
+      ? { found: true, value: descriptor.value }
+      : { found: false, value: undefined };
+  } catch {
+    return { found: false, value: undefined };
+  }
 }
 
 /** Throws the constant safe error for a command that is not valid in the current state. */

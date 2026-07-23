@@ -8,7 +8,7 @@ Represents the safe `ACCOUNT_NOT_ALLOWED` denial.
 
 ## `authorizeIdentity`
 
-Checks the server-verified account against the configured Google `sub`, email, issuer, audience, and expiry, then returns the safe session identity.
+Checks the server-verified account against the configured Google `sub`, email, one exact audience, issuer, and expiry, then returns the safe session identity.
 
 ## `normalizeEmail`
 
@@ -17,10 +17,6 @@ Trims and lowercases an email before comparison.
 ## `isNonEmptyString`
 
 Checks that text is present rather than blank.
-
-## `hasTrustedAudience`
-
-Checks that the token names Vision's configured audience.
 
 ## `isUnexpiredAt`
 

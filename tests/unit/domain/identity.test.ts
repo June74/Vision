@@ -53,6 +53,15 @@ describe("private-pilot identity authorization", () => {
     ).toThrow("ACCOUNT_NOT_ALLOWED");
   });
 
+  it.each([
+    ["one-element audience array", ["vision-web-client"]],
+    ["mixed audience array", ["vision-web-client", "other-client"]],
+  ])("denies a %s with the constant safe error", (_description, audience) => {
+    expect(() =>
+      authorizeIdentity({ ...verifiedClaims, audience: audience as unknown as string }, allowlist, now),
+    ).toThrow("ACCOUNT_NOT_ALLOWED");
+  });
+
   it("denies a claim that has expired at the injected current instant", () => {
     expect(() =>
       authorizeIdentity(

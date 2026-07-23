@@ -5,7 +5,7 @@ export const ACCOUNT_NOT_ALLOWED = "ACCOUNT_NOT_ALLOWED";
 
 /** Google claims admitted only after the server verifies the ID token signature and provenance. */
 export interface ServerVerifiedGoogleClaims {
-  readonly audience: string | readonly string[];
+  readonly audience: string;
   readonly email: string;
   readonly emailVerified: boolean;
   readonly expiresAt: Date;
@@ -66,7 +66,7 @@ export function authorizeIdentity(
     normalizedClaimEmail === undefined ||
     claims.emailVerified !== true ||
     claims.issuer !== allowlist.trustedIssuer ||
-    !hasTrustedAudience(claims.audience, allowlist.trustedAudience) ||
+    claims.audience !== allowlist.trustedAudience ||
     !isUnexpiredAt(claims.expiresAt, now) ||
     claims.sub !== allowlist.sub ||
     normalizedClaimEmail !== normalizedAllowlistedEmail
@@ -88,14 +88,6 @@ function normalizeEmail(value: unknown): string | undefined {
 /** Returns whether a value is a string containing at least one non-whitespace character. */
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
-}
-
-/** Matches a server-verified OpenID Connect audience against Vision's configured audience. */
-function hasTrustedAudience(audience: unknown, trustedAudience: string): boolean {
-  return (
-    audience === trustedAudience ||
-    (Array.isArray(audience) && audience.every((value) => typeof value === "string") && audience.includes(trustedAudience))
-  );
 }
 
 /** Requires a valid expiry instant strictly later than the injected current server instant. */

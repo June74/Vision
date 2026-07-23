@@ -50,6 +50,10 @@ Checks that a saved setup state has the fields needed for its current stage.
 
 Checks that a setup command has safe fields before the state machine uses it.
 
+## `getOwnDataProperty`
+
+Reads a command field only when it is ordinary stored data, not a getter or hostile proxy that can run code.
+
 ## `rejectInvalidTransition`
 
 Stops a command that does not make sense in the current state.
