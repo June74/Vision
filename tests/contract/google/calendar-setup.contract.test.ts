@@ -192,6 +192,140 @@ describe("Google Calendar setup adapter", () => {
     expect(JSON.stringify(error)).not.toContain(TOKEN);
   });
 
+  it("classifies definite 4xx and 429 insert rejections separately from uncertain 5xx", async () => {
+    for (const status of [400, 401, 403, 404, 409, 429]) {
+      const client = new CalendarClient(
+        TOKEN,
+        SUBJECT,
+        vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({}, status)),
+      );
+      await expect(
+        client.createSecondaryCalendar("America/Chicago"),
+      ).rejects.toMatchObject({ outcome: "definite_failure" });
+    }
+    const serverFailure = new CalendarClient(
+      TOKEN,
+      SUBJECT,
+      vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({}, 503)),
+    );
+    await expect(
+      serverFailure.createSecondaryCalendar("America/Chicago"),
+    ).rejects.toMatchObject({ outcome: "uncertain" });
+  });
+
+  it("bounds never-resolving and slow headers with operation-aware abort classification", async () => {
+    for (const mode of ["never", "slow"] as const) {
+      let observedSignal: AbortSignal | undefined;
+      const fetcher = vi.fn<typeof fetch>().mockImplementation(
+        async (_input, init) => {
+          observedSignal = init?.signal ?? undefined;
+          if (mode === "never") return new Promise<Response>(() => {});
+          return new Promise<Response>((resolve) => {
+            setTimeout(() => resolve(jsonResponse({ items: [] })), 100);
+          });
+        },
+      );
+      const client = new CalendarClient(TOKEN, SUBJECT, fetcher, {
+        deadlineMs: 20,
+      });
+
+      await expect(client.listOwnedSecondaryCalendars()).rejects.toMatchObject({
+        outcome: "definite_failure",
+      });
+      expect(observedSignal?.aborted).toBe(true);
+      expect(JSON.stringify(await client.listOwnedSecondaryCalendars().catch((error) => error))).not.toContain(TOKEN);
+    }
+
+    const insert = new CalendarClient(
+      TOKEN,
+      SUBJECT,
+      vi.fn<typeof fetch>().mockImplementation(
+        async () => new Promise<Response>(() => {}),
+      ),
+      { deadlineMs: 20 },
+    );
+    await expect(
+      insert.createSecondaryCalendar("America/Chicago"),
+    ).rejects.toMatchObject({ outcome: "uncertain" });
+  });
+
+  it("bounds slow, never-ending, and oversized streamed bodies before accumulation", async () => {
+    const streamResponse = (
+      start: (controller: ReadableStreamDefaultController<Uint8Array>) => void,
+    ) =>
+      new Response(new ReadableStream<Uint8Array>({ start }), {
+        headers: { "content-type": "application/json" },
+      });
+    const neverEnding = new CalendarClient(
+      TOKEN,
+      SUBJECT,
+      vi.fn<typeof fetch>().mockResolvedValue(
+        streamResponse((controller) => {
+          controller.enqueue(new TextEncoder().encode('{"items":['));
+        }),
+      ),
+      { deadlineMs: 20 },
+    );
+    await expect(
+      neverEnding.listOwnedSecondaryCalendars(),
+    ).rejects.toMatchObject({ outcome: "definite_failure" });
+
+    const slowBody = new CalendarClient(
+      TOKEN,
+      SUBJECT,
+      vi.fn<typeof fetch>().mockResolvedValue(
+        streamResponse((controller) => {
+          setTimeout(() => {
+            controller.enqueue(new TextEncoder().encode('{"items":[]}'));
+            controller.close();
+          }, 100);
+        }),
+      ),
+      { deadlineMs: 20 },
+    );
+    await expect(slowBody.getCalendar("vision-id")).rejects.toMatchObject({
+      outcome: "definite_failure",
+    });
+
+    let cancelled = false;
+    const oversized = new CalendarClient(
+      TOKEN,
+      SUBJECT,
+      vi.fn<typeof fetch>().mockResolvedValue(
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new Uint8Array(33));
+            },
+            cancel() {
+              cancelled = true;
+            },
+          }),
+          { headers: { "content-type": "application/json" } },
+        ),
+      ),
+      { deadlineMs: 100, maxBodyBytes: 32 },
+    );
+    await expect(
+      oversized.listOwnedSecondaryCalendars(),
+    ).rejects.toMatchObject({ outcome: "definite_failure" });
+    expect(cancelled).toBe(true);
+
+    const uncertainInsertBody = new CalendarClient(
+      TOKEN,
+      SUBJECT,
+      vi.fn<typeof fetch>().mockResolvedValue(
+        streamResponse((controller) => {
+          controller.enqueue(new TextEncoder().encode("{"));
+        }),
+      ),
+      { deadlineMs: 20 },
+    );
+    await expect(
+      uncertainInsertBody.createSecondaryCalendar("America/Chicago"),
+    ).rejects.toMatchObject({ outcome: "uncertain" });
+  });
+
   it("contains no event-write endpoint in the production adapter source", () => {
     const source = readFileSync(
       resolve(

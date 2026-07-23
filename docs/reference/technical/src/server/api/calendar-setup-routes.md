@@ -1,9 +1,9 @@
 # Calendar setup routes
 
-Reuses encrypted sessions/tokens and CSRF. Strict schemas accept only current version, exact phrase, UUID key, or explicit stable ID. Creation persists ledger and pre-create snapshot before Google.
+Reuses encrypted sessions/tokens and CSRF. `GET /api/setup/calendar` is strictly read-only. `POST /api/setup/calendar/discover` requires CSRF and an exact version, lists Google first, then performs one final-state CAS. Creation persists ledger and pre-create snapshot before Google.
 
 ## `registerCalendarSetupRoutes`
-Registers routes before the fallback.
+Registers the consumer flow: GET snapshot, POST discover, then POST select or confirm-create.
 ## `createProductionCalendarSetupDependencies`
 Builds server-only production boundaries.
 ## `now`
@@ -42,3 +42,5 @@ Sets `Cache-Control: no-store`.
 Throws constant `INVALID_SETUP_REQUEST`.
 ## `providerUnavailable`
 Throws constant `CALENDAR_SETUP_UNAVAILABLE`.
+## `initialSetupSnapshot`
+Provides immutable version 1 `authenticated` state without a database write.

@@ -42,7 +42,12 @@ export interface CalendarSetupSnapshot {
 export interface CalendarCreationOperation {
   readonly idempotencyKey: string;
   readonly setupVersion: number;
-  readonly status: "in_progress" | "retryable" | "completed" | "action_required";
+  readonly status:
+    | "in_progress"
+    | "retryable"
+    | "completed"
+    | "action_required"
+    | "definite_failure";
   readonly requestedAt: Date;
   readonly completedAt?: Date;
   readonly resultCalendarId?: string;
@@ -57,13 +62,13 @@ export type BeginCreationResult =
 /** Route-facing repository surface implemented by production SQL and deterministic test stores. */
 export interface CalendarRepositoryPort {
   getOrCreateAuthenticated(now: Date): Promise<CalendarSetupSnapshot>;
-  beginDiscovery(setupVersion: number, now: Date): Promise<CalendarSetupSnapshot>;
-  completeDiscovery(setupVersion: number, calendars: readonly VerifiedCalendarEvidence[], now: Date): Promise<CalendarSetupSnapshot>;
+  discover(setupVersion: number, calendars: readonly VerifiedCalendarEvidence[], now: Date): Promise<CalendarSetupSnapshot>;
   selectExisting(setupVersion: number, calendar: VerifiedCalendarEvidence, now: Date): Promise<CalendarSetupSnapshot>;
   beginCreation(setupVersion: number, idempotencyKey: string, preCreateCalendars: readonly VerifiedCalendarEvidence[], now: Date): Promise<BeginCreationResult>;
   findCreationOperation(idempotencyKey: string): Promise<CalendarCreationOperation | undefined>;
   completeCreation(idempotencyKey: string, calendar: VerifiedCalendarEvidence, now: Date): Promise<CalendarSetupSnapshot>;
   markCreationUncertain(idempotencyKey: string, outcome: "retryable" | "action_required", now: Date): Promise<CalendarSetupSnapshot>;
+  markCreationDefiniteFailure(idempotencyKey: string, now: Date): Promise<CalendarSetupSnapshot>;
   getSnapshot(): Promise<CalendarSetupSnapshot | undefined>;
 }
 
@@ -112,30 +117,8 @@ export class DrizzleCalendarStore {
     if (!winner.rows[0]) throw persistenceFailure();
   }
 
-  /** Advances one current authenticated setup row into discovery by compare-and-swap. */
-  async beginDiscovery(
-    ownerId: string,
-    googleSubject: string,
-    expectedVersion: number,
-    now: Date,
-  ): Promise<boolean> {
-    const result = await this.database.execute<Record<string, unknown>>(sql`
-      update calendar_setup_states
-      set setup_version = setup_version + 1,
-          status = 'discovering',
-          action_required = false,
-          updated_at = ${now}
-      where owner_id = ${ownerId}
-        and google_subject = ${googleSubject}
-        and setup_version = ${expectedVersion}
-        and status in ('authenticated', 'awaiting_confirmation')
-      returning setup_version as "setupVersion"
-    `);
-    return result.rows.length === 1;
-  }
-
-  /** Atomically replaces normalized candidates and completes the exact discovery version. */
-  async completeDiscovery(
+  /** Atomically creates or CASes setup directly to the final discovery result and replaces candidates. */
+  async discover(
     ownerId: string,
     googleSubject: string,
     expectedVersion: number,
@@ -145,18 +128,42 @@ export class DrizzleCalendarStore {
     const candidateJson = JSON.stringify(calendars.map(toCandidateParameter));
     const result = await this.database.execute<Record<string, unknown>>(sql`
       with advanced as (
-        update calendar_setup_states
-        set setup_version = setup_version + 1,
-            status = case
-              when ${calendars.length}::integer = 0 then 'awaiting_confirmation'
-              else 'awaiting_choice'
-            end,
-            action_required = false,
-            updated_at = ${now}
-        where owner_id = ${ownerId}
-          and google_subject = ${googleSubject}
-          and setup_version = ${expectedVersion}
-          and status = 'discovering'
+        insert into calendar_setup_states (
+          owner_id, google_subject, setup_version, status,
+          action_required, updated_at
+        )
+        select
+          ${ownerId}, ${googleSubject}, ${expectedVersion + 1},
+          case
+            when ${calendars.length}::integer = 0 then 'awaiting_confirmation'
+            else 'awaiting_choice'
+          end,
+          false,
+          ${now}
+        where ${expectedVersion}::integer = 1
+           or exists (
+             select 1 from calendar_setup_states
+             where owner_id = ${ownerId}
+           )
+        on conflict (owner_id) do update set
+          setup_version = calendar_setup_states.setup_version + 1,
+          status = excluded.status,
+          action_required = false,
+          updated_at = excluded.updated_at
+        where calendar_setup_states.google_subject = ${googleSubject}
+          and calendar_setup_states.setup_version = ${expectedVersion}
+          and calendar_setup_states.status in (
+            'authenticated', 'awaiting_confirmation', 'failed'
+          )
+          and (
+            calendar_setup_states.status <> 'failed'
+            or not exists (
+              select 1 from operation_ledger
+              where owner_id = ${ownerId}
+                and operation_kind = 'vision_calendar_create'
+                and status in ('in_progress', 'retryable', 'action_required')
+            )
+          )
         returning owner_id
       ),
       cleared as (
@@ -420,6 +427,42 @@ export class DrizzleCalendarStore {
     return result.rows.length === 1;
   }
 
+  /** Terminalizes a known non-mutation rejection and releases the unresolved-operation index claim. */
+  async markCreationDefiniteFailure(
+    ownerId: string,
+    googleSubject: string,
+    idempotencyKey: string,
+    now: Date,
+  ): Promise<boolean> {
+    const result = await this.database.execute<Record<string, unknown>>(sql`
+      with changed as (
+        update operation_ledger
+        set status = 'definite_failure',
+            completed_at = ${now}
+        where operation_id = ${idempotencyKey}
+          and owner_id = ${ownerId}
+          and provider = 'google'
+          and operation_kind = 'vision_calendar_create'
+          and status = 'in_progress'
+        returning operation_id
+      ),
+      failed as (
+        update calendar_setup_states
+        set setup_version = setup_version + 1,
+            status = 'failed',
+            action_required = true,
+            updated_at = ${now}
+        where owner_id = ${ownerId}
+          and google_subject = ${googleSubject}
+          and status = 'creating'
+          and exists (select 1 from changed)
+        returning owner_id
+      )
+      select owner_id as "ownerId" from failed
+    `);
+    return result.rows.length === 1;
+  }
+
   /** Reads one owner-subject setup state plus normalized candidates and connection metadata. */
   async readSnapshot(
     ownerId: string,
@@ -494,42 +537,24 @@ export class CalendarRepository implements CalendarRepositoryPort {
     return this.requireSnapshot();
   }
 
-  /** Starts discovery only from an exact current authenticated version. */
-  async beginDiscovery(
-    setupVersion: number,
-    now: Date,
-  ): Promise<CalendarSetupSnapshot> {
-    assertVersionAndDate(setupVersion, now);
-    if (
-      !(await this.store.beginDiscovery(
-        this.ownerId,
-        this.googleSubject,
-        setupVersion,
-        now,
-      ))
-    ) {
-      throw staleVersion();
-    }
-    return this.requireSnapshot();
-  }
-
-  /** Persists a complete, unique, account-bound discovery result. */
-  async completeDiscovery(
+  /** Persists one provider result in a single final-state CAS or returns the concurrent winner. */
+  async discover(
     setupVersion: number,
     calendars: readonly VerifiedCalendarEvidence[],
     now: Date,
   ): Promise<CalendarSetupSnapshot> {
     assertVersionAndDate(setupVersion, now);
     const verified = validateEvidenceSet(calendars, this.googleSubject);
-    if (
-      !(await this.store.completeDiscovery(
-        this.ownerId,
-        this.googleSubject,
-        setupVersion,
-        verified,
-        now,
-      ))
-    ) {
+    const applied = await this.store.discover(
+      this.ownerId,
+      this.googleSubject,
+      setupVersion,
+      verified,
+      now,
+    );
+    if (!applied) {
+      const authoritative = await this.getSnapshot();
+      if (authoritative) return authoritative;
       throw staleVersion();
     }
     return this.requireSnapshot();
@@ -646,6 +671,27 @@ export class CalendarRepository implements CalendarRepositoryPort {
     return this.requireSnapshot();
   }
 
+  /** Records a known provider rejection as terminal so corrected setup can use a fresh key. */
+  async markCreationDefiniteFailure(
+    idempotencyKey: string,
+    now: Date,
+  ): Promise<CalendarSetupSnapshot> {
+    assertUuid(idempotencyKey);
+    assertDate(now);
+    if (
+      !(await this.store.markCreationDefiniteFailure(
+        this.ownerId,
+        this.googleSubject,
+        idempotencyKey,
+        now,
+      ))
+    ) {
+      const operation = await this.findCreationOperation(idempotencyKey);
+      if (operation?.status !== "definite_failure") throw persistenceFailure();
+    }
+    return this.requireSnapshot();
+  }
+
   /** Returns the current setup state in this fixed owner/account scope. */
   async getSnapshot(): Promise<CalendarSetupSnapshot | undefined> {
     return this.store.readSnapshot(this.ownerId, this.googleSubject);
@@ -726,7 +772,8 @@ function decodeCreationOperation(
     status !== "in_progress" &&
     status !== "retryable" &&
     status !== "completed" &&
-    status !== "action_required"
+    status !== "action_required" &&
+    status !== "definite_failure"
   ) {
     throw persistenceFailure();
   }

@@ -68,7 +68,10 @@ alter table operation_ledger
       operation_kind <> 'vision_calendar_create'
       or (
         setup_version is not null
-        and status in ('in_progress', 'retryable', 'completed', 'action_required')
+        and status in (
+          'in_progress', 'retryable', 'completed',
+          'action_required', 'definite_failure'
+        )
       )
     );
 

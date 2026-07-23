@@ -1,9 +1,9 @@
 # Calendar setup routes
 
-Discovers choices, selects an explicit stable ID, or creates after the exact phrase.
+GET reads the setup snapshot only. A CSRF-protected discovery POST refreshes choices; later POSTs select an explicit stable ID or create after the exact phrase.
 
 ## `registerCalendarSetupRoutes`
-Registers the three setup APIs.
+Registers read-only snapshot, discovery, selection, and creation APIs.
 ## `createProductionCalendarSetupDependencies`
 Connects auth, database, Google, and time zone.
 ## `now`
@@ -42,3 +42,5 @@ Disables caching.
 Returns the safe input error.
 ## `providerUnavailable`
 Returns the safe availability error.
+## `initialSetupSnapshot`
+Returns the read-only initial state before the first discovery.

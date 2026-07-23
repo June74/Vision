@@ -4,10 +4,8 @@ Stores versioned setup, normalized choices, connection evidence, and one-shot cr
 
 ## `getOrCreateAuthenticated`
 Creates or reads initial state.
-## `beginDiscovery`
-Starts discovery at the current version.
-## `completeDiscovery`
-Stores choices and advances state.
+## `discover`
+Atomically stores choices and advances directly to the final discovery state.
 ## `selectExisting`
 Connects one rechecked stable ID.
 ## `beginCreation`
@@ -18,6 +16,8 @@ Reads one scoped operation.
 Persists created/reconciled evidence once.
 ## `markCreationUncertain`
 Records retryable or action-required without creating again.
+## `markCreationDefiniteFailure`
+Closes a known rejected create so corrected setup can use a fresh key.
 ## `readSnapshot`
 Reads state, candidates, and connection.
 ## `getSnapshot`

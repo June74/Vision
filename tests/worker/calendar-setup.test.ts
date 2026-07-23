@@ -21,6 +21,7 @@ const NOW = new Date("2026-07-23T19:00:00.000Z");
 const SESSION_ID = "S".repeat(43);
 const CSRF = "C".repeat(43);
 const KEY = "11111111-1111-4111-8111-111111111111";
+const KEY_TWO = "22222222-2222-4222-8222-222222222222";
 const SUBJECT = "google-subject";
 
 function candidate(id: string): OwnedSecondaryCalendar {
@@ -37,6 +38,8 @@ function candidate(id: string): OwnedSecondaryCalendar {
 class MemoryCalendarRepository implements CalendarRepositoryPort {
   snapshot: CalendarSetupSnapshot | undefined;
   operations = new Map<string, CalendarCreationOperation>();
+  failDiscoveryPersistence = false;
+  failCompletionOnce = false;
 
   async getOrCreateAuthenticated(): Promise<CalendarSetupSnapshot> {
     this.snapshot ??= this.state("authenticated", 1);
@@ -60,6 +63,32 @@ class MemoryCalendarRepository implements CalendarRepositoryPort {
     calendars: readonly VerifiedCalendarEvidence[],
   ): Promise<CalendarSetupSnapshot> {
     this.expect(version, "discovering");
+    this.snapshot = this.state(
+      calendars.length ? "awaiting_choice" : "awaiting_confirmation",
+      version + 1,
+      calendars,
+    );
+    return this.snapshot;
+  }
+
+  async discover(
+    version: number,
+    calendars: readonly VerifiedCalendarEvidence[],
+  ): Promise<CalendarSetupSnapshot> {
+    if (this.failDiscoveryPersistence) throw new Error("injected persistence failure");
+    const current = this.snapshot ?? this.state("authenticated", 1);
+    const hasUnresolved = [...this.operations.values()].some(({ status }) =>
+      ["in_progress", "retryable", "action_required"].includes(status),
+    );
+    if (
+      current.setupVersion !== version ||
+      !["authenticated", "awaiting_confirmation", "failed"].includes(
+        current.status,
+      ) ||
+      (current.status === "failed" && hasUnresolved)
+    ) {
+      return this.snapshot ?? current;
+    }
     this.snapshot = this.state(
       calendars.length ? "awaiting_choice" : "awaiting_confirmation",
       version + 1,
@@ -110,6 +139,10 @@ class MemoryCalendarRepository implements CalendarRepositoryPort {
     idempotencyKey: string,
     calendar: VerifiedCalendarEvidence,
   ): Promise<CalendarSetupSnapshot> {
+    if (this.failCompletionOnce) {
+      this.failCompletionOnce = false;
+      throw new Error("injected completion uncertainty");
+    }
     const operation = this.operations.get(idempotencyKey);
     if (!operation) throw new Error("missing");
     this.operations.set(idempotencyKey, {
@@ -137,6 +170,22 @@ class MemoryCalendarRepository implements CalendarRepositoryPort {
     this.snapshot = {
       ...this.state("failed", (this.snapshot?.setupVersion ?? 3) + 1),
       actionRequired: outcome === "action_required",
+    };
+    return this.snapshot;
+  }
+
+  async markCreationDefiniteFailure(
+    idempotencyKey: string,
+  ): Promise<CalendarSetupSnapshot> {
+    const operation = this.operations.get(idempotencyKey)!;
+    this.operations.set(idempotencyKey, {
+      ...operation,
+      status: "definite_failure",
+      completedAt: NOW,
+    });
+    this.snapshot = {
+      ...this.state("failed", (this.snapshot?.setupVersion ?? 2) + 1),
+      actionRequired: true,
     };
     return this.snapshot;
   }
@@ -184,8 +233,15 @@ class MemoryCalendarRepository implements CalendarRepositoryPort {
 function createHarness(options: {
   lists?: readonly (readonly OwnedSecondaryCalendar[])[];
   createError?: CalendarProviderError;
+  getError?: CalendarProviderError;
+  listError?: CalendarProviderError;
+  tokenUnavailable?: boolean;
+  failDiscoveryPersistence?: boolean;
+  failCompletionOnce?: boolean;
 } = {}) {
   const repository = new MemoryCalendarRepository();
+  repository.failDiscoveryPersistence = options.failDiscoveryPersistence ?? false;
+  repository.failCompletionOnce = options.failCompletionOnce ?? false;
   const lists = [...(options.lists ?? [[]])];
   const createSecondaryCalendar = vi.fn<
     (timeZone: string) => Promise<CreatedSecondaryCalendar>
@@ -200,10 +256,15 @@ function createHarness(options: {
       providerEtag: '"created-resource"',
     });
   }
+  const getCalendar = vi.fn(async (id: string) => candidate(id));
+  if (options.getError) getCalendar.mockRejectedValueOnce(options.getError);
   const client: CalendarClientPort = {
-    listOwnedSecondaryCalendars: vi.fn(async () => lists.shift() ?? []),
+    listOwnedSecondaryCalendars: vi.fn(async () => {
+      if (options.listError) throw options.listError;
+      return lists.shift() ?? [];
+    }),
     createSecondaryCalendar,
-    getCalendar: vi.fn(async (id) => candidate(id)),
+    getCalendar,
   };
   const dependencies: CalendarSetupRouteDependencies = {
     logger: vi.fn(),
@@ -224,13 +285,17 @@ function createHarness(options: {
       ),
     },
     tokens: {
-      getGoogleTokens: vi.fn(async () => ({
-        refreshToken: "REFRESH_TOKEN_SENTINEL",
-        accessToken: "ACCESS_TOKEN_SENTINEL",
-        accessExpiresAt: new Date(NOW.getTime() + 60_000),
-        grantedScopes: [],
-        tokenVersion: 1,
-      })),
+      getGoogleTokens: vi.fn(async () =>
+        options.tokenUnavailable
+          ? undefined
+          : {
+              refreshToken: "REFRESH_TOKEN_SENTINEL",
+              accessToken: "ACCESS_TOKEN_SENTINEL",
+              accessExpiresAt: new Date(NOW.getTime() + 60_000),
+              grantedScopes: [],
+              tokenVersion: 1,
+            },
+      ),
     },
     createCalendarClient: () => client,
     createRepository: () => repository,
@@ -265,18 +330,33 @@ function post(path: string, body: unknown, csrf = CSRF): Request {
 }
 
 describe("Vision Worker calendar setup", () => {
-  it("discovers zero, one, and multiple exact candidates without auto-selecting by name", async () => {
+  it("keeps cookie-only GET read-only and exposes the initial authenticated snapshot", async () => {
+    const { app, client, repository } = createHarness();
+    const first = await app.fetch(request("/api/setup/calendar"), {} as Env);
+    const second = await app.fetch(request("/api/setup/calendar"), {} as Env);
+
+    expect(first.status).toBe(200);
+    await expect(first.json()).resolves.toMatchObject({
+      status: "authenticated",
+      setupVersion: 1,
+    });
+    expect(second.status).toBe(200);
+    expect(repository.snapshot).toBeUndefined();
+    expect(client.listOwnedSecondaryCalendars).not.toHaveBeenCalled();
+  });
+
+  it("discovers zero, one, and multiple exact candidates only through CSRF-protected POST", async () => {
     for (const candidates of [[], [candidate("one")], [candidate("one"), candidate("two")]]) {
       const { app } = createHarness({ lists: [candidates] });
       const response = await app.fetch(
-        request("/api/setup/calendar"),
+        post("/api/setup/calendar/discover", { setupVersion: 1 }),
         {} as Env,
       );
       expect(response.status).toBe(200);
       const body = await response.json<Record<string, unknown>>();
       expect(body).toMatchObject({
         status: candidates.length ? "awaiting_choice" : "awaiting_confirmation",
-        setupVersion: 3,
+        setupVersion: 2,
       });
       expect((body.candidates as unknown[]).length).toBe(candidates.length);
       expect(body).not.toHaveProperty("connection");
@@ -290,12 +370,31 @@ describe("Vision Worker calendar setup", () => {
       {} as Env,
     );
     expect(unauthenticated.status).toBe(401);
-    await app.fetch(request("/api/setup/calendar"), {} as Env);
+
+    const missingDiscoveryCsrf = await app.fetch(
+      request("/api/setup/calendar/discover", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ setupVersion: 1 }),
+      }),
+      {} as Env,
+    );
+    expect(missingDiscoveryCsrf.status).toBe(403);
+    const wrongDiscoveryCsrf = await app.fetch(
+      post("/api/setup/calendar/discover", { setupVersion: 1 }, "X".repeat(43)),
+      {} as Env,
+    );
+    expect(wrongDiscoveryCsrf.status).toBe(403);
+    const discovery = await app.fetch(
+      post("/api/setup/calendar/discover", { setupVersion: 1 }),
+      {} as Env,
+    );
+    expect(discovery.status).toBe(200);
 
     const missingCsrf = await app.fetch(
       request("/api/setup/calendar/select", {
         method: "POST",
-        body: JSON.stringify({ setupVersion: 3, calendarId: "one" }),
+        body: JSON.stringify({ setupVersion: 2, calendarId: "one" }),
       }),
       {} as Env,
     );
@@ -303,7 +402,7 @@ describe("Vision Worker calendar setup", () => {
 
     const selected = await app.fetch(
       post("/api/setup/calendar/select", {
-        setupVersion: 3,
+        setupVersion: 2,
         calendarId: "one",
       }),
       {} as Env,
@@ -317,12 +416,15 @@ describe("Vision Worker calendar setup", () => {
 
   it("enforces exact current version, exact phrase, strict body, and a UUID key", async () => {
     const { app, createSecondaryCalendar } = createHarness();
-    await app.fetch(request("/api/setup/calendar"), {} as Env);
+    await app.fetch(
+      post("/api/setup/calendar/discover", { setupVersion: 1 }),
+      {} as Env,
+    );
     for (const body of [
-      { setupVersion: 2, confirmation: "CREATE VISION CALENDAR", idempotencyKey: KEY },
-      { setupVersion: 3, confirmation: "Create Vision Calendar", idempotencyKey: KEY },
-      { setupVersion: 3, confirmation: "CREATE VISION CALENDAR", idempotencyKey: "no" },
-      { setupVersion: 3, confirmation: "CREATE VISION CALENDAR", idempotencyKey: KEY, extra: true },
+      { setupVersion: 1, confirmation: "CREATE VISION CALENDAR", idempotencyKey: KEY },
+      { setupVersion: 2, confirmation: "Create Vision Calendar", idempotencyKey: KEY },
+      { setupVersion: 2, confirmation: "CREATE VISION CALENDAR", idempotencyKey: "no" },
+      { setupVersion: 2, confirmation: "CREATE VISION CALENDAR", idempotencyKey: KEY, extra: true },
     ]) {
       const response = await app.fetch(
         post("/api/setup/calendar/confirm-create", body),
@@ -335,9 +437,12 @@ describe("Vision Worker calendar setup", () => {
 
   it("creates once and returns the same connection for a repeated idempotency key", async () => {
     const { app, createSecondaryCalendar } = createHarness({ lists: [[], []] });
-    await app.fetch(request("/api/setup/calendar"), {} as Env);
+    await app.fetch(
+      post("/api/setup/calendar/discover", { setupVersion: 1 }),
+      {} as Env,
+    );
     const body = {
-      setupVersion: 3,
+      setupVersion: 2,
       confirmation: "CREATE VISION CALENDAR",
       idempotencyKey: KEY,
     };
@@ -359,11 +464,14 @@ describe("Vision Worker calendar setup", () => {
     const { app, createSecondaryCalendar } = createHarness({
       lists: [[], [candidate("appeared-later")]],
     });
-    await app.fetch(request("/api/setup/calendar"), {} as Env);
+    await app.fetch(
+      post("/api/setup/calendar/discover", { setupVersion: 1 }),
+      {} as Env,
+    );
 
     const response = await app.fetch(
       post("/api/setup/calendar/confirm-create", {
-        setupVersion: 3,
+        setupVersion: 2,
         confirmation: "CREATE VISION CALENDAR",
         idempotencyKey: KEY,
       }),
@@ -383,10 +491,13 @@ describe("Vision Worker calendar setup", () => {
       lists: [[], [], [candidate("created-after-timeout")]],
       createError: new CalendarProviderError("uncertain"),
     });
-    await app.fetch(request("/api/setup/calendar"), {} as Env);
+    await app.fetch(
+      post("/api/setup/calendar/discover", { setupVersion: 1 }),
+      {} as Env,
+    );
     const response = await app.fetch(
       post("/api/setup/calendar/confirm-create", {
-        setupVersion: 3,
+        setupVersion: 2,
         confirmation: "CREATE VISION CALENDAR",
         idempotencyKey: KEY,
       }),
@@ -409,9 +520,12 @@ describe("Vision Worker calendar setup", () => {
         lists: [[], [], discovered, discovered],
         createError: new CalendarProviderError("uncertain"),
       });
-      await app.fetch(request("/api/setup/calendar"), {} as Env);
+      await app.fetch(
+        post("/api/setup/calendar/discover", { setupVersion: 1 }),
+        {} as Env,
+      );
       const body = {
-        setupVersion: 3,
+        setupVersion: 2,
         confirmation: "CREATE VISION CALENDAR",
         idempotencyKey: KEY,
       };
@@ -425,6 +539,118 @@ describe("Vision Worker calendar setup", () => {
       );
       expect(first.status).toBe(discovered.length === 0 ? 202 : 409);
       expect([202, 409]).toContain(repeated.status);
+      expect(createSecondaryCalendar).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("leaves setup unchanged when token resolution, provider listing, or atomic persistence fails", async () => {
+    for (const options of [
+      { tokenUnavailable: true },
+      { listError: new CalendarProviderError("definite_failure") },
+      { failDiscoveryPersistence: true },
+    ]) {
+      const { app, repository } = createHarness(options);
+      const response = await app.fetch(
+        post("/api/setup/calendar/discover", { setupVersion: 1 }),
+        {} as Env,
+      );
+      expect(response.status).toBe(503);
+      expect(repository.snapshot).toBeUndefined();
+      const readOnly = await app.fetch(
+        request("/api/setup/calendar"),
+        {} as Env,
+      );
+      await expect(readOnly.json()).resolves.toMatchObject({
+        status: "authenticated",
+        setupVersion: 1,
+      });
+    }
+  });
+
+  it("terminalizes a definite insert rejection and allows a corrected fresh discovery, version, confirmation, and key", async () => {
+    const { app, repository, createSecondaryCalendar } = createHarness({
+      lists: [[], [], [], []],
+      createError: new CalendarProviderError("definite_failure"),
+    });
+    await app.fetch(
+      post("/api/setup/calendar/discover", { setupVersion: 1 }),
+      {} as Env,
+    );
+    const rejected = await app.fetch(
+      post("/api/setup/calendar/confirm-create", {
+        setupVersion: 2,
+        confirmation: "CREATE VISION CALENDAR",
+        idempotencyKey: KEY,
+      }),
+      {} as Env,
+    );
+    expect(rejected.status).toBe(409);
+    expect(repository.operations.get(KEY)).toMatchObject({
+      status: "definite_failure",
+    });
+    expect(repository.snapshot).toMatchObject({
+      status: "failed",
+      setupVersion: 4,
+      actionRequired: true,
+    });
+
+    createSecondaryCalendar.mockReset().mockResolvedValue({
+      id: "created-after-correction",
+      summary: "Vision",
+      timeZone: "America/Chicago",
+      providerEtag: '"created"',
+    });
+    const rediscovered = await app.fetch(
+      post("/api/setup/calendar/discover", { setupVersion: 4 }),
+      {} as Env,
+    );
+    expect(rediscovered.status).toBe(200);
+    await expect(rediscovered.json()).resolves.toMatchObject({
+      status: "awaiting_confirmation",
+      setupVersion: 5,
+    });
+    const corrected = await app.fetch(
+      post("/api/setup/calendar/confirm-create", {
+        setupVersion: 5,
+        confirmation: "CREATE VISION CALENDAR",
+        idempotencyKey: KEY_TWO,
+      }),
+      {} as Env,
+    );
+    expect(corrected.status).toBe(200);
+    expect(createSecondaryCalendar).toHaveBeenCalledTimes(1);
+  });
+
+  it("reconciles after successful insert when verification or persistence becomes uncertain", async () => {
+    for (const options of [
+      {
+        getError: new CalendarProviderError("definite_failure"),
+        lists: [[], [], [candidate("created-vision")]],
+      },
+      {
+        failCompletionOnce: true,
+        lists: [[], [], [candidate("created-vision")]],
+      },
+    ]) {
+      const { app, repository, createSecondaryCalendar } =
+        createHarness(options);
+      await app.fetch(
+        post("/api/setup/calendar/discover", { setupVersion: 1 }),
+        {} as Env,
+      );
+      const response = await app.fetch(
+        post("/api/setup/calendar/confirm-create", {
+          setupVersion: 2,
+          confirmation: "CREATE VISION CALENDAR",
+          idempotencyKey: KEY,
+        }),
+        {} as Env,
+      );
+      expect(response.status).toBe(200);
+      expect(repository.snapshot).toMatchObject({
+        status: "connected",
+        connection: { calendarId: "created-vision" },
+      });
       expect(createSecondaryCalendar).toHaveBeenCalledTimes(1);
     }
   });

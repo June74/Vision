@@ -1,6 +1,6 @@
 # Calendar client
 
-Lists, creates, and verifies only the secondary `Vision` calendar; no event API exists here.
+Lists, creates, and verifies only the secondary `Vision` calendar; no event API exists here. One deadline covers both response headers and the incrementally read body.
 
 ## `listOwnedSecondaryCalendars`
 Returns exact-name, owned, active, non-primary candidates.
@@ -18,3 +18,5 @@ Applies the complete candidate rule.
 Binds evidence to the verified Google account.
 ## `isBoundedText`
 Checks nonempty text size.
+## `readPositiveBound`
+Checks testable limits without exceeding production ceilings.

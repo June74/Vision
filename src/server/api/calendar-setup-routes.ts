@@ -38,6 +38,11 @@ const selectSchema = z
     calendarId: z.string().trim().min(1).max(1_024),
   })
   .strict();
+const discoverSchema = z
+  .object({
+    setupVersion: z.number().int().positive(),
+  })
+  .strict();
 const confirmCreateSchema = z
   .object({
     setupVersion: z.number().int().positive(),
@@ -100,20 +105,38 @@ export function registerCalendarSetupRoutes(
       session.ownerId,
       session.googleSubject,
     );
-    let snapshot = await repository.getOrCreateAuthenticated(dependencies.now());
-    if (snapshot.status === "authenticated") {
-      snapshot = await repository.beginDiscovery(
-        snapshot.setupVersion,
-        dependencies.now(),
-      );
-      const client = await resolveCalendarClient(dependencies, session);
-      const calendars = await client.listOwnedSecondaryCalendars();
-      snapshot = await repository.completeDiscovery(
-        snapshot.setupVersion,
+    const snapshot =
+      (await repository.getSnapshot()) ?? initialSetupSnapshot();
+    noStore(context);
+    return context.json(toSetupResponse(snapshot));
+  });
+
+  app.post("/api/setup/calendar/discover", async (context) => {
+    const dependencies = await resolveSetupDependencies(
+      resolveDependencies,
+      context,
+    );
+    const session = await authenticateSetupRequest(context, dependencies);
+    await requireCsrf(context, session);
+    const input = discoverSchema.safeParse(await readSetupJson(context.req.raw));
+    if (!input.success) throw invalidSetupRequest();
+    const client = await resolveCalendarClient(dependencies, session);
+    const calendars = await client
+      .listOwnedSecondaryCalendars()
+      .catch(() => {
+        throw providerUnavailable();
+      });
+    const repository = dependencies.createRepository(
+      session.ownerId,
+      session.googleSubject,
+    );
+    const snapshot = await repository
+      .discover(
+        input.data.setupVersion,
         bindVerificationTime(calendars, dependencies.now()),
         dependencies.now(),
-      );
-    }
+      )
+      .catch(mapRepositoryFailure);
     logCalendarEventSafely(
       dependencies.logger,
       context.get("requestId"),
@@ -179,6 +202,11 @@ export function registerCalendarSetupRoutes(
       noStore(context);
       return context.json(toSetupResponse(snapshot));
     }
+    if (existing?.status === "definite_failure") {
+      const snapshot = await requireSetupSnapshot(repository);
+      noStore(context);
+      return context.json(toSetupResponse(snapshot), 409);
+    }
     const client = await resolveCalendarClient(dependencies, session);
     if (existing) {
       return reconcileCreation(
@@ -192,14 +220,13 @@ export function registerCalendarSetupRoutes(
 
     const preCreateCalendars = await client.listOwnedSecondaryCalendars();
     if (preCreateCalendars.length > 0) {
-      const discovering = await repository
-        .beginDiscovery(input.data.setupVersion, dependencies.now())
+      const choice = await repository
+        .discover(
+          input.data.setupVersion,
+          bindVerificationTime(preCreateCalendars, dependencies.now()),
+          dependencies.now(),
+        )
         .catch(mapRepositoryFailure);
-      const choice = await repository.completeDiscovery(
-        discovering.setupVersion,
-        bindVerificationTime(preCreateCalendars, dependencies.now()),
-        dependencies.now(),
-      );
       noStore(context);
       return context.json(toSetupResponse(choice), 409);
     }
@@ -221,10 +248,42 @@ export function registerCalendarSetupRoutes(
       );
     }
 
+    let created: CreatedSecondaryCalendar;
     try {
-      const created = await client.createSecondaryCalendar(
+      created = await client.createSecondaryCalendar(
         dependencies.userTimeZone,
       );
+    } catch (error) {
+      if (
+        error instanceof CalendarProviderError &&
+        error.outcome === "definite_failure"
+      ) {
+        const snapshot = await repository
+          .markCreationDefiniteFailure(
+            input.data.idempotencyKey,
+            dependencies.now(),
+          )
+          .catch(mapRepositoryFailure);
+        logCalendarEventSafely(
+          dependencies.logger,
+          context.get("requestId"),
+          "calendar.setup.create",
+          "denied",
+          "calendar_creation_rejected",
+        );
+        noStore(context);
+        return context.json(toSetupResponse(snapshot), 409);
+      }
+      return reconcileCreation(
+        context,
+        dependencies,
+        repository,
+        client,
+        started.operation,
+      );
+    }
+
+    try {
       const verified = await client.getCalendar(created.id);
       const snapshot = await repository.completeCreation(
         input.data.idempotencyKey,
@@ -240,7 +299,7 @@ export function registerCalendarSetupRoutes(
       noStore(context);
       return context.json(toSetupResponse(snapshot));
     } catch {
-      // Once Calendars.insert starts, every lost or malformed response is reconciled, never retried.
+      // A successful insert followed by verification/persistence uncertainty is always reconciled.
       return reconcileCreation(
         context,
         dependencies,
@@ -524,7 +583,8 @@ function logCalendarEventSafely(
   outcome: "succeeded" | "failed" | "denied",
   errorCategory?:
     | "calendar_creation_ambiguous"
-    | "calendar_creation_uncertain",
+    | "calendar_creation_uncertain"
+    | "calendar_creation_rejected",
 ): void {
   try {
     logEvent(logger, {
@@ -566,4 +626,14 @@ function providerUnavailable(): never {
       "Calendar setup is temporarily unavailable.",
     ),
   );
+}
+
+/** Returns the read-only virtual state before the first atomic discovery write. */
+function initialSetupSnapshot(): CalendarSetupSnapshot {
+  return Object.freeze({
+    setupVersion: 1,
+    status: "authenticated",
+    actionRequired: false,
+    candidates: Object.freeze([]),
+  });
 }

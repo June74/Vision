@@ -4,10 +4,8 @@ Captures owner and verified subject. Parameterized PostgreSQL compare-and-swap s
 
 ## `getOrCreateAuthenticated`
 Uses insert-on-conflict with exact owner-subject winner validation.
-## `beginDiscovery`
-CASes `authenticated` to `discovering`.
-## `completeDiscovery`
-CASes, clears, and replaces normalized candidates.
+## `discover`
+Lists first, then one statement inserts/CASes the prior version directly to `awaiting_choice` or `awaiting_confirmation`, clears candidates, and inserts only the winner's evidence. A concurrent loser reloads the authoritative snapshot.
 ## `selectExisting`
 Requires a candidate row and fresh evidence in the connection CTE.
 ## `beginCreation`
@@ -18,6 +16,8 @@ Scopes by owner/provider/kind/key and bounds joined rows.
 Atomically connects evidence, records result ID, completes ledger, and increments version.
 ## `markCreationUncertain`
 Moves to `retryable` or `action_required`; it cannot authorize insert.
+## `markCreationDefiniteFailure`
+Atomically marks the ledger `definite_failure`, completes it, advances setup to failed/action-required, and releases the partial unique claim.
 ## `readSnapshot`
 Uses bounded owner-subject reads.
 ## `getSnapshot`

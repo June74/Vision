@@ -3,6 +3,9 @@ import { z } from "zod";
 
 const GOOGLE_CALENDAR_BASE_URL = "https://www.googleapis.com/calendar/v3";
 const MAX_PROVIDER_BODY_BYTES = 1_048_576;
+const MAX_PROVIDER_DEADLINE_MS = 30_000;
+const DEFAULT_PROVIDER_DEADLINE_MS = 10_000;
+const MAX_PROVIDER_BODY_CHUNKS = 4_096;
 const MAX_LIST_PAGES = 10;
 const MAX_CALENDAR_ENTRIES = 1_000;
 const protocolText = z.string().min(1).max(1_024);
@@ -64,13 +67,29 @@ export interface CreatedSecondaryCalendar {
   readonly providerEtag: string;
 }
 
+/** Testable resource bounds whose production values cannot exceed reviewed ceilings. */
+export interface CalendarClientOptions {
+  readonly deadlineMs?: number;
+  readonly maxBodyBytes?: number;
+}
+
+/** Internal marker used only to race fetch and stream reads against one deadline. */
+class CalendarDeadlineExceeded extends Error {}
+
+/** Internal marker for malformed or over-limit provider response bodies. */
+class CalendarResponseRejected extends Error {}
+
 /** Narrow Google adapter that can list, create, and verify calendars but has no event methods. */
 export class CalendarClient {
+  private readonly deadlineMs: number;
+  private readonly maxBodyBytes: number;
+
   /** Binds a short-lived token and all ownership evidence to one server-verified Google subject. */
   constructor(
     private readonly accessToken: string,
     private readonly verifiedGoogleSubject: string,
     private readonly fetcher: typeof fetch = fetch,
+    options: CalendarClientOptions = {},
   ) {
     if (
       !isBoundedText(accessToken, 16 * 1024) ||
@@ -78,6 +97,14 @@ export class CalendarClient {
     ) {
       throw new CalendarProviderError("definite_failure");
     }
+    this.deadlineMs = readPositiveBound(
+      options.deadlineMs ?? DEFAULT_PROVIDER_DEADLINE_MS,
+      MAX_PROVIDER_DEADLINE_MS,
+    );
+    this.maxBodyBytes = readPositiveBound(
+      options.maxBodyBytes ?? MAX_PROVIDER_BODY_BYTES,
+      MAX_PROVIDER_BODY_BYTES,
+    );
   }
 
   /** Lists exact-name owned secondary calendars through bounded CalendarList pagination. */
@@ -93,9 +120,8 @@ export class CalendarClient {
       url.searchParams.set("showDeleted", "false");
       url.searchParams.set("showHidden", "false");
       if (pageToken) url.searchParams.set("pageToken", pageToken);
-      const response = await this.request(url.toString(), { method: "GET" }, false);
       const payload = calendarListSchema.safeParse(
-        await readBoundedJson(response),
+        await this.request(url.toString(), { method: "GET" }, false),
       );
       if (!payload.success) throw new CalendarProviderError("definite_failure");
       const items = payload.data.items ?? [];
@@ -125,7 +151,7 @@ export class CalendarClient {
     if (!isBoundedText(userTimeZone, 255)) {
       throw new CalendarProviderError("definite_failure");
     }
-    const response = await this.request(
+    const payload = insertedCalendarSchema.safeParse(await this.request(
       `${GOOGLE_CALENDAR_BASE_URL}/calendars`,
       {
         method: "POST",
@@ -133,10 +159,7 @@ export class CalendarClient {
         body: JSON.stringify({ summary: "Vision", timeZone: userTimeZone }),
       },
       true,
-    );
-    const payload = insertedCalendarSchema.safeParse(
-      await readBoundedJson(response),
-    );
+    ));
     if (!payload.success) throw new CalendarProviderError("uncertain");
     return Object.freeze({
       id: payload.data.id,
@@ -151,14 +174,11 @@ export class CalendarClient {
     if (!isBoundedText(calendarId, 1_024)) {
       throw new CalendarProviderError("definite_failure");
     }
-    const response = await this.request(
+    const payload = calendarListEntrySchema.safeParse(await this.request(
       `${GOOGLE_CALENDAR_BASE_URL}/users/me/calendarList/${encodeURIComponent(calendarId)}`,
       { method: "GET" },
       false,
-    );
-    const payload = calendarListEntrySchema.safeParse(
-      await readBoundedJson(response),
-    );
+    ));
     if (!payload.success || !isOwnedVisionEntry(payload.data)) {
       throw new CalendarProviderError("definite_failure");
     }
@@ -170,16 +190,29 @@ export class CalendarClient {
     url: string,
     init: RequestInit,
     mutationMayHaveSucceeded: boolean,
-  ): Promise<Response> {
+  ): Promise<unknown> {
+    const controller = new AbortController();
+    let rejectDeadline!: (reason: CalendarDeadlineExceeded) => void;
+    const deadline = new Promise<never>((_resolve, reject) => {
+      rejectDeadline = reject;
+    });
+    const timer = setTimeout(() => {
+      controller.abort();
+      rejectDeadline(new CalendarDeadlineExceeded());
+    }, this.deadlineMs);
     try {
-      const response = await this.fetcher(url, {
-        ...init,
-        headers: {
-          accept: "application/json",
-          authorization: `Bearer ${this.accessToken}`,
-          ...(init.headers ?? {}),
-        },
-      });
+      const response = await Promise.race([
+        this.fetcher(url, {
+          ...init,
+          signal: controller.signal,
+          headers: {
+            accept: "application/json",
+            authorization: `Bearer ${this.accessToken}`,
+            ...(init.headers ?? {}),
+          },
+        }),
+        deadline,
+      ]);
       if (!response.ok) {
         throw new CalendarProviderError(
           mutationMayHaveSucceeded && response.status >= 500
@@ -187,30 +220,71 @@ export class CalendarClient {
             : "definite_failure",
         );
       }
-      return response;
+      return await readBoundedJson(
+        response,
+        deadline,
+        controller,
+        this.maxBodyBytes,
+      );
     } catch (error) {
       if (error instanceof CalendarProviderError) throw error;
       throw new CalendarProviderError(
         mutationMayHaveSucceeded ? "uncertain" : "definite_failure",
       );
+    } finally {
+      clearTimeout(timer);
     }
   }
 }
 
 /** Reads a provider JSON body only after media type and byte bounds are enforced. */
-async function readBoundedJson(response: Response): Promise<unknown> {
+async function readBoundedJson(
+  response: Response,
+  deadline: Promise<never>,
+  controller: AbortController,
+  maximumBytes: number,
+): Promise<unknown> {
   const contentType = response.headers.get("content-type") ?? "";
   if (!/^application\/json(?:;|$)/iu.test(contentType)) {
-    throw new CalendarProviderError("definite_failure");
+    throw new CalendarResponseRejected();
   }
-  const text = await response.text();
-  if (new TextEncoder().encode(text).byteLength > MAX_PROVIDER_BODY_BYTES) {
-    throw new CalendarProviderError("definite_failure");
+  if (!response.body) throw new CalendarResponseRejected();
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let byteLength = 0;
+  let chunkCount = 0;
+  try {
+    while (true) {
+      const { done, value } = await Promise.race([reader.read(), deadline]);
+      if (done) break;
+      chunkCount += 1;
+      if (
+        !value ||
+        chunkCount > MAX_PROVIDER_BODY_CHUNKS ||
+        value.byteLength > maximumBytes - byteLength
+      ) {
+        await reader.cancel().catch(() => {});
+        throw new CalendarResponseRejected();
+      }
+      chunks.push(value);
+      byteLength += value.byteLength;
+    }
+  } catch (error) {
+    controller.abort();
+    await reader.cancel().catch(() => {});
+    throw error;
+  }
+  const bytes = new Uint8Array(byteLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
   }
   try {
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
     return JSON.parse(text) as unknown;
   } catch {
-    throw new CalendarProviderError("definite_failure");
+    throw new CalendarResponseRejected();
   }
 }
 
@@ -249,4 +323,17 @@ function isBoundedText(value: unknown, maximum: number): value is string {
     value.trim().length > 0 &&
     value.length <= maximum
   );
+}
+
+/** Validates a positive integer test override without exceeding the production ceiling. */
+function readPositiveBound(value: unknown, maximum: number): number {
+  if (
+    typeof value !== "number" ||
+    !Number.isSafeInteger(value) ||
+    value <= 0 ||
+    value > maximum
+  ) {
+    throw new CalendarProviderError("definite_failure");
+  }
+  return value;
 }
