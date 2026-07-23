@@ -4,6 +4,7 @@ import {
   createDeletionPurgeRepository,
   createDeletionRepository,
 } from "../../../../src/data/repositories/deletion-repository";
+import * as deletionRepositoryModule from "../../../../src/data/repositories/deletion-repository";
 import type { VisionDatabase } from "../../../../src/data/db";
 import {
   isVerifiedDeletionPurgeAccess,
@@ -33,5 +34,10 @@ describe("deletion repository access capabilities", () => {
     const copied = Object.defineProperties({}, Object.getOwnPropertyDescriptors(access));
 
     expect(isVerifiedDeletionRepositoryAccess(copied)).toBe(false);
+  });
+
+  it("keeps concrete owner and global-purge constructors out of the public module surface", () => {
+    expect(deletionRepositoryModule).not.toHaveProperty("DrizzleDeletionRepository");
+    expect(deletionRepositoryModule).not.toHaveProperty("DrizzleDeletionPurgeRepository");
   });
 });

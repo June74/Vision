@@ -6,7 +6,7 @@ This adapter depends on the pure deletion timing contract, the typed server-only
 
 ## Inputs, outputs, and side effects
 
-User operations accept an opaque node ID and UTC `Date`; system purge accepts only a UTC `Date`. Marking changes one active owner-scoped node to `deleted` and writes a recovery record. Restoring locks the recovery/node pair, makes it active only before the deadline, and removes the recovery record without selecting or changing ciphertext. Purge locks due pairs in node-ID order, validates them again, requires an inserted or verified-identical audit fact, detaches historic audit links, then removes edges, event rows/envelopes, recovery data, and nodes in one statement.
+User operations accept an opaque node ID and UTC `Date`; system purge accepts only a UTC `Date`. Marking changes one active owner-scoped node to `deleted` and writes a recovery record. Restoring locks the recovery/node pair, makes it active only before the deadline, and removes the recovery record without selecting or changing ciphertext. Purge locks due pairs in node-ID order, validates them again, requires a new closed audit fact, detaches historic audit links, then removes edges, event rows/envelopes, recovery data, and nodes in one statement.
 
 ## Failure and privacy behavior
 
@@ -32,7 +32,7 @@ Locks recovery then node, revalidates `deleted` plus `now < purge_after`, and in
 
 **Signature:** `(now) => Promise<{ purgedNodeIds: string[] }>`.
 
-System-only statement that locks and revalidates rows satisfying `purge_after <= now`. An audit collision that is not the same closed episode fact raises an SQL error and leaves every protected row intact.
+System-only statement that locks and revalidates rows satisfying `purge_after <= now`. Every audit-ID collision raises an SQL error and leaves every protected row intact; a normal later retry is idempotent because the successful purge has already removed the eligible recovery row.
 
 ## `createDeletionRepository`
 

@@ -44,11 +44,15 @@ export class DeletionOwnerAccessDeniedError extends Error {
 type PurgedRow = Record<string, unknown>;
 
 /** Owner-bound repository whose user transitions always predicate node and recovery rows by authenticated owner ID. */
-export class DrizzleDeletionRepository implements DeletionRepository {
+class DrizzleDeletionRepository implements DeletionRepository {
   constructor(
     private readonly database: VisionDatabase,
     private readonly access: VerifiedDeletionRepositoryAccess,
-  ) {}
+  ) {
+    if (!isVerifiedDeletionRepositoryAccess(access)) {
+      throw new DeletionOwnerAccessDeniedError();
+    }
+  }
 
   /** Marks only this owner's active node deleted and creates the exact recovery episode in one PostgreSQL statement. */
   async markDeleted(nodeId: string, deletedAt: Date, purgeAfter?: Date): Promise<RecoverableDeletion> {
@@ -129,8 +133,15 @@ export class DrizzleDeletionRepository implements DeletionRepository {
 }
 
 /** System-only repository whose global purge locks recovery/node pairs in node-ID order before all destructive work. */
-export class DrizzleDeletionPurgeRepository implements DeletionPurgeRepository {
-  constructor(private readonly database: VisionDatabase) {}
+class DrizzleDeletionPurgeRepository implements DeletionPurgeRepository {
+  constructor(
+    private readonly database: VisionDatabase,
+    access: VerifiedDeletionPurgeAccess,
+  ) {
+    if (!isVerifiedDeletionPurgeAccess(access)) {
+      throw new DeletionOwnerAccessDeniedError();
+    }
+  }
 
   /** Lets the first locker win: a waiting restore or purge revalidates and then returns no transition or mutation. */
   async purgeExpiredDeletions(now: Date): Promise<PurgeExpiredDeletionsResult> {
@@ -159,12 +170,6 @@ export class DrizzleDeletionPurgeRepository implements DeletionPurgeRepository {
           'purge_' || md5(eligible.owner_id || chr(31) || eligible.node_id || chr(31) || eligible.deleted_at::text),
           eligible.owner_id, null, 'system', 'record.purged', 'succeeded', ${requested.now}::timestamptz
         from eligible
-        on conflict (id) do update set id = audit_events.id
-        where audit_events.owner_id = excluded.owner_id
-          and audit_events.node_id is null
-          and audit_events.actor_type = 'system'
-          and audit_events.action = 'record.purged'
-          and audit_events.outcome = 'succeeded'
         returning id
       ),
       audit_guard as (
@@ -238,7 +243,7 @@ export function createDeletionPurgeRepository(
   if (!isVerifiedDeletionPurgeAccess(access)) {
     throw new DeletionOwnerAccessDeniedError();
   }
-  return new DrizzleDeletionPurgeRepository(database);
+  return new DrizzleDeletionPurgeRepository(database, access);
 }
 
 /** Validates the only non-content restore inputs before owner-scoped SQL is assembled. */

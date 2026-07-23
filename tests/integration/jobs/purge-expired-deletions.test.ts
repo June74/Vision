@@ -80,6 +80,28 @@ async function episodeAuditId(id = nodeId): Promise<string> {
   return result.rows[0]!.id;
 }
 
+async function seedPurgeAuditConflict(
+  overrides: { readonly occurredAt?: Date; readonly provider?: string | null; readonly errorCategory?: string | null } = {},
+): Promise<void> {
+  await pglite.query(
+    `insert into audit_events (id, owner_id, node_id, actor_type, action, outcome, provider, error_category, occurred_at)
+     values ($1, $2, null, 'system', 'record.purged', 'succeeded', $3, $4, $5)`,
+    [
+      await episodeAuditId(),
+      ownerId,
+      overrides.provider ?? null,
+      overrides.errorCategory ?? null,
+      (overrides.occurredAt ?? purgeAfter).toISOString(),
+    ],
+  );
+}
+
+async function expectAuditConflictRollback(): Promise<void> {
+  await expect(purgeJob().purgeExpiredDeletions(purgeAfter)).rejects.toThrow();
+  expect((await pglite.query("select * from events where node_id = $1", [nodeId])).rows).toHaveLength(1);
+  expect((await pglite.query("select * from recoverable_deletions where node_id = $1", [nodeId])).rows).toHaveLength(1);
+}
+
 beforeEach(async () => {
   pglite = new PGlite();
   await pglite.exec(await readFile(resolve(process.cwd(), "migrations/0001_phase_b_foundation.sql"), "utf8"));
@@ -166,9 +188,31 @@ describe("expired-deletion purge job", () => {
       [await episodeAuditId(), purgeAfter.toISOString()],
     );
 
-    await expect(purgeJob().purgeExpiredDeletions(purgeAfter)).rejects.toThrow();
-    expect((await pglite.query("select * from events where node_id = $1", [nodeId])).rows).toHaveLength(1);
-    expect((await pglite.query("select * from recoverable_deletions where node_id = $1", [nodeId])).rows).toHaveLength(1);
+    await expectAuditConflictRollback();
+  });
+
+  it("aborts when an episode-ID collision has the required fields but a different occurred_at", async () => {
+    await markForDeletion();
+    await seedPurgeAuditConflict({ occurredAt: new Date(purgeAfter.getTime() - 1) });
+    await expectAuditConflictRollback();
+  });
+
+  it("aborts when an episode-ID collision retains a provider that the purge fact must not retain", async () => {
+    await markForDeletion();
+    await seedPurgeAuditConflict({ provider: "google_calendar" });
+    await expectAuditConflictRollback();
+  });
+
+  it("aborts when an episode-ID collision retains an error category that the purge fact must not retain", async () => {
+    await markForDeletion();
+    await seedPurgeAuditConflict({ errorCategory: "database_conflict" });
+    await expectAuditConflictRollback();
+  });
+
+  it("aborts a fully lookalike pre-existing fact because it cannot prove the current recovery episode emitted it", async () => {
+    await markForDeletion();
+    await seedPurgeAuditConflict();
+    await expectAuditConflictRollback();
   });
 
   it("records distinct purge facts when a node ID is recreated for a later deletion episode", async () => {

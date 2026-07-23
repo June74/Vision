@@ -14,6 +14,12 @@ const AUTHORIZATION_INTERNAL_MODULE =
   "src/server/authorization/event-content-capability-internal.ts";
 const AUTHORIZATION_VERIFIER_MODULE =
   "src/server/authorization/event-content-authorization.ts";
+const DELETION_TEST_AUTHORIZATION_MODULE =
+  "src/server/authorization/test-deletion-repository-authorization.ts";
+const DELETION_AUTHORIZATION_INTERNAL_MODULE =
+  "src/server/authorization/deletion-capability-internal.ts";
+const DELETION_AUTHORIZATION_VERIFIER_MODULE =
+  "src/server/authorization/deletion-repository-authorization.ts";
 
 /** Validates source reachability and, when present or required, the built Worker artifact. */
 export function validateProductionCryptoBoundary(
@@ -55,6 +61,24 @@ export function validateProductionCryptoBoundary(
         `${sourceRelativePath}: production source bypasses the event authorization verifier`,
       );
     }
+    if (
+      sourceRelativePath !== DELETION_TEST_AUTHORIZATION_MODULE &&
+      source.includes("test-deletion-repository-authorization")
+    ) {
+      violations.push(
+        `${sourceRelativePath}: production source references the Vitest-only deletion authorization issuer`,
+      );
+    }
+    if (
+      source.includes("deletion-capability-internal") &&
+      sourceRelativePath !== DELETION_AUTHORIZATION_VERIFIER_MODULE &&
+      sourceRelativePath !== DELETION_TEST_AUTHORIZATION_MODULE &&
+      sourceRelativePath !== DELETION_AUTHORIZATION_INTERNAL_MODULE
+    ) {
+      violations.push(
+        `${sourceRelativePath}: production source bypasses the deletion authorization verifier`,
+      );
+    }
   }
 
   const bundleRoot = resolve(root, "dist", "vision");
@@ -73,7 +97,11 @@ export function validateProductionCryptoBoundary(
       bundle.includes("test-key-provider") ||
       bundle.includes("VISION_TEST_AUTHORIZATION_MODULE_MUST_NOT_REACH_PRODUCTION_BUNDLE") ||
       bundle.includes("createTestEventRepositoryAccess") ||
-      bundle.includes("test-event-content-authorization")
+      bundle.includes("test-event-content-authorization") ||
+      bundle.includes("VISION_TEST_DELETION_AUTHORIZATION_MODULE_MUST_NOT_REACH_PRODUCTION_BUNDLE") ||
+      bundle.includes("createTestDeletionRepositoryAccess") ||
+      bundle.includes("createTestDeletionPurgeAccess") ||
+      bundle.includes("test-deletion-repository-authorization")
     ) {
       violations.push(
         `${relative(root, path).replaceAll("\\", "/")}: production bundle contains Vitest-only key-provider code`,
