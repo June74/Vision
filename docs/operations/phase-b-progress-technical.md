@@ -144,3 +144,15 @@ Codex's restricted sandbox blocks Wrangler's normal AppData cache/log paths. The
 - Documentation: simple and technical mirrors cover lifecycle, repository, job, and authorization modules, including dependencies, inputs/outputs, side effects, failures, privacy, authority, and covering tests.
 - External state: no isolated Neon migration, checksum capture, least-privilege query, raw sentinel scan, or true multi-session PostgreSQL/Neon race was executed; these remain milestone acceptance gates.
 - Review result: three Important and two Minor initial findings plus two remaining Important re-review findings were repaired; final spec compliance and task quality are approved with zero findings.
+
+## Authentication Task 1 — Identity and calendar-setup state machines
+
+- Status: complete; independent review approved spec compliance and task quality with zero Critical or Important findings and two carried Minors.
+- Commit range: `2fbc6ab..37330d2`.
+- Implementation/fix commits: `0ccc746`, `97f12fa`, `2794343`, and `37330d2`.
+- GREEN evidence: focused identity/setup suite 34/34; full check 155 main tests and 4 Worker tests; documentation, typechecks, pure-domain checks, and production build passed.
+- Identity boundary: exact scalar audience, trusted issuer, expiration, subject, verified email, exact allowlisted subject, and normalized allowlisted email; failures use constant safe errors.
+- Input boundary: claims, allowlists, setup states, commands, and nested calendar-ID collections are descriptor-snapshotted before use to prevent accessor/proxy error leakage and mutation races.
+- Setup boundary: all eight required states, exact creation confirmation, explicit existing-calendar selection, exact current-version checks, deterministic increments, and overflow rejection.
+- Carried Minors: remove stale references to deleted snapshot helpers; align `snapshotCalendarIds` documentation with non-enumerable-index behavior and document or replace its 10,000-ID bound.
+- External state: no Google token, allowlist secret, session store, provider call, or setup persistence was created or contacted.

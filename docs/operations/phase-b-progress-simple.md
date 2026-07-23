@@ -124,10 +124,24 @@ The Domain, data, and privacy milestone is complete. Live Neon migration,
 least-privilege, and true multi-session concurrency checks remain external
 acceptance gates.
 
-### Next — Authentication foundation
+### Authentication Task 1 — Private-pilot identity and setup policy
 
-Add the private-pilot identity and session boundary that will authorize the
-single Vision owner before connecting Google Calendar.
+Vision now has pure server-side rules for admitting only the configured Google
+identity and for moving calendar setup through its allowed states. Identity
+checks require the exact trusted issuer and client audience, an unexpired
+verified email, and both the allowlisted subject and normalized email.
+
+Calendar creation requires the exact phrase `CREATE VISION CALENDAR`. Every
+state change uses a current version, rejects stale or duplicate commands, and
+safely snapshots hostile inputs before evaluating them.
+
+The task passed 155 main tests and 4 Worker tests. Independent review approved
+both the specification and implementation quality with no blocking findings.
+
+### Next — Google OAuth and Vision sessions
+
+Add the server-owned OAuth exchange, encrypted token storage, private session
+cookie, logout, and CSRF protection.
 
 ## Not yet included
 
