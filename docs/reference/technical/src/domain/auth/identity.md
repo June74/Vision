@@ -32,17 +32,17 @@ Trims and lowercases only nonblank strings, preserving a rejection path for abse
 
 Runtime guard used for hostile-input handling of textual claim and configuration values.
 
-## `hasTrustedAudience`
+## `snapshotRecord`
 
-**Signature:** `(audience, trustedAudience) => boolean`.
+**Signature:** `(value, expectedKeys) => Readonly<Record<string, unknown>> | undefined`.
 
-Accepts a matching scalar or a verified audience list containing the configured audience.
+Accepts only an ordinary object with exactly the expected enumerable own data fields, no symbols, and the standard object prototype. It copies descriptor values into a frozen plain snapshot so later authorization never reads the attacker-controlled original again.
 
-## `isUnexpiredAt`
+## `readDateMillis`
 
-**Signature:** `(expiresAt, now) => boolean`.
+**Signature:** `(value) => number | undefined`.
 
-Uses strict epoch comparison (`expiresAt > now`), making expiry at the current instant a denial.
+Requires the standard `Date` prototype and calls `Date.prototype.getTime` directly, avoiding any overridden instance method.
 
 ## Test coverage
 

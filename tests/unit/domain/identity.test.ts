@@ -96,4 +96,36 @@ describe("private-pilot identity authorization", () => {
       "ACCOUNT_NOT_ALLOWED",
     );
   });
+
+  it("converts a throwing claim getter into the constant safe error", () => {
+    const hostileClaims = Object.defineProperty({ ...verifiedClaims }, "email", {
+      get: () => {
+        throw new Error("hostile claim getter");
+      },
+    });
+
+    expect(() => authorizeIdentity(hostileClaims as never, allowlist, now)).toThrow("ACCOUNT_NOT_ALLOWED");
+  });
+
+  it("converts an allowlist proxy descriptor trap into the constant safe error", () => {
+    const hostileAllowlist = new Proxy(allowlist, {
+      getOwnPropertyDescriptor: () => {
+        throw new Error("hostile allowlist proxy");
+      },
+    });
+
+    expect(() => authorizeIdentity(verifiedClaims, hostileAllowlist, now)).toThrow("ACCOUNT_NOT_ALLOWED");
+  });
+
+  it("uses the intrinsic date reader so an overridden claim date method cannot leak", () => {
+    const hostileExpiry = Object.assign(new Date("2026-07-23T12:01:00.000Z"), {
+      getTime: () => {
+        throw new Error("hostile date method");
+      },
+    });
+
+    expect(() =>
+      authorizeIdentity({ ...verifiedClaims, expiresAt: hostileExpiry }, allowlist, now),
+    ).not.toThrow();
+  });
 });

@@ -54,6 +54,22 @@ Checks that a setup command has safe fields before the state machine uses it.
 
 Reads a command field only when it is ordinary stored data, not a getter or hostile proxy that can run code.
 
+## `snapshotSetupState`
+
+Builds a safe frozen copy of the current setup state before it is used.
+
+## `snapshotSetupCommand`
+
+Builds a safe frozen copy of one allowed setup command before it is used.
+
+## `snapshotRecord`
+
+Copies allowed ordinary data fields without running getters.
+
+## `hasExactKeys`
+
+Checks that a state or command has no unexpected fields.
+
 ## `rejectInvalidTransition`
 
 Stops a command that does not make sense in the current state.

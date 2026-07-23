@@ -170,9 +170,12 @@ export class CalendarSetupTransitionError extends Error {
  * to request a secondary-calendar creation, and no state transition can write an event.
  */
 export function transitionCalendarSetup(
-  state: CalendarSetupState,
-  command: CalendarSetupCommand,
+  stateInput: CalendarSetupState,
+  commandInput: CalendarSetupCommand,
 ): CalendarSetupState {
+  const state = snapshotSetupState(stateInput);
+  const command = snapshotSetupCommand(commandInput);
+  if (!state || !command) throw new CalendarSetupTransitionError(STALE_SETUP_VERSION);
   assertCurrentVersion(state, command);
 
   if (command.type === "sign-out" && state.status !== "signed_out") {
@@ -235,12 +238,8 @@ export function transitionCalendarSetup(
 }
 
 /** Verifies that a command is based on the current valid version before any state transition occurs. */
-function assertCurrentVersion(state: unknown, command: unknown): void {
-  if (
-    !isValidCalendarSetupState(state) ||
-    !isValidCalendarSetupCommand(command) ||
-    state.setupVersion !== command.setupVersion
-  ) {
+function assertCurrentVersion(state: CalendarSetupState, command: CalendarSetupCommand): void {
+  if (state.setupVersion !== command.setupVersion) {
     throw new CalendarSetupTransitionError(STALE_SETUP_VERSION);
   }
 }
@@ -270,10 +269,6 @@ function isSetupVersion(value: unknown): value is number {
 }
 
 /** Returns whether a record is present and can safely expose runtime input fields. */
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object";
-}
-
 /** Returns whether a value names one of the eight supported calendar setup states. */
 function isCalendarSetupStatus(value: unknown): value is CalendarSetupStatus {
   return (
@@ -299,71 +294,82 @@ function isCalendarIdArray(value: unknown): value is readonly string[] {
 }
 
 /** Validates a runtime state shape before transition logic reads its status-specific fields. */
-function isValidCalendarSetupState(value: unknown): value is CalendarSetupState {
-  if (!isRecord(value) || !isSetupVersion(value.setupVersion) || !isCalendarSetupStatus(value.status)) {
-    return false;
+function snapshotSetupState(value: unknown): CalendarSetupState | undefined {
+  const record = snapshotRecord(value, ["setupVersion", "status", "candidates", "calendarId", "connection"]);
+  if (!record || !isSetupVersion(record.setupVersion) || !isCalendarSetupStatus(record.status)) {
+    return undefined;
   }
-  if (value.status === "awaiting_choice") {
-    return isCalendarIdArray(value.candidates) && value.candidates.length > 0;
+  if (record.status === "awaiting_choice") {
+    return hasExactKeys(record, ["setupVersion", "status", "candidates"]) && isCalendarIdArray(record.candidates) && record.candidates.length > 0
+      ? Object.freeze({ candidates: Object.freeze([...record.candidates]), setupVersion: record.setupVersion, status: record.status })
+      : undefined;
   }
-  if (value.status === "connected") {
-    return (
-      isNonEmptyCalendarId(value.calendarId) &&
-      (value.connection === "created" || value.connection === "existing")
-    );
+  if (record.status === "connected") {
+    return hasExactKeys(record, ["setupVersion", "status", "calendarId", "connection"]) && isNonEmptyCalendarId(record.calendarId) && (record.connection === "created" || record.connection === "existing")
+      ? Object.freeze({ calendarId: record.calendarId, connection: record.connection, setupVersion: record.setupVersion, status: record.status })
+      : undefined;
   }
-  return true;
+  return hasExactKeys(record, ["setupVersion", "status"])
+    ? Object.freeze({ setupVersion: record.setupVersion, status: record.status }) as CalendarSetupState
+    : undefined;
 }
 
 /** Validates runtime command fields before transition logic consumes command-specific payloads. */
-function isValidCalendarSetupCommand(value: unknown): value is CalendarSetupCommand {
-  if (!isRecord(value)) {
-    return false;
-  }
-  const setupVersion = getOwnDataProperty(value, "setupVersion");
-  const type = getOwnDataProperty(value, "type");
-  if (!setupVersion.found || !isSetupVersion(setupVersion.value) || !type.found) {
-    return false;
-  }
-
-  switch (type.value) {
+function snapshotSetupCommand(value: unknown): CalendarSetupCommand | undefined {
+  const record = snapshotRecord(value, ["setupVersion", "type", "calendarIds", "calendarId", "phrase"]);
+  if (!record || !isSetupVersion(record.setupVersion)) return undefined;
+  switch (record.type) {
     case "sign-in":
     case "start-discovery":
     case "fail":
     case "retry":
     case "sign-out":
-      return true;
+      return hasExactKeys(record, ["setupVersion", "type"])
+        ? Object.freeze({ setupVersion: record.setupVersion, type: record.type }) as CalendarSetupCommand
+        : undefined;
     case "discovery-complete": {
-      const calendarIds = getOwnDataProperty(value, "calendarIds");
-      return calendarIds.found && isCalendarIdArray(calendarIds.value);
+      return hasExactKeys(record, ["setupVersion", "type", "calendarIds"]) && isCalendarIdArray(record.calendarIds)
+        ? Object.freeze({ calendarIds: Object.freeze([...record.calendarIds]), setupVersion: record.setupVersion, type: record.type })
+        : undefined;
     }
     case "select-existing-calendar":
     case "creation-complete": {
-      const calendarId = getOwnDataProperty(value, "calendarId");
-      return calendarId.found && isNonEmptyCalendarId(calendarId.value);
+      return hasExactKeys(record, ["setupVersion", "type", "calendarId"]) && isNonEmptyCalendarId(record.calendarId)
+        ? Object.freeze({ calendarId: record.calendarId, setupVersion: record.setupVersion, type: record.type }) as CalendarSetupCommand
+        : undefined;
     }
     case "confirm-create": {
-      const phrase = getOwnDataProperty(value, "phrase");
-      return phrase.found && typeof phrase.value === "string";
+      return hasExactKeys(record, ["setupVersion", "type", "phrase"]) && typeof record.phrase === "string"
+        ? Object.freeze({ phrase: record.phrase, setupVersion: record.setupVersion, type: record.type })
+        : undefined;
     }
     default:
-      return false;
+      return undefined;
   }
 }
 
-/** Reads an own data property without evaluating a getter on hostile command input. */
-function getOwnDataProperty(
-  value: Record<string, unknown>,
-  key: string,
-): { readonly found: boolean; readonly value: unknown } {
+/** Copies allowed enumerable own data properties without invoking original getters after validation. */
+function snapshotRecord(value: unknown, allowedKeys: readonly string[]): Readonly<Record<string, unknown>> | undefined {
   try {
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    return descriptor && "value" in descriptor
-      ? { found: true, value: descriptor.value }
-      : { found: false, value: undefined };
+    if (value === null || typeof value !== "object" || Object.getPrototypeOf(value) !== Object.prototype) return undefined;
+    const names = Object.getOwnPropertyNames(value);
+    if (Object.getOwnPropertySymbols(value).length !== 0 || !names.every((name) => allowedKeys.includes(name))) return undefined;
+    const snapshot: Record<string, unknown> = {};
+    for (const name of names) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, name);
+      if (!descriptor || !("value" in descriptor) || !descriptor.enumerable) return undefined;
+      snapshot[name] = descriptor.value;
+    }
+    return Object.freeze(snapshot);
   } catch {
-    return { found: false, value: undefined };
+    return undefined;
   }
+}
+
+/** Returns whether a snapshot has exactly the fields required by its state or command variant. */
+function hasExactKeys(value: Readonly<Record<string, unknown>>, expectedKeys: readonly string[]): boolean {
+  const names = Object.keys(value);
+  return names.length === expectedKeys.length && expectedKeys.every((key) => names.includes(key));
 }
 
 /** Throws the constant safe error for a command that is not valid in the current state. */

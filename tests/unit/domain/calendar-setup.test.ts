@@ -202,4 +202,47 @@ describe("calendar setup state machine", () => {
       }),
     ).toThrow("STALE_SETUP_VERSION");
   });
+
+  it("converts a throwing setup-state getter into the constant safe error", () => {
+    const hostileState = Object.defineProperty({ status: "authenticated" }, "setupVersion", {
+      get: () => {
+        throw new Error("hostile state getter");
+      },
+    });
+
+    expect(() => transitionCalendarSetup(hostileState as never, { setupVersion: 1, type: "start-discovery" })).toThrow(
+      "STALE_SETUP_VERSION",
+    );
+  });
+
+  it("uses a command snapshot when a proxy get trap throws after descriptor validation", () => {
+    const command = new Proxy({ setupVersion: 0, type: "sign-in" }, {
+      get: () => {
+        throw new Error("hostile post-validation get trap");
+      },
+    });
+
+    expect(transitionCalendarSetup(signedOut, command as never)).toEqual({
+      setupVersion: 1,
+      status: "authenticated",
+    });
+  });
+
+  it("uses the extracted command snapshot despite a mutation after descriptor extraction", () => {
+    const target = { setupVersion: 0, type: "sign-in" };
+    const command = new Proxy(target, {
+      getOwnPropertyDescriptor: (value, key) => {
+        const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+        if (key === "type") {
+          value.type = "start-discovery";
+        }
+        return descriptor;
+      },
+    });
+
+    expect(transitionCalendarSetup(signedOut, command as never)).toEqual({
+      setupVersion: 1,
+      status: "authenticated",
+    });
+  });
 });

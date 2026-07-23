@@ -21,3 +21,11 @@ Checks that text is present rather than blank.
 ## `isUnexpiredAt`
 
 Checks that the token expiry is later than the server's current time.
+
+## `snapshotRecord`
+
+Copies only expected ordinary claim or allowlist fields before checking them.
+
+## `readDateMillis`
+
+Reads a date with JavaScript's trusted built-in method.

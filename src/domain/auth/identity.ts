@@ -46,35 +46,63 @@ export function authorizeIdentity(
   allowlist: IdentityAllowlist,
   now = new Date(),
 ): AuthorizedIdentity {
-  if (
-    claims === null ||
-    typeof claims !== "object" ||
-    allowlist === null ||
-    typeof allowlist !== "object"
-  ) {
+  const claimSnapshot = snapshotRecord(claims, ["audience", "email", "emailVerified", "expiresAt", "issuer", "sub"]);
+  const allowlistSnapshot = snapshotRecord(allowlist, ["email", "sub", "trustedAudience", "trustedIssuer"]);
+  const expiresAt = claimSnapshot ? readDateMillis(claimSnapshot.expiresAt) : undefined;
+  const currentTime = readDateMillis(now);
+  if (!claimSnapshot || !allowlistSnapshot || expiresAt === undefined || currentTime === undefined) {
     throw new IdentityAuthorizationError();
   }
-  const normalizedAllowlistedEmail = normalizeEmail(allowlist.email);
-  const normalizedClaimEmail = normalizeEmail(claims.email);
+  const normalizedAllowlistedEmail = normalizeEmail(allowlistSnapshot.email);
+  const normalizedClaimEmail = normalizeEmail(claimSnapshot.email);
 
   if (
-    !isNonEmptyString(claims.sub) ||
-    !isNonEmptyString(allowlist.sub) ||
-    !isNonEmptyString(allowlist.trustedIssuer) ||
-    !isNonEmptyString(allowlist.trustedAudience) ||
+    !isNonEmptyString(claimSnapshot.sub) ||
+    !isNonEmptyString(allowlistSnapshot.sub) ||
+    !isNonEmptyString(allowlistSnapshot.trustedIssuer) ||
+    !isNonEmptyString(allowlistSnapshot.trustedAudience) ||
     normalizedAllowlistedEmail === undefined ||
     normalizedClaimEmail === undefined ||
-    claims.emailVerified !== true ||
-    claims.issuer !== allowlist.trustedIssuer ||
-    claims.audience !== allowlist.trustedAudience ||
-    !isUnexpiredAt(claims.expiresAt, now) ||
-    claims.sub !== allowlist.sub ||
+    claimSnapshot.emailVerified !== true ||
+    claimSnapshot.issuer !== allowlistSnapshot.trustedIssuer ||
+    claimSnapshot.audience !== allowlistSnapshot.trustedAudience ||
+    expiresAt <= currentTime ||
+    claimSnapshot.sub !== allowlistSnapshot.sub ||
     normalizedClaimEmail !== normalizedAllowlistedEmail
   ) {
     throw new IdentityAuthorizationError();
   }
 
-  return { email: normalizedAllowlistedEmail, subject: claims.sub };
+  return Object.freeze({ email: normalizedAllowlistedEmail, subject: claimSnapshot.sub });
+}
+
+/** Copies exact enumerable own data properties from a normal object without invoking getters. */
+function snapshotRecord(value: unknown, expectedKeys: readonly string[]): Readonly<Record<string, unknown>> | undefined {
+  try {
+    if (value === null || typeof value !== "object" || Object.getPrototypeOf(value) !== Object.prototype) return undefined;
+    const names = Object.getOwnPropertyNames(value);
+    if (Object.getOwnPropertySymbols(value).length !== 0 || names.length !== expectedKeys.length || !expectedKeys.every((key) => names.includes(key))) return undefined;
+    const snapshot: Record<string, unknown> = {};
+    for (const key of expectedKeys) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!descriptor || !("value" in descriptor) || !descriptor.enumerable) return undefined;
+      snapshot[key] = descriptor.value;
+    }
+    return Object.freeze(snapshot);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Reads a Date's epoch milliseconds through the trusted intrinsic without calling an overridden method. */
+function readDateMillis(value: unknown): number | undefined {
+  try {
+    if (Object.getPrototypeOf(value) !== Date.prototype) return undefined;
+    const milliseconds = Date.prototype.getTime.call(value);
+    return Number.isNaN(milliseconds) ? undefined : milliseconds;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Normalizes an email for exact allowlist comparison without accepting an empty value. */
@@ -88,15 +116,4 @@ function normalizeEmail(value: unknown): string | undefined {
 /** Returns whether a value is a string containing at least one non-whitespace character. */
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
-}
-
-/** Requires a valid expiry instant strictly later than the injected current server instant. */
-function isUnexpiredAt(expiresAt: unknown, now: unknown): boolean {
-  return (
-    expiresAt instanceof Date &&
-    now instanceof Date &&
-    !Number.isNaN(expiresAt.getTime()) &&
-    !Number.isNaN(now.getTime()) &&
-    expiresAt.getTime() > now.getTime()
-  );
 }

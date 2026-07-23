@@ -86,6 +86,22 @@ Enumerates only the nine command literals in `CalendarSetupCommand`, validates t
 
 Uses an own-property descriptor to accept only data properties and converts descriptor-trap failures to an absent property. This keeps hostile getters and proxies from leaking errors while validating untrusted command-shaped input.
 
+## `snapshotSetupState`
+
+Parses a descriptor-derived frozen record into one exact setup-state variant before transition code reads it.
+
+## `snapshotSetupCommand`
+
+Enumerates the nine command variants and parses one descriptor-derived frozen command snapshot before transition code reads it.
+
+## `snapshotRecord`
+
+Copies only enumerable own data properties from a standard object prototype, rejects symbols and unexpected fields, and catches reflection traps.
+
+## `hasExactKeys`
+
+Requires each state and command variant to have exactly its contract fields after snapshot extraction.
+
 ## `rejectInvalidTransition`
 
 **Signature:** `() => never`.
