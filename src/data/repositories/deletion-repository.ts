@@ -1,21 +1,31 @@
-/** Persists recoverable deletion, restoration, and permanent purge as PostgreSQL atomic statements. */
+/** Persists owner-bound recovery and system-authorized purge through lock-safe PostgreSQL statements. */
 import { sql } from "drizzle-orm";
 import { markDeleted as createDeletionRecord, type RecoverableDeletion } from "../../domain/lifecycle/deletion";
+import {
+  isVerifiedDeletionPurgeAccess,
+  isVerifiedDeletionRepositoryAccess,
+  type VerifiedDeletionPurgeAccess,
+  type VerifiedDeletionRepositoryAccess,
+} from "../../server/authorization/deletion-repository-authorization";
 import type { VisionDatabase } from "../db";
 
-/** Result returned by a purge run after every eligible node has been removed. */
+/** Result returned by a global system purge after every successfully claimed deletion episode is removed. */
 export interface PurgeExpiredDeletionsResult {
   readonly purgedNodeIds: string[];
 }
 
-/** Server-side persistence boundary for the fixed recoverable-deletion lifecycle. */
+/** User-request surface scoped to one verified authenticated owner. */
 export interface DeletionRepository {
   markDeleted(nodeId: string, deletedAt: Date, purgeAfter?: Date): Promise<RecoverableDeletion>;
   restoreDeleted(nodeId: string, now: Date): Promise<boolean>;
+}
+
+/** System-only surface intentionally separated from ordinary owner requests. */
+export interface DeletionPurgeRepository {
   purgeExpiredDeletions(now: Date): Promise<PurgeExpiredDeletionsResult>;
 }
 
-/** Reports a requested lifecycle transition that does not match the authoritative row state. */
+/** Reports a lifecycle transition that is unavailable in the caller's verified owner scope. */
 export class DeletionStateConflictError extends Error {
   constructor() {
     super("Deletion lifecycle transition is not available.");
@@ -23,20 +33,33 @@ export class DeletionStateConflictError extends Error {
   }
 }
 
+/** Reports a forged or missing owner/system capability without leaking which authority was expected. */
+export class DeletionOwnerAccessDeniedError extends Error {
+  constructor() {
+    super("Deletion repository access is not authorized.");
+    this.name = "DeletionOwnerAccessDeniedError";
+  }
+}
+
 type PurgedRow = Record<string, unknown>;
 
-/** Concrete Neon/Drizzle adapter whose data-modifying CTEs are single PostgreSQL transactions. */
+/** Owner-bound repository whose user transitions always predicate node and recovery rows by authenticated owner ID. */
 export class DrizzleDeletionRepository implements DeletionRepository {
-  constructor(private readonly database: VisionDatabase) {}
+  constructor(
+    private readonly database: VisionDatabase,
+    private readonly access: VerifiedDeletionRepositoryAccess,
+  ) {}
 
-  /** Marks an active node deleted and records its exact recovery deadline without moving protected ciphertext. */
+  /** Marks only this owner's active node deleted and creates the exact recovery episode in one PostgreSQL statement. */
   async markDeleted(nodeId: string, deletedAt: Date, purgeAfter?: Date): Promise<RecoverableDeletion> {
     const deletion = createDeletionRecord(nodeId, deletedAt, purgeAfter);
     const result = await this.database.execute(sql`
       with changed_node as (
         update nodes
         set lifecycle = 'deleted', updated_at = ${deletion.deletedAt}::timestamptz, version = version + 1
-        where id = ${deletion.nodeId} and lifecycle = 'active'
+        where id = ${deletion.nodeId}
+          and owner_id = ${this.access.authenticatedOwnerId}
+          and lifecycle = 'active'
         returning id, owner_id
       ),
       recovery as (
@@ -53,84 +76,141 @@ export class DrizzleDeletionRepository implements DeletionRepository {
     return deletion;
   }
 
-  /** Restores a deleted node only before expiry and deletes its recovery marker without reading or rewriting ciphertext. */
+  /** Locks recovery then node, revalidates the pre-deadline state, and restores exactly one owner-bound record. */
   async restoreDeleted(nodeId: string, now: Date): Promise<boolean> {
     const requested = createRestoreRequest(nodeId, now);
     const result = await this.database.execute(sql`
-      with eligible as (
-        select recovery.node_id, recovery.owner_id
+      with locked as (
+        select recovery.node_id, recovery.owner_id, recovery.purge_after
         from recoverable_deletions recovery
         inner join nodes node on node.id = recovery.node_id and node.owner_id = recovery.owner_id
         where recovery.node_id = ${requested.nodeId}
+          and recovery.owner_id = ${this.access.authenticatedOwnerId}
           and node.lifecycle = 'deleted'
-          and ${requested.now}::timestamptz < recovery.purge_after
+          and recovery.purge_after > ${requested.now}::timestamptz
+        order by recovery.node_id
+        for update of recovery, node
+      ),
+      eligible as (
+        select locked.node_id, locked.owner_id
+        from locked
+        inner join recoverable_deletions recovery on recovery.node_id = locked.node_id and recovery.owner_id = locked.owner_id
+        inner join nodes node on node.id = locked.node_id and node.owner_id = locked.owner_id
+        where node.lifecycle = 'deleted'
+          and recovery.purge_after > ${requested.now}::timestamptz
       ),
       restored as (
         update nodes node
         set lifecycle = 'active', updated_at = ${requested.now}::timestamptz, version = node.version + 1
         from eligible
-        where node.id = eligible.node_id and node.owner_id = eligible.owner_id
-        returning node.id
+        where node.id = eligible.node_id
+          and node.owner_id = eligible.owner_id
+          and node.lifecycle = 'deleted'
+          and exists (
+            select 1 from recoverable_deletions recovery
+            where recovery.node_id = eligible.node_id
+              and recovery.owner_id = eligible.owner_id
+              and recovery.purge_after > ${requested.now}::timestamptz
+          )
+        returning node.id, node.owner_id
       ),
       removed_recovery as (
         delete from recoverable_deletions recovery
         using restored
         where recovery.node_id = restored.id
+          and recovery.owner_id = restored.owner_id
+          and recovery.purge_after > ${requested.now}::timestamptz
         returning recovery.node_id
       )
       select node_id as "nodeId" from removed_recovery
     `);
     return result.rows.length === 1;
   }
+}
 
-  /** Purges every due record with one statement: detach safe audit facts, remove data rows, then add a safe purge fact. */
+/** System-only repository whose global purge locks recovery/node pairs in node-ID order before all destructive work. */
+export class DrizzleDeletionPurgeRepository implements DeletionPurgeRepository {
+  constructor(private readonly database: VisionDatabase) {}
+
+  /** Lets the first locker win: a waiting restore or purge revalidates and then returns no transition or mutation. */
   async purgeExpiredDeletions(now: Date): Promise<PurgeExpiredDeletionsResult> {
     const requested = createPurgeRequest(now);
     const result = await this.database.execute<PurgedRow>(sql`
-      with expired as (
-        select recovery.node_id, recovery.owner_id
+      with locked as (
+        select recovery.node_id, recovery.owner_id, recovery.deleted_at, recovery.purge_after
         from recoverable_deletions recovery
         inner join nodes node on node.id = recovery.node_id and node.owner_id = recovery.owner_id
         where recovery.purge_after <= ${requested.now}::timestamptz
           and node.lifecycle = 'deleted'
+        order by recovery.node_id
+        for update of recovery, node
+      ),
+      eligible as (
+        select locked.node_id, locked.owner_id, locked.deleted_at
+        from locked
+        inner join recoverable_deletions recovery on recovery.node_id = locked.node_id and recovery.owner_id = locked.owner_id
+        inner join nodes node on node.id = locked.node_id and node.owner_id = locked.owner_id
+        where node.lifecycle = 'deleted'
+          and recovery.purge_after <= ${requested.now}::timestamptz
+      ),
+      purge_audit as (
+        insert into audit_events (id, owner_id, node_id, actor_type, action, outcome, occurred_at)
+        select
+          'purge_' || md5(eligible.owner_id || chr(31) || eligible.node_id || chr(31) || eligible.deleted_at::text),
+          eligible.owner_id, null, 'system', 'record.purged', 'succeeded', ${requested.now}::timestamptz
+        from eligible
+        on conflict (id) do update set id = audit_events.id
+        where audit_events.owner_id = excluded.owner_id
+          and audit_events.node_id is null
+          and audit_events.actor_type = 'system'
+          and audit_events.action = 'record.purged'
+          and audit_events.outcome = 'succeeded'
+        returning id
+      ),
+      audit_guard as (
+        select case
+          when (select count(*) from purge_audit) = (select count(*) from eligible) then true
+          else (select 1 / (count(*) - count(*)) = 1 from purge_audit)
+        end as allowed
+      ),
+      claimed_recovery as (
+        delete from recoverable_deletions recovery
+        using eligible, audit_guard, nodes node
+        where audit_guard.allowed
+          and recovery.node_id = eligible.node_id
+          and recovery.owner_id = eligible.owner_id
+          and node.id = eligible.node_id
+          and node.owner_id = eligible.owner_id
+          and node.lifecycle = 'deleted'
+          and recovery.purge_after <= ${requested.now}::timestamptz
+        returning recovery.node_id, recovery.owner_id
       ),
       detached_audit as (
         update audit_events audit
         set node_id = null
-        from expired
-        where audit.node_id = expired.node_id and audit.owner_id = expired.owner_id
+        from claimed_recovery
+        where audit.node_id = claimed_recovery.node_id and audit.owner_id = claimed_recovery.owner_id
         returning audit.id
       ),
       removed_edges as (
         delete from edges edge
-        using expired
-        where edge.owner_id = expired.owner_id
-          and (edge.source_node_id = expired.node_id or edge.destination_node_id = expired.node_id)
+        using claimed_recovery
+        where edge.owner_id = claimed_recovery.owner_id
+          and (edge.source_node_id = claimed_recovery.node_id or edge.destination_node_id = claimed_recovery.node_id)
         returning edge.id
       ),
       removed_events as (
         delete from events event
-        using expired
-        where event.node_id = expired.node_id and event.owner_id = expired.owner_id
+        using claimed_recovery
+        where event.node_id = claimed_recovery.node_id and event.owner_id = claimed_recovery.owner_id
         returning event.node_id
-      ),
-      removed_recovery as (
-        delete from recoverable_deletions recovery
-        using expired
-        where recovery.node_id = expired.node_id and recovery.owner_id = expired.owner_id
-        returning recovery.node_id
-      ),
-      purge_audit as (
-        insert into audit_events (id, owner_id, node_id, actor_type, action, outcome, occurred_at)
-        select 'purge_' || md5(expired.node_id), expired.owner_id, null, 'system', 'record.purged', 'succeeded', ${requested.now}::timestamptz
-        from expired
-        on conflict (id) do nothing
-        returning id
       ),
       removed_nodes as (
         delete from nodes node
-        using expired
-        where node.id = expired.node_id and node.owner_id = expired.owner_id
+        using claimed_recovery
+        where node.id = claimed_recovery.node_id
+          and node.owner_id = claimed_recovery.owner_id
+          and node.lifecycle = 'deleted'
         returning node.id
       )
       select id as "nodeId" from removed_nodes order by id
@@ -139,24 +219,41 @@ export class DrizzleDeletionRepository implements DeletionRepository {
   }
 }
 
-/** Creates the production deletion repository without exposing a client-side database path. */
-export function createDeletionRepository(database: VisionDatabase): DeletionRepository {
-  return new DrizzleDeletionRepository(database);
+/** Creates an owner-scoped repository only from a registered verified owner capability. */
+export function createDeletionRepository(
+  database: VisionDatabase,
+  access: VerifiedDeletionRepositoryAccess,
+): DeletionRepository {
+  if (!isVerifiedDeletionRepositoryAccess(access)) {
+    throw new DeletionOwnerAccessDeniedError();
+  }
+  return new DrizzleDeletionRepository(database, access);
 }
 
-/** Validates the only non-content restore inputs before a statement is assembled. */
+/** Creates the distinct global purge repository only from the registered trusted scheduler capability. */
+export function createDeletionPurgeRepository(
+  database: VisionDatabase,
+  access: VerifiedDeletionPurgeAccess,
+): DeletionPurgeRepository {
+  if (!isVerifiedDeletionPurgeAccess(access)) {
+    throw new DeletionOwnerAccessDeniedError();
+  }
+  return new DrizzleDeletionPurgeRepository(database);
+}
+
+/** Validates the only non-content restore inputs before owner-scoped SQL is assembled. */
 function createRestoreRequest(nodeId: string, now: Date): { readonly nodeId: string; readonly now: Date } {
   const placeholder = createDeletionRecord(nodeId, now);
   return { nodeId: placeholder.nodeId, now: placeholder.deletedAt };
 }
 
-/** Validates the UTC purge time using the pure lifecycle contract. */
+/** Validates the UTC purge time before it reaches the system-authorized PostgreSQL boundary. */
 function createPurgeRequest(now: Date): { readonly now: Date } {
   const placeholder = createDeletionRecord("purge_request", now);
   return { now: placeholder.deletedAt };
 }
 
-/** Decodes an opaque node ID returned by the atomic purge statement without coercion. */
+/** Decodes an opaque node ID returned by the atomic system purge statement without coercion. */
 function decodePurgedNodeId(row: PurgedRow): string {
   if (typeof row.nodeId !== "string" || row.nodeId.length === 0) {
     throw new Error("Purge returned an invalid node ID.");

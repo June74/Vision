@@ -16,7 +16,11 @@ Permanently removes due records, their encrypted event rows, edges, and recovery
 
 ## `createDeletionRepository`
 
-Builds the server-side deletion repository.
+Builds an owner-scoped deletion repository only after the server gives it verified owner access.
+
+## `createDeletionPurgeRepository`
+
+Builds the separate system-only repository used by the scheduled purge job.
 
 ## `createRestoreRequest`
 

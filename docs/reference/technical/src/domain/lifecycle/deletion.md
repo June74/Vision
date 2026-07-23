@@ -1,31 +1,37 @@
 # `src/domain/lifecycle/deletion.ts`
 
-Pure domain timing contract for a `RecoverableDeletion`. `RECOVERY_WINDOW_MS` is exactly `30 * 24 * 60 * 60 * 1000`; no local timezone or calendar-month arithmetic is used.
+## Dependencies, inputs, and role
+
+This pure module has no database, provider, authorization, or crypto dependency. It accepts valid JavaScript `Date` values and opaque IDs, returns defensive `Date` copies, and defines the fixed `30 * 24 * 60 * 60 * 1000` millisecond window. It validates request data; PostgreSQL repository predicates remain the authoritative live boundary for concurrent row eligibility.
+
+## Outputs, failures, and privacy
+
+Invalid IDs, invalid dates, or a caller-supplied deadline that is not exact throw `DeletionLifecycleValidationError` with constant messages. The module never persists, decrypts, logs, or authorizes content. Its behavior is covered by `tests/unit/domain/deletion.test.ts`; repository boundary behavior is covered separately by `tests/integration/jobs/purge-expired-deletions.test.ts`.
 
 ## `markDeleted`
 
 **Signature:** `(nodeId, deletedAt, purgeAfter?) => RecoverableDeletion`.
 
-Validates a nonempty opaque ID and valid `Date` instances. A supplied deadline must equal the fixed UTC duration exactly; it returns defensive `Date` copies and throws a constant validation error otherwise.
+Returns a validated deletion episode only if the deadline exactly equals the fixed UTC duration.
 
 ## `calculatePurgeAfter`
 
-**Signature:** `(deletedAt: Date) => Date`.
+**Signature:** `(deletedAt) => Date`.
 
-Produces the authoritative purge instant by millisecond addition. It has no persistence side effects.
+Uses epoch arithmetic rather than local time or a calendar-month interpretation.
 
 ## `canRestore`
 
 **Signature:** `(deletion, now) => boolean`.
 
-Returns `now < purgeAfter`. The strict comparison prevents restoration at the same instant a job is authorized to purge.
+Returns `now < purgeAfter`; exact deadline returns false.
 
 ## `isPurgeDue`
 
 **Signature:** `(deletion, now) => boolean`.
 
-Returns `now >= purgeAfter`, the complementary permanent-purge boundary.
+Returns `now >= purgeAfter`; unit coverage pins both sides of the boundary.
 
 ## `assertValidInstant`
 
-Internal validator that rejects invalid `Date` values without echoing input data. Covered by `tests/unit/domain/deletion.test.ts` through public lifecycle APIs.
+Internal `Date` validator used by all exported timing rules.
