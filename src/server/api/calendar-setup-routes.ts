@@ -32,6 +32,7 @@ import { parseVisionUserTimeZone } from "../env";
 import { throwVisionError, VisionError } from "../errors";
 import { logEvent, type SafeLogger } from "../logging";
 
+const CREATE_OPERATION_LEASE_MS = 120_000;
 const selectSchema = z
   .object({
     setupVersion: z.number().int().positive(),
@@ -209,12 +210,17 @@ export function registerCalendarSetupRoutes(
     }
     const client = await resolveCalendarClient(dependencies, session);
     if (existing) {
+      const replay = await prepareCreationReplay(
+        repository,
+        existing,
+        dependencies.now(),
+      );
       return reconcileCreation(
         context,
         dependencies,
         repository,
         client,
-        existing,
+        replay,
       );
     }
 
@@ -239,12 +245,17 @@ export function registerCalendarSetupRoutes(
       )
       .catch(mapRepositoryFailure);
     if (started.kind === "existing") {
+      const replay = await prepareCreationReplay(
+        repository,
+        started.operation,
+        dependencies.now(),
+      );
       return reconcileCreation(
         context,
         dependencies,
         repository,
         client,
-        started.operation,
+        replay,
       );
     }
 
@@ -357,6 +368,11 @@ async function reconcileCreation(
     noStore(context);
     return context.json(toSetupResponse(snapshot));
   }
+  if (operation.status === "definite_failure") {
+    const snapshot = await requireSetupSnapshot(repository);
+    noStore(context);
+    return context.json(toSetupResponse(snapshot), 409);
+  }
   if (operation.status === "action_required") {
     const snapshot = await requireSetupSnapshot(repository);
     noStore(context);
@@ -416,6 +432,19 @@ async function reconcileCreation(
     },
     actionRequired ? 409 : 202,
   );
+}
+
+/** Keeps active work authoritative and leases only expired creates to reconciliation. */
+async function prepareCreationReplay(
+  repository: CalendarRepositoryPort,
+  operation: CalendarCreationOperation,
+  now: Date,
+): Promise<CalendarCreationOperation> {
+  if (operation.status !== "in_progress") return operation;
+  const staleBefore = new Date(now.getTime() - CREATE_OPERATION_LEASE_MS);
+  return repository
+    .takeOverStaleCreation(operation.idempotencyKey, staleBefore, now)
+    .catch(mapRepositoryFailure);
 }
 
 /** Records that the authoritative create call settled uncertain before any replay may reconcile it. */

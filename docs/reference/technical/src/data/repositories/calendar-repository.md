@@ -10,6 +10,8 @@ Lists first, then one statement inserts/CASes the prior version directly to `awa
 Requires a candidate row and fresh evidence in the connection CTE.
 ## `beginCreation`
 Only the CAS winner inserts ledger/snapshot; a partial index permits one unresolved operation.
+## `takeOverStaleCreation`
+Locks the exact owner/key ledger and matching setup version. A request still inside the two-minute route lease remains `in_progress`; an expired operation advances once to reconciliation-only `retryable` and never authorizes another insert.
 ## `findCreationOperation`
 Scopes by owner/provider/kind/key and bounds joined rows.
 ## `completeCreation`

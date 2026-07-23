@@ -10,6 +10,8 @@ Atomically stores choices and advances directly to the final discovery state.
 Connects one rechecked stable ID.
 ## `beginCreation`
 Atomically stores key and pre-create IDs before Google.
+## `takeOverStaleCreation`
+After the safe waiting period, lets the same account and key check what an interrupted create produced without creating again.
 ## `findCreationOperation`
 Reads one scoped operation.
 ## `completeCreation`

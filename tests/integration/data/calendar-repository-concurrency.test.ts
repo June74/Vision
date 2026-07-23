@@ -286,8 +286,15 @@ describe("calendar setup persistence", () => {
     await repository.discover(1, [], NOW);
     await repository.beginCreation(2, OPERATION, [], NOW);
     await expect(
-      repository.markCreationUncertain(OPERATION, "retryable", NOW),
+      repository.takeOverStaleCreation(
+        OPERATION,
+        new Date(NOW.getTime() + 1),
+        new Date(NOW.getTime() + 120_001),
+      ),
     ).resolves.toMatchObject({
+      status: "retryable",
+    });
+    await expect(repository.getSnapshot()).resolves.toMatchObject({
       status: "failed",
       setupVersion: 4,
       actionRequired: false,
@@ -310,6 +317,51 @@ describe("calendar setup persistence", () => {
     await expect(
       repository.beginCreation(6, SECOND_OPERATION, [], NOW),
     ).resolves.toMatchObject({ kind: "started" });
+  });
+
+  it("keeps a within-lease owner replay active without changing setup", async () => {
+    await repository.discover(1, [], NOW);
+    await repository.beginCreation(2, OPERATION, [], NOW);
+
+    await expect(
+      repository.takeOverStaleCreation(
+        OPERATION,
+        new Date(NOW.getTime() - 30_000),
+        new Date(NOW.getTime() + 30_000),
+      ),
+    ).resolves.toMatchObject({
+      status: "in_progress",
+      setupVersion: 2,
+    });
+    await expect(repository.getSnapshot()).resolves.toMatchObject({
+      status: "creating",
+      setupVersion: 3,
+    });
+  });
+
+  it("linearizes concurrent expired-lease takeovers to one version transition", async () => {
+    const competing = new CalendarRepository(
+      new DrizzleCalendarStore(database()),
+      OWNER,
+      SUBJECT,
+    );
+    await repository.discover(1, [], NOW);
+    await repository.beginCreation(2, OPERATION, [], NOW);
+    const staleBefore = new Date(NOW.getTime() + 1);
+    const takeoverTime = new Date(NOW.getTime() + 120_001);
+
+    const [first, second] = await Promise.all([
+      repository.takeOverStaleCreation(OPERATION, staleBefore, takeoverTime),
+      competing.takeOverStaleCreation(OPERATION, staleBefore, takeoverTime),
+    ]);
+
+    expect(first).toMatchObject({ status: "retryable" });
+    expect(second).toMatchObject({ status: "retryable" });
+    await expect(repository.getSnapshot()).resolves.toMatchObject({
+      status: "failed",
+      setupVersion: 4,
+      actionRequired: false,
+    });
   });
 
   it("preserves an ambiguous action-required setup while terminalizing its ledger claim", async () => {
@@ -359,6 +411,47 @@ describe("calendar setup persistence", () => {
     ).rejects.toMatchObject({ code: "CALENDAR_PERSISTENCE_FAILED" });
     await expect(repository.findCreationOperation(OPERATION)).resolves.toMatchObject({
       status: "retryable",
+    });
+  });
+
+  it("does not take over an expired ledger when its stored setup version no longer matches", async () => {
+    await repository.discover(1, [], NOW);
+    await repository.beginCreation(2, OPERATION, [], NOW);
+    await pglite.query(
+      "update calendar_setup_states set setup_version = 99 where owner_id = $1",
+      [OWNER],
+    );
+
+    await expect(
+      repository.takeOverStaleCreation(
+        OPERATION,
+        new Date(NOW.getTime() + 1),
+        new Date(NOW.getTime() + 120_001),
+      ),
+    ).rejects.toMatchObject({ code: "CALENDAR_PERSISTENCE_FAILED" });
+    await expect(repository.findCreationOperation(OPERATION)).resolves.toMatchObject({
+      status: "in_progress",
+    });
+  });
+
+  it("does not expose or take over another owner's expired operation", async () => {
+    const other = new CalendarRepository(
+      new DrizzleCalendarStore(database()),
+      "usr_other",
+      SUBJECT,
+    );
+    await repository.discover(1, [], NOW);
+    await repository.beginCreation(2, OPERATION, [], NOW);
+
+    await expect(
+      other.takeOverStaleCreation(
+        OPERATION,
+        new Date(NOW.getTime() + 1),
+        new Date(NOW.getTime() + 120_001),
+      ),
+    ).rejects.toMatchObject({ code: "CALENDAR_PERSISTENCE_FAILED" });
+    await expect(repository.findCreationOperation(OPERATION)).resolves.toMatchObject({
+      status: "in_progress",
     });
   });
 });

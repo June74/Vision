@@ -197,3 +197,56 @@ Final scans:
 - PGlite raw-row test still confirms stable metadata only and no token/provider/event payload plaintext.
 
 The first full-gate attempt after strengthening SQL state binding exposed an ambiguous `setup_version` expression. The target-table expression was qualified, the focused repository suite was rerun, and the complete gate above then passed. No live Google, Neon, Cloudflare, or other external service was used.
+
+## Final stale-creation lease correction
+
+### RED to GREEN
+
+- RED: after simulating a crash with a durable `in_progress` ledger written before the provider-created calendar could be recorded uncertain, a same-key replay remained HTTP 202 forever and never reconciled the new stable ID.
+- GREEN: a deterministic two-minute lease now protects the active winner. A replay at 30 seconds remains `creating`/HTTP 202, does not relist, and cannot change the ledger.
+- After the lease, the same owner and idempotency key may atomically move only the exact matching `in_progress` ledger plus `creating` setup version to reconciliation-only `retryable`. The route then performs the existing pre-create stable-ID set difference and never calls Calendars.insert.
+- The two-minute lease exceeds the adapter's bounded insert plus ownership-verification request windows. A late successful winner can still complete from `retryable`; a late definite result can still terminalize it and release the unresolved uniqueness claim.
+- The takeover statement locks and binds owner, verified subject, provider, operation kind, idempotency key, requested-at cutoff, ledger setup version, current setup version/status, and action-required flag.
+- Concurrent expired replays linearize to one setup-version transition. A losing takeover reloads the authoritative `retryable` or terminal state. A mismatched setup version or another owner cannot take over or learn the operation.
+
+### Added coverage
+
+- Crash after provider mutation but before the uncertain-state write: expired replay connects the provider-created stable ID.
+- Within-lease replay: HTTP 202, authoritative `in_progress`, zero reconciliation list calls.
+- After-lease replay: one reconciliation, zero replacement inserts.
+- Two concurrent expired route replays: both return the same connection, zero inserts.
+- Two concurrent PGlite takeovers: one transition to `retryable` and setup version 4.
+- Stored setup-version mismatch: generic persistence failure and ledger remains `in_progress`.
+- Owner mismatch: generic persistence failure and ledger remains private.
+- Definite terminalization after takeover: ledger becomes terminal, unresolved claim is released, and recovery uses fresh discovery/version/key.
+
+### Lease verification
+
+Focused command:
+
+```powershell
+$env:XDG_CONFIG_HOME=(Resolve-Path '.wrangler').Path
+.\node_modules\.bin\vitest.CMD run tests/contract/google/calendar-setup.contract.test.ts tests/integration/data/calendar-repository-concurrency.test.ts tests/worker/calendar-setup.test.ts
+```
+
+Result: 3 files passed, 38 tests passed.
+
+Full command:
+
+```powershell
+$env:XDG_CONFIG_HOME=(Resolve-Path '.wrangler').Path
+pnpm.cmd check
+```
+
+Result:
+
+- Unit/integration: 29 files passed, 193 tests passed.
+- Worker: 4 files passed, 30 tests passed.
+- Production and test TypeScript: passed.
+- Mirrored documentation coverage: passed.
+- Worker and client production builds: passed.
+- Production crypto-boundary validation: passed.
+
+The first full run encountered three unrelated PGlite `beforeEach` initialization timeouts under parallel load. The focused PGlite suite was already green, and an unchanged rerun of the complete gate passed with the counts above. No live service was used.
+
+Final scans passed: `git diff --check`, task-scoped event writes, production/docs/migrations secret sentinels, unbounded adapter response helpers, awaited reader cancellation, and durable `discovering` writes all reported zero matches where applicable.
