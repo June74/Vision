@@ -10,4 +10,4 @@
 
 ## `Env`
 
-`Env` adds the static-asset binding to the checked environment. It contains no credentials.
+`Env` adds the static-asset binding and the Worker-only database URL secret. The browser never receives this secret.

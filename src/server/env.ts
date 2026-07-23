@@ -12,4 +12,6 @@ export type RuntimeEnv = z.infer<typeof RuntimeEnvSchema>;
 /** Defines every Worker binding used by the initial Vision runtime. */
 export interface Env extends RuntimeEnv {
   ASSETS: Fetcher;
+  // This Worker-only secret must use a least-privileged application role, never neondb_owner.
+  DATABASE_URL: string;
 }

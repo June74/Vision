@@ -16,4 +16,4 @@ This type keeps TypeScript consumers aligned with the runtime schema. It has no 
 
 **Signature:** `interface Env extends RuntimeEnv { ASSETS: Fetcher }`
 
-`Env` is the Hono binding contract for the initial Worker. `ASSETS.fetch` serves static browser routes. Neither this interface nor the runtime schema contains credential bindings.
+`Env` is the Hono binding contract for the Worker. `ASSETS.fetch` serves static browser routes and `DATABASE_URL` is a Worker-only secret consumed by the data boundary. It must authenticate as a least-privileged application role, never `neondb_owner`; the runtime schema intentionally validates only non-secret bindings.
