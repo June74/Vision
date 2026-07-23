@@ -23,3 +23,6 @@ Requires the complete server-only Google client, exact callback, and private-pil
 ## `Env`
 
 `Env` adds the static-asset binding. Its database URL and root key remain Worker-only, and the browser never receives them.
+## `parseVisionUserTimeZone`
+
+Checks the private-pilot time zone used for calendar creation.

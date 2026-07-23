@@ -67,3 +67,6 @@ Parses the Google OAuth client ID and secret, exact callback URI, allowed subjec
 **Signature:** `interface Env extends RuntimeEnv { ASSETS: Fetcher }`
 
 `Env` is the Hono binding contract for the Worker. `ASSETS.fetch` serves static browser routes. `DATABASE_URL` and `KEY_ENCRYPTION_KEY` are validated runtime secrets consumed only by server-side data and cryptographic boundaries.
+## `parseVisionUserTimeZone`
+
+Requires a bounded IANA-style zone or `UTC`; request bodies cannot choose it.

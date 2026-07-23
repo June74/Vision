@@ -39,6 +39,11 @@ const googleAllowedSubjectSchema = z
   .max(255)
   .regex(/^[\x21-\x7e]+$/u);
 const googleRedirectSchema = z.string().url().max(2_048);
+const userTimeZoneSchema = z
+  .string()
+  .min(1)
+  .max(255)
+  .regex(/^(?:UTC|[A-Za-z_+-]+\/[A-Za-z0-9_+./-]+)$/u);
 
 /** Validates the server-only Google OAuth and private-pilot allowlist bindings as one exact unit. */
 export const GoogleAuthEnvSchema = z
@@ -90,6 +95,7 @@ export const RuntimeEnvSchema = z.object({
   GOOGLE_REDIRECT_URI: googleRedirectSchema.optional(),
   GOOGLE_ALLOWED_SUB: googleAllowedSubjectSchema.optional(),
   GOOGLE_ALLOWED_EMAIL: z.string().email().max(320).optional(),
+  VISION_USER_TIME_ZONE: userTimeZoneSchema.optional(),
 });
 
 /** Safely validates a Worker-only database URL without including credential text in errors. */
@@ -110,6 +116,11 @@ export function parseGoogleAuthEnvironment(
   environment: unknown,
 ): z.infer<typeof GoogleAuthEnvSchema> {
   return GoogleAuthEnvSchema.parse(environment);
+}
+
+/** Validates the server-owned private-pilot time zone used for secondary-calendar creation. */
+export function parseVisionUserTimeZone(userTimeZone: unknown): string {
+  return userTimeZoneSchema.parse(userTimeZone);
 }
 
 /** Represents the validated server-only, secret-bearing Vision runtime environment. */

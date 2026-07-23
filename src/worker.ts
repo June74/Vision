@@ -10,12 +10,18 @@ import {
   type AuthRouteDependencies,
 } from "./server/auth/oauth-routes";
 import type { AuthRequestVariables } from "./server/auth/session";
+import {
+  createProductionCalendarSetupDependencies,
+  registerCalendarSetupRoutes,
+  type CalendarSetupRouteDependencies,
+} from "./server/api/calendar-setup-routes";
 
 /** Supplies replaceable runtime boundaries for deterministic, side-effect-free application tests. */
 export interface AppDependencies {
   logger?: SafeLogger;
   createRequestId?: RequestIdFactory;
   auth?: AuthRouteDependencies;
+  calendarSetup?: CalendarSetupRouteDependencies;
 }
 
 /** Writes only a previously validated, structured event to the Worker console. */
@@ -49,6 +55,12 @@ export function createApp(dependencies: AppDependencies = {}) {
     app,
     dependencies.auth ??
       ((environment) => createProductionAuthDependencies(environment, logger)),
+  );
+  registerCalendarSetupRoutes(
+    app,
+    dependencies.calendarSetup ??
+      ((environment) =>
+        createProductionCalendarSetupDependencies(environment, logger)),
   );
   app.all("/api/*", () => {
     throwVisionError(new VisionError("NOT_FOUND", 404, "API route not found."));

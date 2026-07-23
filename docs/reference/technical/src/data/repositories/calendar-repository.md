@@ -1,0 +1,62 @@
+# Calendar repository
+
+Captures owner and verified subject. Parameterized PostgreSQL compare-and-swap statements linearize setup versions. A data-modifying CTE advances confirmation, inserts the operation ledger, and inserts normalized snapshot IDs before returning.
+
+## `getOrCreateAuthenticated`
+Uses insert-on-conflict with exact owner-subject winner validation.
+## `beginDiscovery`
+CASes `authenticated` to `discovering`.
+## `completeDiscovery`
+CASes, clears, and replaces normalized candidates.
+## `selectExisting`
+Requires a candidate row and fresh evidence in the connection CTE.
+## `beginCreation`
+Only the CAS winner inserts ledger/snapshot; a partial index permits one unresolved operation.
+## `findCreationOperation`
+Scopes by owner/provider/kind/key and bounds joined rows.
+## `completeCreation`
+Atomically connects evidence, records result ID, completes ledger, and increments version.
+## `markCreationUncertain`
+Moves to `retryable` or `action_required`; it cannot authorize insert.
+## `readSnapshot`
+Uses bounded owner-subject reads.
+## `getSnapshot`
+Delegates inside immutable scope.
+## `requireSnapshot`
+Collapses missing post-write state.
+## `toCandidateParameter`
+Serializes only ID, timezone, ETag, and verification time.
+## `validateEvidenceSet`
+Caps at 100 and rejects duplicate IDs.
+## `validateEvidence`
+Requires `Vision`, `owner`, exact subject, bounded fields, and valid time.
+## `decodeCreationOperation`
+Strictly decodes status/version/time/IDs.
+## `decodeSetupSnapshot`
+Strictly decodes state and revalidates evidence.
+## `decodeConnection`
+Allows only `existing` or `created`.
+## `assertUuid`
+Requires canonical UUID variant/version shape.
+## `assertVersionAndDate`
+Rejects unsafe or nonpositive versions.
+## `assertDate`
+Uses intrinsic Date access.
+## `isValidDate`
+Rejects invalid Dates.
+## `isBoundedText`
+Rejects empty or oversized scalars.
+## `readPositiveInteger`
+Allows number or canonical decimal text.
+## `readText`
+Never coerces database rows.
+## `readBoolean`
+Never applies truthy coercion.
+## `readDate`
+Allows Date or explicit offset strings.
+## `staleVersion`
+Returns `STALE_SETUP_VERSION`.
+## `invalidEvidence`
+Returns `INVALID_CALENDAR_EVIDENCE`.
+## `persistenceFailure`
+Returns `CALENDAR_PERSISTENCE_FAILED` without cause.
