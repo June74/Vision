@@ -3,12 +3,14 @@ import { z } from "zod";
 import { decodeBase64Url } from "../crypto/envelope";
 
 const keyEncryptionKeySchema = z.string().superRefine((keyEncryptionKey, context) => {
+  let decoded: Uint8Array | undefined;
+
   try {
     if (keyEncryptionKey.length !== 43) {
       throw new Error("Incorrect encoded length.");
     }
 
-    const decoded = decodeBase64Url(keyEncryptionKey, "Root key", 43);
+    decoded = decodeBase64Url(keyEncryptionKey, "Root key", 43);
     if (decoded.byteLength !== 32) {
       throw new Error("Incorrect decoded length.");
     }
@@ -18,6 +20,9 @@ const keyEncryptionKeySchema = z.string().superRefine((keyEncryptionKey, context
       code: "custom",
       message: "KEY_ENCRYPTION_KEY must be a canonical 256-bit base64url secret.",
     });
+  } finally {
+    // Best-effort clearing applies only to this application-controlled mutable decode buffer.
+    decoded?.fill(0);
   }
 });
 
@@ -38,7 +43,10 @@ export function parseVisionDatabaseUrl(databaseUrl: unknown): string {
   return RuntimeEnvSchema.shape.DATABASE_URL.parse(databaseUrl);
 }
 
-/** Safely validates the root wrapping secret without copying its value into error messages. */
+/**
+ * Validates the root wrapping secret without copying it into errors and clears the local mutable
+ * decoded-byte validation buffer after either acceptance or rejection.
+ */
 export function parseVisionKeyEncryptionKey(keyEncryptionKey: unknown): string {
   return RuntimeEnvSchema.shape.KEY_ENCRYPTION_KEY.parse(keyEncryptionKey);
 }

@@ -2,7 +2,7 @@
 
 ## `RuntimeEnvSchema`
 
-`RuntimeEnvSchema` checks the deployment environment, private database URL, and root wrapping key. It accepts only the `vision_app` database role and a canonical 256-bit base64url key.
+`RuntimeEnvSchema` checks the deployment environment, private database URL, and root wrapping key. It accepts only the `vision_app` database role and a canonical 256-bit base64url key. After checking the key, it clears the temporary mutable byte buffer that this code created; this best-effort cleanup does not claim to erase the original JavaScript string or runtime-internal copies.
 
 ## `RuntimeEnv`
 
@@ -14,7 +14,7 @@ Checks a server-only database URL and accepts only the `vision_app` role without
 
 ## `parseVisionKeyEncryptionKey`
 
-Checks the server-only root wrapping key format without repeating the secret in errors.
+Checks the server-only root wrapping key format without repeating the secret in errors. It also clears the temporary mutable decoded-byte buffer after either acceptance or rejection.
 
 ## `Env`
 

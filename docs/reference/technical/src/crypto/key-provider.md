@@ -22,19 +22,19 @@ Reads the authoritative current version, requires a strictly higher candidate, a
 
 **Signature:** `(rootKeyBase64Url: string, store: WrappedDataKeyStore, activeKeyVersion: number) => Promise<WrappedKeyProvider>`
 
-Prechecks the root's exact 43-character size, canonically decodes 32 bytes, imports it as non-extractable AES-GCM, and zeroes the temporary buffer. It atomically activates the configured version and rejects when the returned authoritative version is higher, preventing restart rollback.
+Prechecks the root's exact 43-character size, canonically decodes 32 bytes, imports it as non-extractable AES-GCM, and calls `fill(0)` on the application-controlled mutable decode buffer. This is best-effort cleanup and does not claim to erase immutable input strings, Web Crypto copies, or engine temporaries. It atomically activates the configured version and rejects when the returned authoritative version is higher, preventing restart rollback.
 
 ## `createWrappedDataKey`
 
 **Signature:** `(rootKey: CryptoKey, ownerId: string, domain: Domain, keyVersion: number) => Promise<WrappedDataKeyRecord>`
 
-Generates independent random 32-byte data-key material and a fresh 12-byte wrapping IV. AES-GCM wraps the key with a 128-bit tag and owner/domain/version AAD. The temporary raw key buffer is zeroed in `finally`.
+Generates independent random 32-byte data-key material and a fresh 12-byte wrapping IV. AES-GCM wraps the key with a 128-bit tag and owner/domain/version AAD. The application-controlled mutable raw key buffer is cleared with `fill(0)` in `finally`; runtime-internal copies are outside this best-effort boundary.
 
 ## `unwrapDataKey`
 
 **Signature:** `(rootKey: CryptoKey, record: WrappedDataKeyRecord) => Promise<CryptoKey>`
 
-Authenticates and decrypts the 48-byte wrapped value, requires exactly 32 plaintext bytes, imports them as a non-extractable field key, and zeroes the temporary buffer. Wrong root key, IV, ciphertext, owner, domain, or version causes rejection.
+Authenticates and decrypts the 48-byte wrapped value, requires exactly 32 plaintext bytes, imports them as a non-extractable field key, and clears the application-controlled mutable plaintext buffer with `fill(0)`. This does not claim forensic erasure of runtime-internal copies. Wrong root key, IV, ciphertext, owner, domain, or version causes rejection.
 
 ## `validateWrappedDataKey`
 
