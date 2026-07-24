@@ -78,6 +78,34 @@ describe("mapGoogleEvent", () => {
     });
   });
 
+  it("uses trusted collection timezone context for date-only event boundaries", () => {
+    const change = mapGoogleEvent({
+      calendarId: CALENDAR_ID,
+      end: { date: "2026-07-25" },
+      id: "collection_zone_all_day_1",
+      start: { date: "2026-07-24" },
+      status: "confirmed",
+      updated: "2026-07-24T14:01:03.000Z",
+    }, { calendarTimeZone: "America/Chicago" });
+
+    expect(change).toMatchObject({
+      startsAt: "2026-07-24T05:00:00.000Z",
+      endsAt: "2026-07-25T05:00:00.000Z",
+      timeZone: "America/Chicago",
+    });
+  });
+
+  it("rejects date-only values without an event or trusted collection timezone", () => {
+    expect(() => mapGoogleEvent({
+      calendarId: CALENDAR_ID,
+      end: { date: "2026-07-25" },
+      id: "missing_collection_zone_1",
+      start: { date: "2026-07-24" },
+      status: "confirmed",
+      updated: "2026-07-24T14:01:03.000Z",
+    })).toThrow(GoogleEventMappingError);
+  });
+
   it("uses the earliest instant that belongs to an all-day date when local midnight is skipped or repeated", () => {
     const saoPaulo = mapGoogleEvent({
       calendarId: CALENDAR_ID,
@@ -281,6 +309,25 @@ describe("mapGoogleEvent", () => {
     expect(deleted).toEqual(expect.objectContaining({ type: "delete", target: { sourceSystem: "google-calendar", sourceCalendarId: CALENDAR_ID, sourceEventId: "deleted_1" }, recurrence: { kind: "single" } }));
     expect(occurrence).not.toHaveProperty("protected");
     expect(deleted).not.toHaveProperty("protected");
+  });
+
+  it("uses trusted collection timezone context for a sparse all-day cancelled occurrence", () => {
+    const occurrence = mapGoogleEvent({
+      calendarId: CALENDAR_ID,
+      id: "series_all_day_20260724",
+      originalStartTime: { date: "2026-07-24" },
+      recurringEventId: "series_all_day_1",
+      status: "cancelled",
+    }, { calendarTimeZone: "America/Chicago" });
+
+    expect(occurrence).toEqual(expect.objectContaining({
+      type: "delete",
+      recurrence: {
+        kind: "occurrence",
+        masterEventId: "series_all_day_1",
+        originalStartAt: "2026-07-24T05:00:00.000Z",
+      },
+    }));
   });
 
   it("keeps attendee and meeting data protected and attachment data as references only", () => {

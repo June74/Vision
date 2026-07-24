@@ -6,13 +6,17 @@ This pure adapter accepts an unknown Google Calendar event response plus a trust
 
 Provides the sole safe failure for malformed, oversized, impossible, or timezone-invalid provider event data. Its message excludes event values, tokens, URLs, and provider response bodies.
 
+## `GoogleCalendarMappingContext`
+
+Carries the trusted `timeZone` returned at the Google `events.list` collection boundary. It is optional only to preserve direct mapping of fully timed values; callers must supply it whenever a date-only start, end, or recurring original-start field lacks its own IANA timezone.
+
 ## `mapGoogleEvent`
 
-Validates the permissive raw Google payload and defaults absent ordinary `status` to Google’s `confirmed` default. An upsert requires `updated` and receives a versioned identity; a cancelled resource maps before version parsing to an explicit stable target tombstone because Google guarantees only sparse deletion fields. Later synchronization must commit such tombstones under its trusted page/checkpoint transaction ordering. The mapper ignores Google extended properties, including any provider-side Vision category-like values. Title, description, location, attendee email addresses, meeting links, and attachment references are emitted only in `protected`.
+Validates the permissive raw Google payload and defaults absent ordinary `status` to Google’s `confirmed` default. An upsert requires `updated` and receives a versioned identity; a cancelled resource maps before version parsing to an explicit stable target tombstone because Google guarantees only sparse deletion fields. Later synchronization must commit such tombstones under its trusted page/checkpoint transaction ordering. The optional context supplies the collection timezone for date-only values; absent context is rejected instead of silently assuming UTC. The mapper ignores Google extended properties, including any provider-side Vision category-like values. Title, description, location, attendee email addresses, meeting links, and attachment references are emitted only in `protected`.
 
-## `readTimeZone`
+## `validateNamedTimeZone`
 
-Selects start, end, event, or UTC timezone in that order and validates it through `Intl`. The selected source zone remains queryable beside normalized UTC instants.
+Validates an event-level or trusted collection IANA timezone through `Intl`. Invalid zones fail before mapping; there is no implicit UTC default.
 
 ## `toProviderOrderKey`
 
@@ -24,7 +28,11 @@ Creates a closed single/master/occurrence recurrence value. It intentionally dis
 
 ## `normalizeGoogleTime`
 
-Normalizes a Google RFC 3339 `dateTime` to ISO UTC or delegates an all-day `date` to calendar-zone conversion. When `dateTime` has no offset, Google permits the field only with an explicit `timeZone`; the mapper resolves that wall-clock value in this IANA zone rather than using the Worker host timezone. Missing, malformed, timed gap, and timed overlap values fail before an upsert is emitted. Fractional milliseconds are preserved without contaminating sampled timezone offsets.
+Resolves each Google time object independently, then normalizes a RFC 3339 `dateTime` to ISO UTC or delegates an all-day `date` to calendar-zone conversion. A date-only field requires its own IANA timezone or the trusted collection context. When `dateTime` has no offset, Google permits the field only with an explicit `timeZone`; the mapper resolves that wall-clock value in this IANA zone rather than using the Worker host timezone. Missing, malformed, timed gap, and timed overlap values fail before an upsert is emitted. Fractional milliseconds are preserved without contaminating sampled timezone offsets.
+
+## `resolveGoogleTimeZone`
+
+Uses an event time object's named IANA zone first. For a date-only value with no own zone it requires and validates `calendarTimeZone`; for a timed value with an explicit RFC 3339 offset but no named zone it derives `UTC` or a fixed `UTC+/-HH:MM` representation from the offset, never from the Worker host. Offset-less timed values still require their own named timezone under Google’s contract.
 
 ## `normalizeGoogleDateTime`
 

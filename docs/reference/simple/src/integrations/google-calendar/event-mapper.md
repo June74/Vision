@@ -6,13 +6,17 @@ Converts one Google event and its supplied calendar ID into a safe Vision sync c
 
 Reports invalid provider event data without showing it.
 
+## `GoogleCalendarMappingContext`
+
+Carries the trusted collection timezone for date-only Google values.
+
 ## `mapGoogleEvent`
 
-Maps normal events to upserts and sparse cancelled events to stable tombstones.
+Maps normal events to upserts and sparse cancelled events to stable tombstones, with optional trusted collection context.
 
-## `readTimeZone`
+## `validateNamedTimeZone`
 
-Finds the source timezone for the event.
+Checks a supplied IANA timezone.
 
 ## `toProviderOrderKey`
 
@@ -25,6 +29,10 @@ Keeps only master and occurrence identity.
 ## `normalizeGoogleTime`
 
 Turns Google date and date-time values into UTC instants.
+
+## `resolveGoogleTimeZone`
+
+Requires a named event or collection timezone for date-only values and derives timed offset zones explicitly.
 
 ## `normalizeGoogleDateTime`
 

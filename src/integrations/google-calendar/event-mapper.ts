@@ -64,14 +64,21 @@ export class GoogleEventMappingError extends Error {
   }
 }
 
-/** Maps one Google event plus its supplied calendar context to an immutable Vision provider change. */
-export function mapGoogleEvent(raw: unknown): ProviderEventChange {
+/** Supplies the trusted collection timezone returned beside Google `events.list` items when event fields omit it. */
+export interface GoogleCalendarMappingContext {
+  readonly calendarTimeZone?: string;
+}
+
+/** Maps one Google event plus optional trusted collection timezone context to an immutable Vision provider change. */
+export function mapGoogleEvent(
+  raw: unknown,
+  context: GoogleCalendarMappingContext = {},
+): ProviderEventChange {
   const parsed = googleEventSchema.safeParse(raw);
   if (!parsed.success) throw new GoogleEventMappingError();
   const event = parsed.data;
   const status = event.status ?? "confirmed";
-  const timeZone = readTimeZone(event);
-  const recurrence = mapRecurrence(event, timeZone);
+  const recurrence = mapRecurrence(event, context.calendarTimeZone);
 
   if (status === "cancelled") {
     return ProviderEventChangeSchema.parse({
@@ -91,11 +98,11 @@ export function mapGoogleEvent(raw: unknown): ProviderEventChange {
     sourceSystem: "google-calendar",
     sourceVersion: toProviderOrderKey(event.updated),
   } as const;
-  const startsAt = normalizeGoogleTime(event.start, timeZone);
-  const endsAt = normalizeGoogleTime(event.end, timeZone);
+  const start = normalizeGoogleTime(event.start, context.calendarTimeZone);
+  const end = normalizeGoogleTime(event.end, context.calendarTimeZone);
   const mapped = ProviderEventChangeSchema.safeParse({
     busy: event.transparency !== "transparent",
-    endsAt,
+    endsAt: end.instant,
     identity,
     protected: {
       attachmentReferences: mapAttachmentReferences(event.attachments),
@@ -106,18 +113,17 @@ export function mapGoogleEvent(raw: unknown): ProviderEventChange {
       title: event.summary ?? null,
     },
     recurrence,
-    startsAt,
+    startsAt: start.instant,
     status,
-    timeZone,
+    timeZone: start.timeZone,
     type: "upsert",
   });
   if (!mapped.success) throw new GoogleEventMappingError();
   return mapped.data;
 }
 
-/** Selects and validates the source zone retained beside normalized instants. */
-function readTimeZone(event: z.infer<typeof googleEventSchema>): string {
-  const timeZone = event.start?.timeZone ?? event.end?.timeZone ?? event.timeZone ?? "UTC";
+/** Validates a named IANA timezone supplied by an event field or trusted calendar collection response. */
+function validateNamedTimeZone(timeZone: string): string {
   try {
     new Intl.DateTimeFormat("en-US", { timeZone }).format();
     return timeZone;
@@ -142,11 +148,11 @@ function toProviderOrderKey(updated: string): string {
 /** Derives a closed recurrence identity without retaining Google recurrence rules or unsupported fields. */
 function mapRecurrence(
   event: z.infer<typeof googleEventSchema>,
-  timeZone: string,
+  calendarTimeZone: string | undefined,
 ): ProviderRecurrence {
   if (event.recurringEventId) {
     const originalStartAt = event.originalStartTime
-      ? normalizeGoogleTime(event.originalStartTime, timeZone)
+      ? normalizeGoogleTime(event.originalStartTime, calendarTimeZone).instant
       : undefined;
     return originalStartAt === undefined
       ? { kind: "occurrence", masterEventId: event.recurringEventId }
@@ -160,14 +166,39 @@ function mapRecurrence(
 /** Normalizes one Google date-time or all-day date to a UTC instant while preserving its original zone separately. */
 function normalizeGoogleTime(
   value: z.infer<typeof googleTimeSchema> | undefined,
-  timeZone: string,
-): string {
+  calendarTimeZone: string | undefined,
+): { readonly instant: string; readonly timeZone: string } {
   if (!value) throw new GoogleEventMappingError();
+  const zone = resolveGoogleTimeZone(value, calendarTimeZone);
   if (value.dateTime) {
-    return normalizeGoogleDateTime(value.dateTime, value.timeZone ?? timeZone, value.timeZone !== undefined);
+    return {
+      instant: normalizeGoogleDateTime(value.dateTime, zone.timeZone, zone.hasNamedTimeZone),
+      timeZone: zone.timeZone,
+    };
   }
-  if (value.date) return localDateStartToInstant(value.date, value.timeZone ?? timeZone);
+  if (value.date) return { instant: localDateStartToInstant(value.date, zone.timeZone), timeZone: zone.timeZone };
   throw new GoogleEventMappingError();
+}
+
+/** Resolves a time object's own zone, trusted collection fallback, or an explicit timed offset without implicit UTC. */
+function resolveGoogleTimeZone(
+  value: z.infer<typeof googleTimeSchema>,
+  calendarTimeZone: string | undefined,
+): { readonly timeZone: string; readonly hasNamedTimeZone: boolean } {
+  if (value.timeZone) {
+    return { timeZone: validateNamedTimeZone(value.timeZone), hasNamedTimeZone: true };
+  }
+  if (value.date) {
+    if (!calendarTimeZone) throw new GoogleEventMappingError();
+    return { timeZone: validateNamedTimeZone(calendarTimeZone), hasNamedTimeZone: true };
+  }
+  if (!value.dateTime) throw new GoogleEventMappingError();
+  const parsed = parseGoogleDateTime(value.dateTime);
+  if (!parsed.offset) throw new GoogleEventMappingError();
+  return {
+    hasNamedTimeZone: false,
+    timeZone: parsed.offset === "Z" ? "UTC" : `UTC${parsed.offset}`,
+  };
 }
 
 /** Normalizes an RFC 3339 instant directly or resolves an offset-less wall clock only in its explicit IANA zone. */
