@@ -182,6 +182,22 @@ the durable winner instead of returning a transient generic error.
 Build the browser states for sign-in, discovery, explicit choice, exact
 confirmation, creation, connection, and action-required recovery.
 
+### Authentication Task 4 - Authenticated setup interface
+
+Vision now provides the private-pilot browser flow for sign-in, owned-calendar
+discovery, explicit selection, exact confirmation, creation, connection, and
+safe recovery. Creation replay keeps the original setup version and idempotency
+key, while terminal failures require fresh discovery before a new attempt.
+
+The focused Chromium suite passed 10/10. Independent review approved the task
+with four non-blocking minor follow-ups. The broader gate encountered unrelated
+PGlite setup-hook timeouts; no Task 4 browser failure was observed.
+
+### Next - External acceptance and read synchronization
+
+Task 5 covers manual Google/Neon/Cloudflare acceptance checks, then Phase B
+continues with Google calendar read synchronization.
+
 ## Not yet included
 
 No Google login, calendar connection, database, AI, alerts, or production deployment exists yet.
