@@ -9,6 +9,7 @@ const databaseBoundary = vi.hoisted(() => {
       kind: "neon-client",
     })),
     getDefaultTypeParser: vi.fn(() => defaultParser),
+    setTypeParser: vi.fn(),
   };
 });
 
@@ -17,6 +18,7 @@ vi.mock("@neondatabase/serverless", () => ({
   types: {
     builtins: { BYTEA: 17 },
     getTypeParser: databaseBoundary.getDefaultTypeParser,
+    setTypeParser: databaseBoundary.setTypeParser,
   },
 }));
 
@@ -43,33 +45,21 @@ describe("createDb", () => {
     expect(() => createDb("postgresql://vision_app:secret@db.example.test/vision")).not.toThrow();
   });
 
-  it("keeps Neon bytea as canonical text while preserving every default non-binary parser", () => {
+  it("registers canonical text parsing for Neon bytea before creating the client", () => {
     const databaseUrl =
       "postgresql://vision_app:secret@db.example.test/vision";
 
     createDb(databaseUrl);
 
-    expect(databaseBoundary.neon).toHaveBeenCalledWith(
-      databaseUrl,
-      expect.objectContaining({
-        types: expect.objectContaining({
-          getTypeParser: expect.any(Function),
-        }),
-      }),
+    expect(databaseBoundary.setTypeParser).toHaveBeenCalledWith(
+      17,
+      "text",
+      expect.any(Function),
     );
-    const options = databaseBoundary.neon.mock.calls[0]?.[1] as {
-      types: {
-        getTypeParser: (
-          id: number,
-          format?: "text" | "binary",
-        ) => (value: string) => unknown;
-      };
-    };
-    expect(options.types.getTypeParser(17, "text")("\\x00ff")).toBe(
-      "\\x00ff",
-    );
-    expect(options.types.getTypeParser(25, "text")).toBe(
-      databaseBoundary.defaultParser,
-    );
+    const parser = databaseBoundary.setTypeParser.mock.calls[0]?.[2] as (
+      value: string,
+    ) => string;
+    expect(parser("\\x00ff")).toBe("\\x00ff");
+    expect(databaseBoundary.neon).toHaveBeenCalledWith(databaseUrl);
   });
 });

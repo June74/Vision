@@ -12,25 +12,15 @@ function preserveCanonicalByteaText(value: string): string {
   return value;
 }
 
-const visionNeonTypes = {
-  /** Overrides only text bytea parsing and delegates every other PostgreSQL type to Neon. */
-  getTypeParser(id: number, format?: "text" | "binary") {
-    if (
-      id === types.builtins.BYTEA &&
-      (format === undefined || format === "text")
-    ) {
-      return preserveCanonicalByteaText;
-    }
-    return types.getTypeParser(id, format);
-  },
-};
-
 /** Creates a typed Neon HTTP client after enforcing the least-privileged URL policy at this callable boundary. */
 export function createDb(databaseUrl: unknown): VisionDatabase {
+  types.setTypeParser(
+    types.builtins.BYTEA,
+    "text",
+    preserveCanonicalByteaText,
+  );
   return drizzle({
-    client: neon(parseVisionDatabaseUrl(databaseUrl), {
-      types: visionNeonTypes,
-    }),
+    client: neon(parseVisionDatabaseUrl(databaseUrl)),
     schema,
   });
 }
