@@ -221,7 +221,7 @@ test("clears a definite failure before fresh calendar discovery", async ({ page 
   let current = setupSnapshot({ status: "awaiting_confirmation" });
   await page.route("**/api/setup/calendar", (route) => route.fulfill({ body: JSON.stringify(current), contentType: "application/json" }));
   await page.route("**/api/setup/calendar/confirm-create", (route) => {
-    current = setupSnapshot({ retryable: false, status: "failed" });
+    current = setupSnapshot({ actionRequired: true, status: "failed" });
     return route.fulfill({ body: JSON.stringify(current), contentType: "application/json", status: 409 });
   });
   await page.route("**/api/setup/calendar/discover", (route) => {
