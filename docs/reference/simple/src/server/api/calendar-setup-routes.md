@@ -13,7 +13,11 @@ Creates the account-bound adapter.
 ## `createRepository`
 Creates the owner-bound repository.
 ## `reconcileCreation`
-Connects one new ID, waits for zero, or requires action for many.
+Leaves an active create alone; after its result becomes uncertain, connects one new ID, waits for zero, or requires action for many.
+## `prepareCreationReplay`
+Waits for an active create, then safely changes an expired interrupted attempt into check-only recovery.
+## `recordCreationUncertain`
+Marks only a finished uncertain create as safe to reconcile.
 ## `authenticateSetupRequest`
 Requires an active session.
 ## `requireCsrf`

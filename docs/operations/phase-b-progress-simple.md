@@ -159,6 +159,54 @@ No live Google account, Neon database, or Cloudflare secret was used.
 Discover owned secondary calendars, connect an explicitly selected existing
 Vision calendar, or create exactly one after current explicit confirmation.
 
+### Authentication Task 3 - Calendar discovery and setup APIs
+
+Vision now discovers calendars through stable IDs, excludes the primary and
+non-owned calendars, and requires explicit selection of an existing `Vision`
+calendar. New creation requires exact confirmation, the current setup version,
+and one idempotency key. Lost provider responses are reconciled without a
+second create.
+
+Provider timeouts and streamed responses are bounded, discovery is
+CSRF-protected and crash-recoverable, and abandoned operations can be safely
+reconciled after their lease expires. No event insert, update, or delete path
+is reachable.
+
+The task passed 193 main tests and 30 Worker tests. Independent review
+approved both the specification and implementation quality with no blocking
+findings. One non-blocking minor remains for a takeover CAS loser to reload
+the durable winner instead of returning a transient generic error.
+
+### Next - Authenticated setup interface
+
+Build the browser states for sign-in, discovery, explicit choice, exact
+confirmation, creation, connection, and action-required recovery.
+
+### Authentication Task 4 - Authenticated setup interface
+
+Vision now provides the private-pilot browser flow for sign-in, owned-calendar
+discovery, explicit selection, exact confirmation, creation, connection, and
+safe recovery. Creation replay keeps the original setup version and idempotency
+key, while terminal failures require fresh discovery before a new attempt.
+
+The focused Chromium suite passed 10/10. Independent review approved the task
+with four non-blocking minor follow-ups. The broader gate encountered unrelated
+PGlite setup-hook timeouts; no Task 4 browser failure was observed.
+
+### Next - External acceptance and read synchronization
+
+Task 5 covers manual Google/Neon/Cloudflare acceptance checks, then Phase B
+continues with Google calendar read synchronization.
+
+### Authentication Task 5 - Acceptance preparation
+
+The repeatable OAuth and disposable-calendar acceptance procedure is now
+documented, with redacted evidence fields and preview workflow guards. No
+external account, database, Worker, or secret was changed.
+
+The focused workflow policy test passed 2/2 and documentation coverage passed.
+The real acceptance run is paused until you approve the named external setup.
+
 ## Not yet included
 
 No Google login, calendar connection, database, AI, alerts, or production deployment exists yet.

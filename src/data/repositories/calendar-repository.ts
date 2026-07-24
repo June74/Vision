@@ -65,6 +65,7 @@ export interface CalendarRepositoryPort {
   discover(setupVersion: number, calendars: readonly VerifiedCalendarEvidence[], now: Date): Promise<CalendarSetupSnapshot>;
   selectExisting(setupVersion: number, calendar: VerifiedCalendarEvidence, now: Date): Promise<CalendarSetupSnapshot>;
   beginCreation(setupVersion: number, idempotencyKey: string, preCreateCalendars: readonly VerifiedCalendarEvidence[], now: Date): Promise<BeginCreationResult>;
+  takeOverStaleCreation(idempotencyKey: string, staleBefore: Date, now: Date): Promise<CalendarCreationOperation>;
   findCreationOperation(idempotencyKey: string): Promise<CalendarCreationOperation | undefined>;
   completeCreation(idempotencyKey: string, calendar: VerifiedCalendarEvidence, now: Date): Promise<CalendarSetupSnapshot>;
   markCreationUncertain(idempotencyKey: string, outcome: "retryable" | "action_required", now: Date): Promise<CalendarSetupSnapshot>;
@@ -297,6 +298,63 @@ export class DrizzleCalendarStore {
     return result.rows.length === 1;
   }
 
+  /** Moves only one expired active operation and its exact setup version to reconciliation-only state. */
+  async takeOverStaleCreation(
+    ownerId: string,
+    googleSubject: string,
+    idempotencyKey: string,
+    staleBefore: Date,
+    now: Date,
+  ): Promise<boolean> {
+    const result = await this.database.execute<Record<string, unknown>>(sql`
+      with eligible as (
+        select
+          ledger.operation_id,
+          setup.setup_version,
+          setup.status as setup_status,
+          setup.action_required
+        from operation_ledger ledger
+        join calendar_setup_states setup
+          on setup.owner_id = ledger.owner_id
+         and setup.google_subject = ${googleSubject}
+         and setup.setup_version = ledger.setup_version + 1
+         and setup.status = 'creating'
+         and setup.action_required = false
+        where ledger.operation_id = ${idempotencyKey}
+          and ledger.owner_id = ${ownerId}
+          and ledger.provider = 'google'
+          and ledger.operation_kind = 'vision_calendar_create'
+          and ledger.status = 'in_progress'
+          and ledger.requested_at <= ${staleBefore}
+        for update of ledger, setup
+      ),
+      changed as (
+        update operation_ledger ledger
+        set status = 'retryable'
+        from eligible
+        where ledger.operation_id = eligible.operation_id
+        returning ledger.operation_id
+      ),
+      failed as (
+        update calendar_setup_states setup
+        set setup_version = setup.setup_version + 1,
+            status = 'failed',
+            action_required = false,
+            updated_at = ${now}
+        from eligible
+        where setup.owner_id = ${ownerId}
+          and setup.google_subject = ${googleSubject}
+          and setup.setup_version = eligible.setup_version
+          and setup.status = eligible.setup_status
+          and setup.action_required = eligible.action_required
+          and exists (select 1 from changed)
+        returning setup.owner_id
+      )
+      select owner_id as "ownerId" from failed
+    `);
+    return result.rows.length === 1;
+  }
+
   /** Reads one owner-scoped creation ledger and its normalized pre-create ID snapshot. */
   async findCreationOperation(
     ownerId: string,
@@ -399,28 +457,54 @@ export class DrizzleCalendarStore {
     status: "retryable" | "action_required",
     now: Date,
   ): Promise<boolean> {
+    const priorOperationStatus =
+      status === "retryable" ? "in_progress" : "retryable";
+    const priorSetupStatus =
+      status === "retryable" ? "creating" : "failed";
+    const priorSetupVersionOffset = status === "retryable" ? 1 : 2;
+    const priorActionRequired = false;
     const result = await this.database.execute<Record<string, unknown>>(sql`
-      with changed as (
-        update operation_ledger
+      with eligible as (
+        select
+          ledger.operation_id,
+          setup.setup_version,
+          setup.status as setup_status,
+          setup.action_required
+        from operation_ledger ledger
+        join calendar_setup_states setup
+          on setup.owner_id = ledger.owner_id
+         and setup.google_subject = ${googleSubject}
+         and setup.setup_version = ledger.setup_version + ${priorSetupVersionOffset}
+         and setup.status = ${priorSetupStatus}
+         and setup.action_required = ${priorActionRequired}
+        where ledger.operation_id = ${idempotencyKey}
+          and ledger.owner_id = ${ownerId}
+          and ledger.provider = 'google'
+          and ledger.operation_kind = 'vision_calendar_create'
+          and ledger.status = ${priorOperationStatus}
+        for update of ledger, setup
+      ),
+      changed as (
+        update operation_ledger ledger
         set status = ${status}
-        where operation_id = ${idempotencyKey}
-          and owner_id = ${ownerId}
-          and provider = 'google'
-          and operation_kind = 'vision_calendar_create'
-          and status in ('in_progress', 'retryable')
-        returning operation_id
+        from eligible
+        where ledger.operation_id = eligible.operation_id
+        returning ledger.operation_id
       ),
       failed as (
-        update calendar_setup_states
-        set setup_version = setup_version + 1,
+        update calendar_setup_states setup
+        set setup_version = setup.setup_version + 1,
             status = 'failed',
             action_required = ${status === "action_required"},
             updated_at = ${now}
-        where owner_id = ${ownerId}
-          and google_subject = ${googleSubject}
-          and status in ('creating', 'failed')
+        from eligible
+        where setup.owner_id = ${ownerId}
+          and setup.google_subject = ${googleSubject}
+          and setup.setup_version = eligible.setup_version
+          and setup.status = eligible.setup_status
+          and setup.action_required = eligible.action_required
           and exists (select 1 from changed)
-        returning owner_id
+        returning setup.owner_id
       )
       select owner_id as "ownerId" from failed
     `);
@@ -435,28 +519,56 @@ export class DrizzleCalendarStore {
     now: Date,
   ): Promise<boolean> {
     const result = await this.database.execute<Record<string, unknown>>(sql`
-      with changed as (
-        update operation_ledger
+      with eligible as (
+        select
+          ledger.operation_id,
+          setup.setup_version,
+          setup.status as setup_status,
+          setup.action_required
+        from operation_ledger ledger
+        join calendar_setup_states setup
+          on setup.owner_id = ledger.owner_id
+         and setup.google_subject = ${googleSubject}
+         and setup.setup_version = ledger.setup_version +
+           case ledger.status
+             when 'in_progress' then 1
+             when 'retryable' then 2
+             when 'action_required' then 3
+           end
+         and (
+           (ledger.status = 'in_progress' and setup.status = 'creating' and setup.action_required = false)
+           or (ledger.status = 'retryable' and setup.status = 'failed' and setup.action_required = false)
+           or (ledger.status = 'action_required' and setup.status = 'failed' and setup.action_required = true)
+         )
+        where ledger.operation_id = ${idempotencyKey}
+          and ledger.owner_id = ${ownerId}
+          and ledger.provider = 'google'
+          and ledger.operation_kind = 'vision_calendar_create'
+          and ledger.status in ('in_progress', 'retryable', 'action_required')
+        for update of ledger, setup
+      ),
+      changed as (
+        update operation_ledger ledger
         set status = 'definite_failure',
             completed_at = ${now}
-        where operation_id = ${idempotencyKey}
-          and owner_id = ${ownerId}
-          and provider = 'google'
-          and operation_kind = 'vision_calendar_create'
-          and status = 'in_progress'
-        returning operation_id
+        from eligible
+        where ledger.operation_id = eligible.operation_id
+        returning ledger.operation_id
       ),
       failed as (
-        update calendar_setup_states
-        set setup_version = setup_version + 1,
+        update calendar_setup_states setup
+        set setup_version = setup.setup_version + 1,
             status = 'failed',
             action_required = true,
             updated_at = ${now}
-        where owner_id = ${ownerId}
-          and google_subject = ${googleSubject}
-          and status = 'creating'
+        from eligible
+        where setup.owner_id = ${ownerId}
+          and setup.google_subject = ${googleSubject}
+          and setup.setup_version = eligible.setup_version
+          and setup.status = eligible.setup_status
+          and setup.action_required = eligible.action_required
           and exists (select 1 from changed)
-        returning owner_id
+        returning setup.owner_id
       )
       select owner_id as "ownerId" from failed
     `);
@@ -613,6 +725,34 @@ export class CalendarRepository implements CalendarRepositoryPort {
     const operation = await this.findCreationOperation(idempotencyKey);
     if (!operation) throw persistenceFailure();
     return { kind: "started", operation };
+  }
+
+  /** Lets the same owner/key reconcile an expired create without ever issuing another insert. */
+  async takeOverStaleCreation(
+    idempotencyKey: string,
+    staleBefore: Date,
+    now: Date,
+  ): Promise<CalendarCreationOperation> {
+    assertUuid(idempotencyKey);
+    assertDate(staleBefore);
+    assertDate(now);
+    const takenOver = await this.store.takeOverStaleCreation(
+      this.ownerId,
+      this.googleSubject,
+      idempotencyKey,
+      staleBefore,
+      now,
+    );
+    const operation = await this.findCreationOperation(idempotencyKey);
+    if (!operation) throw persistenceFailure();
+    if (
+      !takenOver &&
+      operation.status === "in_progress" &&
+      operation.requestedAt.getTime() <= staleBefore.getTime()
+    ) {
+      throw persistenceFailure();
+    }
+    return operation;
   }
 
   /** Reads one idempotency operation only inside the repository's fixed owner scope. */

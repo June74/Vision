@@ -13,7 +13,11 @@ Binds provider evidence to the verified subject.
 ## `createRepository`
 Captures owner and subject.
 ## `reconcileCreation`
-Diffs valid owned IDs against the durable snapshot; never calls insert again.
+Returns an authoritative `in_progress` replay without relisting. Only after the winning create settles uncertain does it diff valid owned IDs against the durable snapshot; it never calls insert again.
+## `prepareCreationReplay`
+Returns active operations unchanged during a two-minute lease, safely exceeding the adapter's bounded insert-plus-verification request windows. After expiry it invokes the owner/key/version-bound repository takeover and permits reconciliation only from the resulting ledger state.
+## `recordCreationUncertain`
+Atomically moves the winning completed-but-uncertain create from `in_progress` to reconciliation-only `retryable`, then reloads its ledger state.
 ## `authenticateSetupRequest`
 Resolves exactly one opaque cookie server-side.
 ## `requireCsrf`

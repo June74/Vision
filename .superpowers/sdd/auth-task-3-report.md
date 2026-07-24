@@ -141,3 +141,112 @@ Corrected scans:
 - Durable `status = 'discovering'` write scan: zero matches.
 
 No live Google, Neon, Cloudflare, or other external service was used in the correction round.
+
+## Final I1/I3 adversarial correction evidence
+
+### Same-key in-flight ownership and definite terminalization
+
+- RED: a deterministic deferred Calendars.insert test showed that a same-key replay relisted immediately, moved the authoritative `in_progress` ledger to `retryable`, and advanced setup from `creating` to `failed`.
+- GREEN: an `in_progress` replay now reloads and returns the authoritative `creating` snapshot with HTTP 202. It neither relists nor mutates the ledger. Only the request that actually receives a completed uncertain create outcome may atomically move `in_progress` to reconciliation-only `retryable`.
+- Repository transitions are bound to the exact owner, subject, operation key, operation kind, stored confirmation version, expected setup version/status, and action-required flag.
+- Definite terminalization accepts matching `in_progress`, `retryable`, and `action_required` states, completes the ledger, and releases the unresolved partial-index claim. If ambiguity was already action-required, setup remains failed/action-required.
+- Deterministic Worker coverage exercises replay-before-definite and definite-before-replay ordering. PGlite coverage exercises definite terminalization from active, crash-marked retryable, and action-required states; release to a fresh discovery/version/key; and refusal when the setup version no longer matches.
+
+### Hostile stream cancellation
+
+- RED: a response stream whose `cancel()` promise never settled kept the public request pending beyond the configured provider deadline.
+- GREEN: deadline/overflow aborts the request, initiates best-effort reader cancellation, observes cancellation rejection, and never awaits the untrusted cleanup promise.
+- Never-resolving and rejecting cancellation algorithms are covered on both deadline and overflow paths. List/get remain `definite_failure`; insert remains `uncertain`.
+- The main request timer is still cleared in `finally`, byte/chunk ceilings remain enforced before accumulation, and adapter errors retain no token or hostile cancellation details.
+
+### Final verification
+
+Focused command:
+
+```powershell
+$env:XDG_CONFIG_HOME=(Resolve-Path '.wrangler').Path
+.\node_modules\.bin\vitest.CMD run tests/contract/google/calendar-setup.contract.test.ts tests/integration/data/calendar-repository-concurrency.test.ts tests/worker/calendar-setup.test.ts
+```
+
+Result: 3 files passed, 32 tests passed.
+
+Full command:
+
+```powershell
+$env:XDG_CONFIG_HOME=(Resolve-Path '.wrangler').Path
+pnpm.cmd check
+```
+
+Result:
+
+- Unit/integration: 29 files passed, 189 tests passed.
+- Worker: 4 files passed, 28 tests passed.
+- Production and test TypeScript: passed.
+- Mirrored documentation coverage: passed.
+- Worker and client production builds: passed.
+- Production crypto-boundary validation: passed.
+
+Final scans:
+
+- `git diff --check`: passed.
+- Task-scoped event-write endpoint/method scan: zero matches.
+- Production/docs/migrations token/client-secret sentinel scan: zero matches.
+- Calendar adapter `response.text()`/`response.json()` scan: zero matches.
+- Calendar adapter awaited `reader.cancel()` scan: zero matches.
+- Durable `status = 'discovering'` write scan: zero matches.
+- PGlite raw-row test still confirms stable metadata only and no token/provider/event payload plaintext.
+
+The first full-gate attempt after strengthening SQL state binding exposed an ambiguous `setup_version` expression. The target-table expression was qualified, the focused repository suite was rerun, and the complete gate above then passed. No live Google, Neon, Cloudflare, or other external service was used.
+
+## Final stale-creation lease correction
+
+### RED to GREEN
+
+- RED: after simulating a crash with a durable `in_progress` ledger written before the provider-created calendar could be recorded uncertain, a same-key replay remained HTTP 202 forever and never reconciled the new stable ID.
+- GREEN: a deterministic two-minute lease now protects the active winner. A replay at 30 seconds remains `creating`/HTTP 202, does not relist, and cannot change the ledger.
+- After the lease, the same owner and idempotency key may atomically move only the exact matching `in_progress` ledger plus `creating` setup version to reconciliation-only `retryable`. The route then performs the existing pre-create stable-ID set difference and never calls Calendars.insert.
+- The two-minute lease exceeds the adapter's bounded insert plus ownership-verification request windows. A late successful winner can still complete from `retryable`; a late definite result can still terminalize it and release the unresolved uniqueness claim.
+- The takeover statement locks and binds owner, verified subject, provider, operation kind, idempotency key, requested-at cutoff, ledger setup version, current setup version/status, and action-required flag.
+- Concurrent expired replays linearize to one setup-version transition. A losing takeover reloads the authoritative `retryable` or terminal state. A mismatched setup version or another owner cannot take over or learn the operation.
+
+### Added coverage
+
+- Crash after provider mutation but before the uncertain-state write: expired replay connects the provider-created stable ID.
+- Within-lease replay: HTTP 202, authoritative `in_progress`, zero reconciliation list calls.
+- After-lease replay: one reconciliation, zero replacement inserts.
+- Two concurrent expired route replays: both return the same connection, zero inserts.
+- Two concurrent PGlite takeovers: one transition to `retryable` and setup version 4.
+- Stored setup-version mismatch: generic persistence failure and ledger remains `in_progress`.
+- Owner mismatch: generic persistence failure and ledger remains private.
+- Definite terminalization after takeover: ledger becomes terminal, unresolved claim is released, and recovery uses fresh discovery/version/key.
+
+### Lease verification
+
+Focused command:
+
+```powershell
+$env:XDG_CONFIG_HOME=(Resolve-Path '.wrangler').Path
+.\node_modules\.bin\vitest.CMD run tests/contract/google/calendar-setup.contract.test.ts tests/integration/data/calendar-repository-concurrency.test.ts tests/worker/calendar-setup.test.ts
+```
+
+Result: 3 files passed, 38 tests passed.
+
+Full command:
+
+```powershell
+$env:XDG_CONFIG_HOME=(Resolve-Path '.wrangler').Path
+pnpm.cmd check
+```
+
+Result:
+
+- Unit/integration: 29 files passed, 193 tests passed.
+- Worker: 4 files passed, 30 tests passed.
+- Production and test TypeScript: passed.
+- Mirrored documentation coverage: passed.
+- Worker and client production builds: passed.
+- Production crypto-boundary validation: passed.
+
+The first full run encountered three unrelated PGlite `beforeEach` initialization timeouts under parallel load. The focused PGlite suite was already green, and an unchanged rerun of the complete gate passed with the counts above. No live service was used.
+
+Final scans passed: `git diff --check`, task-scoped event writes, production/docs/migrations secret sentinels, unbounded adapter response helpers, awaited reader cancellation, and durable `discovering` writes all reported zero matches where applicable.

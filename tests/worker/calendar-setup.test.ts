@@ -113,6 +113,7 @@ class MemoryCalendarRepository implements CalendarRepositoryPort {
     version: number,
     idempotencyKey: string,
     preCreateCalendars: readonly VerifiedCalendarEvidence[],
+    now: Date = NOW,
   ) {
     const existing = this.operations.get(idempotencyKey);
     if (existing) return { kind: "existing" as const, operation: existing };
@@ -121,12 +122,29 @@ class MemoryCalendarRepository implements CalendarRepositoryPort {
       idempotencyKey,
       setupVersion: version,
       status: "in_progress",
-      requestedAt: NOW,
+      requestedAt: now,
       preCreateCalendarIds: preCreateCalendars.map(({ id }) => id),
     };
     this.operations.set(idempotencyKey, operation);
     this.snapshot = this.state("creating", version + 1);
     return { kind: "started" as const, operation };
+  }
+
+  async takeOverStaleCreation(
+    idempotencyKey: string,
+    staleBefore: Date,
+  ): Promise<CalendarCreationOperation> {
+    const operation = this.operations.get(idempotencyKey);
+    if (!operation) throw new Error("missing");
+    if (
+      operation.status === "in_progress" &&
+      operation.requestedAt.getTime() <= staleBefore.getTime() &&
+      this.snapshot?.status === "creating" &&
+      this.snapshot.setupVersion === operation.setupVersion + 1
+    ) {
+      await this.markCreationUncertain(idempotencyKey, "retryable");
+    }
+    return this.operations.get(idempotencyKey)!;
   }
 
   async findCreationOperation(
@@ -166,6 +184,12 @@ class MemoryCalendarRepository implements CalendarRepositoryPort {
     outcome: "retryable" | "action_required",
   ): Promise<CalendarSetupSnapshot> {
     const operation = this.operations.get(idempotencyKey)!;
+    const expectedStatus =
+      outcome === "retryable" ? "in_progress" : "retryable";
+    if (operation.status !== expectedStatus) {
+      if (!this.snapshot) throw new Error("missing");
+      return this.snapshot;
+    }
     this.operations.set(idempotencyKey, { ...operation, status: outcome });
     this.snapshot = {
       ...this.state("failed", (this.snapshot?.setupVersion ?? 3) + 1),
@@ -178,6 +202,17 @@ class MemoryCalendarRepository implements CalendarRepositoryPort {
     idempotencyKey: string,
   ): Promise<CalendarSetupSnapshot> {
     const operation = this.operations.get(idempotencyKey)!;
+    if (operation.status === "definite_failure") {
+      if (!this.snapshot) throw new Error("missing");
+      return this.snapshot;
+    }
+    if (
+      !["in_progress", "retryable", "action_required"].includes(
+        operation.status,
+      )
+    ) {
+      throw new Error("invalid terminalization");
+    }
     this.operations.set(idempotencyKey, {
       ...operation,
       status: "definite_failure",
@@ -238,6 +273,7 @@ function createHarness(options: {
   tokenUnavailable?: boolean;
   failDiscoveryPersistence?: boolean;
   failCompletionOnce?: boolean;
+  now?: () => Date;
 } = {}) {
   const repository = new MemoryCalendarRepository();
   repository.failDiscoveryPersistence = options.failDiscoveryPersistence ?? false;
@@ -268,7 +304,7 @@ function createHarness(options: {
   };
   const dependencies: CalendarSetupRouteDependencies = {
     logger: vi.fn(),
-    now: () => NOW,
+    now: options.now ?? (() => NOW),
     userTimeZone: "America/Chicago",
     sessions: {
       findSession: vi.fn(async (sessionId) =>
@@ -279,7 +315,7 @@ function createHarness(options: {
               email: "allowed@example.test",
               csrfToken: CSRF,
               createdAt: NOW,
-              expiresAt: new Date(NOW.getTime() + 60_000),
+              expiresAt: new Date(NOW.getTime() + 600_000),
             }
           : undefined,
       ),
@@ -291,7 +327,7 @@ function createHarness(options: {
           : {
               refreshToken: "REFRESH_TOKEN_SENTINEL",
               accessToken: "ACCESS_TOKEN_SENTINEL",
-              accessExpiresAt: new Date(NOW.getTime() + 60_000),
+              accessExpiresAt: new Date(NOW.getTime() + 600_000),
               grantedScopes: [],
               tokenVersion: 1,
             },
@@ -327,6 +363,16 @@ function post(path: string, body: unknown, csrf = CSRF): Request {
     },
     body: JSON.stringify(body),
   });
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((accept, decline) => {
+    resolve = accept;
+    reject = decline;
+  });
+  return { promise, resolve, reject };
 }
 
 describe("Vision Worker calendar setup", () => {
@@ -458,6 +504,120 @@ describe("Vision Worker calendar setup", () => {
     expect(second.status).toBe(200);
     expect(createSecondaryCalendar).toHaveBeenCalledTimes(1);
     expect(createSecondaryCalendar).toHaveBeenCalledWith("America/Chicago");
+  });
+
+  it("keeps the original create authoritative while a same-key replay arrives in flight", async () => {
+    const clock = { value: NOW };
+    const { app, client, repository, createSecondaryCalendar } = createHarness({
+      lists: [[], [], []],
+      now: () => clock.value,
+    });
+    const create = deferred<CreatedSecondaryCalendar>();
+    createSecondaryCalendar.mockImplementation(() => create.promise);
+    await app.fetch(
+      post("/api/setup/calendar/discover", { setupVersion: 1 }),
+      {} as Env,
+    );
+    const body = {
+      setupVersion: 2,
+      confirmation: "CREATE VISION CALENDAR",
+      idempotencyKey: KEY,
+    };
+    const original = app.fetch(
+      post("/api/setup/calendar/confirm-create", body),
+      {} as Env,
+    );
+    await vi.waitFor(() =>
+      expect(createSecondaryCalendar).toHaveBeenCalledTimes(1),
+    );
+    clock.value = new Date(NOW.getTime() + 30_000);
+
+    const replay = await app.fetch(
+      post("/api/setup/calendar/confirm-create", body),
+      {} as Env,
+    );
+    expect(replay.status).toBe(202);
+    await expect(replay.json()).resolves.toMatchObject({
+      status: "creating",
+      setupVersion: 3,
+    });
+    expect(repository.operations.get(KEY)).toMatchObject({
+      status: "in_progress",
+    });
+    expect(client.listOwnedSecondaryCalendars).toHaveBeenCalledTimes(2);
+
+    create.reject(new CalendarProviderError("definite_failure"));
+    const rejected = await original;
+    expect(rejected.status).toBe(409);
+    expect(repository.operations.get(KEY)).toMatchObject({
+      status: "definite_failure",
+    });
+  });
+
+  it("takes over an expired crashed create for reconciliation without issuing another insert", async () => {
+    const clock = { value: NOW };
+    const { app, client, repository, createSecondaryCalendar } = createHarness({
+      lists: [[], [candidate("created-before-crash")]],
+      now: () => clock.value,
+    });
+    await app.fetch(
+      post("/api/setup/calendar/discover", { setupVersion: 1 }),
+      {} as Env,
+    );
+    await repository.beginCreation(2, KEY, [], NOW);
+    clock.value = new Date(NOW.getTime() + 120_001);
+
+    const replay = await app.fetch(
+      post("/api/setup/calendar/confirm-create", {
+        setupVersion: 2,
+        confirmation: "CREATE VISION CALENDAR",
+        idempotencyKey: KEY,
+      }),
+      {} as Env,
+    );
+
+    expect(replay.status).toBe(200);
+    await expect(replay.json()).resolves.toMatchObject({
+      status: "connected",
+      connection: { calendarId: "created-before-crash" },
+    });
+    expect(createSecondaryCalendar).not.toHaveBeenCalled();
+    expect(client.listOwnedSecondaryCalendars).toHaveBeenCalledTimes(2);
+  });
+
+  it("linearizes concurrent expired replays and never issues a replacement insert", async () => {
+    const clock = { value: NOW };
+    const { app, repository, createSecondaryCalendar } = createHarness({
+      lists: [
+        [],
+        [candidate("created-before-crash")],
+        [candidate("created-before-crash")],
+      ],
+      now: () => clock.value,
+    });
+    await app.fetch(
+      post("/api/setup/calendar/discover", { setupVersion: 1 }),
+      {} as Env,
+    );
+    await repository.beginCreation(2, KEY, [], NOW);
+    clock.value = new Date(NOW.getTime() + 120_001);
+    const body = {
+      setupVersion: 2,
+      confirmation: "CREATE VISION CALENDAR",
+      idempotencyKey: KEY,
+    };
+
+    const [first, second] = await Promise.all([
+      app.fetch(post("/api/setup/calendar/confirm-create", body), {} as Env),
+      app.fetch(post("/api/setup/calendar/confirm-create", body), {} as Env),
+    ]);
+
+    expect([first.status, second.status]).toEqual([200, 200]);
+    expect(repository.operations.get(KEY)).toMatchObject({
+      status: "completed",
+      resultCalendarId: "created-before-crash",
+    });
+    expect(createSecondaryCalendar).not.toHaveBeenCalled();
   });
 
   it("requires explicit selection when a candidate appears after discovery but before confirmation", async () => {
@@ -593,6 +753,16 @@ describe("Vision Worker calendar setup", () => {
       setupVersion: 4,
       actionRequired: true,
     });
+    const rejectedReplay = await app.fetch(
+      post("/api/setup/calendar/confirm-create", {
+        setupVersion: 2,
+        confirmation: "CREATE VISION CALENDAR",
+        idempotencyKey: KEY,
+      }),
+      {} as Env,
+    );
+    expect(rejectedReplay.status).toBe(409);
+    expect(createSecondaryCalendar).toHaveBeenCalledTimes(1);
 
     createSecondaryCalendar.mockReset().mockResolvedValue({
       id: "created-after-correction",

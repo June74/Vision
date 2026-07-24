@@ -10,14 +10,16 @@ Atomically stores choices and advances directly to the final discovery state.
 Connects one rechecked stable ID.
 ## `beginCreation`
 Atomically stores key and pre-create IDs before Google.
+## `takeOverStaleCreation`
+After the safe waiting period, lets the same account and key check what an interrupted create produced without creating again.
 ## `findCreationOperation`
 Reads one scoped operation.
 ## `completeCreation`
 Persists created/reconciled evidence once.
 ## `markCreationUncertain`
-Records retryable or action-required without creating again.
+Moves a completed uncertain create to retry-only, then to manual review if reconciliation is ambiguous.
 ## `markCreationDefiniteFailure`
-Closes a known rejected create so corrected setup can use a fresh key.
+Closes a known rejected create while keeping any existing manual-review warning.
 ## `readSnapshot`
 Reads state, candidates, and connection.
 ## `getSnapshot`

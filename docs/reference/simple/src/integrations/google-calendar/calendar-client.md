@@ -12,6 +12,8 @@ Rechecks one encoded stable ID.
 Adds server authorization and hides raw failures.
 ## `readBoundedJson`
 Reads only small valid JSON responses.
+## `cancelReaderSafely`
+Starts stream cleanup without waiting forever for an untrusted provider.
 ## `isOwnedVisionEntry`
 Applies the complete candidate rule.
 ## `bindOwnership`

@@ -16,6 +16,23 @@ function jsonResponse(value: unknown, status = 200): Response {
   });
 }
 
+async function settleWithin<T>(work: Promise<T>, milliseconds = 200): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () => reject(new Error("Provider request did not settle.")),
+          milliseconds,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 describe("Google Calendar setup adapter", () => {
   it("paginates bounded CalendarList reads and keeps only exact owned secondary Vision calendars", async () => {
     const fetcher = vi
@@ -276,8 +293,12 @@ describe("Google Calendar setup adapter", () => {
       vi.fn<typeof fetch>().mockResolvedValue(
         streamResponse((controller) => {
           setTimeout(() => {
-            controller.enqueue(new TextEncoder().encode('{"items":[]}'));
-            controller.close();
+            try {
+              controller.enqueue(new TextEncoder().encode('{"items":[]}'));
+              controller.close();
+            } catch {
+              // The deadline may already have cancelled this intentionally slow stream.
+            }
           }, 100);
         }),
       ),
@@ -323,6 +344,79 @@ describe("Google Calendar setup adapter", () => {
     );
     await expect(
       uncertainInsertBody.createSecondaryCalendar("America/Chicago"),
+    ).rejects.toMatchObject({ outcome: "uncertain" });
+  });
+
+  it("does not await hostile stream cancellation after deadline or body overflow", async () => {
+    const hostileResponse = (
+      overflow: boolean,
+      cancel: () => Promise<void>,
+    ) =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(
+              overflow
+                ? new Uint8Array(33)
+                : new TextEncoder().encode('{"items":['),
+            );
+          },
+          cancel,
+        }),
+        { headers: { "content-type": "application/json" } },
+      );
+    const neverCancels = () => new Promise<void>(() => {});
+    const rejectsCancellation = () =>
+      Promise.reject(new Error("HOSTILE_CANCEL_REJECTION"));
+
+    const deadlineRead = new CalendarClient(
+      TOKEN,
+      SUBJECT,
+      vi.fn<typeof fetch>().mockResolvedValue(
+        hostileResponse(false, neverCancels),
+      ),
+      { deadlineMs: 20 },
+    );
+    await expect(
+      settleWithin(deadlineRead.listOwnedSecondaryCalendars()),
+    ).rejects.toMatchObject({ outcome: "definite_failure" });
+
+    const deadlineInsert = new CalendarClient(
+      TOKEN,
+      SUBJECT,
+      vi.fn<typeof fetch>().mockResolvedValue(
+        hostileResponse(false, rejectsCancellation),
+      ),
+      { deadlineMs: 20 },
+    );
+    await expect(
+      settleWithin(deadlineInsert.createSecondaryCalendar("America/Chicago")),
+    ).rejects.toMatchObject({ outcome: "uncertain" });
+
+    const overflowRead = new CalendarClient(
+      TOKEN,
+      SUBJECT,
+      vi.fn<typeof fetch>().mockResolvedValue(
+        hostileResponse(true, rejectsCancellation),
+      ),
+      { deadlineMs: 100, maxBodyBytes: 32 },
+    );
+    await expect(
+      settleWithin(overflowRead.getCalendar("vision-id")),
+    ).rejects.toMatchObject({ outcome: "definite_failure" });
+
+    const overflowInsert = new CalendarClient(
+      TOKEN,
+      SUBJECT,
+      vi.fn<typeof fetch>().mockResolvedValue(
+        hostileResponse(true, neverCancels),
+      ),
+      { deadlineMs: 100, maxBodyBytes: 32 },
+    );
+    await expect(
+      settleWithin(
+        overflowInsert.createSecondaryCalendar("America/Chicago"),
+      ),
     ).rejects.toMatchObject({ outcome: "uncertain" });
   });
 
