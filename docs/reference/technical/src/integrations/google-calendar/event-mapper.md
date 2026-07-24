@@ -8,7 +8,7 @@ Provides the sole safe failure for malformed, oversized, impossible, or timezone
 
 ## `mapGoogleEvent`
 
-Validates the permissive raw Google payload, constructs a fixed provider identity from the calendar context, event ID, and update instant, then returns an upsert or explicit delete tombstone. It ignores Google extended properties, including any provider-side Vision category-like values. Title, description, location, attendee email addresses, meeting links, and attachment references are emitted only in `protected`.
+Validates the permissive raw Google payload and defaults absent ordinary `status` to Google’s `confirmed` default. An upsert requires `updated` and receives a versioned identity; a cancelled resource maps before version parsing to an explicit stable target tombstone because Google guarantees only sparse deletion fields. Later synchronization must commit such tombstones under its trusted page/checkpoint transaction ordering. The mapper ignores Google extended properties, including any provider-side Vision category-like values. Title, description, location, attendee email addresses, meeting links, and attachment references are emitted only in `protected`.
 
 ## `readTimeZone`
 
@@ -24,7 +24,7 @@ Creates a closed single/master/occurrence recurrence value. It intentionally dis
 
 ## `normalizeGoogleTime`
 
-Normalizes a Google RFC 3339 `dateTime` to ISO UTC or delegates an all-day `date` to calendar-zone conversion. When `dateTime` has no offset, Google permits the field only with an explicit `timeZone`; the mapper resolves that wall-clock value in this IANA zone rather than using the Worker host timezone. Missing, malformed, gap, and overlap values fail before an upsert is emitted.
+Normalizes a Google RFC 3339 `dateTime` to ISO UTC or delegates an all-day `date` to calendar-zone conversion. When `dateTime` has no offset, Google permits the field only with an explicit `timeZone`; the mapper resolves that wall-clock value in this IANA zone rather than using the Worker host timezone. Missing, malformed, timed gap, and timed overlap values fail before an upsert is emitted. Fractional milliseconds are preserved without contaminating sampled timezone offsets.
 
 ## `normalizeGoogleDateTime`
 
@@ -36,7 +36,15 @@ Parses and validates date, clock, fractional-millisecond, and optional strict RF
 
 ## `localDateStartToInstant`
 
-Converts a calendar-local all-day boundary through the same candidate-and-round-trip logic as offset-less date-times. A skipped local date, such as `Pacific/Apia` on 2011-12-30, has no matching instant and is rejected rather than silently shifted to a different calendar date.
+Finds the earliest instant whose IANA calendar date equals the requested all-day date through a bounded 96-hour binary search. A midnight gap starts the date later and a midnight overlap selects the first occurrence; only a wholly skipped date, such as `Pacific/Apia` on 2011-12-30, is rejected.
+
+## `toLocalDateKey`
+
+Builds a fixed-width `YYYYMMDD` comparison key from validated date fields for date-boundary searching.
+
+## `formatLocalDateKey`
+
+Formats an instant as an IANA-zone date key without consulting the Worker host timezone. It is monotonic across instants, allowing the bounded lower-bound search to locate the earliest instant of an existing local date.
 
 ## `localDateTimeToInstant`
 
@@ -52,7 +60,7 @@ Formats a candidate instant through numeric `Intl` parts and compares every date
 
 ## `getTimeZoneOffset`
 
-Uses numeric `Intl.DateTimeFormat` parts to calculate an IANA offset at one instant. A second offset evaluation handles a daylight-saving transition around the target local midnight.
+Uses numeric `Intl.DateTimeFormat` parts to calculate an IANA offset from a whole-second sample. The fractional part is deliberately removed before sampling so offset-less provider milliseconds are not folded into the offset; candidate instants restore the original milliseconds afterward.
 
 ## `mapAttendees`
 

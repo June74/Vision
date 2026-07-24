@@ -8,7 +8,7 @@ Reports invalid provider event data without showing it.
 
 ## `mapGoogleEvent`
 
-Maps normal events to upserts and cancelled events to deletions.
+Maps normal events to upserts and sparse cancelled events to stable tombstones.
 
 ## `readTimeZone`
 
@@ -16,7 +16,7 @@ Finds the source timezone for the event.
 
 ## `toProviderOrderKey`
 
-Turns a strict offset-bearing provider update time into a fixed-width order key.
+Turns a strict offset-bearing update time into an upsert-only fixed-width order key.
 
 ## `mapRecurrence`
 
@@ -36,7 +36,15 @@ Reads safe RFC 3339 calendar parts before conversion.
 
 ## `localDateStartToInstant`
 
-Converts an all-day local date only when it exists in its IANA timezone.
+Finds the earliest instant belonging to an all-day local date, unless the whole date was skipped.
+
+## `toLocalDateKey`
+
+Builds a comparable local-date key.
+
+## `formatLocalDateKey`
+
+Formats an instant's calendar date in an IANA timezone.
 
 ## `localDateTimeToInstant`
 

@@ -2,6 +2,10 @@
 
 Defines strict Zod contracts for the provider-neutral event changes consumed by later synchronization jobs. The module imports only the canonical provider identity contract and does not couple domain data to Google, storage, queues, or cryptography.
 
+## `ProviderEventTargetSchema`
+
+Requires only provider system, calendar, and event IDs. Google deletion tombstones may omit `updated`, so a deletion cannot truthfully reuse the versioned upsert identity. A later transactional page consumer can order staged tombstones by the trusted page/checkpoint transaction rather than an invented provider revision.
+
 ## `ProviderAttachmentReferenceSchema`
 
 Requires an opaque attachment ID or URL with optional MIME type. It intentionally omits Google attachment title and contents, so attachment bytes and user-facing attachment text never cross the mapper boundary.
@@ -20,7 +24,7 @@ Requires queryable provider identity, normalized offset-aware instants, source z
 
 ## `DeleteEventSchema`
 
-Represents a provider tombstone using only provider identity and recurrence identity. The strict schema refuses protected payload fields, preventing stale event text from surviving a deletion mapping.
+Represents a provider tombstone using the unversioned stable target and recurrence identity. The strict schema refuses protected payload fields and source version fields, preventing stale event text from surviving a deletion mapping or sparse provider data from becoming a false ordering claim.
 
 ## `ProviderEventChangeSchema`
 

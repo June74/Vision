@@ -78,6 +78,28 @@ describe("mapGoogleEvent", () => {
     });
   });
 
+  it("uses the earliest instant that belongs to an all-day date when local midnight is skipped or repeated", () => {
+    const saoPaulo = mapGoogleEvent({
+      calendarId: CALENDAR_ID,
+      end: { date: "2018-11-05", timeZone: "America/Sao_Paulo" },
+      id: "sao_paulo_midnight_gap_1",
+      start: { date: "2018-11-04", timeZone: "America/Sao_Paulo" },
+      status: "confirmed",
+      updated: "2018-11-03T12:00:00.000Z",
+    });
+    const havana = mapGoogleEvent({
+      calendarId: CALENDAR_ID,
+      end: { date: "2020-11-02", timeZone: "America/Havana" },
+      id: "havana_midnight_overlap_1",
+      start: { date: "2020-11-01", timeZone: "America/Havana" },
+      status: "confirmed",
+      updated: "2020-10-31T12:00:00.000Z",
+    });
+
+    expect(saoPaulo).toMatchObject({ startsAt: "2018-11-04T03:00:00.000Z" });
+    expect(havana).toMatchObject({ startsAt: "2020-11-01T04:00:00.000Z" });
+  });
+
   it("rejects all-day dates that do not exist in their IANA timezone", () => {
     expect(() => mapGoogleEvent({
       calendarId: CALENDAR_ID,
@@ -131,6 +153,46 @@ describe("mapGoogleEvent", () => {
       endsAt: "2026-07-24T16:00:00.000Z",
       timeZone: "America/Chicago",
     });
+  });
+
+  it("preserves fractional milliseconds for offset-less dateTimes in multiple IANA timezones", () => {
+    const chicago = mapGoogleEvent({
+      calendarId: CALENDAR_ID,
+      end: { dateTime: "2026-07-24T11:00:00.456", timeZone: "America/Chicago" },
+      id: "fractional_chicago_1",
+      start: { dateTime: "2026-07-24T10:00:00.123", timeZone: "America/Chicago" },
+      status: "confirmed",
+      updated: "2026-07-24T14:01:03.500Z",
+    });
+    const kathmandu = mapGoogleEvent({
+      calendarId: CALENDAR_ID,
+      end: { dateTime: "2026-07-24T11:00:00.002", timeZone: "Asia/Kathmandu" },
+      id: "fractional_kathmandu_1",
+      start: { dateTime: "2026-07-24T10:00:00.001", timeZone: "Asia/Kathmandu" },
+      status: "confirmed",
+      updated: "2026-07-24T14:01:03.501Z",
+    });
+
+    expect(chicago).toMatchObject({
+      startsAt: "2026-07-24T15:00:00.123Z",
+      endsAt: "2026-07-24T16:00:00.456Z",
+    });
+    expect(kathmandu).toMatchObject({
+      startsAt: "2026-07-24T04:15:00.001Z",
+      endsAt: "2026-07-24T05:15:00.002Z",
+    });
+  });
+
+  it("defaults an omitted ordinary Google status to confirmed", () => {
+    const change = mapGoogleEvent({
+      calendarId: CALENDAR_ID,
+      end: { dateTime: "2026-07-24T11:00:00Z" },
+      id: "defaulted_status_1",
+      start: { dateTime: "2026-07-24T10:00:00Z" },
+      updated: "2026-07-24T14:01:03.600Z",
+    });
+
+    expect(change).toMatchObject({ type: "upsert", status: "confirmed" });
   });
 
   it("rejects an offset-less dateTime without the timezone that Google requires", () => {
@@ -201,24 +263,22 @@ describe("mapGoogleEvent", () => {
     });
   });
 
-  it("maps a cancelled occurrence and deleted event as explicit deletions", () => {
+  it("maps sparse cancelled occurrences and deleted events as explicit tombstones without a provider revision", () => {
     const occurrence = mapGoogleEvent({
       calendarId: CALENDAR_ID,
       id: "series_1_20260731",
       originalStartTime: { dateTime: "2026-07-31T10:00:00Z" },
       recurringEventId: "series_1",
       status: "cancelled",
-      updated: "2026-07-24T14:01:06.000Z",
     });
     const deleted = mapGoogleEvent({
       calendarId: CALENDAR_ID,
       id: "deleted_1",
       status: "cancelled",
-      updated: "2026-07-24T14:01:07.000Z",
     });
 
-    expect(occurrence).toEqual(expect.objectContaining({ type: "delete", recurrence: expect.objectContaining({ kind: "occurrence", masterEventId: "series_1" }) }));
-    expect(deleted).toEqual(expect.objectContaining({ type: "delete", recurrence: { kind: "single" } }));
+    expect(occurrence).toEqual(expect.objectContaining({ type: "delete", target: expect.objectContaining({ sourceEventId: "series_1_20260731" }), recurrence: expect.objectContaining({ kind: "occurrence", masterEventId: "series_1" }) }));
+    expect(deleted).toEqual(expect.objectContaining({ type: "delete", target: { sourceSystem: "google-calendar", sourceCalendarId: CALENDAR_ID, sourceEventId: "deleted_1" }, recurrence: { kind: "single" } }));
     expect(occurrence).not.toHaveProperty("protected");
     expect(deleted).not.toHaveProperty("protected");
   });

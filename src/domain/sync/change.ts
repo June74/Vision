@@ -4,6 +4,15 @@ import { ProviderEventIdentitySchema } from "../events/event";
 
 const nonEmptyText = z.string().min(1);
 
+/** Validates the stable provider address used to target a tombstone without claiming a provider revision exists. */
+export const ProviderEventTargetSchema = z
+  .object({
+    sourceCalendarId: nonEmptyText,
+    sourceEventId: nonEmptyText,
+    sourceSystem: nonEmptyText,
+  })
+  .strict();
+
 /** Validates a non-content attachment locator without copying attachment bytes or display text. */
 export const ProviderAttachmentReferenceSchema = z
   .object({
@@ -64,8 +73,8 @@ export const UpsertEventSchema = z
 /** Stores an explicit provider tombstone without retaining protected event content. */
 export const DeleteEventSchema = z
   .object({
-    identity: ProviderEventIdentitySchema,
     recurrence: ProviderRecurrenceSchema,
+    target: ProviderEventTargetSchema,
     type: z.literal("delete"),
   })
   .strict();
@@ -78,6 +87,9 @@ export const ProviderEventChangeSchema = z.discriminatedUnion("type", [
 
 /** A non-provider-specific attachment reference retained only inside encrypted event content. */
 export type ProviderAttachmentReference = z.infer<typeof ProviderAttachmentReferenceSchema>;
+
+/** A stable provider record address used when a source deletion cannot guarantee a version or update timestamp. */
+export type ProviderEventTarget = z.infer<typeof ProviderEventTargetSchema>;
 
 /** The protected content that an encrypted repository must accept separately from planning fields. */
 export type ProviderEventProtectedPayload = z.infer<typeof ProviderEventProtectedPayloadSchema>;

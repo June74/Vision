@@ -7,11 +7,10 @@ describe("provider-neutral synchronization contracts", () => {
     expect(
       ProviderEventChangeSchema.safeParse({
         type: "delete",
-        identity: {
+        target: {
           sourceCalendarId: "calendar_1",
           sourceEventId: "event_1",
           sourceSystem: "google-calendar",
-          sourceVersion: "00000000001753417300",
         },
         recurrence: { kind: "occurrence", masterEventId: "series_1", originalStartAt: "2026-07-24T14:00:00.000Z" },
       }).success,
@@ -22,11 +21,10 @@ describe("provider-neutral synchronization contracts", () => {
     expect(
       ProviderEventChangeSchema.safeParse({
         type: "delete",
-        identity: {
+        target: {
           sourceCalendarId: "calendar_1",
           sourceEventId: "event_1",
           sourceSystem: "google-calendar",
-          sourceVersion: "00000000001753417300",
         },
         recurrence: { kind: "single" },
         protected: { title: "must not persist" },

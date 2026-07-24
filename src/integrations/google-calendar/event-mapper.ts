@@ -47,11 +47,11 @@ const googleEventSchema = z
     recurrence: z.array(z.string().max(MAX_PROVIDER_TEXT_LENGTH)).max(MAX_PROVIDER_ARRAY_LENGTH).optional(),
     recurringEventId: nonEmptyProviderText.optional(),
     start: googleTimeSchema.optional(),
-    status: z.enum(["cancelled", "confirmed", "tentative"]),
+    status: z.enum(["cancelled", "confirmed", "tentative"]).optional(),
     summary: z.string().max(MAX_PROVIDER_TEXT_LENGTH).optional(),
     timeZone: z.string().trim().min(1).max(255).optional(),
     transparency: z.enum(["opaque", "transparent"]).optional(),
-    updated: z.string().max(255),
+    updated: z.string().max(255).optional(),
   })
   .passthrough();
 
@@ -69,19 +69,28 @@ export function mapGoogleEvent(raw: unknown): ProviderEventChange {
   const parsed = googleEventSchema.safeParse(raw);
   if (!parsed.success) throw new GoogleEventMappingError();
   const event = parsed.data;
+  const status = event.status ?? "confirmed";
   const timeZone = readTimeZone(event);
+  const recurrence = mapRecurrence(event, timeZone);
+
+  if (status === "cancelled") {
+    return ProviderEventChangeSchema.parse({
+      recurrence,
+      target: {
+        sourceCalendarId: event.calendarId,
+        sourceEventId: event.id,
+        sourceSystem: "google-calendar",
+      },
+      type: "delete",
+    });
+  }
+  if (!event.updated) throw new GoogleEventMappingError();
   const identity = {
     sourceCalendarId: event.calendarId,
     sourceEventId: event.id,
     sourceSystem: "google-calendar",
     sourceVersion: toProviderOrderKey(event.updated),
   } as const;
-  const recurrence = mapRecurrence(event, timeZone);
-
-  if (event.status === "cancelled") {
-    return ProviderEventChangeSchema.parse({ type: "delete", identity, recurrence });
-  }
-
   const startsAt = normalizeGoogleTime(event.start, timeZone);
   const endsAt = normalizeGoogleTime(event.end, timeZone);
   const mapped = ProviderEventChangeSchema.safeParse({
@@ -98,7 +107,7 @@ export function mapGoogleEvent(raw: unknown): ProviderEventChange {
     },
     recurrence,
     startsAt,
-    status: event.status,
+    status,
     timeZone,
     type: "upsert",
   });
@@ -217,9 +226,51 @@ function parseGoogleDateTime(dateTime: string): {
   return { year, month, day, hour, minute, second, millisecond, offset };
 }
 
-/** Converts an all-day local calendar date into its UTC midnight instant without assuming the host timezone. */
+/** Finds the earliest instant belonging to one all-day local date without treating a midnight gap or overlap as invalid. */
 function localDateStartToInstant(date: string, timeZone: string): string {
-  return localDateTimeToInstant(parseGoogleDateTime(`${date}T00:00:00`), timeZone);
+  const localDate = parseGoogleDateTime(`${date}T00:00:00`);
+  const localEpoch = Date.UTC(localDate.year, localDate.month - 1, localDate.day);
+  const targetDateKey = toLocalDateKey(localDate);
+  let lower = localEpoch - 48 * 60 * 60 * 1_000;
+  let upper = localEpoch + 48 * 60 * 60 * 1_000;
+  while (lower < upper) {
+    const middle = lower + Math.floor((upper - lower) / 2);
+    if (formatLocalDateKey(middle, timeZone) >= targetDateKey) {
+      upper = middle;
+    } else {
+      lower = middle + 1;
+    }
+  }
+  if (formatLocalDateKey(lower, timeZone) !== targetDateKey) {
+    throw new GoogleEventMappingError();
+  }
+  return new Date(lower).toISOString();
+}
+
+/** Builds a lexicographically comparable date key from validated local calendar parts. */
+function toLocalDateKey(local: ReturnType<typeof parseGoogleDateTime>): string {
+  return `${String(local.year).padStart(4, "0")}${String(local.month).padStart(2, "0")}${String(local.day).padStart(2, "0")}`;
+}
+
+/** Formats only an instant's local IANA calendar date so the date-boundary binary search is host-timezone independent. */
+function formatLocalDateKey(instant: number, timeZone: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      day: "2-digit",
+      month: "2-digit",
+      timeZone,
+      year: "numeric",
+    }).formatToParts(new Date(instant));
+    const values = new Map(parts.map((part) => [part.type, part.value]));
+    const year = values.get("year");
+    const month = values.get("month");
+    const day = values.get("day");
+    if (!year || !month || !day) throw new GoogleEventMappingError();
+    return `${year.padStart(4, "0")}${month}${day}`;
+  } catch (error) {
+    if (error instanceof GoogleEventMappingError) throw error;
+    throw new GoogleEventMappingError();
+  }
 }
 
 /** Resolves one offset-less local wall-clock value only when its IANA zone has exactly one matching instant. */
@@ -291,6 +342,7 @@ function matchesLocalDateTime(
 /** Returns the supplied IANA zone's offset at an instant using locale-independent numeric calendar parts. */
 function getTimeZoneOffset(instant: number, timeZone: string): number {
   try {
+    const wholeSecondInstant = Math.floor(instant / 1_000) * 1_000;
     const parts = new Intl.DateTimeFormat("en-US", {
       day: "2-digit",
       hour: "2-digit",
@@ -300,7 +352,7 @@ function getTimeZoneOffset(instant: number, timeZone: string): number {
       second: "2-digit",
       timeZone,
       year: "numeric",
-    }).formatToParts(new Date(instant));
+    }).formatToParts(new Date(wholeSecondInstant));
     const values = new Map(parts.map((part) => [part.type, part.value]));
     const localMillis = Date.UTC(
       Number(values.get("year")),
@@ -311,7 +363,7 @@ function getTimeZoneOffset(instant: number, timeZone: string): number {
       Number(values.get("second")),
     );
     if (!Number.isSafeInteger(localMillis)) throw new GoogleEventMappingError();
-    return localMillis - instant;
+    return localMillis - wholeSecondInstant;
   } catch (error) {
     if (error instanceof GoogleEventMappingError) throw error;
     throw new GoogleEventMappingError();

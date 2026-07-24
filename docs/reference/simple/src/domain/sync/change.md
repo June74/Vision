@@ -1,6 +1,10 @@
 # `src/domain/sync/change.ts`
 
-Defines the small set of provider event changes that synchronization may stage. Existing events carry planning data and protected content separately; deletions carry only identity and recurrence information.
+Defines the small set of provider event changes that synchronization may stage. Existing events carry planning data and protected content separately; deletions carry only a stable target and recurrence information.
+
+## `ProviderEventTargetSchema`
+
+Checks the stable provider address of a deleted event without requiring a revision.
 
 ## `ProviderAttachmentReferenceSchema`
 
@@ -20,7 +24,7 @@ Checks a current event projection, including valid ordering of its start and end
 
 ## `DeleteEventSchema`
 
-Checks a tombstone with no protected content.
+Checks a tombstone with no protected content or invented provider revision.
 
 ## `ProviderEventChangeSchema`
 
