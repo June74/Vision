@@ -114,4 +114,5 @@ Decodes bounded cleanup aggregates from number, bigint, or canonical decimal tex
 
 ## `readDatabaseDate`
 
-Copies valid Date instances or parses strings that explicitly carry `Z` or an offset.
+Copies valid Date instances or parses strings that explicitly carry `Z`, a `+HH:MM` offset, or PostgreSQL's
+short `+HH` offset. Short offsets are normalized to `+HH:00` before parsing.

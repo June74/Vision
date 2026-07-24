@@ -591,11 +591,12 @@ function readDatabaseDate(value: unknown): Date {
   }
   if (
     typeof value !== "string" ||
-    !/(?:z|[+-]\d{2}:\d{2})$/iu.test(value)
+    !/(?:z|[+-]\d{2}(?::\d{2})?)$/iu.test(value)
   ) {
     throw new AuthPersistenceError();
   }
-  const parsed = new Date(value);
+  const normalized = /[+-]\d{2}$/u.test(value) ? `${value}:00` : value;
+  const parsed = new Date(normalized);
   if (Number.isNaN(parsed.getTime())) throw new AuthPersistenceError();
   return parsed;
 }

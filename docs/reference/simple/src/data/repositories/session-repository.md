@@ -72,7 +72,7 @@ Reads canonical PostgreSQL bytea.
 
 ## `readDatabaseDate`
 
-Reads a valid timezone-aware timestamp.
+Reads a valid timezone-aware timestamp, including Neon's PostgreSQL `+00` offset form.
 
 ## `readPositiveInteger`
 
