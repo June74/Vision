@@ -71,7 +71,7 @@ const BASE64URL_PROTOCOL_VALUE = /^[A-Za-z0-9_-]+$/u;
 
 /** Carries only a safe startup-failure category; never retains secret-bearing error text. */
 class AuthDependencyInitializationError extends Error {
-  constructor(readonly category: "configuration_invalid" | "database_or_key_unavailable") {
+  constructor(readonly category: "configuration_invalid" | "encryption_key_invalid" | "database_unavailable") {
     super(category);
     this.name = "AuthDependencyInitializationError";
   }
@@ -342,15 +342,21 @@ export async function createProductionAuthDependencies(
   } catch {
     throw new AuthDependencyInitializationError("configuration_invalid");
   }
+  let keyEncryptionKey;
+  try {
+    keyEncryptionKey = parseVisionKeyEncryptionKey(environment.KEY_ENCRYPTION_KEY);
+  } catch {
+    throw new AuthDependencyInitializationError("encryption_key_invalid");
+  }
   let keyProvider;
   try {
     keyProvider = await createWrappedKeyProvider(
-      parseVisionKeyEncryptionKey(environment.KEY_ENCRYPTION_KEY),
+      keyEncryptionKey,
       new DrizzleWrappedDataKeyStore(database),
       1,
     );
   } catch {
-    throw new AuthDependencyInitializationError("database_or_key_unavailable");
+    throw new AuthDependencyInitializationError("database_unavailable");
   }
   const ownerId = await deriveOwnerId(authEnvironment.GOOGLE_ALLOWED_SUB);
   const admissionKey = await createAuthAdmissionKeyFactory(
