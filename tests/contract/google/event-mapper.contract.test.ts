@@ -6,6 +6,18 @@ import { GoogleEventMappingError, mapGoogleEvent } from "../../../src/integratio
 
 const CALENDAR_ID = "vision-secondary-calendar";
 
+function mapInChildTimezone(raw: Record<string, unknown>, timezone: string): "accepted" | "rejected" {
+  const mapperUrl = pathToFileURL(
+    resolve(process.cwd(), "src/integrations/google-calendar/event-mapper.ts"),
+  ).href;
+  const script = `import(${JSON.stringify(mapperUrl)}).then(({ mapGoogleEvent }) => { try { mapGoogleEvent(${JSON.stringify(raw)}); process.stdout.write("accepted"); } catch { process.stdout.write("rejected"); } })`;
+  return execFileSync(
+    process.execPath,
+    ["--import", "tsx", "--eval", script],
+    { cwd: process.cwd(), env: { ...process.env, TZ: timezone } },
+  ).toString() as "accepted" | "rejected";
+}
+
 describe("mapGoogleEvent", () => {
   it("maps a normal event into queryable planning data and protected content", () => {
     const change = mapGoogleEvent({
@@ -66,6 +78,34 @@ describe("mapGoogleEvent", () => {
     });
   });
 
+  it("rejects all-day dates that do not exist in their IANA timezone", () => {
+    expect(() => mapGoogleEvent({
+      calendarId: CALENDAR_ID,
+      end: { date: "2011-12-31", timeZone: "Pacific/Apia" },
+      id: "apia_skip_1",
+      start: { date: "2011-12-30", timeZone: "Pacific/Apia" },
+      status: "confirmed",
+      updated: "2011-12-29T12:00:00.000Z",
+    })).toThrow(GoogleEventMappingError);
+  });
+
+  it("preserves valid all-day Apia boundaries around the skipped date", () => {
+    const change = mapGoogleEvent({
+      calendarId: CALENDAR_ID,
+      end: { date: "2011-12-31", timeZone: "Pacific/Apia" },
+      id: "apia_boundary_1",
+      start: { date: "2011-12-29", timeZone: "Pacific/Apia" },
+      status: "confirmed",
+      updated: "2011-12-29T12:00:00.000Z",
+    });
+
+    expect(change).toMatchObject({
+      startsAt: "2011-12-29T10:00:00.000Z",
+      endsAt: "2011-12-30T10:00:00.000Z",
+      timeZone: "Pacific/Apia",
+    });
+  });
+
   it("maps an offset-less dateTime using its supplied IANA timezone instead of the Worker timezone", () => {
     const raw = {
       calendarId: CALENDAR_ID,
@@ -99,6 +139,32 @@ describe("mapGoogleEvent", () => {
       end: { dateTime: "2026-07-24T11:00:00" },
       id: "unqualified_wall_clock_1",
       start: { dateTime: "2026-07-24T10:00:00" },
+      status: "confirmed",
+      updated: "2026-07-24T14:01:03.750Z",
+    })).toThrow(GoogleEventMappingError);
+  });
+
+  it("rejects host-dependent and non-RFC3339 provider revision times in every Worker timezone", () => {
+    const base = {
+      calendarId: CALENDAR_ID,
+      end: { dateTime: "2026-07-24T11:00:00Z" },
+      id: "revision_1",
+      start: { dateTime: "2026-07-24T10:00:00Z" },
+      status: "confirmed",
+    };
+    for (const updated of ["2026-07-24T14:00:00", "Thu, 24 Jul 2026 14:00:00 GMT"]) {
+      for (const timezone of ["UTC", "America/Los_Angeles"]) {
+        expect(mapInChildTimezone({ ...base, updated }, timezone)).toBe("rejected");
+      }
+    }
+  });
+
+  it("rejects an offset-bearing dateTime that contradicts its supplied IANA timezone", () => {
+    expect(() => mapGoogleEvent({
+      calendarId: CALENDAR_ID,
+      end: { dateTime: "2026-07-24T11:00:00-05:00", timeZone: "America/Los_Angeles" },
+      id: "contradictory_zone_1",
+      start: { dateTime: "2026-07-24T10:00:00-05:00", timeZone: "America/Los_Angeles" },
       status: "confirmed",
       updated: "2026-07-24T14:01:03.750Z",
     })).toThrow(GoogleEventMappingError);

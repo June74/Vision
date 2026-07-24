@@ -16,7 +16,7 @@ Finds the source timezone for the event.
 
 ## `toProviderOrderKey`
 
-Turns the provider update time into a fixed-width order key.
+Turns a strict offset-bearing provider update time into a fixed-width order key.
 
 ## `mapRecurrence`
 
@@ -28,7 +28,7 @@ Turns Google date and date-time values into UTC instants.
 
 ## `normalizeGoogleDateTime`
 
-Uses an explicit offset when present, or the required supplied IANA timezone for a local wall-clock value.
+Uses an explicit offset only when it agrees with the supplied IANA timezone, or the required supplied IANA timezone for a local wall-clock value.
 
 ## `parseGoogleDateTime`
 
@@ -36,7 +36,7 @@ Reads safe RFC 3339 calendar parts before conversion.
 
 ## `localDateStartToInstant`
 
-Converts an all-day local date without using the server timezone.
+Converts an all-day local date only when it exists in its IANA timezone.
 
 ## `localDateTimeToInstant`
 

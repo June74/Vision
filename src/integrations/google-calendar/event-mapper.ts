@@ -119,6 +119,8 @@ function readTimeZone(event: z.infer<typeof googleEventSchema>): string {
 
 /** Converts a provider revision timestamp into Vision's fixed-width comparable provider order key. */
 function toProviderOrderKey(updated: string): string {
+  const parsed = parseGoogleDateTime(updated);
+  if (!parsed.offset) throw new GoogleEventMappingError();
   const milliseconds = Date.parse(updated);
   if (!Number.isSafeInteger(milliseconds) || milliseconds < 0) {
     throw new GoogleEventMappingError();
@@ -169,6 +171,9 @@ function normalizeGoogleDateTime(
   if (parsed.offset) {
     const milliseconds = Date.parse(dateTime);
     if (!Number.isSafeInteger(milliseconds)) throw new GoogleEventMappingError();
+    if (hasExplicitTimeZone && !matchesLocalDateTime(milliseconds, timeZone, parsed)) {
+      throw new GoogleEventMappingError();
+    }
     return new Date(milliseconds).toISOString();
   }
   if (!hasExplicitTimeZone) throw new GoogleEventMappingError();
@@ -186,7 +191,7 @@ function parseGoogleDateTime(dateTime: string): {
   readonly millisecond: number;
   readonly offset: string | undefined;
 } {
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:?\d{2})?$/u.exec(dateTime);
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})?$/u.exec(dateTime);
   if (!match) throw new GoogleEventMappingError();
   const [, yearText, monthText, dayText, hourText, minuteText, secondText, fractionText, offset] = match;
   const year = Number(yearText);
@@ -214,23 +219,7 @@ function parseGoogleDateTime(dateTime: string): {
 
 /** Converts an all-day local calendar date into its UTC midnight instant without assuming the host timezone. */
 function localDateStartToInstant(date: string, timeZone: string): string {
-  const [yearText, monthText, dayText] = date.split("-");
-  const year = Number(yearText);
-  const month = Number(monthText);
-  const day = Number(dayText);
-  const localEpoch = Date.UTC(year, month - 1, day);
-  if (
-    !Number.isSafeInteger(localEpoch) ||
-    new Date(localEpoch).getUTCFullYear() !== year ||
-    new Date(localEpoch).getUTCMonth() !== month - 1 ||
-    new Date(localEpoch).getUTCDate() !== day
-  ) {
-    throw new GoogleEventMappingError();
-  }
-  const firstOffset = getTimeZoneOffset(localEpoch, timeZone);
-  const candidate = localEpoch - firstOffset;
-  const finalOffset = getTimeZoneOffset(candidate, timeZone);
-  return new Date(localEpoch - finalOffset).toISOString();
+  return localDateTimeToInstant(parseGoogleDateTime(`${date}T00:00:00`), timeZone);
 }
 
 /** Resolves one offset-less local wall-clock value only when its IANA zone has exactly one matching instant. */
@@ -275,6 +264,7 @@ function matchesLocalDateTime(
   try {
     const parts = new Intl.DateTimeFormat("en-US", {
       day: "2-digit",
+      fractionalSecondDigits: 3,
       hour: "2-digit",
       hourCycle: "h23",
       minute: "2-digit",
@@ -290,7 +280,8 @@ function matchesLocalDateTime(
       Number(values.get("day")) === expected.day &&
       Number(values.get("hour")) === expected.hour &&
       Number(values.get("minute")) === expected.minute &&
-      Number(values.get("second")) === expected.second
+      Number(values.get("second")) === expected.second &&
+      Number(values.get("fractionalSecond")) === expected.millisecond
     );
   } catch {
     throw new GoogleEventMappingError();

@@ -16,7 +16,7 @@ Selects start, end, event, or UTC timezone in that order and validates it throug
 
 ## `toProviderOrderKey`
 
-Converts the validated Google `updated` instant to a zero-padded 20-digit millisecond timestamp. This satisfies the canonical event repository's lexicographic provider-order contract without persisting an opaque Google ETag.
+First requires Google `updated` to be a strict RFC 3339 date-time with `Z` or a numeric `+/-HH:MM` offset, then converts it to a zero-padded 20-digit millisecond timestamp. Offset-less and RFC-822-like strings are rejected before `Date.parse`, preventing Worker-host timezone dependence in the canonical provider-order key.
 
 ## `mapRecurrence`
 
@@ -28,15 +28,15 @@ Normalizes a Google RFC 3339 `dateTime` to ISO UTC or delegates an all-day `date
 
 ## `normalizeGoogleDateTime`
 
-Uses `Date.parse` only after an explicit RFC 3339 offset or `Z` is present. Offset-less values require their own Google `timeZone` field and are then passed to deterministic IANA-zone conversion, so a preview or production Worker timezone cannot shift events.
+Uses `Date.parse` only after an explicit RFC 3339 offset or `Z` is present. If the same Google time object supplies an IANA `timeZone`, the resulting instant must round-trip to every original local component, including milliseconds, in that zone; contradictory offset/zone facts are rejected. Offset-less values require their own `timeZone` field and are then passed to deterministic IANA-zone conversion, so a preview or production Worker timezone cannot shift events.
 
 ## `parseGoogleDateTime`
 
-Parses and validates date, clock, fractional-millisecond, and optional-offset fields. Calendar overflow is rejected rather than normalized by the JavaScript date parser.
+Parses and validates date, clock, fractional-millisecond, and optional strict RFC 3339 offset fields. Calendar overflow is rejected rather than normalized by the JavaScript date parser.
 
 ## `localDateStartToInstant`
 
-Converts a calendar-local all-day boundary to UTC midnight in the supplied IANA zone. It validates the calendar date, avoiding host timezone behavior and invalid date rollover.
+Converts a calendar-local all-day boundary through the same candidate-and-round-trip logic as offset-less date-times. A skipped local date, such as `Pacific/Apia` on 2011-12-30, has no matching instant and is rejected rather than silently shifted to a different calendar date.
 
 ## `localDateTimeToInstant`
 
@@ -48,7 +48,7 @@ Samples a bounded 72-hour neighborhood around the local epoch. This includes the
 
 ## `matchesLocalDateTime`
 
-Formats a candidate instant through numeric `Intl` parts and compares every calendar component with the parsed wall clock. It never reads the Worker host timezone.
+Formats a candidate instant through numeric `Intl` parts and compares every date, clock, and millisecond component with the parsed wall clock. It never reads the Worker host timezone.
 
 ## `getTimeZoneOffset`
 
