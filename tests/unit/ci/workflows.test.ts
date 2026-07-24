@@ -7,6 +7,17 @@ async function readWorkflow(name: string): Promise<string> {
   return readFile(resolve(process.cwd(), ".github", "workflows", name), "utf8");
 }
 
+/** Extracts one named workflow step without requiring a YAML runtime dependency. */
+function readWorkflowStep(workflow: string, name: string): string {
+  const marker = `      - name: ${name}`;
+  const start = workflow.indexOf(marker);
+  if (start === -1) {
+    throw new Error(`Workflow step not found: ${name}`);
+  }
+  const nextStep = workflow.indexOf("\n      - ", start + marker.length);
+  return workflow.slice(start, nextStep === -1 ? undefined : nextStep);
+}
+
 /** Reads the package metadata without adding a YAML parser dependency to policy tests. */
 async function readPackage(): Promise<{ packageManager?: string }> {
   const contents = await readFile(resolve(process.cwd(), "package.json"), "utf8");
@@ -67,27 +78,51 @@ describe("delivery workflow policy", () => {
 });
 
 describe("preview OAuth acceptance policy", () => {
-  it("documents and validates preview-only OAuth prerequisites without values", async () => {
-    const [preview, oauthSetup, evidenceTemplate] = await Promise.all([
+  it("keeps deployment credentials in GitHub and application secrets in the Worker runtime", async () => {
+    const [preview, oauthSetup, secretPolicy, evidenceTemplate] = await Promise.all([
       readWorkflow("preview.yml"),
       readOperationsDocument("google-oauth-setup.md"),
+      readOperationsDocument("secrets.md"),
       readOperationsDocument("calendar-setup-evidence.md"),
     ]);
 
-    for (const secret of [
-      "CLOUDFLARE_API_TOKEN_PREVIEW",
-      "DATABASE_URL_PREVIEW",
-      "GOOGLE_CLIENT_ID_PREVIEW",
-      "GOOGLE_CLIENT_SECRET_PREVIEW",
-      "GOOGLE_ALLOWED_SUB_PREVIEW",
-      "GOOGLE_ALLOWED_EMAIL_PREVIEW",
-      "KEY_ENCRYPTION_KEY_PREVIEW",
-      "VISION_USER_TIME_ZONE_PREVIEW",
+    const tokenMapping =
+      "CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}";
+    const accountMapping =
+      "CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}";
+    const authorizationStep = readWorkflowStep(
+      preview,
+      "Check preview deployment authorization",
+    );
+    const deploymentStep = readWorkflowStep(preview, "Deploy isolated preview Worker");
+
+    expect(authorizationStep).toContain(tokenMapping);
+    expect(authorizationStep).toContain(accountMapping);
+    expect(authorizationStep).toContain('if [[ -z "$CLOUDFLARE_API_TOKEN" ]]; then');
+    expect(authorizationStep).toContain('if [[ -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then');
+    expect(deploymentStep).toContain(tokenMapping);
+    expect(deploymentStep).toContain(accountMapping);
+
+    for (const runtimeSecret of [
+      "DATABASE_URL",
+      "GOOGLE_CLIENT_ID",
+      "GOOGLE_CLIENT_SECRET",
+      "GOOGLE_ALLOWED_SUB",
+      "GOOGLE_ALLOWED_EMAIL",
+      "KEY_ENCRYPTION_KEY",
+      "VISION_USER_TIME_ZONE",
     ]) {
-      expect(preview).toContain(secret);
-      expect(oauthSetup).toContain(secret);
+      expect(preview).not.toContain(`${runtimeSecret}_PREVIEW`);
+      expect(preview).not.toContain(`secrets.${runtimeSecret}`);
+      expect(oauthSetup).toContain(runtimeSecret);
     }
-    expect(preview).toContain("Preview configuration is incomplete.");
+    expect(oauthSetup).toContain("CLOUDFLARE_API_TOKEN_PREVIEW");
+    expect(oauthSetup).toContain("CLOUDFLARE_ACCOUNT_ID_PREVIEW");
+    expect(oauthSetup).toContain("Cloudflare Worker runtime");
+    expect(secretPolicy).toContain("separately managed, non-live preview values");
+    expect(secretPolicy).toContain(
+      "fails before deployment when either preview deployment entry is unavailable",
+    );
     expect(preview).not.toContain('echo "$');
     expect(oauthSetup).toContain("/api/auth/google/callback");
     expect(evidenceTemplate).toContain("Approval required before external acceptance");

@@ -18,20 +18,16 @@ Replace `<approved-cloudflare-subdomain>` only after approval; do not guess an a
 
 Approve only `openid`, `email`, `profile`, and `https://www.googleapis.com/auth/calendar.calendarlist.readonly`. Do not request event-write scopes.
 
-## Preview secret names
+## Preview deployment configuration
 
-Configure the `_PREVIEW` names in the protected GitHub `preview` environment. When adding secrets directly to the Worker with Wrangler, use the corresponding runtime names without the `_PREVIEW` suffix. Record values nowhere in this repository:
+Configure only these deployment entries in the protected GitHub `preview` environment. Record values nowhere in this repository:
 
 - `CLOUDFLARE_API_TOKEN_PREVIEW`
-- `DATABASE_URL_PREVIEW`
-- `GOOGLE_CLIENT_ID_PREVIEW`
-- `GOOGLE_CLIENT_SECRET_PREVIEW`
-- `GOOGLE_ALLOWED_SUB_PREVIEW`
-- `GOOGLE_ALLOWED_EMAIL_PREVIEW`
-- `KEY_ENCRYPTION_KEY_PREVIEW`
-- `VISION_USER_TIME_ZONE_PREVIEW`
+- `CLOUDFLARE_ACCOUNT_ID_PREVIEW`
 
-Worker runtime names:
+The Account ID is not a credential by itself, but this workflow stores it alongside the token so both deployment inputs share the same protected environment boundary.
+
+Configure the application secrets directly in the Cloudflare Worker runtime:
 
 - `DATABASE_URL`
 - `GOOGLE_CLIENT_ID`
