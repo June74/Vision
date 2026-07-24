@@ -20,7 +20,7 @@ Approve only `openid`, `email`, `profile`, and `https://www.googleapis.com/auth/
 
 ## Preview secret names
 
-Configure these names in the protected GitHub `preview` environment and the approved preview runtime. Record values nowhere in this repository:
+Configure the `_PREVIEW` names in the protected GitHub `preview` environment. When adding secrets directly to the Worker with Wrangler, use the corresponding runtime names without the `_PREVIEW` suffix. Record values nowhere in this repository:
 
 - `CLOUDFLARE_API_TOKEN_PREVIEW`
 - `DATABASE_URL_PREVIEW`
@@ -30,6 +30,19 @@ Configure these names in the protected GitHub `preview` environment and the appr
 - `GOOGLE_ALLOWED_EMAIL_PREVIEW`
 - `KEY_ENCRYPTION_KEY_PREVIEW`
 - `VISION_USER_TIME_ZONE_PREVIEW`
+
+Worker runtime names:
+
+- `DATABASE_URL`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_ALLOWED_SUB`
+- `GOOGLE_ALLOWED_EMAIL`
+- `KEY_ENCRYPTION_KEY`
+- `VISION_USER_TIME_ZONE`
+
+Set the non-secret runtime variable `GOOGLE_REDIRECT_URI` to
+`https://vision-preview.june74.workers.dev/api/auth/google/callback`.
 
 The allowlisted subject and email must identify only the approved disposable account. The database user must be the least-privileged `vision_app` role. No name may use a `VITE_` prefix.
 
