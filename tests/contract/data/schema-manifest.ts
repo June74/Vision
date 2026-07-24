@@ -24,7 +24,7 @@ interface DrizzleSnapshotColumn {
   type: string;
   primaryKey: boolean;
   notNull: boolean;
-  default?: string;
+  default?: unknown;
 }
 
 interface DrizzleSnapshotTable {
@@ -62,6 +62,13 @@ function normalizeSqlExpression(expression: string): string {
     .replace(/"([^"]+)"/g, "$1")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function normalizeSnapshotDefault(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === "string") return normalizeSqlExpression(value);
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  throw new Error("Unsupported generated snapshot default.");
 }
 
 function renderColumnDefault(value: unknown): string | undefined {
@@ -166,7 +173,7 @@ export function extractSnapshotTablesManifest(snapshot: unknown): SchemaTablesMa
                 column.name,
                 column.type,
                 column.notNull,
-                column.default === undefined ? undefined : normalizeSqlExpression(column.default),
+                normalizeSnapshotDefault(column.default),
               ),
             ),
             primaryKeys: [

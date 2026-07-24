@@ -98,6 +98,11 @@ Checks owner/privacy again, decrypts an equal-version row, and rejects it unless
 
 Builds the owner-scoped repository only from an opaque verified server access capability.
 
+## `prepareStoredEventRow`
+
+Validates one trusted plaintext event and encrypts all represented protected fields before returning the binary row
+accepted by atomic event persistence.
+
 ## `databaseRowToPlanningEvent`
 
 Strictly decodes raw Neon cells into a validated Vision event.

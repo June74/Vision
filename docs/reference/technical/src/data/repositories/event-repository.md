@@ -162,6 +162,14 @@ Reissues and verifies the branded owner/privacy decision, decrypts the authorita
 Wires `DrizzleAtomicEventStore`, the key provider, the server-supplied authenticated owner, and authorization policy.
 The authentication milestone must supply the verified owner; this factory does not authenticate a raw request.
 
+## `prepareStoredEventRow`
+
+**Signature:** `(event: PlaintextEvent, keyProvider: KeyProvider) => Promise<StoredEventRow>`
+
+Reuses the repository's strict plaintext validator, encrypts title, description, dense attendee JSON, location, and the
+selected meeting link under exact owner/node/domain/field AAD, and returns the binary stored row. This is the trusted
+preparation seam used by the multi-event synchronization transaction; it performs no database work.
+
 ## `databaseRowToPlanningEvent`
 
 **Signature:** `(row: DatabaseEventRow) => VisionEvent`

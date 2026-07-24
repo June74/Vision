@@ -383,23 +383,7 @@ class EventRepository implements EventRepositoryPort {
     if (validated.ownerId !== this.access.authenticatedOwnerId) {
       throw new EventOwnerMismatchError();
     }
-    const planningEvent = toPlanningEvent(validated);
-    const encrypted = await encryptProtectedFields(
-      this.keyProvider,
-      {
-        ownerId: validated.ownerId,
-        nodeId: validated.nodeId,
-        domain: validated.domain,
-      },
-      {
-        title: validated.title,
-        description: validated.description,
-        attendees: JSON.stringify(validated.attendees),
-        location: validated.location,
-        meetingLink: validated.meetingLink,
-      },
-    );
-    const row = toStoredEventRow(planningEvent, encrypted);
+    const row = await prepareStoredEventRow(validated, this.keyProvider);
 
     // No database adapter method is reachable until all plaintext fields have become authenticated envelopes.
     const result = await this.store.saveAtomically(row);
@@ -521,6 +505,31 @@ export function createEventRepository(
     keyProvider,
     access,
   );
+}
+
+/** Validates and encrypts one complete plaintext event for an already-authorized atomic persistence caller. */
+export async function prepareStoredEventRow(
+  event: PlaintextEvent,
+  keyProvider: KeyProvider,
+): Promise<StoredEventRow> {
+  const validated = validatePlaintextEvent(event);
+  const planningEvent = toPlanningEvent(validated);
+  const encrypted = await encryptProtectedFields(
+    keyProvider,
+    {
+      ownerId: validated.ownerId,
+      nodeId: validated.nodeId,
+      domain: validated.domain,
+    },
+    {
+      title: validated.title,
+      description: validated.description,
+      attendees: JSON.stringify(validated.attendees),
+      location: validated.location,
+      meetingLink: validated.meetingLink,
+    },
+  );
+  return toStoredEventRow(planningEvent, encrypted);
 }
 
 /** Validates the exact top-level event and protected value shapes without coercion. */

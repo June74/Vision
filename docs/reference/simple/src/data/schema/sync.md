@@ -1,10 +1,20 @@
 # `src/data/schema/sync.ts`
 
-These tables keep provider sync position, notification channels, and deletion recovery state.
+These tables keep provider sync position, encrypted mapped-event payloads, content-free run metrics, notification
+channels, and deletion recovery state.
 
 ## `syncCheckpoints`
 
-Stores the last encrypted sync token for one provider calendar.
+Stores a version-zero empty cursor or a positive compare-and-swap version with its encrypted token, plus safe connection
+status.
+
+## `eventSyncPayloads`
+
+Stores the complete mapped protected Google payload as binary ciphertext.
+
+## `syncRuns`
+
+Stores only opaque IDs, reason, counts, timing, and checkpoint version for diagnostics.
 
 ## `syncChannels`
 

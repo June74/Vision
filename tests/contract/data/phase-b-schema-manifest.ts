@@ -1,7 +1,7 @@
 import type { SchemaTablesManifest } from "./schema-manifest";
 
 /**
- * Hand-authored from the eight CREATE TABLE statements in migrations/0001_phase_b_foundation.sql.
+ * Hand-authored from the ten authoritative tables in migrations 0001 and 0004.
  * Never regenerate this fixture from Drizzle metadata or the generated snapshot.
  *
  * Primary and unique keys intentionally record columns rather than generated names because the
@@ -113,6 +113,24 @@ export const phaseBSchemaManifest = {
       ["events_provider_non_empty", "provider <> ''"],
       ["events_provider_version_non_empty", "provider_version <> ''"],
       ["events_status_valid", "status in ('confirmed', 'tentative', 'cancelled')"],
+    ],
+  },
+
+  // Migration 0004: complete encrypted mapped provider payloads.
+  event_sync_payloads: {
+    columns: [
+      ["node_id", "text", true],
+      ["owner_id", "text", true],
+      ["protected_payload_envelope", "bytea", true],
+      ["protected_key_version", "integer", true],
+    ],
+    primaryKeys: [["node_id"]],
+    uniqueKeys: [],
+    foreignKeys: [
+      ["event_sync_payloads_event_owner_fk", ["node_id", "owner_id"], "events", ["node_id", "owner_id"]],
+    ],
+    checks: [
+      ["event_sync_payloads_key_version_positive", "protected_key_version > 0"],
     ],
   },
 
@@ -236,9 +254,13 @@ export const phaseBSchemaManifest = {
       ["owner_id", "text", true],
       ["provider", "text", true],
       ["provider_calendar_id", "text", true],
-      ["sync_token_envelope", "bytea", true],
-      ["key_version", "text", true],
+      ["sync_token_envelope", "bytea", false],
+      ["key_version", "integer", false],
       ["committed_at", "timestamptz", true],
+      ["version", "integer", true, "0"],
+      ["status", "text", true, "'pending'"],
+      ["last_error_category", "text", false],
+      ["updated_at", "timestamptz", true, "now()"],
     ],
     primaryKeys: [["id"]],
     uniqueKeys: [
@@ -247,8 +269,47 @@ export const phaseBSchemaManifest = {
     foreignKeys: [],
     checks: [
       ["sync_checkpoints_calendar_non_empty", "provider_calendar_id <> ''"],
-      ["sync_checkpoints_key_version_non_empty", "key_version <> ''"],
+      ["sync_checkpoints_error_category_valid", "last_error_category is null or last_error_category in ('authorization', 'concurrency', 'database', 'provider', 'schema', 'sync_token_invalid', 'transient')"],
+      ["sync_checkpoints_key_version_positive", "key_version is null or key_version > 0"],
       ["sync_checkpoints_provider_non_empty", "provider <> ''"],
+      ["sync_checkpoints_status_valid", "status in ('pending', 'connected', 'disconnected', 'action_required', 'rebuild_required', 'retry_scheduled')"],
+      ["sync_checkpoints_token_version_consistent", "(version = 0 and sync_token_envelope is null and key_version is null) or (version > 0 and sync_token_envelope is not null and key_version is not null and key_version > 0)"],
+      ["sync_checkpoints_version_non_negative", "version >= 0"],
+    ],
+  },
+
+  // Migration 0004: content-free synchronization operation metrics.
+  sync_runs: {
+    columns: [
+      ["job_id", "text", true],
+      ["owner_id", "text", true],
+      ["provider", "text", true],
+      ["provider_calendar_id", "text", true],
+      ["reason", "text", true],
+      ["page_count", "integer", true],
+      ["staged_count", "integer", true],
+      ["upserted_count", "integer", true],
+      ["deleted_count", "integer", true],
+      ["unchanged_count", "integer", true],
+      ["started_at", "timestamptz", true],
+      ["completed_at", "timestamptz", true],
+      ["checkpoint_version", "integer", true],
+    ],
+    primaryKeys: [["job_id"]],
+    uniqueKeys: [],
+    foreignKeys: [],
+    checks: [
+      ["sync_runs_calendar_non_empty", "provider_calendar_id <> ''"],
+      ["sync_runs_checkpoint_version_positive", "checkpoint_version > 0"],
+      ["sync_runs_completed_after_started", "completed_at >= started_at"],
+      ["sync_runs_deleted_count_non_negative", "deleted_count >= 0"],
+      ["sync_runs_owner_non_empty", "owner_id <> ''"],
+      ["sync_runs_page_count_positive", "page_count > 0"],
+      ["sync_runs_provider_non_empty", "provider <> ''"],
+      ["sync_runs_reason_valid", "reason in ('initial', 'manual', 'push', 'rebuild', 'repair')"],
+      ["sync_runs_staged_count_non_negative", "staged_count >= 0"],
+      ["sync_runs_unchanged_count_non_negative", "unchanged_count >= 0"],
+      ["sync_runs_upserted_count_non_negative", "upserted_count >= 0"],
     ],
   },
 } satisfies SchemaTablesManifest;
