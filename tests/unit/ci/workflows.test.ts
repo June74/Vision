@@ -94,14 +94,20 @@ describe("preview OAuth acceptance policy", () => {
       preview,
       "Check preview deployment authorization",
     );
+    const deployBuildStep = readWorkflowStep(
+      preview,
+      "Build deployable preview artifact",
+    );
     const deploymentStep = readWorkflowStep(preview, "Deploy isolated preview Worker");
 
     expect(authorizationStep).toContain(tokenMapping);
     expect(authorizationStep).toContain(accountMapping);
     expect(authorizationStep).toContain('if [[ -z "$CLOUDFLARE_API_TOKEN" ]]; then');
     expect(authorizationStep).toContain('if [[ -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then');
+    expect(deployBuildStep).toContain("run: pnpm build");
     expect(deploymentStep).toContain(tokenMapping);
     expect(deploymentStep).toContain(accountMapping);
+    expect(deploymentStep).toContain("--config dist/vision/wrangler.json");
 
     for (const runtimeSecret of [
       "DATABASE_URL",
