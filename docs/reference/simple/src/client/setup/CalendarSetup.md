@@ -45,6 +45,8 @@ Keeps one temporary replay key for the same setup version, never a token.
 Runs one setup request safely.
 ## `discover`
 Finds owned calendars.
+## `restart`
+Re-checks calendars before clearing a terminal recovery record.
 ## `select`
 Verifies a chosen calendar.
 ## `createOrReplay`

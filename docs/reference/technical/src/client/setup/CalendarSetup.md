@@ -45,6 +45,8 @@ Uses `sessionStorage` only for an opaque UUID namespaced by setup version; it st
 Serializes one safe browser command.
 ## `discover`
 Posts discovery with the current version.
+## `restart`
+Runs failure-atomic fresh discovery for terminal setup recovery.
 ## `select`
 Posts an explicit calendar selection.
 ## `createOrReplay`
