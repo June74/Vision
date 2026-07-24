@@ -13,6 +13,11 @@ async function readPackage(): Promise<{ packageManager?: string }> {
   return JSON.parse(contents) as { packageManager?: string };
 }
 
+/** Reads a committed non-secret operations document. */
+async function readOperationsDocument(name: string): Promise<string> {
+  return readFile(resolve(process.cwd(), "docs", "operations", name), "utf8");
+}
+
 describe("delivery workflow policy", () => {
   it("keeps checks, previews, and production releases safely separated", async () => {
     const [ci, preview, production, packageMetadata] = await Promise.all([
@@ -58,5 +63,34 @@ describe("delivery workflow policy", () => {
     expect(production).toContain("git rev-parse HEAD");
     expect(production).toContain("ref: ${{ needs.verify.outputs.verified_sha }}");
     expect(production).toContain("permissions:\n  contents: read");
+  });
+});
+
+describe("preview OAuth acceptance policy", () => {
+  it("documents and validates preview-only OAuth prerequisites without values", async () => {
+    const [preview, oauthSetup, evidenceTemplate] = await Promise.all([
+      readWorkflow("preview.yml"),
+      readOperationsDocument("google-oauth-setup.md"),
+      readOperationsDocument("calendar-setup-evidence.md"),
+    ]);
+
+    for (const secret of [
+      "CLOUDFLARE_API_TOKEN_PREVIEW",
+      "DATABASE_URL_PREVIEW",
+      "GOOGLE_CLIENT_ID_PREVIEW",
+      "GOOGLE_CLIENT_SECRET_PREVIEW",
+      "GOOGLE_ALLOWED_SUB_PREVIEW",
+      "GOOGLE_ALLOWED_EMAIL_PREVIEW",
+      "KEY_ENCRYPTION_KEY_PREVIEW",
+      "VISION_USER_TIME_ZONE_PREVIEW",
+    ]) {
+      expect(preview).toContain(secret);
+      expect(oauthSetup).toContain(secret);
+    }
+    expect(preview).toContain("Preview configuration is incomplete.");
+    expect(preview).not.toContain('echo "$');
+    expect(oauthSetup).toContain("/api/auth/google/callback");
+    expect(evidenceTemplate).toContain("Approval required before external acceptance");
+    expect(evidenceTemplate).toContain("calendar ID suffix");
   });
 });

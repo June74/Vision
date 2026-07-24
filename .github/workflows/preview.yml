@@ -54,7 +54,22 @@ jobs:
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
+          DATABASE_URL_PREVIEW: ${{ secrets.DATABASE_URL_PREVIEW }}
+          GOOGLE_CLIENT_ID_PREVIEW: ${{ secrets.GOOGLE_CLIENT_ID_PREVIEW }}
+          GOOGLE_CLIENT_SECRET_PREVIEW: ${{ secrets.GOOGLE_CLIENT_SECRET_PREVIEW }}
+          GOOGLE_ALLOWED_SUB_PREVIEW: ${{ secrets.GOOGLE_ALLOWED_SUB_PREVIEW }}
+          GOOGLE_ALLOWED_EMAIL_PREVIEW: ${{ secrets.GOOGLE_ALLOWED_EMAIL_PREVIEW }}
+          KEY_ENCRYPTION_KEY_PREVIEW: ${{ secrets.KEY_ENCRYPTION_KEY_PREVIEW }}
+          VISION_USER_TIME_ZONE_PREVIEW: ${{ secrets.VISION_USER_TIME_ZONE_PREVIEW }}
         run: |
+          required=(CLOUDFLARE_API_TOKEN DATABASE_URL_PREVIEW GOOGLE_CLIENT_ID_PREVIEW GOOGLE_CLIENT_SECRET_PREVIEW GOOGLE_ALLOWED_SUB_PREVIEW GOOGLE_ALLOWED_EMAIL_PREVIEW KEY_ENCRYPTION_KEY_PREVIEW VISION_USER_TIME_ZONE_PREVIEW)
+          for name in "${required[@]}"; do
+            if [[ -z "${!name}" ]]; then
+              echo "## Preview deployment blocked" >> "$GITHUB_STEP_SUMMARY"
+              echo "Preview configuration is incomplete." >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+          done
           if [[ -z "$CLOUDFLARE_API_TOKEN" ]]; then
             echo "## Preview deployment blocked" >> "$GITHUB_STEP_SUMMARY"
             echo "CLOUDFLARE_API_TOKEN_PREVIEW is unavailable in the preview environment." >> "$GITHUB_STEP_SUMMARY"
