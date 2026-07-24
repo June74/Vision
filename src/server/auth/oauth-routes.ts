@@ -69,6 +69,14 @@ export type AuthDependencyResolver = (
 const OAUTH_TRANSACTION_LIFETIME_MS = 10 * 60 * 1_000;
 const BASE64URL_PROTOCOL_VALUE = /^[A-Za-z0-9_-]+$/u;
 
+/** Carries only a safe startup-failure category; never retains secret-bearing error text. */
+class AuthDependencyInitializationError extends Error {
+  constructor(readonly category: "configuration_invalid" | "database_or_key_unavailable") {
+    super(category);
+    this.name = "AuthDependencyInitializationError";
+  }
+}
+
 /** Adds the Google start route before the Worker's generic API fallback. */
 export function registerOAuthRoutes(
   app: Hono<{ Bindings: Env; Variables: AuthRequestVariables }>,
@@ -241,7 +249,13 @@ export function registerOAuthRoutes(
   app.get("/api/auth/session", async (context) => {
     const dependencies = await Promise.resolve(
       resolveDependencies(context.env),
-    ).catch(() => {
+    ).catch((error) => {
+      console.info({
+        requestId: context.get("requestId"),
+        action: "auth.dependencies",
+        outcome: "failed",
+        errorCategory: error instanceof AuthDependencyInitializationError ? error.category : "authentication_failed",
+      });
       throwVisionError(
         new VisionError("AUTHENTICATION_FAILED", 503, "Authentication is temporarily unavailable."),
       );
@@ -316,13 +330,28 @@ export async function createProductionAuthDependencies(
   environment: Env,
   logger: SafeLogger,
 ): Promise<AuthRouteDependencies> {
-  const authEnvironment = parseGoogleAuthEnvironment(environment);
-  const database = createDb(environment.DATABASE_URL);
-  const keyProvider = await createWrappedKeyProvider(
-    parseVisionKeyEncryptionKey(environment.KEY_ENCRYPTION_KEY),
-    new DrizzleWrappedDataKeyStore(database),
-    1,
-  );
+  let authEnvironment;
+  try {
+    authEnvironment = parseGoogleAuthEnvironment(environment);
+  } catch {
+    throw new AuthDependencyInitializationError("configuration_invalid");
+  }
+  let database;
+  try {
+    database = createDb(environment.DATABASE_URL);
+  } catch {
+    throw new AuthDependencyInitializationError("configuration_invalid");
+  }
+  let keyProvider;
+  try {
+    keyProvider = await createWrappedKeyProvider(
+      parseVisionKeyEncryptionKey(environment.KEY_ENCRYPTION_KEY),
+      new DrizzleWrappedDataKeyStore(database),
+      1,
+    );
+  } catch {
+    throw new AuthDependencyInitializationError("database_or_key_unavailable");
+  }
   const ownerId = await deriveOwnerId(authEnvironment.GOOGLE_ALLOWED_SUB);
   const admissionKey = await createAuthAdmissionKeyFactory(
     environment.KEY_ENCRYPTION_KEY,
