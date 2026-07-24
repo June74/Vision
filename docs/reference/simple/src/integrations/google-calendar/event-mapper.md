@@ -26,9 +26,29 @@ Keeps only master and occurrence identity.
 
 Turns Google date and date-time values into UTC instants.
 
+## `normalizeGoogleDateTime`
+
+Uses an explicit offset when present, or the required supplied IANA timezone for a local wall-clock value.
+
+## `parseGoogleDateTime`
+
+Reads safe RFC 3339 calendar parts before conversion.
+
 ## `localDateStartToInstant`
 
 Converts an all-day local date without using the server timezone.
+
+## `localDateTimeToInstant`
+
+Converts an offset-less local date-time only when it names one instant.
+
+## `getCandidateOffsets`
+
+Finds nearby timezone offsets around daylight-saving changes.
+
+## `matchesLocalDateTime`
+
+Checks an instant against local calendar fields in an IANA timezone.
 
 ## `getTimeZoneOffset`
 

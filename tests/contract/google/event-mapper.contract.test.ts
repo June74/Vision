@@ -1,5 +1,8 @@
+import { execFileSync } from "node:child_process";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
-import { mapGoogleEvent } from "../../../src/integrations/google-calendar/event-mapper";
+import { GoogleEventMappingError, mapGoogleEvent } from "../../../src/integrations/google-calendar/event-mapper";
 
 const CALENDAR_ID = "vision-secondary-calendar";
 
@@ -61,6 +64,44 @@ describe("mapGoogleEvent", () => {
       endsAt: "2026-07-25T05:00:00.000Z",
       timeZone: "America/Chicago",
     });
+  });
+
+  it("maps an offset-less dateTime using its supplied IANA timezone instead of the Worker timezone", () => {
+    const raw = {
+      calendarId: CALENDAR_ID,
+      end: { dateTime: "2026-07-24T11:00:00", timeZone: "America/Chicago" },
+      id: "wall_clock_1",
+      start: { dateTime: "2026-07-24T10:00:00", timeZone: "America/Chicago" },
+      status: "confirmed",
+      updated: "2026-07-24T14:01:03.500Z",
+    };
+    const mapperUrl = pathToFileURL(
+      resolve(process.cwd(), "src/integrations/google-calendar/event-mapper.ts"),
+    ).href;
+    const script = `import(${JSON.stringify(mapperUrl)}).then(({ mapGoogleEvent }) => process.stdout.write(JSON.stringify(mapGoogleEvent(${JSON.stringify(raw)}))))`;
+    const change = JSON.parse(execFileSync(
+      process.execPath,
+      ["--import", "tsx", "--eval", script],
+      { cwd: process.cwd(), env: { ...process.env, TZ: "UTC" } },
+    ).toString()) as Record<string, unknown>;
+
+    expect(change).toMatchObject({
+      type: "upsert",
+      startsAt: "2026-07-24T15:00:00.000Z",
+      endsAt: "2026-07-24T16:00:00.000Z",
+      timeZone: "America/Chicago",
+    });
+  });
+
+  it("rejects an offset-less dateTime without the timezone that Google requires", () => {
+    expect(() => mapGoogleEvent({
+      calendarId: CALENDAR_ID,
+      end: { dateTime: "2026-07-24T11:00:00" },
+      id: "unqualified_wall_clock_1",
+      start: { dateTime: "2026-07-24T10:00:00" },
+      status: "confirmed",
+      updated: "2026-07-24T14:01:03.750Z",
+    })).toThrow(GoogleEventMappingError);
   });
 
   it("retains recurring-master and occurrence identities", () => {

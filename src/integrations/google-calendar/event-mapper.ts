@@ -153,12 +153,63 @@ function normalizeGoogleTime(
 ): string {
   if (!value) throw new GoogleEventMappingError();
   if (value.dateTime) {
-    const milliseconds = Date.parse(value.dateTime);
-    if (!Number.isSafeInteger(milliseconds)) throw new GoogleEventMappingError();
-    return new Date(milliseconds).toISOString();
+    return normalizeGoogleDateTime(value.dateTime, value.timeZone ?? timeZone, value.timeZone !== undefined);
   }
   if (value.date) return localDateStartToInstant(value.date, value.timeZone ?? timeZone);
   throw new GoogleEventMappingError();
+}
+
+/** Normalizes an RFC 3339 instant directly or resolves an offset-less wall clock only in its explicit IANA zone. */
+function normalizeGoogleDateTime(
+  dateTime: string,
+  timeZone: string,
+  hasExplicitTimeZone: boolean,
+): string {
+  const parsed = parseGoogleDateTime(dateTime);
+  if (parsed.offset) {
+    const milliseconds = Date.parse(dateTime);
+    if (!Number.isSafeInteger(milliseconds)) throw new GoogleEventMappingError();
+    return new Date(milliseconds).toISOString();
+  }
+  if (!hasExplicitTimeZone) throw new GoogleEventMappingError();
+  return localDateTimeToInstant(parsed, timeZone);
+}
+
+/** Parses the limited RFC 3339 calendar fields needed to distinguish an instant from an offset-less local time. */
+function parseGoogleDateTime(dateTime: string): {
+  readonly year: number;
+  readonly month: number;
+  readonly day: number;
+  readonly hour: number;
+  readonly minute: number;
+  readonly second: number;
+  readonly millisecond: number;
+  readonly offset: string | undefined;
+} {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:?\d{2})?$/u.exec(dateTime);
+  if (!match) throw new GoogleEventMappingError();
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText, fractionText, offset] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText);
+  const millisecond = Number((fractionText ?? "").slice(0, 3).padEnd(3, "0"));
+  const localEpoch = Date.UTC(year, month - 1, day, hour, minute, second, millisecond);
+  if (
+    !Number.isSafeInteger(localEpoch) ||
+    new Date(localEpoch).getUTCFullYear() !== year ||
+    new Date(localEpoch).getUTCMonth() !== month - 1 ||
+    new Date(localEpoch).getUTCDate() !== day ||
+    new Date(localEpoch).getUTCHours() !== hour ||
+    new Date(localEpoch).getUTCMinutes() !== minute ||
+    new Date(localEpoch).getUTCSeconds() !== second ||
+    new Date(localEpoch).getUTCMilliseconds() !== millisecond
+  ) {
+    throw new GoogleEventMappingError();
+  }
+  return { year, month, day, hour, minute, second, millisecond, offset };
 }
 
 /** Converts an all-day local calendar date into its UTC midnight instant without assuming the host timezone. */
@@ -180,6 +231,70 @@ function localDateStartToInstant(date: string, timeZone: string): string {
   const candidate = localEpoch - firstOffset;
   const finalOffset = getTimeZoneOffset(candidate, timeZone);
   return new Date(localEpoch - finalOffset).toISOString();
+}
+
+/** Resolves one offset-less local wall-clock value only when its IANA zone has exactly one matching instant. */
+function localDateTimeToInstant(
+  local: ReturnType<typeof parseGoogleDateTime>,
+  timeZone: string,
+): string {
+  const localEpoch = Date.UTC(
+    local.year,
+    local.month - 1,
+    local.day,
+    local.hour,
+    local.minute,
+    local.second,
+    local.millisecond,
+  );
+  const candidates = [...getCandidateOffsets(localEpoch, timeZone)]
+    .map((offset) => localEpoch - offset)
+    .filter((instant) => matchesLocalDateTime(instant, timeZone, local));
+  if (candidates.length !== 1) {
+    // Gaps have no instant and overlaps have two; neither can be inferred safely from a wall-clock string alone.
+    throw new GoogleEventMappingError();
+  }
+  return new Date(candidates[0]!).toISOString();
+}
+
+/** Samples the bounded timezone-offset neighborhood that can apply to a local date near a DST transition. */
+function getCandidateOffsets(localEpoch: number, timeZone: string): ReadonlySet<number> {
+  const offsets = new Set<number>();
+  for (const hours of [-36, -24, -12, 0, 12, 24, 36]) {
+    offsets.add(getTimeZoneOffset(localEpoch + hours * 60 * 60 * 1_000, timeZone));
+  }
+  return offsets;
+}
+
+/** Checks whether an instant formats to every local wall-clock component without depending on the Worker host zone. */
+function matchesLocalDateTime(
+  instant: number,
+  timeZone: string,
+  expected: ReturnType<typeof parseGoogleDateTime>,
+): boolean {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      day: "2-digit",
+      hour: "2-digit",
+      hourCycle: "h23",
+      minute: "2-digit",
+      month: "2-digit",
+      second: "2-digit",
+      timeZone,
+      year: "numeric",
+    }).formatToParts(new Date(instant));
+    const values = new Map(parts.map((part) => [part.type, part.value]));
+    return (
+      Number(values.get("year")) === expected.year &&
+      Number(values.get("month")) === expected.month &&
+      Number(values.get("day")) === expected.day &&
+      Number(values.get("hour")) === expected.hour &&
+      Number(values.get("minute")) === expected.minute &&
+      Number(values.get("second")) === expected.second
+    );
+  } catch {
+    throw new GoogleEventMappingError();
+  }
 }
 
 /** Returns the supplied IANA zone's offset at an instant using locale-independent numeric calendar parts. */

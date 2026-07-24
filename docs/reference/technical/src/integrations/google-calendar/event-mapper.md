@@ -24,11 +24,31 @@ Creates a closed single/master/occurrence recurrence value. It intentionally dis
 
 ## `normalizeGoogleTime`
 
-Normalizes a Google RFC 3339 `dateTime` to ISO UTC or delegates an all-day `date` to calendar-zone conversion. Missing or malformed time data fails before an upsert is emitted.
+Normalizes a Google RFC 3339 `dateTime` to ISO UTC or delegates an all-day `date` to calendar-zone conversion. When `dateTime` has no offset, Google permits the field only with an explicit `timeZone`; the mapper resolves that wall-clock value in this IANA zone rather than using the Worker host timezone. Missing, malformed, gap, and overlap values fail before an upsert is emitted.
+
+## `normalizeGoogleDateTime`
+
+Uses `Date.parse` only after an explicit RFC 3339 offset or `Z` is present. Offset-less values require their own Google `timeZone` field and are then passed to deterministic IANA-zone conversion, so a preview or production Worker timezone cannot shift events.
+
+## `parseGoogleDateTime`
+
+Parses and validates date, clock, fractional-millisecond, and optional-offset fields. Calendar overflow is rejected rather than normalized by the JavaScript date parser.
 
 ## `localDateStartToInstant`
 
 Converts a calendar-local all-day boundary to UTC midnight in the supplied IANA zone. It validates the calendar date, avoiding host timezone behavior and invalid date rollover.
+
+## `localDateTimeToInstant`
+
+Finds candidate instants for an offset-less local clock value by combining the local epoch with nearby timezone offsets and formatting each candidate back in the requested IANA zone. Exactly one match is required: daylight-saving gaps have zero and overlaps have two candidates, so both are rejected as ambiguous provider input rather than guessed.
+
+## `getCandidateOffsets`
+
+Samples a bounded 72-hour neighborhood around the local epoch. This includes the offsets on either side of ordinary daylight-saving transitions without unbounded timezone searching.
+
+## `matchesLocalDateTime`
+
+Formats a candidate instant through numeric `Intl` parts and compares every calendar component with the parsed wall clock. It never reads the Worker host timezone.
 
 ## `getTimeZoneOffset`
 
