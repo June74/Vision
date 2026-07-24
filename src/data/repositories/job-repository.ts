@@ -86,16 +86,21 @@ class DrizzleCalendarJobRepository implements CalendarJobRepository {
   ): Promise<GoogleWebhookChannel | undefined> {
     const result = await this.database.execute<Record<string, unknown>>(sql`
       select
-        owner_id as "ownerId",
-        provider_calendar_id as "calendarId",
-        provider_channel_id as "providerChannelId",
-        provider_resource_id as "providerResourceId",
-        verification_token_hash as "verificationTokenHash",
-        expires_at as "expiresAt"
-      from sync_channels
-      where provider = 'google-calendar'
-        and provider_channel_id = ${providerChannelId}
-        and verification_token_hash = ${verificationTokenHash}
+        channel.owner_id as "ownerId",
+        channel.provider_calendar_id as "calendarId",
+        channel.provider_channel_id as "providerChannelId",
+        channel.provider_resource_id as "providerResourceId",
+        channel.verification_token_hash as "verificationTokenHash",
+        channel.expires_at as "expiresAt"
+      from sync_channels as channel
+      inner join sync_checkpoints as checkpoint
+        on checkpoint.owner_id = channel.owner_id
+       and checkpoint.provider = channel.provider
+       and checkpoint.provider_calendar_id = channel.provider_calendar_id
+       and checkpoint.status = 'connected'
+      where channel.provider = 'google-calendar'
+        and channel.provider_channel_id = ${providerChannelId}
+        and channel.verification_token_hash = ${verificationTokenHash}
       limit 1
     `);
     return result.rows[0] ? decodeChannel(result.rows[0]) : undefined;

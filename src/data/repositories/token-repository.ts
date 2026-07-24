@@ -35,6 +35,10 @@ export interface GoogleTokenRow {
 export interface TokenStore {
   find(ownerId: string, googleSubject: string): Promise<GoogleTokenRow | undefined>;
   upsert(row: GoogleTokenWriteRow): Promise<GoogleTokenRow>;
+  updateAccessTokenIfVersion(
+    row: GoogleTokenWriteRow,
+    expectedTokenVersion: number,
+  ): Promise<GoogleTokenRow | undefined>;
 }
 
 /** Atomic token write whose null refresh fields mean preserve the database winner. */
@@ -241,6 +245,35 @@ export class DrizzleTokenStore implements TokenStore {
     }
     return decodeGoogleTokenRow(result.rows[0]);
   }
+
+  /** Replaces refresh-derived access state only while the observed token generation still wins. */
+  async updateAccessTokenIfVersion(
+    row: GoogleTokenWriteRow,
+    expectedTokenVersion: number,
+  ): Promise<GoogleTokenRow | undefined> {
+    const result = await this.database.execute<Record<string, unknown>>(sql`
+      update google_oauth_tokens
+      set
+        access_token_envelope = ${row.accessTokenEnvelope}::bytea,
+        access_expires_at = ${row.accessExpiresAt},
+        granted_scopes = ${row.grantedScopes},
+        updated_at = ${row.updatedAt}
+      where owner_id = ${row.ownerId}
+        and google_subject = ${row.googleSubject}
+        and token_version = ${expectedTokenVersion}
+      returning
+        owner_id as "ownerId",
+        google_subject as "googleSubject",
+        refresh_token_envelope as "refreshTokenEnvelope",
+        refresh_token_digest as "refreshTokenDigest",
+        access_token_envelope as "accessTokenEnvelope",
+        access_expires_at as "accessExpiresAt",
+        granted_scopes as "grantedScopes",
+        token_version as "tokenVersion",
+        updated_at as "updatedAt"
+    `);
+    return result.rows[0] ? decodeGoogleTokenRow(result.rows[0]) : undefined;
+  }
 }
 
 /** Minimum server-side token repository surface needed to choose first-consent behavior. */
@@ -248,6 +281,10 @@ export interface TokenRepositoryPort {
   hasRefreshToken(googleSubject: string): Promise<boolean>;
   getGoogleTokens(googleSubject: string): Promise<RetainedGoogleTokens | undefined>;
   saveGoogleTokens(tokens: NewGoogleTokens): Promise<RetainedGoogleTokens>;
+  saveRefreshedAccessToken(
+    tokens: NewGoogleTokens,
+    expectedTokenVersion: number,
+  ): Promise<RetainedGoogleTokens>;
 }
 
 /** Plain retained tokens that may exist only inside the trusted repository caller. */
@@ -369,6 +406,64 @@ export class EncryptedTokenRepository implements TokenRepositoryPort {
       persisted.googleSubject !== tokens.googleSubject
     ) {
       throw new Error("Token persistence returned an invalid owner-bound row.");
+    }
+    const decrypted = await decryptProtectedFields(
+      this.keyProvider,
+      tokenContext(this.ownerId),
+      {
+        refreshToken: decodeEnvelope(persisted.refreshTokenEnvelope),
+        accessToken: persisted.accessTokenEnvelope
+          ? decodeEnvelope(persisted.accessTokenEnvelope)
+          : null,
+      },
+    );
+    return {
+      refreshToken: decrypted.refreshToken as string,
+      accessToken: decrypted.accessToken,
+      accessExpiresAt: new Date(persisted.accessExpiresAt),
+      grantedScopes: parseScopes(persisted.grantedScopes),
+      tokenVersion: persisted.tokenVersion,
+    };
+  }
+
+  /** Persists refresh-derived access state with compare-and-swap and returns the authoritative winner. */
+  async saveRefreshedAccessToken(
+    tokens: NewGoogleTokens,
+    expectedTokenVersion: number,
+  ): Promise<RetainedGoogleTokens> {
+    if (
+      tokens.refreshToken !== undefined ||
+      !Number.isSafeInteger(expectedTokenVersion) ||
+      expectedTokenVersion <= 0
+    ) {
+      throw new Error("Invalid refreshed Google token write.");
+    }
+    const grantedScopes = validateScopes(tokens.grantedScopes);
+    validateTokenWrite(tokens);
+    const encrypted = await encryptProtectedFields(
+      this.keyProvider,
+      tokenContext(this.ownerId),
+      { refreshToken: null, accessToken: tokens.accessToken },
+    );
+    const write: GoogleTokenWriteRow = {
+      ownerId: this.ownerId,
+      googleSubject: tokens.googleSubject,
+      refreshTokenEnvelope: null,
+      refreshTokenDigest: null,
+      accessTokenEnvelope: encrypted.accessToken
+        ? encodeEnvelope(encrypted.accessToken)
+        : null,
+      accessExpiresAt: new Date(tokens.accessExpiresAt),
+      grantedScopes: grantedScopes.join(" "),
+      updatedAt: new Date(tokens.updatedAt),
+    };
+    const persisted =
+      (await this.store.updateAccessTokenIfVersion(
+        write,
+        expectedTokenVersion,
+      )) ?? (await this.store.find(this.ownerId, tokens.googleSubject));
+    if (!persisted) {
+      throw new Error("Refreshed token conflict winner was unavailable.");
     }
     const decrypted = await decryptProtectedFields(
       this.keyProvider,

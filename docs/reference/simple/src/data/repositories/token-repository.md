@@ -26,6 +26,10 @@ Reads one owner-and-subject token row.
 
 Atomically preserves an existing refresh token when Google omits one, or advances the version for a distinct provider token.
 
+## `updateAccessTokenIfVersion`
+
+Updates refresh-derived access details only when the token version has not changed.
+
 ## `hasRefreshToken`
 
 Reports whether an encrypted refresh token already exists.
@@ -37,6 +41,10 @@ Decrypts retained tokens for trusted server use.
 ## `saveGoogleTokens`
 
 Encrypts provider tokens before the database call.
+
+## `saveRefreshedAccessToken`
+
+Encrypts a refreshed access token and keeps a newer sign-in result when the observed version is stale.
 
 ## `validateTokenWrite`
 

@@ -183,6 +183,28 @@ class MemoryTokenStore implements TokenStore {
     }
     return structuredClone(persisted);
   }
+
+  async updateAccessTokenIfVersion(
+    row: GoogleTokenWriteRow,
+    expectedTokenVersion: number,
+  ): Promise<GoogleTokenRow | undefined> {
+    const existing = this.rows.find(
+      (candidate) =>
+        candidate.ownerId === row.ownerId &&
+        candidate.googleSubject === row.googleSubject &&
+        candidate.tokenVersion === expectedTokenVersion,
+    );
+    if (!existing) return undefined;
+    const persisted = structuredClone({
+      ...existing,
+      accessTokenEnvelope: row.accessTokenEnvelope,
+      accessExpiresAt: row.accessExpiresAt,
+      grantedScopes: row.grantedScopes,
+      updatedAt: row.updatedAt,
+    });
+    this.rows.splice(this.rows.indexOf(existing), 1, persisted);
+    return structuredClone(persisted);
+  }
 }
 
 async function createKeyProvider(): Promise<KeyProvider> {

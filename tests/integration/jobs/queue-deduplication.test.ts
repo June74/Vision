@@ -18,6 +18,8 @@ import {
   SyncCalendarError,
   type SyncResult,
 } from "../../../src/jobs/sync-calendar";
+import type { Env } from "../../../src/server/env";
+import { createApp } from "../../../src/worker";
 
 const NOW = new Date("2026-07-24T16:00:00.000Z");
 const MESSAGE: CalendarSyncMessage = {
@@ -90,6 +92,73 @@ function batch(...messages: CalendarSyncQueueMessage[]): CalendarSyncBatch {
 }
 
 describe("calendar queue deduplication", () => {
+  it("does not enqueue a valid channel notification after its checkpoint disconnects", async () => {
+    await pglite.query(`delete from calendar_sync_jobs`);
+    const token = "valid-channel-token";
+    const digest = new Uint8Array(
+      await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token)),
+    );
+    let binary = "";
+    for (const byte of digest) binary += String.fromCharCode(byte);
+    const tokenHash = btoa(binary)
+      .replaceAll("+", "-")
+      .replaceAll("/", "_")
+      .replace(/=+$/u, "");
+    await pglite.query(
+      `insert into sync_checkpoints (
+         id, owner_id, provider, provider_calendar_id, sync_token_envelope,
+         key_version, committed_at, version, status, updated_at
+       ) values ('checkpoint-1', $1, 'google-calendar', $2, $3, 1, $4, 1, 'disconnected', $4)`,
+      [MESSAGE.ownerId, MESSAGE.calendarId, new Uint8Array([1]), NOW.toISOString()],
+    );
+    await pglite.query(
+      `insert into sync_channels (
+         id, owner_id, provider, provider_calendar_id, provider_channel_id,
+         provider_resource_id, verification_token_envelope,
+         verification_token_hash, expires_at
+       ) values ('channel-row-1', $1, 'google-calendar', $2, 'channel-1',
+         'resource-1', $3, $4, $5)`,
+      [
+        MESSAGE.ownerId,
+        MESSAGE.calendarId,
+        new Uint8Array([1]),
+        tokenHash,
+        new Date(NOW.getTime() + 60_000).toISOString(),
+      ],
+    );
+    const send = vi.fn(async () => undefined);
+    const app = createApp({
+      googleCalendarWebhook: {
+        repository,
+        queue: { send },
+        now: () => NOW,
+      },
+      createRequestId: () => "req_disconnected_channel",
+      logger: vi.fn(),
+    });
+
+    const response = await app.fetch(
+      new Request("https://vision.example.test/webhooks/google/calendar", {
+        method: "POST",
+        headers: {
+          "x-goog-channel-id": "channel-1",
+          "x-goog-channel-token": token,
+          "x-goog-resource-id": "resource-1",
+          "x-goog-resource-state": "exists",
+          "x-goog-message-number": "1",
+        },
+      }),
+      {} as Env,
+    );
+
+    expect(response.status).toBe(204);
+    expect(send).not.toHaveBeenCalled();
+    expect(
+      (await pglite.query(`select count(*)::integer as count from calendar_sync_jobs`))
+        .rows,
+    ).toEqual([{ count: 0 }]);
+  });
+
   it("executes a duplicate queue delivery only once", async () => {
     const sync = vi.fn(async () => result());
     const first = queueMessage();
@@ -239,6 +308,76 @@ describe("calendar queue deduplication", () => {
     ]);
   });
 
+  it.each(["missing retained credentials", "rejected refresh credentials"])(
+    "persists a disconnected checkpoint and failed job for %s",
+    async () => {
+      await pglite.query(
+        `insert into sync_checkpoints (
+           id, owner_id, provider, provider_calendar_id, sync_token_envelope,
+           key_version, committed_at, version, status, updated_at
+         ) values ('checkpoint-auth', $1, 'google-calendar', $2, $3, 1, $4, 1, 'connected', $4)`,
+        [
+          MESSAGE.ownerId,
+          MESSAGE.calendarId,
+          new Uint8Array([1]),
+          NOW.toISOString(),
+        ],
+      );
+      const sync = vi.fn(async () => {
+        throw new SyncCalendarError("authorization", "disconnected", false);
+      });
+      const message = queueMessage(1);
+
+      await consumeCalendarSyncBatch(batch(message), {
+        repository,
+        sync,
+        recordFailure: async (request, error) => {
+          await pglite.query(
+            `update sync_checkpoints
+             set status = $1, last_error_category = $2, updated_at = $3
+             where owner_id = $4 and provider = 'google-calendar'
+               and provider_calendar_id = $5 and version = 1`,
+            [
+              error.state,
+              error.category,
+              NOW.toISOString(),
+              request.ownerId,
+              request.calendarId,
+            ],
+          );
+        },
+        now: () => NOW,
+        createClaimId: () => "claim-auth",
+      });
+
+      expect(message.ack).toHaveBeenCalledOnce();
+      expect(message.retry).not.toHaveBeenCalled();
+      expect(
+        (
+          await pglite.query(
+            `select status, last_error_category from sync_checkpoints`,
+          )
+        ).rows,
+      ).toEqual([
+        { status: "disconnected", last_error_category: "authorization" },
+      ]);
+      expect(
+        (
+          await pglite.query(
+            `select status, last_error_category, action_required
+             from calendar_sync_jobs`,
+          )
+        ).rows,
+      ).toEqual([
+        {
+          status: "failed",
+          last_error_category: "authorization",
+          action_required: false,
+        },
+      ]);
+    },
+  );
+
   it("turns an unknown retryable failure into Action required at the sixth attempt", async () => {
     const sync = vi.fn(async () => {
       throw new Error("synthetic unknown failure");
@@ -270,6 +409,41 @@ describe("calendar queue deduplication", () => {
       },
     ]);
   });
+
+  it.each(["transient", "database"] as const)(
+    "turns a typed retryable %s failure into Action required at the sixth attempt",
+    async (category) => {
+      const sync = vi.fn(async () => {
+        throw new SyncCalendarError(category, "retry_scheduled", true, 17);
+      });
+      const message = queueMessage(6);
+
+      await consumeCalendarSyncBatch(batch(message), {
+        repository,
+        sync,
+        now: () => NOW,
+        createClaimId: () => `claim-${category}`,
+      });
+
+      expect(message.ack).toHaveBeenCalledOnce();
+      expect(message.retry).not.toHaveBeenCalled();
+      expect(
+        (
+          await pglite.query(
+            `select status, attempts, last_error_category, action_required
+             from calendar_sync_jobs`,
+          )
+        ).rows,
+      ).toEqual([
+        {
+          status: "failed",
+          attempts: 6,
+          last_error_category: category,
+          action_required: true,
+        },
+      ]);
+    },
+  );
 
   it("acks malformed opaque messages without creating or changing jobs", async () => {
     const sync = vi.fn(async () => result());

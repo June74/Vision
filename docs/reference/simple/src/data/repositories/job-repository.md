@@ -4,7 +4,7 @@ This repository stores verified notification jobs and prevents duplicate queue d
 
 ## `findGoogleChannel`
 
-Finds a channel only when its Google channel ID and hashed secret token both match.
+Finds a channel only when its Google channel ID and hashed secret token both match and its checkpoint is connected.
 
 ## `reserveWebhookJob`
 

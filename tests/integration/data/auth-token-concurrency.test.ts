@@ -142,6 +142,31 @@ describe("atomic Google refresh-token persistence", () => {
     });
   });
 
+  it("does not let a stale access-token refresh overwrite a newer OAuth callback", async () => {
+    const initial = await repository.saveGoogleTokens(
+      tokenWrite("REFRESH_TOKEN_OLD_SENTINEL", "2026-07-23T12:00:00.000Z"),
+    );
+    const callbackWrite = await repository.saveGoogleTokens(
+      tokenWrite("REFRESH_TOKEN_NEW_SENTINEL", "2026-07-23T12:01:00.000Z"),
+    );
+
+    const refreshWinner = await repository.saveRefreshedAccessToken(
+      tokenWrite(undefined, "2026-07-23T12:02:00.000Z"),
+      initial.tokenVersion,
+    );
+
+    expect(refreshWinner).toMatchObject({
+      refreshToken: "REFRESH_TOKEN_NEW_SENTINEL",
+      accessToken: callbackWrite.accessToken,
+      tokenVersion: callbackWrite.tokenVersion,
+    });
+    await expect(repository.getGoogleTokens(SUBJECT)).resolves.toMatchObject({
+      refreshToken: "REFRESH_TOKEN_NEW_SENTINEL",
+      accessToken: callbackWrite.accessToken,
+      tokenVersion: callbackWrite.tokenVersion,
+    });
+  });
+
   it.each([
     {
       name: "the preserving callback reaches SQL last",

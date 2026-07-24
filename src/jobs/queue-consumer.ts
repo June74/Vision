@@ -50,6 +50,10 @@ export interface CalendarSyncBatch {
 export interface CalendarSyncConsumerDependencies {
   readonly repository: CalendarJobRepository;
   readonly sync: (request: SyncCalendarRequest) => Promise<SyncResult>;
+  readonly recordFailure?: (
+    request: SyncCalendarRequest,
+    error: SyncCalendarError,
+  ) => Promise<void>;
   readonly now?: () => Date;
   readonly createClaimId?: () => string;
 }
@@ -107,11 +111,12 @@ async function consumeOne(
     return;
   }
 
+  const request: SyncCalendarRequest = {
+    ...claim.job.message,
+    deliveryAttempt: claim.job.attempt,
+  };
   try {
-    const result = await dependencies.sync({
-      ...claim.job.message,
-      deliveryAttempt: claim.job.attempt,
-    });
+    const result = await dependencies.sync(request);
     const completed = await dependencies.repository.completeJob(
       message.jobId,
       claim.job.claimId,
@@ -122,17 +127,23 @@ async function consumeOne(
     else delivery.retry({ delaySeconds: retryDelay(claim.job.attempt) });
   } catch (error) {
     if (error instanceof SyncCalendarError) {
-      if (error.retry) {
+      const exhausted =
+        error.retry && claim.job.attempt >= MAX_DELIVERY_ATTEMPTS;
+      const classified = exhausted
+        ? new SyncCalendarError(error.category, "action_required", false)
+        : error;
+      await dependencies.recordFailure?.(request, classified);
+      if (classified.retry) {
         const scheduled = await dependencies.repository.scheduleRetry(
           message.jobId,
           claim.job.claimId,
-          error.category,
+          classified.category,
           now(),
         );
         if (scheduled) {
           delivery.retry({
             delaySeconds:
-              error.retryDelaySeconds ?? retryDelay(claim.job.attempt),
+              classified.retryDelaySeconds ?? retryDelay(claim.job.attempt),
           });
         } else {
           delivery.ack();
@@ -142,8 +153,8 @@ async function consumeOne(
       await dependencies.repository.failJob(
         message.jobId,
         claim.job.claimId,
-        error.category,
-        error.state === "action_required",
+        classified.category,
+        classified.state === "action_required",
         now(),
       );
       delivery.ack();
@@ -206,12 +217,30 @@ async function createProductionCalendarSyncConsumerDependencies(
       },
     },
   );
+  const syncRepository = createSyncRepository(database, keyProvider, ownerId);
   return {
     repository: createCalendarJobRepository(database),
     /** Reads a fresh timestamp for each durable queue transition. */
     now: () => new Date(),
     /** Creates a unique opaque lease for one atomic job claim. */
     createClaimId: () => crypto.randomUUID(),
+    /** Mirrors every safe failure onto the exact checkpoint generation before job disposition. */
+    recordFailure: async (request, error) => {
+      if (request.ownerId !== ownerId) return;
+      const checkpoint = await syncRepository.loadCheckpoint(
+        request.ownerId,
+        request.calendarId,
+      );
+      await syncRepository.recordFailure({
+        ownerId: request.ownerId,
+        calendarId: request.calendarId,
+        category: error.category,
+        state: error.state,
+        occurredAt: new Date().toISOString(),
+        jobId: request.jobId,
+        expectedCheckpointVersion: checkpoint?.version ?? 0,
+      });
+    },
     /** Resolves owner-bound tokens and runs the existing transactional sync job. */
     sync: async (request) => {
       if (request.ownerId !== ownerId) {
@@ -246,15 +275,18 @@ async function createProductionCalendarSyncConsumerDependencies(
         }
         const refreshedAt = new Date();
         try {
-          tokens = await tokenRepository.saveGoogleTokens({
-            googleSubject: authEnvironment.GOOGLE_ALLOWED_SUB,
-            accessToken: refreshed.accessToken,
-            accessExpiresAt: new Date(
-              refreshedAt.getTime() + refreshed.expiresInSeconds * 1_000,
-            ),
-            grantedScopes: refreshed.scopes ?? tokens.grantedScopes,
-            updatedAt: refreshedAt,
-          });
+          tokens = await tokenRepository.saveRefreshedAccessToken(
+            {
+              googleSubject: authEnvironment.GOOGLE_ALLOWED_SUB,
+              accessToken: refreshed.accessToken,
+              accessExpiresAt: new Date(
+                refreshedAt.getTime() + refreshed.expiresInSeconds * 1_000,
+              ),
+              grantedScopes: refreshed.scopes ?? tokens.grantedScopes,
+              updatedAt: refreshedAt,
+            },
+            tokens.tokenVersion,
+          );
         } catch {
           throw new SyncCalendarError("database", "retry_scheduled", true, 5);
         }
@@ -267,7 +299,7 @@ async function createProductionCalendarSyncConsumerDependencies(
           accessToken: tokens.accessToken,
           fetcher: fetch.bind(globalThis),
         }),
-        repository: createSyncRepository(database, keyProvider, ownerId),
+        repository: syncRepository,
       });
     },
   };

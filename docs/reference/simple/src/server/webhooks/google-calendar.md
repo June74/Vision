@@ -4,7 +4,7 @@ The Google Calendar webhook verifies a registered channel and creates an opaque 
 
 ## `registerGoogleCalendarWebhook`
 
-Registers `POST /webhooks/google/calendar` and returns `204` for accepted or safely discarded signals.
+Registers `POST /webhooks/google/calendar` and returns `204` for accepted or safely discarded signals, including authenticated `not_exists` lifecycle notices.
 
 ## `createProductionGoogleCalendarWebhookDependencies`
 

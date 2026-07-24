@@ -62,6 +62,9 @@ export function registerGoogleCalendarWebhook(
     ) {
       return context.body(null, 204);
     }
+    if (parsed.resourceState === "not_exists") {
+      return context.body(null, 204);
+    }
 
     const message = Object.freeze({
       jobId: await stableNotificationJobId(
@@ -103,7 +106,7 @@ function parseGoogleNotificationHeaders(headers: Headers):
       channelId: string;
       channelToken: string;
       resourceId: string;
-      resourceState: "sync" | "exists";
+      resourceState: "sync" | "exists" | "not_exists";
       messageNumber: string;
     }
   | undefined {
@@ -116,7 +119,9 @@ function parseGoogleNotificationHeaders(headers: Headers):
     !boundedText(channelId, 256) ||
     !boundedText(channelToken, 256) ||
     !boundedText(resourceId, 1_024) ||
-    (resourceState !== "sync" && resourceState !== "exists") ||
+    (resourceState !== "sync" &&
+      resourceState !== "exists" &&
+      resourceState !== "not_exists") ||
     !isBoundedMessageNumber(messageNumber)
   ) {
     return undefined;

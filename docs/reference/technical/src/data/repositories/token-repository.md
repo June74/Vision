@@ -9,9 +9,11 @@ Wrapped per-owner/per-domain data keys are protected by the Worker root key. `da
 ```ts
 find(ownerId: string, googleSubject: string): Promise<GoogleTokenRow | undefined>;
 upsert(row: GoogleTokenWriteRow): Promise<GoogleTokenRow>;
+updateAccessTokenIfVersion(row: GoogleTokenWriteRow, expectedTokenVersion: number): Promise<GoogleTokenRow | undefined>;
 hasRefreshToken(googleSubject: string): Promise<boolean>;
 getGoogleTokens(googleSubject: string): Promise<RetainedGoogleTokens | undefined>;
 saveGoogleTokens(tokens: NewGoogleTokens): Promise<RetainedGoogleTokens>;
+saveRefreshedAccessToken(tokens: NewGoogleTokens, expectedTokenVersion: number): Promise<RetainedGoogleTokens>;
 ```
 
 ## Dependencies
@@ -62,6 +64,10 @@ Selects only the exact owner and Google subject with parameterized predicates.
 
 Uses an atomic update/insert CTE. Null refresh fields preserve the database winner; a distinct digest replaces ciphertext and increments `token_version`; equal retry preserves envelope and version.
 
+## `updateAccessTokenIfVersion`
+
+Uses an owner/subject/version compare-and-swap update for access-token ciphertext, expiry, scopes, and timestamp. A version mismatch returns no row so the repository can read the newer OAuth winner.
+
 ## `hasRefreshToken`
 
 Uses ciphertext presence only; it does not decrypt the token to decide consent behavior.
@@ -73,6 +79,10 @@ Validates owner/subject/version, decrypts refresh and optional access token with
 ## `saveGoogleTokens`
 
 Validates bounded inputs, encrypts supplied provider fields, hashes a supplied refresh token for equality only, persists atomically, then decrypts the authoritative returned row.
+
+## `saveRefreshedAccessToken`
+
+Rejects refresh-token replacement, encrypts only refresh-derived access state, persists it against the version observed before the provider call, and returns either that update or the authoritative newer row.
 
 ## `validateTokenWrite`
 

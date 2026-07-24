@@ -4,7 +4,7 @@ Google notifications are not cryptographically signed. Authenticity comes from a
 
 ## `registerGoogleCalendarWebhook`
 
-Parses the closed header set, hashes the supplied token, resolves the channel by ID plus digest, repeats a constant-time digest comparison, and checks resource identity and expiry. It reserves PostgreSQL work before Queue send, then marks the send. Sequential duplicate HTTP signals do not enqueue twice; uncertain sends remain recoverable by replay.
+Parses the closed header set, hashes the supplied token, resolves a connected channel by ID plus digest, repeats a constant-time digest comparison, and checks resource identity and expiry. Authenticated `not_exists` lifecycle notices are acknowledged without a sync job. Other accepted states reserve PostgreSQL work before Queue send, then mark the send. Sequential duplicate HTTP signals do not enqueue twice; uncertain sends remain recoverable by replay.
 
 ## `createProductionGoogleCalendarWebhookDependencies`
 
@@ -16,7 +16,7 @@ Provides a fresh time for channel expiry.
 
 ## `parseGoogleNotificationHeaders`
 
-Accepts only `sync` and `exists` states for Task 3 and bounds IDs, token, resource, and message number. It never reads the request body.
+Accepts `sync`, `exists`, and `not_exists`, and bounds IDs, token, resource, and message number. It never reads the request body.
 
 ## `isBoundedMessageNumber`
 

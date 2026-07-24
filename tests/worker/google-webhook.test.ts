@@ -168,6 +168,19 @@ describe("Google Calendar notification webhook", () => {
     },
   );
 
+  it("authenticates and acknowledges not_exists without enqueueing work", async () => {
+    const { app, repository, send } = harness();
+    const response = await post(
+      app,
+      headers({ "x-goog-resource-state": "not_exists" }),
+    );
+
+    expect(response.status).toBe(204);
+    expect(repository.lookup).toHaveBeenCalledOnce();
+    expect(repository.jobs.size).toBe(0);
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it("deduplicates a repeated HTTP signal by channel, resource, and message number", async () => {
     const { app, repository, send } = harness();
     const first = await post(app, headers());

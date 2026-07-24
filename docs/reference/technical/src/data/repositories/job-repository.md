@@ -4,7 +4,7 @@ The job repository is the PostgreSQL authority between an unauthenticated Google
 
 ## `findGoogleChannel`
 
-Queries `sync_channels` with provider, channel ID, and the SHA-256 token digest. It returns only owner, calendar, resource identity, digest, and expiry; the encrypted recovery token never crosses this boundary.
+Queries `sync_channels` with provider, channel ID, and the SHA-256 token digest, then joins the authoritative checkpoint and requires `connected`. It returns only owner, calendar, resource identity, digest, and expiry; the encrypted recovery token never crosses this boundary.
 
 ## `reserveWebhookJob`
 
