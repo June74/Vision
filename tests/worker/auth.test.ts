@@ -714,4 +714,36 @@ describe("Vision Worker Google authentication", () => {
     expect(sessionStore.sessionRows).toHaveLength(0);
     expect(tokenStore.rows).toHaveLength(0);
   });
+
+  it("logs a privacy-safe callback stage when Google's token exchange fails", async () => {
+    const { app, logger } = await createHarness({
+      tokenResponse: {
+        error: "invalid_grant",
+        error_description: "SENSITIVE_PROVIDER_DETAIL",
+      },
+    });
+    await app.fetch(
+      new Request("https://vision.example.test/api/auth/google/start"),
+      {} as Env,
+    );
+
+    const response = await app.fetch(
+      new Request(
+        `https://vision.example.test/api/auth/google/callback?code=authorization-code&state=${state}`,
+      ),
+      {} as Env,
+    );
+
+    expect(response.status).toBe(400);
+    expect(logger).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "auth.callback",
+        errorCategory: "token_exchange_failed",
+        outcome: "failed",
+      }),
+    );
+    expect(JSON.stringify(logger.mock.calls)).not.toContain(
+      "SENSITIVE_PROVIDER_DETAIL",
+    );
+  });
 });

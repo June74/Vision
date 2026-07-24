@@ -77,6 +77,25 @@ class AuthDependencyInitializationError extends Error {
   }
 }
 
+/** Fixed callback stages safe for operational logs; none contain provider or user values. */
+type AuthCallbackFailureCategory =
+  | "callback_dependencies_failed"
+  | "callback_request_invalid"
+  | "callback_transaction_failed"
+  | "token_exchange_failed"
+  | "scope_validation_failed"
+  | "id_token_verification_failed"
+  | "claims_validation_failed"
+  | "token_persistence_failed"
+  | "session_rotation_failed"
+  | "session_creation_failed";
+
+/** Every privacy-safe authentication failure category emitted by this module. */
+type AuthFailureCategory =
+  | "account_not_allowed"
+  | "authentication_failed"
+  | AuthCallbackFailureCategory;
+
 /** Adds the Google start route before the Worker's generic API fallback. */
 export function registerOAuthRoutes(
   app: Hono<{ Bindings: Env; Variables: AuthRequestVariables }>,
@@ -142,9 +161,13 @@ export function registerOAuthRoutes(
   app.get("/api/auth/google/callback", async (context) => {
     const requestId = context.get("requestId");
     let dependencies: AuthRouteDependencies | undefined;
+    let failureCategory: AuthCallbackFailureCategory =
+      "callback_dependencies_failed";
     try {
       dependencies = await resolveDependencies(context.env);
+      failureCategory = "callback_request_invalid";
       const query = readCallbackQuery(context.req.raw);
+      failureCategory = "callback_transaction_failed";
       const transaction = await dependencies.sessions.consumeOAuthTransaction(
         query.state,
         dependencies.now(),
@@ -159,12 +182,16 @@ export function registerOAuthRoutes(
         );
         return authenticationFailurePage(context, 400);
       }
+      failureCategory = "token_exchange_failed";
       const tokenSet = await dependencies.oauthClient.exchangeCode(
         query.code,
         transaction.pkceVerifier,
       );
+      failureCategory = "scope_validation_failed";
       validateGrantedScopes(tokenSet.scopes);
+      failureCategory = "id_token_verification_failed";
       const payload = await dependencies.oauthClient.verifyIdToken(tokenSet.idToken);
+      failureCategory = "claims_validation_failed";
       const claims = await readVerifiedClaims(
         payload,
         transaction.nonce,
@@ -175,6 +202,7 @@ export function registerOAuthRoutes(
         dependencies.identityAllowlist,
         dependencies.now(),
       );
+      failureCategory = "token_persistence_failed";
       const issuedAt = dependencies.now();
       await dependencies.tokens.saveGoogleTokens({
         googleSubject: identity.subject,
@@ -189,6 +217,7 @@ export function registerOAuthRoutes(
         updatedAt: issuedAt,
       });
 
+      failureCategory = "session_rotation_failed";
       const previousSessionId = readSessionCookie(context.req.raw);
       if (previousSessionId) {
         // Successful authentication always rotates any presented session bearer.
@@ -201,6 +230,7 @@ export function registerOAuthRoutes(
         dependencies.randomToken("csrfToken"),
       );
       const expiresAt = new Date(issuedAt.getTime() + SESSION_LIFETIME_MS);
+      failureCategory = "session_creation_failed";
       await dependencies.sessions.createSession({
         sessionId,
         ownerId: dependencies.ownerId,
@@ -240,7 +270,7 @@ export function registerOAuthRoutes(
         requestId,
         "failed",
         "auth.callback",
-        "authentication_failed",
+        failureCategory,
       );
       return authenticationFailurePage(context, 400);
     }
@@ -435,7 +465,7 @@ function logAuthEventSafely(
   requestId: string,
   outcome: "succeeded" | "failed" | "denied",
   action = "auth.start",
-  errorCategory?: "account_not_allowed" | "authentication_failed",
+  errorCategory?: AuthFailureCategory,
 ): void {
   try {
     logEvent(logger, {
