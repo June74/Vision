@@ -12,8 +12,8 @@ fall back to the Worker host timezone.
 
 **Signature:** `(request: EventSyncListRequest) => Promise<EventSyncPage>`
 
-Performs one GET, never reads or returns the provider error body, validates the page through Zod, adds the trusted
-requested calendar identity, and maps each item. The returned page contains closed changes and one continuation token.
+Performs one GET, bounds the raw successful response to 8 MiB, validates the page through Zod, adds the trusted requested
+calendar identity, and maps each item. The returned page contains closed changes and one continuation token.
 
 ## `createGoogleEventSyncClient`
 
@@ -32,8 +32,29 @@ Requires an object item and overwrites any provider-supplied `calendarId` with t
 
 ## `classifyResponse`
 
-Classifies 401/403 as authorization, 410 as `sync_token_invalid`, 429 and 5xx as transient, and other non-success
-statuses as permanent provider failures.
+Classifies 401 as authorization, 410 as `sync_token_invalid`, 429 and 5xx as transient, and uses only a bounded closed
+403 reason projection for rate limit, quota, and permission policy. Unknown and malformed 403 responses stay permanent
+provider failures.
+
+## `readBoundedForbiddenReasons`
+
+Reads no more than 8 KiB, performs fatal UTF-8 decoding, and validates at most sixteen bounded reason strings. It never
+retains or reflects provider messages.
+
+## `readBoundedJson`
+
+Reads a successful response through the byte-capped stream helper, then performs fatal UTF-8 decoding and JSON parsing.
+Oversized responses remain distinct from malformed schema.
+
+## `readBoundedBytes`
+
+Streams into bounded chunks, cancels the reader on overflow, and emits `payload_too_large` before a full provider page
+can consume Worker memory.
+
+## `classifyForbiddenReason`
+
+Maps `rateLimitExceeded` and `userRateLimitExceeded` to transient retry, `quotaExceeded` to explicit non-retry quota
+policy, known permission reasons to authorization, and every other value to provider failure.
 
 ## `validateSecretToken`
 

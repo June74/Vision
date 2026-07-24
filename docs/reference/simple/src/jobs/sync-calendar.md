@@ -11,6 +11,14 @@ Runs one synchronization attempt and returns only safe counts, duration, reason,
 
 Keeps one exact change per provider identity and rejects conflicting duplicates.
 
+## `validateProtectedPayloadSizes`
+
+Rejects protected event fields or the complete protected payload when their UTF-8 encryption input exceeds 64 KiB.
+
+## `utf8ByteLength`
+
+Measures bytes, rather than JavaScript character count, at the encryption boundary.
+
 ## `canonicalJson`
 
 Creates a stable comparison string for already-validated mapper output.

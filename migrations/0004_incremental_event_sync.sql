@@ -27,7 +27,7 @@ alter table sync_checkpoints
       last_error_category is null
       or last_error_category in (
         'authorization', 'concurrency', 'database', 'provider',
-        'schema', 'sync_token_invalid', 'transient'
+        'payload_too_large', 'quota', 'schema', 'sync_token_invalid', 'transient'
       )
     ),
   add constraint sync_checkpoints_token_version_consistent

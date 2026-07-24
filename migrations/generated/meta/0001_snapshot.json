@@ -1,5 +1,5 @@
 {
-  "id": "636e1fa0-eeef-449c-81a0-c21c32464678",
+  "id": "11b60121-462c-4e0f-86f0-c9d0da1e239d",
   "prevId": "ba51b02f-d560-464b-8606-9e0af4ad9b44",
   "version": "7",
   "dialect": "postgresql",
@@ -843,7 +843,7 @@
             "node_id",
             "owner_id"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -1136,7 +1136,7 @@
         },
         "sync_checkpoints_error_category_valid": {
           "name": "sync_checkpoints_error_category_valid",
-          "value": "\"sync_checkpoints\".\"last_error_category\" is null or \"sync_checkpoints\".\"last_error_category\" in ('authorization', 'concurrency', 'database', 'provider', 'schema', 'sync_token_invalid', 'transient')"
+          "value": "\"sync_checkpoints\".\"last_error_category\" is null or \"sync_checkpoints\".\"last_error_category\" in ('authorization', 'concurrency', 'database', 'provider', 'payload_too_large', 'quota', 'schema', 'sync_token_invalid', 'transient')"
         },
         "sync_checkpoints_token_version_consistent": {
           "name": "sync_checkpoints_token_version_consistent",
@@ -1228,7 +1228,41 @@
           "notNull": true
         }
       },
-      "indexes": {},
+      "indexes": {
+        "sync_runs_owner_calendar_completed_idx": {
+          "name": "sync_runs_owner_calendar_completed_idx",
+          "columns": [
+            {
+              "expression": "owner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider_calendar_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "completed_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},

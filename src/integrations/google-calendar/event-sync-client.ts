@@ -8,6 +8,14 @@ import {
 
 const MAX_TOKEN_CHARS = 16 * 1024;
 const MAX_CALENDAR_ID_CHARS = 2 * 1024;
+const MAX_ERROR_BODY_BYTES = 8 * 1024;
+const MAX_PROVIDER_PAGE_BYTES = 8 * 1024 * 1024;
+const googleErrorReasonSchema = z
+  .object({
+    error: z.object({
+      errors: z.array(z.object({ reason: z.string().min(1).max(128) })).max(16),
+    }),
+  });
 const googleEventsPageSchema = z
   .object({
     items: z.array(z.unknown()).max(2_500).default([]),
@@ -49,6 +57,8 @@ export interface EventSyncClient {
 export type EventSyncClientErrorCategory =
   | "authorization"
   | "provider"
+  | "payload_too_large"
+  | "quota"
   | "schema"
   | "sync_token_invalid"
   | "transient";
@@ -111,13 +121,14 @@ export function createGoogleEventSyncClient(
       }
 
       if (!response.ok) {
-        throw classifyResponse(response.status);
+        throw await classifyResponse(response);
       }
 
       let raw: unknown;
       try {
-        raw = await response.json();
-      } catch {
+        raw = await readBoundedJson(response, MAX_PROVIDER_PAGE_BYTES);
+      } catch (error) {
+        if (error instanceof EventSyncClientError) throw error;
         throw new EventSyncClientError("schema", response.status);
       }
       const page = googleEventsPageSchema.safeParse(raw);
@@ -182,9 +193,13 @@ function addCalendarIdentity(item: unknown, calendarId: string): unknown {
   return { ...item, calendarId };
 }
 
-/** Maps HTTP status only; response bodies are never retained or reflected. */
-function classifyResponse(status: number): EventSyncClientError {
-  if (status === 401 || status === 403) {
+/** Maps HTTP status and a bounded closed 403 reason set without reflecting provider text. */
+async function classifyResponse(response: Response): Promise<EventSyncClientError> {
+  const { status } = response;
+  if (status === 403) {
+    return classifyForbiddenReason(await readBoundedForbiddenReasons(response));
+  }
+  if (status === 401) {
     return new EventSyncClientError("authorization", status);
   }
   if (status === 410) {
@@ -194,6 +209,94 @@ function classifyResponse(status: number): EventSyncClientError {
     return new EventSyncClientError("transient", status);
   }
   return new EventSyncClientError("provider", status);
+}
+
+/** Reads only a small closed reason projection from a 403 body and discards all provider text. */
+async function readBoundedForbiddenReasons(
+  response: Response,
+): Promise<readonly string[] | undefined> {
+  try {
+    const bytes = await readBoundedBytes(response, MAX_ERROR_BODY_BYTES);
+    const decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    const parsed = googleErrorReasonSchema.safeParse(JSON.parse(decoded) as unknown);
+    return parsed.success
+      ? parsed.data.error.errors.map(({ reason }) => reason)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Reads and parses one successful provider page while enforcing a strict raw response cap. */
+async function readBoundedJson(response: Response, maximumBytes: number): Promise<unknown> {
+  let bytes: Uint8Array;
+  try {
+    bytes = await readBoundedBytes(response, maximumBytes);
+  } catch (error) {
+    if (error instanceof EventSyncClientError) throw error;
+    throw new EventSyncClientError("schema", response.status);
+  }
+  try {
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as unknown;
+  } catch {
+    throw new EventSyncClientError("schema", response.status);
+  }
+}
+
+/** Materializes a response only while it remains beneath the supplied Worker-safe byte cap. */
+async function readBoundedBytes(
+  response: Response,
+  maximumBytes: number,
+): Promise<Uint8Array> {
+  const reader = response.body?.getReader();
+  if (!reader) return new Uint8Array();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maximumBytes) {
+        await reader.cancel();
+        throw new EventSyncClientError("payload_too_large", response.status);
+      }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return bytes;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+/** Applies the explicit safe retry, quota, and permission policy to closed 403 reason values. */
+function classifyForbiddenReason(
+  reasons: readonly string[] | undefined,
+): EventSyncClientError {
+  if (
+    reasons?.some((reason) =>
+      reason === "rateLimitExceeded" || reason === "userRateLimitExceeded")
+  ) {
+    return new EventSyncClientError("transient", 403);
+  }
+  if (reasons?.includes("quotaExceeded")) {
+    return new EventSyncClientError("quota", 403);
+  }
+  if (
+    reasons?.some((reason) =>
+      reason === "insufficientPermissions" ||
+      reason === "forbidden" ||
+      reason === "permissionDenied")
+  ) {
+    return new EventSyncClientError("authorization", 403);
+  }
+  return new EventSyncClientError("provider", 403);
 }
 
 /** Snapshots a bounded bearer credential at construction without logging it. */

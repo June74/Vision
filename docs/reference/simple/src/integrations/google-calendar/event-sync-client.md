@@ -22,7 +22,23 @@ Adds the trusted requested calendar ID before mapping an item.
 
 ## `classifyResponse`
 
-Maps status codes to authorization, expired-token, transient, or permanent provider categories.
+Maps status codes and a small closed set of Google 403 reasons to safe authorization, quota, transient, or permanent categories.
+
+## `readBoundedForbiddenReasons`
+
+Reads at most 8 KiB from a 403 response and keeps only recognized reason fields.
+
+## `readBoundedJson`
+
+Parses a successful provider response only while it fits the strict page-size limit.
+
+## `readBoundedBytes`
+
+Stops reading and returns a safe payload-too-large error when a response crosses its byte cap.
+
+## `classifyForbiddenReason`
+
+Separates rate limits, account quota, revoked permissions, and unknown 403 failures.
 
 ## `validateSecretToken`
 

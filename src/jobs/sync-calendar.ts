@@ -1,5 +1,6 @@
 /** Stages every provider page before one atomic event-projection and checkpoint commit. */
 import type { ProviderEventChange } from "../domain/sync/change";
+import { MAX_PROTECTED_PLAINTEXT_BYTES } from "../crypto/envelope";
 import {
   SyncCheckpointSchema,
   type SyncCheckpoint,
@@ -12,6 +13,10 @@ import {
 const MAX_STAGED_CHANGES = 25_000;
 const MAX_PAGES = 10_000;
 const MAX_DELIVERY_ATTEMPTS = 6;
+const MAX_STAGED_MEMORY_BYTES = 32 * 1024 * 1024;
+const STAGED_COPY_MULTIPLIER = 8;
+const STAGED_CHANGE_OVERHEAD_BYTES = 4 * 1024;
+const utf8Encoder = new TextEncoder();
 
 /** Opaque synchronization job payload safe for queue transport. */
 export type SyncReason = "initial" | "manual" | "push" | "rebuild" | "repair";
@@ -63,6 +68,7 @@ export interface SyncFailureRecord {
   readonly state: SyncFailureState;
   readonly occurredAt: string;
   readonly jobId: string;
+  readonly expectedCheckpointVersion?: number;
 }
 
 /** Persistence boundary whose success must cover changes, invalidations, and checkpoint atomically. */
@@ -86,6 +92,8 @@ export type SyncCalendarErrorCategory =
   | "concurrency"
   | "database"
   | "provider"
+  | "payload_too_large"
+  | "quota"
   | "schema"
   | "sync_token_invalid"
   | "transient";
@@ -129,17 +137,24 @@ export async function syncCalendar(
   const started = now();
   const startedAt = Date.prototype.getTime.call(started);
   let checkpoint: SyncCheckpoint | undefined;
+  let checkpointLoaded = false;
 
   try {
-    checkpoint = await dependencies.repository.loadCheckpoint(
-      input.ownerId,
-      input.calendarId,
-    );
+    try {
+      checkpoint = await dependencies.repository.loadCheckpoint(
+        input.ownerId,
+        input.calendarId,
+      );
+      checkpointLoaded = true;
+    } catch {
+      throw retryError("database", input.deliveryAttempt, random);
+    }
     if (checkpoint?.calendarId !== undefined && checkpoint.calendarId !== input.calendarId) {
       throw new SyncCalendarError("schema", "action_required", false);
     }
 
     const staged = new Map<string, { serialized: string; change: ProviderEventChange }>();
+    let stagedMemoryBytes = 0;
     let pageToken: string | undefined;
     let calendarTimeZone: string | undefined;
     let nextSyncToken: string | undefined;
@@ -164,7 +179,14 @@ export async function syncCalendar(
       }
       calendarTimeZone = page.calendarTimeZone;
       for (const change of page.changes) {
-        stageChange(staged, change);
+        stagedMemoryBytes += stageChange(staged, change);
+        if (stagedMemoryBytes > MAX_STAGED_MEMORY_BYTES) {
+          throw new SyncCalendarError(
+            "payload_too_large",
+            "action_required",
+            false,
+          );
+        }
         if (staged.size > MAX_STAGED_CHANGES) {
           throw new SyncCalendarError("schema", "action_required", false);
         }
@@ -237,6 +259,9 @@ export async function syncCalendar(
         state: failure.state,
         occurredAt: Date.prototype.toISOString.call(now()),
         jobId: input.jobId,
+        expectedCheckpointVersion: checkpointLoaded
+          ? checkpoint?.version ?? 0
+          : undefined,
       });
     } catch {
       // Failure bookkeeping is best effort and must never replace the queue disposition.
@@ -249,7 +274,8 @@ export async function syncCalendar(
 function stageChange(
   staged: Map<string, { serialized: string; change: ProviderEventChange }>,
   change: ProviderEventChange,
-): void {
+): number {
+  validateProtectedPayloadSizes(change);
   const identity = change.type === "upsert" ? change.identity : change.target;
   const key = JSON.stringify([
     identity.sourceSystem,
@@ -262,7 +288,43 @@ function stageChange(
     // Unversioned tombstones cannot be ordered against an upsert or another distinct representation.
     throw new SyncCalendarError("schema", "action_required", false);
   }
-  if (!existing) staged.set(key, { serialized, change });
+  if (existing) return 0;
+  staged.set(key, { serialized, change });
+  return (
+    utf8ByteLength(serialized) * STAGED_COPY_MULTIPLIER +
+    STAGED_CHANGE_OVERHEAD_BYTES
+  );
+}
+
+/** Rejects any protected serialization that cannot fit the shared 64 KiB encryption boundary. */
+function validateProtectedPayloadSizes(change: ProviderEventChange): void {
+  if (change.type === "delete") return;
+  const fields = [
+    change.protected.title,
+    change.protected.description,
+    JSON.stringify(change.protected.attendees),
+    change.protected.location,
+    change.protected.meetingLinks[0] ?? null,
+    JSON.stringify(change.protected),
+  ];
+  if (
+    fields.some(
+      (value) =>
+        value !== null &&
+        utf8ByteLength(value) > MAX_PROTECTED_PLAINTEXT_BYTES,
+    )
+  ) {
+    throw new SyncCalendarError(
+      "payload_too_large",
+      "action_required",
+      false,
+    );
+  }
+}
+
+/** Measures the actual UTF-8 allocation used by the encryption boundary. */
+function utf8ByteLength(value: string): number {
+  return utf8Encoder.encode(value).byteLength;
 }
 
 /** Serializes mapper output deterministically for duplicate equality only. */
@@ -295,11 +357,18 @@ function normalizeFailure(
     if (error.category === "authorization") {
       return new SyncCalendarError("authorization", "disconnected", false);
     }
-    if (error.category === "schema" || error.category === "provider") {
+    if (
+      error.category === "schema" ||
+      error.category === "provider" ||
+      error.category === "payload_too_large"
+    ) {
       return new SyncCalendarError(error.category, "action_required", false);
     }
     if (error.category === "sync_token_invalid") {
       return new SyncCalendarError("sync_token_invalid", "rebuild_required", false);
+    }
+    if (error.category === "quota") {
+      return new SyncCalendarError("quota", "action_required", false);
     }
     return retryError("transient", deliveryAttempt, random);
   }

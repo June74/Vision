@@ -1,6 +1,6 @@
 /** Defines explicit synchronization state without storing provider tokens in JSON. */
 import { sql } from "drizzle-orm";
-import { check, foreignKey, integer, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { check, foreignKey, index, integer, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { events } from "./events";
 import { ciphertext, nodes } from "./nodes";
 
@@ -27,7 +27,7 @@ export const syncCheckpoints = pgTable(
     check("sync_checkpoints_key_version_positive", sql`${table.keyVersion} is null or ${table.keyVersion} > 0`),
     check("sync_checkpoints_version_non_negative", sql`${table.version} >= 0`),
     check("sync_checkpoints_status_valid", sql`${table.status} in ('pending', 'connected', 'disconnected', 'action_required', 'rebuild_required', 'retry_scheduled')`),
-    check("sync_checkpoints_error_category_valid", sql`${table.lastErrorCategory} is null or ${table.lastErrorCategory} in ('authorization', 'concurrency', 'database', 'provider', 'schema', 'sync_token_invalid', 'transient')`),
+    check("sync_checkpoints_error_category_valid", sql`${table.lastErrorCategory} is null or ${table.lastErrorCategory} in ('authorization', 'concurrency', 'database', 'provider', 'payload_too_large', 'quota', 'schema', 'sync_token_invalid', 'transient')`),
     check("sync_checkpoints_token_version_consistent", sql`(${table.version} = 0 and ${table.syncTokenEnvelope} is null and ${table.keyVersion} is null) or (${table.version} > 0 and ${table.syncTokenEnvelope} is not null and ${table.keyVersion} is not null and ${table.keyVersion} > 0)`),
   ],
 );
@@ -47,7 +47,7 @@ export const eventSyncPayloads = pgTable(
       columns: [table.nodeId, table.ownerId],
       foreignColumns: [events.nodeId, events.ownerId],
       name: "event_sync_payloads_event_owner_fk",
-    }),
+    }).onDelete("cascade"),
     check("event_sync_payloads_key_version_positive", sql`${table.protectedKeyVersion} > 0`),
   ],
 );
@@ -82,6 +82,12 @@ export const syncRuns = pgTable(
     check("sync_runs_unchanged_count_non_negative", sql`${table.unchangedCount} >= 0`),
     check("sync_runs_completed_after_started", sql`${table.completedAt} >= ${table.startedAt}`),
     check("sync_runs_checkpoint_version_positive", sql`${table.checkpointVersion} > 0`),
+    index("sync_runs_owner_calendar_completed_idx").on(
+      table.ownerId,
+      table.provider,
+      table.providerCalendarId,
+      table.completedAt.desc(),
+    ),
   ],
 );
 

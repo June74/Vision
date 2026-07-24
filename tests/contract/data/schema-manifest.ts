@@ -6,7 +6,20 @@ import type { PgTable } from "drizzle-orm/pg-core";
 
 export type ColumnManifest = [name: string, sqlType: string, notNull: boolean, defaultSql?: string];
 export type KeyManifest = string[];
-export type ForeignKeyManifest = [name: string, localColumns: string[], targetTable: string, targetColumns: string[]];
+export type ForeignKeyManifest = [
+  name: string,
+  localColumns: string[],
+  targetTable: string,
+  targetColumns: string[],
+  onUpdate: string,
+  onDelete: string,
+];
+export type IndexManifest = [
+  name: string,
+  unique: boolean,
+  method: string,
+  columns: Array<[name: string, order: string, nulls: string]>,
+];
 export type CheckManifest = [name: string, expression: string];
 
 export interface TableManifest {
@@ -14,6 +27,7 @@ export interface TableManifest {
   primaryKeys: KeyManifest[];
   uniqueKeys: KeyManifest[];
   foreignKeys: ForeignKeyManifest[];
+  indexes: IndexManifest[];
   checks: CheckManifest[];
 }
 
@@ -35,6 +49,18 @@ interface DrizzleSnapshotTable {
     tableTo: string;
     columnsFrom: string[];
     columnsTo: string[];
+    onUpdate: string;
+    onDelete: string;
+  }>;
+  indexes: Record<string, {
+    name: string;
+    columns: Array<{
+      expression: string;
+      asc: boolean;
+      nulls: string;
+    }>;
+    isUnique: boolean;
+    method: string;
   }>;
   compositePrimaryKeys: Record<string, { columns: string[] }>;
   uniqueConstraints: Record<string, { columns: string[] }>;
@@ -138,8 +164,28 @@ export function extractDrizzleTablesManifest(tables: PgTable[]): SchemaTablesMan
                   reference.columns.map((column) => column.name),
                   getTableName(reference.foreignTable),
                   reference.foreignColumns.map((column) => column.name),
+                  foreignKey.onUpdate ?? "no action",
+                  foreignKey.onDelete ?? "no action",
                 ];
               })
+              .sort(bySerializedValue),
+            indexes: config.indexes
+              .map((declaredIndex): IndexManifest => [
+                declaredIndex.config.name ?? "",
+                declaredIndex.config.unique,
+                declaredIndex.config.method ?? "btree",
+                declaredIndex.config.columns.map((column) => {
+                  if (!("name" in column) || !column.name || !("indexConfig" in column)) {
+                    throw new Error("Only named-column indexes are supported by the schema manifest.");
+                  }
+                  const indexConfig = column.indexConfig;
+                  return [
+                    column.name,
+                    indexConfig?.order ?? "asc",
+                    indexConfig?.nulls ?? "last",
+                  ];
+                }),
+              ])
               .sort(bySerializedValue),
             checks: config.checks
               .map((check): CheckManifest => [
@@ -192,6 +238,20 @@ export function extractSnapshotTablesManifest(snapshot: unknown): SchemaTablesMa
                 [...foreignKey.columnsFrom],
                 foreignKey.tableTo,
                 [...foreignKey.columnsTo],
+                foreignKey.onUpdate,
+                foreignKey.onDelete,
+              ])
+              .sort(bySerializedValue),
+            indexes: Object.values(table.indexes)
+              .map((declaredIndex): IndexManifest => [
+                declaredIndex.name,
+                declaredIndex.isUnique,
+                declaredIndex.method,
+                declaredIndex.columns.map((column) => [
+                  column.expression,
+                  column.asc ? "asc" : "desc",
+                  column.nulls,
+                ]),
               ])
               .sort(bySerializedValue),
             checks: Object.values(table.checkConstraints)

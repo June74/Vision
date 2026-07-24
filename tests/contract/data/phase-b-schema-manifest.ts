@@ -26,8 +26,9 @@ export const phaseBSchemaManifest = {
     primaryKeys: [["id"]],
     uniqueKeys: [],
     foreignKeys: [
-      ["audit_events_node_owner_fk", ["node_id", "owner_id"], "nodes", ["id", "owner_id"]],
+      ["audit_events_node_owner_fk", ["node_id", "owner_id"], "nodes", ["id", "owner_id"], "no action", "no action"],
     ],
+    indexes: [],
     checks: [
       ["audit_events_owner_non_empty", "owner_id <> ''"],
     ],
@@ -55,11 +56,12 @@ export const phaseBSchemaManifest = {
     primaryKeys: [["id"]],
     uniqueKeys: [],
     foreignKeys: [
-      ["edges_destination_owner_fk", ["destination_node_id", "owner_id"], "nodes", ["id", "owner_id"]],
-      ["edges_destination_owner_type_fk", ["destination_node_id", "owner_id", "destination_node_type"], "nodes", ["id", "owner_id", "node_type"]],
-      ["edges_source_owner_fk", ["source_node_id", "owner_id"], "nodes", ["id", "owner_id"]],
-      ["edges_source_owner_type_fk", ["source_node_id", "owner_id", "source_node_type"], "nodes", ["id", "owner_id", "node_type"]],
+      ["edges_destination_owner_fk", ["destination_node_id", "owner_id"], "nodes", ["id", "owner_id"], "no action", "no action"],
+      ["edges_destination_owner_type_fk", ["destination_node_id", "owner_id", "destination_node_type"], "nodes", ["id", "owner_id", "node_type"], "no action", "no action"],
+      ["edges_source_owner_fk", ["source_node_id", "owner_id"], "nodes", ["id", "owner_id"], "no action", "no action"],
+      ["edges_source_owner_type_fk", ["source_node_id", "owner_id", "source_node_type"], "nodes", ["id", "owner_id", "node_type"], "no action", "no action"],
     ],
+    indexes: [],
     checks: [
       ["edges_confidence_valid", "confidence is null or (confidence >= 0 and confidence <= 1000000)"],
       ["edges_lifecycle_valid", "lifecycle in ('proposed', 'confirmed', 'rejected', 'retracted')"],
@@ -101,9 +103,10 @@ export const phaseBSchemaManifest = {
       ["provider", "provider_calendar_id", "provider_event_id"],
     ],
     foreignKeys: [
-      ["events_node_owner_fk", ["node_id", "owner_id"], "nodes", ["id", "owner_id"]],
-      ["events_node_owner_type_fk", ["node_id", "owner_id", "node_type"], "nodes", ["id", "owner_id", "node_type"]],
+      ["events_node_owner_fk", ["node_id", "owner_id"], "nodes", ["id", "owner_id"], "no action", "no action"],
+      ["events_node_owner_type_fk", ["node_id", "owner_id", "node_type"], "nodes", ["id", "owner_id", "node_type"], "no action", "no action"],
     ],
+    indexes: [],
     checks: [
       ["events_calendar_non_empty", "provider_calendar_id <> ''"],
       ["events_end_after_start", "ends_at > starts_at"],
@@ -127,8 +130,9 @@ export const phaseBSchemaManifest = {
     primaryKeys: [["node_id"]],
     uniqueKeys: [],
     foreignKeys: [
-      ["event_sync_payloads_event_owner_fk", ["node_id", "owner_id"], "events", ["node_id", "owner_id"]],
+      ["event_sync_payloads_event_owner_fk", ["node_id", "owner_id"], "events", ["node_id", "owner_id"], "no action", "cascade"],
     ],
+    indexes: [],
     checks: [
       ["event_sync_payloads_key_version_positive", "protected_key_version > 0"],
     ],
@@ -162,6 +166,7 @@ export const phaseBSchemaManifest = {
       ["owner_id", "provider", "provider_node_id"],
     ],
     foreignKeys: [],
+    indexes: [],
     checks: [
       ["nodes_domain_state_valid", "domain_state in ('confirmed', 'inferred', 'unresolved') and ((domain = 'unresolved') = (domain_state = 'unresolved'))"],
       ["nodes_domain_valid", "domain in ('school', 'work', 'personal', 'unresolved')"],
@@ -197,6 +202,7 @@ export const phaseBSchemaManifest = {
       ["owner_id", "provider", "provider_operation_id"],
     ],
     foreignKeys: [],
+    indexes: [],
     checks: [
       ["operation_ledger_operation_non_empty", "provider_operation_id <> ''"],
       ["operation_ledger_provider_non_empty", "provider <> ''"],
@@ -215,8 +221,9 @@ export const phaseBSchemaManifest = {
     primaryKeys: [["node_id"]],
     uniqueKeys: [],
     foreignKeys: [
-      ["recoverable_deletions_node_owner_fk", ["node_id", "owner_id"], "nodes", ["id", "owner_id"]],
+      ["recoverable_deletions_node_owner_fk", ["node_id", "owner_id"], "nodes", ["id", "owner_id"], "no action", "no action"],
     ],
+    indexes: [],
     checks: [
       ["recoverable_deletions_purge_after_deleted", "purge_after > deleted_at"],
     ],
@@ -239,6 +246,7 @@ export const phaseBSchemaManifest = {
       ["owner_id", "provider", "provider_channel_id"],
     ],
     foreignKeys: [],
+    indexes: [],
     checks: [
       ["sync_channels_calendar_non_empty", "provider_calendar_id <> ''"],
       ["sync_channels_channel_non_empty", "provider_channel_id <> ''"],
@@ -267,9 +275,10 @@ export const phaseBSchemaManifest = {
       ["owner_id", "provider", "provider_calendar_id"],
     ],
     foreignKeys: [],
+    indexes: [],
     checks: [
       ["sync_checkpoints_calendar_non_empty", "provider_calendar_id <> ''"],
-      ["sync_checkpoints_error_category_valid", "last_error_category is null or last_error_category in ('authorization', 'concurrency', 'database', 'provider', 'schema', 'sync_token_invalid', 'transient')"],
+      ["sync_checkpoints_error_category_valid", "last_error_category is null or last_error_category in ('authorization', 'concurrency', 'database', 'provider', 'payload_too_large', 'quota', 'schema', 'sync_token_invalid', 'transient')"],
       ["sync_checkpoints_key_version_positive", "key_version is null or key_version > 0"],
       ["sync_checkpoints_provider_non_empty", "provider <> ''"],
       ["sync_checkpoints_status_valid", "status in ('pending', 'connected', 'disconnected', 'action_required', 'rebuild_required', 'retry_scheduled')"],
@@ -298,6 +307,19 @@ export const phaseBSchemaManifest = {
     primaryKeys: [["job_id"]],
     uniqueKeys: [],
     foreignKeys: [],
+    indexes: [
+      [
+        "sync_runs_owner_calendar_completed_idx",
+        false,
+        "btree",
+        [
+          ["owner_id", "asc", "last"],
+          ["provider", "asc", "last"],
+          ["provider_calendar_id", "asc", "last"],
+          ["completed_at", "desc", "last"],
+        ],
+      ],
+    ],
     checks: [
       ["sync_runs_calendar_non_empty", "provider_calendar_id <> ''"],
       ["sync_runs_checkpoint_version_positive", "checkpoint_version > 0"],

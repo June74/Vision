@@ -353,6 +353,13 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
         where persisted.owner_id = excluded.owner_id
         returning persisted.node_id
       ),
+      cleared_recoverable_deletions as (
+        delete from recoverable_deletions persisted
+        using event_writes event
+        where persisted.node_id = event.node_id
+          and persisted.owner_id = ${commit.ownerId}
+        returning persisted.node_id
+      ),
       deleted_events as (
         update events as persisted
         set status = 'cancelled'
@@ -438,6 +445,7 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
         counts.deleted,
         counts.unchanged,
         (select count(*) from payload_writes) as "payloadWrites",
+        (select count(*) from cleared_recoverable_deletions) as "clearedRecoverableDeletions",
         (select count(*) from retained_deletions) as "retainedDeletions",
         (select count(*) from invalidated_edges) as "invalidatedEdges",
         (select count(*) from run_write) as "runWrites"
@@ -456,6 +464,7 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
 
   /** Updates safe health state only and never modifies the encrypted cursor or its version. */
   async recordFailure(record: SyncFailureRecord): Promise<void> {
+    if (record.expectedCheckpointVersion === undefined) return;
     await this.database.execute(sql`
       update sync_checkpoints
       set
@@ -465,6 +474,7 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
       where owner_id = ${record.ownerId}
         and provider = ${PROVIDER}
         and provider_calendar_id = ${record.calendarId}
+        and version = ${record.expectedCheckpointVersion}
     `);
   }
 }

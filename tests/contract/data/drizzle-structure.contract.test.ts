@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -50,6 +50,14 @@ describe("Drizzle schema structure", () => {
     assertSchemaMatchesManifest(actual, phaseBSchemaManifest);
   });
 
+  it("keeps generated Drizzle SQL non-deployable", () => {
+    const generatedFiles = readdirSync(
+      resolve(process.cwd(), "migrations/generated"),
+    );
+    expect(generatedFiles.filter((name) => name.endsWith(".sql"))).toEqual([]);
+    expect(generatedFiles.some((name) => name.endsWith(".sql.draft"))).toBe(true);
+  });
+
   it("rejects a same-name check whose SQL expression is weakened", () => {
     const weakened = structuredClone(
       extractDrizzleTablesManifest(drizzleTables),
@@ -74,6 +82,36 @@ describe("Drizzle schema structure", () => {
     );
     expect(foreignKey).toBeDefined();
     foreignKey![3] = ["owner_id", "id"];
+
+    expect(() =>
+      assertSchemaMatchesManifest(weakened, phaseBSchemaManifest),
+    ).toThrow();
+  });
+
+  it("rejects a foreign key whose delete action is weakened", () => {
+    const weakened = structuredClone(
+      extractDrizzleTablesManifest(drizzleTables),
+    );
+    const foreignKey = weakened.event_sync_payloads.foreignKeys.find(
+      ([name]) => name === "event_sync_payloads_event_owner_fk",
+    );
+    expect(foreignKey).toBeDefined();
+    foreignKey![5] = "no action";
+
+    expect(() =>
+      assertSchemaMatchesManifest(weakened, phaseBSchemaManifest),
+    ).toThrow();
+  });
+
+  it("rejects a sync-run index whose completion ordering is weakened", () => {
+    const weakened = structuredClone(
+      extractDrizzleTablesManifest(drizzleTables),
+    );
+    const index = weakened.sync_runs.indexes.find(
+      ([name]) => name === "sync_runs_owner_calendar_completed_idx",
+    );
+    expect(index).toBeDefined();
+    index![3][3]![1] = "asc";
 
     expect(() =>
       assertSchemaMatchesManifest(weakened, phaseBSchemaManifest),

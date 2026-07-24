@@ -39,7 +39,9 @@ afterEach(async () => {
   await pglite.close();
 });
 
-function upsert(version = "00000000000000000001"): ProviderEventChange {
+function upsert(
+  version = "00000000000000000001",
+): Extract<ProviderEventChange, { type: "upsert" }> {
   return {
     type: "upsert",
     identity: {
@@ -273,8 +275,9 @@ describe("encrypted atomic synchronization repository", () => {
       lifecycle: string;
       status: string;
       protected_payload_envelope: Uint8Array;
+      node_id: string;
     }>(
-      `select node.domain, node.domain_state, node.lifecycle, event.status,
+      `select node.domain, node.domain_state, node.lifecycle, event.status, event.node_id,
               payload.protected_payload_envelope
        from nodes node
        join events event on event.node_id = node.id
@@ -288,5 +291,78 @@ describe("encrypted atomic synchronization repository", () => {
     });
     expect(deleted.rows[0]!.protected_payload_envelope).toBeInstanceOf(Uint8Array);
     expect((await pglite.query(`select * from recoverable_deletions`)).rows).toHaveLength(1);
+
+    await expect(
+      run(
+        client({
+          changes: [upsert("00000000000000000003")],
+          calendarTimeZone: "America/Chicago",
+          nextSyncToken: "sync-token-4",
+        }),
+        syncRepository,
+        "job-reactivate",
+      ),
+    ).resolves.toMatchObject({ checkpointVersion: 4, upserted: 1 });
+    const reactivated = await pglite.query<{
+      domain: string;
+      domain_state: string;
+      privacy: string;
+      lifecycle: string;
+      status: string;
+      node_id: string;
+    }>(
+      `select node.domain, node.domain_state, node.privacy, node.lifecycle,
+              event.status, event.node_id
+       from nodes node join events event on event.node_id = node.id`,
+    );
+    expect(reactivated.rows[0]).toMatchObject({
+      domain: "work",
+      domain_state: "confirmed",
+      privacy: "private",
+      lifecycle: "active",
+      status: "confirmed",
+      node_id: deleted.rows[0]!.node_id,
+    });
+    expect((await pglite.query(`select * from recoverable_deletions`)).rows).toHaveLength(0);
+  });
+
+  it("does not let a stale failure generation overwrite a newer connected checkpoint", async () => {
+    const syncRepository = await repository();
+    await run(
+      client({
+        changes: [upsert()],
+        calendarTimeZone: "America/Chicago",
+        nextSyncToken: "sync-token-1",
+      }),
+      syncRepository,
+      "job-generation-1",
+    );
+    await run(
+      client({
+        changes: [],
+        calendarTimeZone: "America/Chicago",
+        nextSyncToken: "sync-token-2",
+      }),
+      syncRepository,
+      "job-generation-2",
+    );
+
+    await syncRepository.recordFailure({
+      ownerId,
+      calendarId,
+      category: "authorization",
+      state: "disconnected",
+      occurredAt: "2026-07-24T16:00:00.000Z",
+      jobId: "stale-generation-1",
+      expectedCheckpointVersion: 1,
+    });
+    const checkpoint = await pglite.query<{
+      version: number;
+      status: string;
+      last_error_category: string | null;
+    }>(`select version, status, last_error_category from sync_checkpoints`);
+    expect(checkpoint.rows).toEqual([
+      { version: 2, status: "connected", last_error_category: null },
+    ]);
   });
 });

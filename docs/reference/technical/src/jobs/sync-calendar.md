@@ -20,6 +20,15 @@ Loads the committed checkpoint, retrieves all pages, stages changes, constructs 
 Builds a collision-free JSON tuple key from stable provider identity. Exact duplicates collapse; distinct duplicates
 raise a schema failure before persistence.
 
+## `validateProtectedPayloadSizes`
+
+Measures each serialized encryption input—title, description, attendees, location, meeting link, and complete protected
+payload—against the shared 64 KiB plaintext envelope limit before any repository call.
+
+## `utf8ByteLength`
+
+Uses `TextEncoder` so multibyte content is bounded by actual UTF-8 allocation rather than UTF-16 code units.
+
 ## `canonicalJson`
 
 Recursively sorts object keys while preserving array order to compare closed provider-change values deterministically.

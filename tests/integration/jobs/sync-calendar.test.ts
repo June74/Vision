@@ -17,7 +17,10 @@ const ownerId = "owner-1";
 const calendarId = "calendar-1";
 const fixedNow = new Date("2026-07-24T15:00:00.000Z");
 
-function upsert(id: string, version: string): ProviderEventChange {
+function upsert(
+  id: string,
+  version: string,
+): Extract<ProviderEventChange, { type: "upsert" }> {
   return {
     type: "upsert",
     identity: {
@@ -60,9 +63,11 @@ class MemorySyncRepository implements SyncRepository {
   projection = new Map<string, ProviderEventChange>();
   failures: SyncFailureRecord[] = [];
   failApply = false;
+  failLoad = false;
   applyCalls = 0;
 
   async loadCheckpoint(): Promise<SyncCheckpoint | undefined> {
+    if (this.failLoad) throw new Error("database unavailable");
     return this.checkpoint ? structuredClone(this.checkpoint) : undefined;
   }
 
@@ -407,5 +412,117 @@ describe("transactional incremental calendar synchronization", () => {
       state: "retry_scheduled",
       retry: true,
     });
+    expect(repository.failures.at(-1)?.expectedCheckpointVersion).toBe(1);
+  });
+
+  it("classifies checkpoint read failures as database without mutating an unobserved generation", async () => {
+    const repository = new MemorySyncRepository();
+    repository.failLoad = true;
+
+    await expect(
+      run(pageClient([]), repository),
+    ).rejects.toMatchObject({
+      category: "database",
+      state: "retry_scheduled",
+      retry: true,
+    });
+    expect(repository.applyCalls).toBe(0);
+    expect(repository.checkpoint).toBeUndefined();
+    expect(repository.failures).toEqual([
+      expect.objectContaining({
+        category: "database",
+        expectedCheckpointVersion: undefined,
+      }),
+    ]);
+  });
+
+  it("rejects oversized protected fields and complete payloads without apply or retry", async () => {
+    const cases: ProviderEventChange[] = [
+      {
+        ...upsert("oversized-attendees", "00000000000000000001"),
+        protected: {
+          ...upsert("oversized-attendees", "00000000000000000001").protected,
+          attendees: [
+            `a:${"x".repeat(22_000)}`,
+            `b:${"x".repeat(22_000)}`,
+            `c:${"x".repeat(22_000)}`,
+          ],
+        },
+      } as ProviderEventChange,
+      {
+        ...upsert("oversized-payload", "00000000000000000001"),
+        protected: {
+          title: "x".repeat(20_000),
+          description: "y".repeat(20_000),
+          attendees: [],
+          location: null,
+          meetingLinks: [],
+          attachmentReferences: Array.from({ length: 20 }, (_, index) => ({
+            id: `${index}:${"z".repeat(2_000)}`,
+            mimeType: "text/plain",
+            url: null,
+          })),
+        },
+      } as ProviderEventChange,
+    ];
+
+    for (const change of cases) {
+      const repository = new MemorySyncRepository();
+      const error = await run(
+        pageClient([
+          {
+            changes: [change],
+            calendarTimeZone: "America/Chicago",
+            nextSyncToken: "new",
+          },
+        ]),
+        repository,
+      ).catch((failure: unknown) => failure);
+      expect(error).toMatchObject({
+        category: "payload_too_large",
+        state: "action_required",
+        retry: false,
+      });
+      expect(repository.applyCalls).toBe(0);
+      expect(repository.checkpoint).toBeUndefined();
+      expect(JSON.stringify(repository.failures)).not.toContain("x".repeat(100));
+      expect(repository.failures.at(-1)?.expectedCheckpointVersion).toBe(0);
+    }
+  });
+
+  it("bounds aggregate multi-page staging memory with headroom below the Worker limit", async () => {
+    const repository = new MemorySyncRepository();
+    const changes = Array.from({ length: 800 }, (_, index) => ({
+      ...upsert(`large-${index}`, "00000000000000000001"),
+      protected: {
+        ...upsert(`large-${index}`, "00000000000000000001").protected,
+        description: `sentinel-${index}:${"x".repeat(6_000)}`,
+      },
+    })) as ProviderEventChange[];
+
+    const error = await run(
+      pageClient([
+        {
+          changes: changes.slice(0, 400),
+          calendarTimeZone: "America/Chicago",
+          nextPageToken: "p2",
+        },
+        {
+          changes: changes.slice(400),
+          calendarTimeZone: "America/Chicago",
+          nextSyncToken: "new",
+        },
+      ]),
+      repository,
+    ).catch((failure: unknown) => failure);
+
+    expect(error).toMatchObject({
+      category: "payload_too_large",
+      state: "action_required",
+      retry: false,
+    });
+    expect(repository.applyCalls).toBe(0);
+    expect(repository.checkpoint).toBeUndefined();
+    expect(JSON.stringify(repository.failures)).not.toContain("sentinel-");
   });
 });

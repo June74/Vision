@@ -87,7 +87,6 @@ describe("Google events.list incremental synchronization contract", () => {
   it("classifies authorization, transient, expired-token, and permanent provider failures safely", async () => {
     for (const [status, category] of [
       [401, "authorization"],
-      [403, "authorization"],
       [410, "sync_token_invalid"],
       [429, "transient"],
       [500, "transient"],
@@ -110,6 +109,68 @@ describe("Google events.list incremental synchronization contract", () => {
       expect(String(failure)).not.toContain(accessToken);
       expect(String(failure)).not.toContain("old-sync");
     }
+  });
+
+  it("classifies bounded Google 403 reasons without treating rate limits as revoked access", async () => {
+    for (const [reason, category] of [
+      ["rateLimitExceeded", "transient"],
+      ["userRateLimitExceeded", "transient"],
+      ["insufficientPermissions", "authorization"],
+      ["forbidden", "authorization"],
+      ["quotaExceeded", "quota"],
+      ["unknownReason", "provider"],
+    ] as const) {
+      const client = createGoogleEventSyncClient({
+        accessToken,
+        fetcher: vi.fn<typeof fetch>().mockResolvedValue(
+          response({
+            error: {
+              errors: [{ domain: "usageLimits", reason, message: "must not escape" }],
+              code: 403,
+              message: "must not escape",
+            },
+          }, 403),
+        ),
+      });
+      const failure = await client
+        .listChanges({ calendarId, syncToken: "old-sync" })
+        .catch((error: unknown) => error);
+      expect(failure).toMatchObject({ category, status: 403 });
+      expect(String(failure)).not.toContain("must not escape");
+      expect(String(failure)).not.toContain(reason);
+    }
+  });
+
+  it("treats oversized or malformed 403 bodies as a safe permanent provider failure", async () => {
+    for (const body of [
+      "x".repeat(9 * 1024),
+      JSON.stringify({ error: { errors: "invalid" } }),
+    ]) {
+      const client = createGoogleEventSyncClient({
+        accessToken,
+        fetcher: vi.fn<typeof fetch>().mockResolvedValue(
+          new Response(body, { status: 403 }),
+        ),
+      });
+      await expect(client.listChanges({ calendarId })).rejects.toMatchObject({
+        category: "provider",
+        status: 403,
+      });
+    }
+  });
+
+  it("rejects an oversized successful provider page before mapping it", async () => {
+    const client = createGoogleEventSyncClient({
+      accessToken,
+      fetcher: vi.fn<typeof fetch>().mockResolvedValue(
+        new Response("x".repeat(8 * 1024 * 1024 + 1), { status: 200 }),
+      ),
+    });
+
+    await expect(client.listChanges({ calendarId })).rejects.toMatchObject({
+      category: "payload_too_large",
+      status: 200,
+    });
   });
 
   it("rejects malformed pages and a nonterminal sync token as schema failures", async () => {
