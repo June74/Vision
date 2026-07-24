@@ -215,3 +215,24 @@ test("uses safe action-required copy after a provider failure", async ({ page })
   await expect(page.getByText("Review your Vision calendars, then try again.")).toBeVisible();
   await expect(page.getByText(/provider stack trace/i)).toHaveCount(0);
 });
+
+test("clears a definite failure before fresh calendar discovery", async ({ page }) => {
+  await mockSession(page, 200, authenticatedSession);
+  let current = setupSnapshot({ status: "awaiting_confirmation" });
+  await page.route("**/api/setup/calendar", (route) => route.fulfill({ body: JSON.stringify(current), contentType: "application/json" }));
+  await page.route("**/api/setup/calendar/confirm-create", (route) => {
+    current = setupSnapshot({ retryable: false, status: "failed" });
+    return route.fulfill({ body: JSON.stringify(current), contentType: "application/json", status: 409 });
+  });
+  await page.route("**/api/setup/calendar/discover", (route) => {
+    current = setupSnapshot({ setupVersion: 3, status: "awaiting_confirmation" });
+    return route.fulfill({ body: JSON.stringify(current), contentType: "application/json" });
+  });
+  await page.goto("/");
+  await page.getByLabel("Type CREATE VISION CALENDAR to confirm").fill("CREATE VISION CALENDAR");
+  await page.getByRole("button", { name: "Create Vision calendar" }).click();
+  await page.getByRole("button", { name: "Start setup again" }).click();
+  await expect(page.getByRole("button", { name: "Create Vision calendar" })).toBeDisabled();
+  await page.getByLabel("Type CREATE VISION CALENDAR to confirm").fill("CREATE VISION CALENDAR");
+  await expect(page.getByRole("button", { name: "Create Vision calendar" })).toBeEnabled();
+});
