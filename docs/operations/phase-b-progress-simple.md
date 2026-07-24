@@ -198,6 +198,15 @@ PGlite setup-hook timeouts; no Task 4 browser failure was observed.
 Task 5 covers manual Google/Neon/Cloudflare acceptance checks, then Phase B
 continues with Google calendar read synchronization.
 
+### Authentication Task 5 - Acceptance preparation
+
+The repeatable OAuth and disposable-calendar acceptance procedure is now
+documented, with redacted evidence fields and preview workflow guards. No
+external account, database, Worker, or secret was changed.
+
+The focused workflow policy test passed 2/2 and documentation coverage passed.
+The real acceptance run is paused until you approve the named external setup.
+
 ## Not yet included
 
 No Google login, calendar connection, database, AI, alerts, or production deployment exists yet.
