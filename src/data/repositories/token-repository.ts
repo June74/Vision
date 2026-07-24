@@ -557,7 +557,9 @@ function readDate(value: unknown): Date {
   }
   if (
     typeof value !== "string" ||
-    !/(?:z|[+-]\d{2}:\d{2})$/iu.test(value)
+    // Postgres/Neon's default text output omits the offset minutes when they
+    // are zero (e.g. "+00" for UTC, not "+00:00"), so the minutes are optional.
+    !isDatabaseTimestampText(value)
   ) {
     throw new Error("Invalid Google token database row.");
   }
@@ -566,6 +568,49 @@ function readDate(value: unknown): Date {
     throw new Error("Invalid Google token database row.");
   }
   return parsed;
+}
+
+/** Rejects timestamp component rollover before JavaScript date parsing can normalize it. */
+function isDatabaseTimestampText(value: string): boolean {
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.\d{1,6})?(?:z|[+-](\d{2})(?::?(\d{2}))?)$/iu.exec(
+      value,
+    );
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  const offsetHour = match[7] === undefined ? 0 : Number(match[7]);
+  const offsetMinute = match[8] === undefined ? 0 : Number(match[8]);
+  const leapYear =
+    year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [
+    0,
+    31,
+    leapYear ? 29 : 28,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
+  ][month] ?? 0;
+  return (
+    day >= 1 &&
+    day <= daysInMonth &&
+    hour <= 23 &&
+    minute <= 59 &&
+    second <= 59 &&
+    offsetHour <= 23 &&
+    offsetMinute <= 59
+  );
 }
 
 /** Strictly decodes one wrapped per-owner/domain data-key ciphertext row. */

@@ -130,6 +130,10 @@ Requires exactly 43 canonical base64url characters for the SHA-256 equality mark
 
 Accepts a valid Date or explicitly timezone-aware timestamp string.
 
+## `isDatabaseTimestampText`
+
+Requires a complete timestamp, a valid Gregorian date and clock time, and a bounded explicit UTC offset before parsing.
+
 ## `decodeWrappedKeyRow`
 
 Reconstructs the fixed A256GCM version-1 wrapped-key record and validates its domain and metadata bounds.

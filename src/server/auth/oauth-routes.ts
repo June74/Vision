@@ -411,8 +411,8 @@ export async function createProductionAuthDependencies(
         clientSecret: authEnvironment.GOOGLE_CLIENT_SECRET,
         redirectUri: authEnvironment.GOOGLE_REDIRECT_URI,
       },
-      fetch,
-      new GoogleJwksIdTokenVerifier(fetch),
+      fetch.bind(globalThis),
+      new GoogleJwksIdTokenVerifier(fetch.bind(globalThis)),
     ),
     ownerId,
     randomToken: createRandomProtocolValue,
@@ -575,13 +575,21 @@ function snapshotSignedClaims(
   }
 }
 
+/** Baseline identity scopes Google grants alongside "openid"/"email" that carry no calendar or profile-write access; safe to ignore rather than require or reject. */
+const BENIGN_IDENTITY_SCOPES = new Set([
+  "profile",
+  "https://www.googleapis.com/auth/userinfo.profile",
+]);
+
 /** Requires every V1 scope and rejects previously granted broad or event-write scopes. */
 function validateGrantedScopes(scopes: readonly string[]): void {
-  const normalized = scopes.map((scope) =>
-    scope === "https://www.googleapis.com/auth/userinfo.email"
-      ? "email"
-      : scope,
-  );
+  const normalized = scopes
+    .map((scope) =>
+      scope === "https://www.googleapis.com/auth/userinfo.email"
+        ? "email"
+        : scope,
+    )
+    .filter((scope) => !BENIGN_IDENTITY_SCOPES.has(scope));
   const granted = new Set(normalized);
   if (
     GOOGLE_OAUTH_SCOPES.some((scope) => !granted.has(scope)) ||

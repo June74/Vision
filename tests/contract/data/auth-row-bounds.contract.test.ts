@@ -2,6 +2,7 @@ import type { SQL } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { MAX_SERIALIZED_CIPHER_ENVELOPE_CHARS } from "../../../src/crypto/envelope";
 import type { VisionDatabase } from "../../../src/data/db";
+import { DrizzleCalendarStore } from "../../../src/data/repositories/calendar-repository";
 import { DrizzleSessionStore } from "../../../src/data/repositories/session-repository";
 import { DrizzleTokenStore } from "../../../src/data/repositories/token-repository";
 import { GOOGLE_OAUTH_SCOPES } from "../../../src/integrations/google/oauth-client";
@@ -41,6 +42,113 @@ function transactionRow(bytes: unknown): Record<string, unknown> {
 }
 
 describe("auth raw-row binary bounds", () => {
+  it("accepts Neon's short UTC offset in Google token timestamps", async () => {
+    const row = tokenRow(new Uint8Array([1]));
+    row.accessExpiresAt = "2026-07-23 12:10:00+00";
+    row.updatedAt = "2026-07-23 12:00:00+00";
+
+    await expect(
+      new DrizzleTokenStore(databaseReturning(row)).find(
+        "usr_private_pilot",
+        "google-subject",
+      ),
+    ).resolves.toMatchObject({
+      accessExpiresAt: new Date("2026-07-23T12:10:00.000Z"),
+      updatedAt: new Date("2026-07-23T12:00:00.000Z"),
+    });
+  });
+
+  it("accepts Neon's short UTC offset in connected-calendar timestamps", async () => {
+    const resultSets = [
+      [
+        {
+          ownerId: "usr_private_pilot",
+          googleSubject: "google-subject",
+          setupVersion: "4",
+          status: "connected",
+          actionRequired: false,
+        },
+      ],
+      [],
+      [
+        {
+          calendarId: "calendar-id",
+          connectionKind: "created",
+          timeZone: "America/Chicago",
+          providerEtag: "provider-etag",
+          verifiedAt: "2026-07-23 12:00:00+00",
+        },
+      ],
+    ];
+    const database = {
+      execute: async (_statement: SQL) => ({ rows: resultSets.shift() ?? [] }),
+    } as unknown as VisionDatabase;
+
+    await expect(
+      new DrizzleCalendarStore(database).readSnapshot(
+        "usr_private_pilot",
+        "google-subject",
+      ),
+    ).resolves.toMatchObject({
+      connection: {
+        verifiedAt: new Date("2026-07-23T12:00:00.000Z"),
+      },
+    });
+  });
+
+  it("still rejects malformed or timezone-free token and calendar timestamps", async () => {
+    for (const invalid of [
+      "2026-07-23",
+      "2026-07-23 12:00:00",
+      "not-a-date+00",
+      "2026-99-99 99:99:99+00",
+      "2026-02-30 12:00:00+00",
+      "2026-07-23 24:00:00+00",
+    ]) {
+      const token = tokenRow(new Uint8Array([1]));
+      token.accessExpiresAt = invalid;
+      await expect(
+        new DrizzleTokenStore(databaseReturning(token)).find(
+          "usr_private_pilot",
+          "google-subject",
+        ),
+      ).rejects.toThrow("Invalid Google token database row.");
+
+      const resultSets = [
+        [
+          {
+            ownerId: "usr_private_pilot",
+            googleSubject: "google-subject",
+            setupVersion: "4",
+            status: "connected",
+            actionRequired: false,
+          },
+        ],
+        [],
+        [
+          {
+            calendarId: "calendar-id",
+            connectionKind: "created",
+            timeZone: "America/Chicago",
+            providerEtag: "provider-etag",
+            verifiedAt: invalid,
+          },
+        ],
+      ];
+      const database = {
+        execute: async (_statement: SQL) => ({
+          rows: resultSets.shift() ?? [],
+        }),
+      } as unknown as VisionDatabase;
+      await expect(
+        new DrizzleCalendarStore(database).readSnapshot(
+          "usr_private_pilot",
+          "google-subject",
+        ),
+      ).rejects.toThrow("CALENDAR_PERSISTENCE_FAILED");
+    }
+  });
+
   it("applies one exact nonzero maximum to decoded and encoded token envelopes", async () => {
     const exact = new Uint8Array(MAX_SERIALIZED_CIPHER_ENVELOPE_CHARS);
     const decoded = await new DrizzleTokenStore(

@@ -348,7 +348,7 @@ export async function createProductionCalendarSetupDependencies(
     tokens: auth.tokens,
     /** Creates the narrow account-bound provider adapter after token/session validation. */
     createCalendarClient: (accessToken, googleSubject) =>
-      new CalendarClient(accessToken, googleSubject, fetch),
+      new CalendarClient(accessToken, googleSubject, fetch.bind(globalThis)),
     /** Creates an owner- and subject-bound setup repository for the authenticated request. */
     createRepository: (ownerId, googleSubject) =>
       new CalendarRepository(store, ownerId, googleSubject),

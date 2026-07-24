@@ -183,3 +183,15 @@ Codex's restricted sandbox blocks Wrangler's normal AppData cache/log paths. The
 - Event boundary: no event insert/update/delete API or provider method is reachable.
 - Carried Minor: a takeover CAS loser may return a transient generic error instead of reloading the concurrent durable winner; no duplicate creation is possible.
 - External state: no live Google, Neon, or Cloudflare execution was performed.
+
+## Authentication preview remediation - 2026-07-24
+
+- Status: the approved-account authentication and calendar-setup happy path passes in the deployed preview; the complete Plan 3 milestone remains in progress.
+- Root causes covered by the saved fix: Google returns benign baseline `profile` identity scopes alongside the requested grant; Neon returns UTC `timestamptz` text ending in `+00`; Cloudflare provider adapters require the runtime's global `fetch` to retain its receiver; timestamp validation must reject component rollover before JavaScript can normalize it.
+- RED evidence: six focused regressions failed against pre-fix commit `7f57430` for profile-scope acceptance, Google-token `+00` timestamps, connected-calendar `+00` timestamps, OAuth token-exchange fetch binding, JWKS fetch binding, and Calendar API fetch binding. The first strict timestamp test also caught the intermediate date-only `-23` suffix ambiguity before commit.
+- GREEN evidence: the focused compatibility and strictness suite passed 21/21 against the saved fix. The fresh full verification passed 196 unit/integration tests, 44 contract tests, 32 Worker tests, and 10 Chromium setup flows, plus strict type checks, documentation validation, the production build, and the production crypto-boundary validator.
+- CI regression gate: `pnpm check` now includes the contract project; previously the standard check omitted the project containing the Google/Neon compatibility regressions.
+- Hosted evidence: a fresh approved-account Google sign-in reached `Connected` at setup version 4, verified a new secondary Vision calendar with zero events, and remained connected after a full reload.
+- Privacy evidence: no callback URL, authorization code, token, database URL, key, full calendar ID, account identifier, or OAuth secret was recorded.
+- Deployment-attribution note: the live client asset names match the local production build, but the server deployment was made from uncommitted working-tree changes. Commit and deployment identity must be reconciled before this milestone can be treated as immutable release evidence.
+- Remaining Plan 3 evidence: wrong-account denial, exact-confirmation enforcement, raw encrypted-token inspection, logout/revocation behavior, disposable-calendar cleanup, and a reviewed commit whose local, remote, and deployed identities are attributable.

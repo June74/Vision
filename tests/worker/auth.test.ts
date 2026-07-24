@@ -224,20 +224,23 @@ async function createHarness(options: {
       },
     ),
   };
+  const tokenResponseBody = options.tokenResponse ?? {
+    access_token: "ACCESS_TOKEN_SENTINEL",
+    expires_in: 3_600,
+    id_token: "SIGNED_ID_TOKEN_SENTINEL",
+    refresh_token: "REFRESH_TOKEN_SENTINEL",
+    scope: GOOGLE_OAUTH_SCOPES.join(" "),
+    token_type: "Bearer",
+  };
+  const simulatesProviderRejection =
+    typeof tokenResponseBody === "object" &&
+    tokenResponseBody !== null &&
+    "error" in tokenResponseBody;
   const fetcher = vi.fn().mockResolvedValue(
-    new Response(
-      JSON.stringify(
-        options.tokenResponse ?? {
-          access_token: "ACCESS_TOKEN_SENTINEL",
-          expires_in: 3_600,
-          id_token: "SIGNED_ID_TOKEN_SENTINEL",
-          refresh_token: "REFRESH_TOKEN_SENTINEL",
-          scope: GOOGLE_OAUTH_SCOPES.join(" "),
-          token_type: "Bearer",
-        },
-      ),
-      { status: 200, headers: { "content-type": "application/json" } },
-    ),
+    new Response(JSON.stringify(tokenResponseBody), {
+      status: simulatesProviderRejection ? 400 : 200,
+      headers: { "content-type": "application/json" },
+    }),
   );
   const oauthClient = new GoogleOAuthClient(
     {
@@ -460,6 +463,41 @@ describe("Vision Worker Google authentication", () => {
       expect(persistedText).not.toContain(secret);
       expect(JSON.stringify(logger.mock.calls)).not.toContain(secret);
     }
+  });
+
+  it("accepts Google's benign profile identity scopes", async () => {
+    const grantedScopes = [
+      ...GOOGLE_OAUTH_SCOPES,
+      "profile",
+      "https://www.googleapis.com/auth/userinfo.profile",
+    ];
+    const { app, sessionStore, tokenStore } = await createHarness({
+      tokenResponse: {
+        access_token: "ACCESS_TOKEN_SENTINEL",
+        expires_in: 3_600,
+        id_token: "SIGNED_ID_TOKEN_SENTINEL",
+        refresh_token: "REFRESH_TOKEN_SENTINEL",
+        scope: grantedScopes.join(" "),
+        token_type: "Bearer",
+      },
+    });
+    await app.fetch(
+      new Request("https://vision.example.test/api/auth/google/start"),
+      {} as Env,
+    );
+
+    const callback = await app.fetch(
+      new Request(
+        `https://vision.example.test/api/auth/google/callback?code=authorization-code&state=${state}`,
+      ),
+      {} as Env,
+    );
+
+    expect(callback.status).toBe(302);
+    expect(callback.headers.get("location")).toBe("/");
+    expect(sessionStore.sessionRows).toHaveLength(1);
+    expect(tokenStore.rows).toHaveLength(1);
+    expect(tokenStore.rows[0]?.grantedScopes).toBe(grantedScopes.join(" "));
   });
 
   it("requires the server-bound CSRF token for logout, then revokes the session and clears its cookie", async () => {

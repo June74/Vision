@@ -94,6 +94,10 @@ Reads the canonical refresh-token equality marker.
 
 Reads a timezone-aware timestamp.
 
+## `isDatabaseTimestampText`
+
+Checks every timestamp component before JavaScript can normalize an invalid date.
+
 ## `decodeWrappedKeyRow`
 
 Strictly reads one wrapped data-key row.

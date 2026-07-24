@@ -56,6 +56,8 @@ Never coerces database rows.
 Never applies truthy coercion.
 ## `readDate`
 Allows Date or explicit offset strings.
+## `isDatabaseTimestampText`
+Requires a complete timestamp, a valid Gregorian date and clock time, and a bounded explicit UTC offset before parsing.
 ## `staleVersion`
 Returns `STALE_SETUP_VERSION`.
 ## `invalidEvidence`

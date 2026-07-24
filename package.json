@@ -10,10 +10,11 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
     "test:unit": "vitest run --project unit",
+    "test:contract": "vitest run --project contract",
     "test:worker": "vitest run --project worker",
     "test:e2e": "playwright test",
     "docs:check": "tsx scripts/validate-doc-coverage.ts",
-    "check": "pnpm typecheck && pnpm test:unit && pnpm test:worker && pnpm docs:check && pnpm build",
+    "check": "pnpm typecheck && pnpm test:unit && pnpm test:contract && pnpm test:worker && pnpm docs:check && pnpm build",
     "ci": "pnpm check && pnpm test:e2e"
   },
   "keywords": [],

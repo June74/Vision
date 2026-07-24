@@ -56,6 +56,8 @@ Reads bounded database text.
 Reads exact booleans.
 ## `readDate`
 Reads timezone-aware timestamps.
+## `isDatabaseTimestampText`
+Checks every timestamp component before JavaScript can normalize an invalid date.
 ## `staleVersion`
 Creates the safe version conflict.
 ## `invalidEvidence`
