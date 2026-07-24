@@ -56,3 +56,7 @@ The function calls `logEvent` with constant action/outcome and a safe category, 
 **Signature:** `createApp(dependencies?: AppDependencies): Hono`
 
 The factory installs request context first, then registers health, authentication, unknown API, and static-asset routes. Its `onError` handler maps expected and unexpected values through `toVisionErrorResponse`, attempts to log `{ requestId, action: "api.request", outcome: "failed", errorCategory }`, and returns the safe body even when the sink throws.
+
+## `fetch`
+
+The default `ExportedHandler` delegates HTTP requests to `app.fetch` and exposes the same module's queue consumer without changing the testable `createApp` surface.

@@ -15,6 +15,13 @@ import {
   registerCalendarSetupRoutes,
   type CalendarSetupRouteDependencies,
 } from "./server/api/calendar-setup-routes";
+import {
+  createProductionGoogleCalendarWebhookDependencies,
+  registerGoogleCalendarWebhook,
+  type GoogleCalendarWebhookDependencies,
+} from "./server/webhooks/google-calendar";
+import { consumer } from "./jobs/queue-consumer";
+import type { CalendarSyncMessage } from "./jobs/queue-message";
 
 /** Supplies replaceable runtime boundaries for deterministic, side-effect-free application tests. */
 export interface AppDependencies {
@@ -22,6 +29,7 @@ export interface AppDependencies {
   createRequestId?: RequestIdFactory;
   auth?: AuthRouteDependencies;
   calendarSetup?: CalendarSetupRouteDependencies;
+  googleCalendarWebhook?: GoogleCalendarWebhookDependencies;
 }
 
 /** Writes only a previously validated, structured event to the Worker console. */
@@ -62,6 +70,11 @@ export function createApp(dependencies: AppDependencies = {}) {
       ((environment) =>
         createProductionCalendarSetupDependencies(environment, logger)),
   );
+  registerGoogleCalendarWebhook(
+    app,
+    dependencies.googleCalendarWebhook ??
+      createProductionGoogleCalendarWebhookDependencies,
+  );
   app.all("/api/*", () => {
     throwVisionError(new VisionError("NOT_FOUND", 404, "API route not found."));
   });
@@ -81,4 +94,12 @@ export function createApp(dependencies: AppDependencies = {}) {
 
 const app = createApp();
 
-export default app;
+/** Exposes Hono fetch handling and the same idempotent queue consumer from one Worker. */
+const worker: ExportedHandler<Env, CalendarSyncMessage> = {
+  /** Delegates HTTP requests to the fully registered Hono application. */
+  fetch: (request, environment, context) =>
+    app.fetch(request, environment, context),
+  queue: consumer,
+};
+
+export default worker;

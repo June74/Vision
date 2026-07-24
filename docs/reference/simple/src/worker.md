@@ -17,3 +17,7 @@ The Vision Worker answers `GET /api/health` with `{ "status": "ok", "service": "
 ## `createApp`
 
 `createApp` creates the Worker app and its privacy-safe error handling.
+
+## `fetch`
+
+Delegates HTTP requests to the registered Hono application.

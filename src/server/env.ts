@@ -129,4 +129,5 @@ export type RuntimeEnv = z.infer<typeof RuntimeEnvSchema>;
 /** Defines every Worker binding used by the initial Vision runtime. */
 export interface Env extends RuntimeEnv {
   ASSETS: Fetcher;
+  CALENDAR_SYNC_QUEUE?: Queue<import("../jobs/queue-message").CalendarSyncMessage>;
 }

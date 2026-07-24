@@ -10,8 +10,32 @@ describe("Cloudflare asset routing", () => {
       assets?: {
         run_worker_first?: string[];
       };
+      queues?: {
+        producers?: Array<{ binding?: string; queue?: string }>;
+        consumers?: Array<{
+          queue?: string;
+          max_retries?: number;
+          max_concurrency?: number;
+        }>;
+      };
     };
 
-    expect(config.assets?.run_worker_first).toEqual(["/api/*"]);
+    expect(config.assets?.run_worker_first).toEqual([
+      "/api/*",
+      "/webhooks/google/calendar",
+    ]);
+    expect(config.queues?.producers).toEqual([
+      {
+        binding: "CALENDAR_SYNC_QUEUE",
+        queue: "vision-calendar-sync",
+      },
+    ]);
+    expect(config.queues?.consumers).toEqual([
+      expect.objectContaining({
+        queue: "vision-calendar-sync",
+        max_retries: 5,
+        max_concurrency: 1,
+      }),
+    ]);
   });
 });

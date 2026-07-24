@@ -185,6 +185,82 @@ describe("Google OAuth adapter", () => {
     });
   });
 
+  it("refreshes an expired access token without exposing the retained refresh token", async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          access_token: "REFRESHED_ACCESS_TOKEN_SENTINEL",
+          expires_in: 3600,
+          scope: GOOGLE_OAUTH_SCOPES.join(" "),
+          token_type: "Bearer",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    const client = new GoogleOAuthClient(
+      {
+        clientId: "client-id.apps.googleusercontent.com",
+        clientSecret: "client-secret",
+        redirectUri,
+      },
+      fetcher,
+      verifier,
+    );
+
+    await expect(
+      client.refreshAccessToken("REFRESH_TOKEN_SENTINEL"),
+    ).resolves.toEqual({
+      accessToken: "REFRESHED_ACCESS_TOKEN_SENTINEL",
+      expiresInSeconds: 3600,
+      scopes: GOOGLE_OAUTH_SCOPES,
+      tokenType: "Bearer",
+    });
+    const [url, init] = fetcher.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://oauth2.googleapis.com/token");
+    expect(Object.fromEntries(new URLSearchParams(init.body as string))).toEqual({
+      client_id: "client-id.apps.googleusercontent.com",
+      client_secret: "client-secret",
+      grant_type: "refresh_token",
+      refresh_token: "REFRESH_TOKEN_SENTINEL",
+    });
+  });
+
+  it.each([
+    ["network failure", () => Promise.reject(new Error("offline"))],
+    [
+      "provider retry response",
+      () => Promise.resolve(new Response(null, { status: 503 })),
+    ],
+  ])("classifies refresh %s as transient", async (_name, fetchImplementation) => {
+    const client = new GoogleOAuthClient(
+      {
+        clientId: "client-id.apps.googleusercontent.com",
+        clientSecret: "client-secret",
+        redirectUri,
+      },
+      vi.fn(fetchImplementation) as unknown as typeof fetch,
+      verifier,
+    );
+    await expect(
+      client.refreshAccessToken("REFRESH_TOKEN_SENTINEL"),
+    ).rejects.toMatchObject({ category: "transient" });
+  });
+
+  it("classifies a rejected refresh grant as authorization failure", async () => {
+    const client = new GoogleOAuthClient(
+      {
+        clientId: "client-id.apps.googleusercontent.com",
+        clientSecret: "client-secret",
+        redirectUri,
+      },
+      vi.fn(async () => new Response(null, { status: 400 })) as unknown as typeof fetch,
+      verifier,
+    );
+    await expect(
+      client.refreshAccessToken("REFRESH_TOKEN_SENTINEL"),
+    ).rejects.toMatchObject({ category: "authorization" });
+  });
+
   it("cryptographically verifies an RS256 Google ID token through a bounded JWKS fetch", async () => {
     const pair = (await crypto.subtle.generateKey(
       {

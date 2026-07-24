@@ -22,6 +22,10 @@ Creates an offline authorization-code URL with state, nonce, PKCE S256, and only
 
 Sends the code and server-retained PKCE verifier to Google's token endpoint.
 
+## `refreshAccessToken`
+
+Uses the retained refresh token to obtain a new short-lived access token.
+
 ## `verifyIdToken`
 
 Passes a bounded ID token to the injected cryptographic verifier.

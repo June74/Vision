@@ -1,0 +1,432 @@
+/** Persists verified Google notification jobs and provides atomic at-least-once claims. */
+import { sql } from "drizzle-orm";
+import type { VisionDatabase } from "../db";
+import type { CalendarSyncMessage } from "../../jobs/queue-message";
+import type {
+  SyncCalendarErrorCategory,
+  SyncResult,
+} from "../../jobs/sync-calendar";
+
+/** Queryable, content-free Google channel facts required to authenticate a notification. */
+export interface GoogleWebhookChannel {
+  readonly ownerId: string;
+  readonly calendarId: string;
+  readonly providerChannelId: string;
+  readonly providerResourceId: string;
+  readonly verificationTokenHash: string;
+  readonly expiresAt: Date;
+}
+
+/** Indicates whether a durable webhook job still needs its first queue send. */
+export interface ReserveWebhookJobResult {
+  readonly message: CalendarSyncMessage;
+  readonly shouldEnqueue: boolean;
+}
+
+/** Exact lease returned by one successful durable job claim. */
+export interface ClaimedCalendarJob {
+  readonly message: CalendarSyncMessage;
+  readonly claimId: string;
+  readonly attempt: number;
+}
+
+/** Safe result of attempting to claim an at-least-once queue delivery. */
+export type ClaimCalendarJobResult =
+  | { readonly outcome: "claimed"; readonly job: ClaimedCalendarJob }
+  | { readonly outcome: "duplicate" }
+  | { readonly outcome: "missing" };
+
+/** Persistence surface shared by the webhook and queue consumer. */
+export interface CalendarJobRepository {
+  findGoogleChannel(
+    providerChannelId: string,
+    verificationTokenHash: string,
+  ): Promise<GoogleWebhookChannel | undefined>;
+  reserveWebhookJob(
+    message: CalendarSyncMessage,
+    now?: Date,
+  ): Promise<ReserveWebhookJobResult>;
+  markEnqueued(jobId: string, now?: Date): Promise<void>;
+  claimJob(
+    message: CalendarSyncMessage,
+    deliveryAttempt: number,
+    claimId: string,
+    now: Date,
+  ): Promise<ClaimCalendarJobResult>;
+  completeJob(
+    jobId: string,
+    claimId: string,
+    result: SyncResult,
+    now: Date,
+  ): Promise<boolean>;
+  scheduleRetry(
+    jobId: string,
+    claimId: string,
+    category: SyncCalendarErrorCategory,
+    now: Date,
+  ): Promise<boolean>;
+  failJob(
+    jobId: string,
+    claimId: string,
+    category: SyncCalendarErrorCategory,
+    actionRequired: boolean,
+    now: Date,
+  ): Promise<boolean>;
+}
+
+/** PostgreSQL implementation whose state transitions are guarded by exact claim leases. */
+class DrizzleCalendarJobRepository implements CalendarJobRepository {
+  /** Binds job and channel operations to Vision's authoritative database. */
+  constructor(private readonly database: VisionDatabase) {}
+
+  /** Resolves one Google channel by both its public ID and fixed-size secret-token digest. */
+  async findGoogleChannel(
+    providerChannelId: string,
+    verificationTokenHash: string,
+  ): Promise<GoogleWebhookChannel | undefined> {
+    const result = await this.database.execute<Record<string, unknown>>(sql`
+      select
+        owner_id as "ownerId",
+        provider_calendar_id as "calendarId",
+        provider_channel_id as "providerChannelId",
+        provider_resource_id as "providerResourceId",
+        verification_token_hash as "verificationTokenHash",
+        expires_at as "expiresAt"
+      from sync_channels
+      where provider = 'google-calendar'
+        and provider_channel_id = ${providerChannelId}
+        and verification_token_hash = ${verificationTokenHash}
+      limit 1
+    `);
+    return result.rows[0] ? decodeChannel(result.rows[0]) : undefined;
+  }
+
+  /** Inserts one stable notification job or returns its exact existing winner. */
+  async reserveWebhookJob(
+    message: CalendarSyncMessage,
+    now: Date = new Date(),
+  ): Promise<ReserveWebhookJobResult> {
+    assertDate(now);
+    const inserted = await this.database.execute<Record<string, unknown>>(sql`
+      insert into calendar_sync_jobs (
+        job_id, owner_id, provider, provider_calendar_id, reason,
+        status, attempts, action_required, created_at, updated_at
+      ) values (
+        ${message.jobId}, ${message.ownerId}, 'google-calendar',
+        ${message.calendarId}, ${message.reason}, 'pending_enqueue',
+        0, false, ${now}, ${now}
+      )
+      on conflict (job_id) do nothing
+      returning job_id as "jobId"
+    `);
+    if (inserted.rows[0]) {
+      return { message, shouldEnqueue: true };
+    }
+    const existing = await this.database.execute<Record<string, unknown>>(sql`
+      select
+        job_id as "jobId",
+        owner_id as "ownerId",
+        provider_calendar_id as "calendarId",
+        reason,
+        status
+      from calendar_sync_jobs
+      where job_id = ${message.jobId}
+        and owner_id = ${message.ownerId}
+        and provider = 'google-calendar'
+        and provider_calendar_id = ${message.calendarId}
+        and reason = ${message.reason}
+      limit 1
+    `);
+    if (!existing.rows[0]) throw new Error("Notification job identity conflict.");
+    const winner = decodeMessage(existing.rows[0]);
+    return {
+      message: winner,
+      shouldEnqueue: readText(existing.rows[0].status) === "pending_enqueue",
+    };
+  }
+
+  /** Marks a successfully sent first delivery without disturbing a consumer claim. */
+  async markEnqueued(jobId: string, now: Date = new Date()): Promise<void> {
+    assertDate(now);
+    await this.database.execute(sql`
+      update calendar_sync_jobs
+      set status = 'enqueued', updated_at = ${now}
+      where job_id = ${jobId} and status = 'pending_enqueue'
+    `);
+  }
+
+  /** Claims one exact message, reconciling a prior committed sync before any replay. */
+  async claimJob(
+    message: CalendarSyncMessage,
+    deliveryAttempt: number,
+    claimId: string,
+    now: Date,
+  ): Promise<ClaimCalendarJobResult> {
+    assertAttempt(deliveryAttempt);
+    assertClaimId(claimId);
+    assertDate(now);
+    const result = await this.database.execute<Record<string, unknown>>(sql`
+      with reconciled as (
+        update calendar_sync_jobs as job
+        set
+          status = 'succeeded',
+          completed_at = run.completed_at,
+          checkpoint_version = run.checkpoint_version,
+          page_count = run.page_count,
+          staged_count = run.staged_count,
+          upserted_count = run.upserted_count,
+          deleted_count = run.deleted_count,
+          unchanged_count = run.unchanged_count,
+          claim_id = null,
+          last_error_category = null,
+          action_required = false,
+          updated_at = ${now}
+        from sync_runs as run
+        where job.job_id = ${message.jobId}
+          and run.job_id = job.job_id
+          and job.status not in ('succeeded', 'failed')
+        returning job.job_id
+      ),
+      claimed as (
+        update calendar_sync_jobs as job
+        set
+          status = 'in_progress',
+          attempts = greatest(job.attempts + 1, ${deliveryAttempt}),
+          claim_id = ${claimId},
+          claimed_at = ${now},
+          updated_at = ${now}
+        where job.job_id = ${message.jobId}
+          and job.owner_id = ${message.ownerId}
+          and job.provider = 'google-calendar'
+          and job.provider_calendar_id = ${message.calendarId}
+          and job.reason = ${message.reason}
+          and not exists (select 1 from reconciled)
+          and (
+            job.status in ('pending_enqueue', 'enqueued', 'retry_scheduled')
+            or (
+              job.status = 'in_progress'
+              and job.attempts < ${deliveryAttempt}
+            )
+          )
+        returning job.attempts
+      )
+      select attempts from claimed
+    `);
+    if (result.rows[0]) {
+      return {
+        outcome: "claimed",
+        job: {
+          message,
+          claimId,
+          attempt: readPositiveInteger(result.rows[0].attempts),
+        },
+      };
+    }
+    const existing = await this.database.execute<Record<string, unknown>>(sql`
+      select owner_id as "ownerId", provider_calendar_id as "calendarId", reason
+      from calendar_sync_jobs
+      where job_id = ${message.jobId} and provider = 'google-calendar'
+      limit 1
+    `);
+    if (!existing.rows[0]) return { outcome: "missing" };
+    const winner = decodeMessage({ ...existing.rows[0], jobId: message.jobId });
+    return winner.ownerId === message.ownerId &&
+      winner.calendarId === message.calendarId &&
+      winner.reason === message.reason
+      ? { outcome: "duplicate" }
+      : { outcome: "missing" };
+  }
+
+  /** Completes only the currently leased job and stores content-free sync metrics. */
+  async completeJob(
+    jobId: string,
+    claimId: string,
+    result: SyncResult,
+    now: Date,
+  ): Promise<boolean> {
+    assertClaimId(claimId);
+    assertDate(now);
+    const updated = await this.database.execute<Record<string, unknown>>(sql`
+      update calendar_sync_jobs
+      set
+        status = 'succeeded',
+        checkpoint_version = ${result.checkpointVersion},
+        page_count = ${result.pages},
+        staged_count = ${result.staged},
+        upserted_count = ${result.upserted},
+        deleted_count = ${result.deleted},
+        unchanged_count = ${result.unchanged},
+        completed_at = ${now},
+        claim_id = null,
+        last_error_category = null,
+        action_required = false,
+        updated_at = ${now}
+      where job_id = ${jobId}
+        and status = 'in_progress'
+        and claim_id = ${claimId}
+      returning job_id as "jobId"
+    `);
+    return updated.rows.length === 1;
+  }
+
+  /** Releases one current lease for bounded queue redelivery. */
+  async scheduleRetry(
+    jobId: string,
+    claimId: string,
+    category: SyncCalendarErrorCategory,
+    now: Date,
+  ): Promise<boolean> {
+    return this.finishFailure(
+      jobId,
+      claimId,
+      "retry_scheduled",
+      category,
+      false,
+      now,
+    );
+  }
+
+  /** Persists one permanent or retry-exhausted safe failure classification. */
+  async failJob(
+    jobId: string,
+    claimId: string,
+    category: SyncCalendarErrorCategory,
+    actionRequired: boolean,
+    now: Date,
+  ): Promise<boolean> {
+    return this.finishFailure(
+      jobId,
+      claimId,
+      "failed",
+      category,
+      actionRequired,
+      now,
+    );
+  }
+
+  /** Applies a claim-guarded failure transition without retaining exception text. */
+  private async finishFailure(
+    jobId: string,
+    claimId: string,
+    status: "retry_scheduled" | "failed",
+    category: SyncCalendarErrorCategory,
+    actionRequired: boolean,
+    now: Date,
+  ): Promise<boolean> {
+    assertClaimId(claimId);
+    assertDate(now);
+    const updated = await this.database.execute<Record<string, unknown>>(sql`
+      update calendar_sync_jobs
+      set
+        status = ${status},
+        last_error_category = ${category},
+        action_required = ${actionRequired},
+        completed_at = case when ${status} = 'failed' then ${now}::timestamptz else null end,
+        claim_id = null,
+        updated_at = ${now}
+      where job_id = ${jobId}
+        and status = 'in_progress'
+        and claim_id = ${claimId}
+      returning job_id as "jobId"
+    `);
+    return updated.rows.length === 1;
+  }
+}
+
+/** Creates the production calendar job repository over a typed database. */
+export function createCalendarJobRepository(
+  database: VisionDatabase,
+): CalendarJobRepository {
+  return new DrizzleCalendarJobRepository(database);
+}
+
+/** Decodes one channel row without ever retaining its encrypted recovery token. */
+function decodeChannel(row: Record<string, unknown>): GoogleWebhookChannel {
+  const expiresAt = readDate(row.expiresAt);
+  return {
+    ownerId: readText(row.ownerId),
+    calendarId: readText(row.calendarId),
+    providerChannelId: readText(row.providerChannelId),
+    providerResourceId: readText(row.providerResourceId),
+    verificationTokenHash: readHash(row.verificationTokenHash),
+    expiresAt,
+  };
+}
+
+/** Decodes only the four opaque fields permitted in a queue message. */
+function decodeMessage(row: Record<string, unknown>): CalendarSyncMessage {
+  const reason = readText(row.reason);
+  if (!["initial", "manual", "push", "rebuild", "repair"].includes(reason)) {
+    throw new Error("Invalid calendar job row.");
+  }
+  return {
+    jobId: readText(row.jobId),
+    ownerId: readText(row.ownerId),
+    calendarId: readText(row.calendarId),
+    reason: reason as CalendarSyncMessage["reason"],
+  };
+}
+
+/** Reads one non-empty database text value. */
+function readText(value: unknown): string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error("Invalid calendar job row.");
+  }
+  return value;
+}
+
+/** Reads one canonical SHA-256 base64url digest. */
+function readHash(value: unknown): string {
+  const hash = readText(value);
+  if (!/^[A-Za-z0-9_-]{43}$/u.test(hash)) {
+    throw new Error("Invalid calendar channel digest.");
+  }
+  return hash;
+}
+
+/** Reads a positive safe database integer or decimal representation. */
+function readPositiveInteger(value: unknown): number {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && /^[1-9]\d*$/u.test(value)
+        ? Number(value)
+        : Number.NaN;
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new Error("Invalid calendar job row.");
+  }
+  return parsed;
+}
+
+/** Reads a genuine or offset-bearing database timestamp. */
+function readDate(value: unknown): Date {
+  const parsed =
+    value instanceof Date
+      ? new Date(Date.prototype.getTime.call(value))
+      : typeof value === "string" && /(?:z|[+-]\d{2}(?::?\d{2})?)$/iu.test(value)
+        ? new Date(value)
+        : new Date(Number.NaN);
+  if (Number.isNaN(parsed.getTime())) throw new Error("Invalid calendar job row.");
+  return parsed;
+}
+
+/** Validates a queue delivery attempt before it enters SQL state transitions. */
+function assertAttempt(value: number): void {
+  if (!Number.isSafeInteger(value) || value <= 0 || value > 1_000) {
+    throw new Error("Invalid calendar queue attempt.");
+  }
+}
+
+/** Validates a content-free lease identifier. */
+function assertClaimId(value: string): void {
+  if (typeof value !== "string" || value.length === 0 || value.length > 128) {
+    throw new Error("Invalid calendar job claim.");
+  }
+}
+
+/** Validates repository timestamps through the trusted Date intrinsic. */
+function assertDate(value: Date): void {
+  if (!(value instanceof Date) || Number.isNaN(Date.prototype.getTime.call(value))) {
+    throw new Error("Invalid calendar job timestamp.");
+  }
+}

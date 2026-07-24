@@ -1,6 +1,6 @@
 /** Defines explicit synchronization state without storing provider tokens in JSON. */
 import { sql } from "drizzle-orm";
-import { check, foreignKey, index, integer, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { boolean, check, foreignKey, index, integer, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { events } from "./events";
 import { ciphertext, nodes } from "./nodes";
 
@@ -102,14 +102,65 @@ export const syncChannels = pgTable(
     providerChannelId: text("provider_channel_id").notNull(),
     providerResourceId: text("provider_resource_id").notNull(),
     verificationTokenEnvelope: ciphertext("verification_token_envelope").notNull(),
+    verificationTokenHash: text("verification_token_hash"),
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
   },
   (table) => [
     unique("sync_channels_provider_channel_unique").on(table.ownerId, table.provider, table.providerChannelId),
+    unique("sync_channels_provider_channel_lookup_uq").on(table.provider, table.providerChannelId),
     check("sync_channels_provider_non_empty", sql`${table.provider} <> ''`),
     check("sync_channels_calendar_non_empty", sql`${table.providerCalendarId} <> ''`),
     check("sync_channels_channel_non_empty", sql`${table.providerChannelId} <> ''`),
     check("sync_channels_resource_non_empty", sql`${table.providerResourceId} <> ''`),
+    check("sync_channels_token_hash_valid", sql`${table.verificationTokenHash} is null or ${table.verificationTokenHash} ~ '^[A-Za-z0-9_-]{43}$'`),
+  ],
+);
+
+/** Stores idempotent notification work and content-free queue outcomes. */
+export const calendarSyncJobs = pgTable(
+  "calendar_sync_jobs",
+  {
+    jobId: text("job_id").primaryKey(),
+    ownerId: text("owner_id").notNull(),
+    provider: text("provider").notNull(),
+    providerCalendarId: text("provider_calendar_id").notNull(),
+    reason: text("reason").notNull(),
+    status: text("status").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    claimId: text("claim_id"),
+    claimedAt: timestamp("claimed_at", { withTimezone: true, mode: "date" }),
+    completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+    lastErrorCategory: text("last_error_category"),
+    actionRequired: boolean("action_required").notNull().default(false),
+    checkpointVersion: integer("checkpoint_version"),
+    pageCount: integer("page_count"),
+    stagedCount: integer("staged_count"),
+    upsertedCount: integer("upserted_count"),
+    deletedCount: integer("deleted_count"),
+    unchangedCount: integer("unchanged_count"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull(),
+  },
+  (table) => [
+    check("calendar_sync_jobs_owner_non_empty", sql`${table.ownerId} <> ''`),
+    check("calendar_sync_jobs_provider_non_empty", sql`${table.provider} <> ''`),
+    check("calendar_sync_jobs_calendar_non_empty", sql`${table.providerCalendarId} <> ''`),
+    check("calendar_sync_jobs_reason_valid", sql`${table.reason} in ('initial', 'manual', 'push', 'rebuild', 'repair')`),
+    check("calendar_sync_jobs_status_valid", sql`${table.status} in ('pending_enqueue', 'enqueued', 'in_progress', 'retry_scheduled', 'succeeded', 'failed')`),
+    check("calendar_sync_jobs_attempts_non_negative", sql`${table.attempts} >= 0`),
+    check("calendar_sync_jobs_claim_consistent", sql`(${table.status} = 'in_progress' and ${table.claimId} is not null and ${table.claimedAt} is not null) or (${table.status} <> 'in_progress' and ${table.claimId} is null)`),
+    check("calendar_sync_jobs_error_category_valid", sql`${table.lastErrorCategory} is null or ${table.lastErrorCategory} in ('authorization', 'concurrency', 'database', 'provider', 'payload_too_large', 'quota', 'schema', 'sync_token_invalid', 'transient')`),
+    check("calendar_sync_jobs_checkpoint_positive", sql`${table.checkpointVersion} is null or ${table.checkpointVersion} > 0`),
+    check("calendar_sync_jobs_counts_non_negative", sql`(${table.pageCount} is null or ${table.pageCount} > 0) and (${table.stagedCount} is null or ${table.stagedCount} >= 0) and (${table.upsertedCount} is null or ${table.upsertedCount} >= 0) and (${table.deletedCount} is null or ${table.deletedCount} >= 0) and (${table.unchangedCount} is null or ${table.unchangedCount} >= 0)`),
+    check("calendar_sync_jobs_completed_consistent", sql`(${table.status} in ('succeeded', 'failed')) = (${table.completedAt} is not null)`),
+    check("calendar_sync_jobs_action_required_terminal", sql`not ${table.actionRequired} or ${table.status} = 'failed'`),
+    check("calendar_sync_jobs_timestamps_valid", sql`${table.updatedAt} >= ${table.createdAt} and (${table.claimedAt} is null or ${table.claimedAt} >= ${table.createdAt}) and (${table.completedAt} is null or ${table.completedAt} >= ${table.createdAt})`),
+    index("calendar_sync_jobs_owner_calendar_updated_idx").on(
+      table.ownerId,
+      table.provider,
+      table.providerCalendarId,
+      table.updatedAt.desc(),
+    ),
   ],
 );
 

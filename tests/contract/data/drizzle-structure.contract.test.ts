@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   auditEvents,
+  calendarSyncJobs,
   edges,
   eventSyncPayloads,
   events,
@@ -26,6 +27,7 @@ const drizzleTables = [
   eventSyncPayloads,
   edges,
   auditEvents,
+  calendarSyncJobs,
   syncCheckpoints,
   syncChannels,
   syncRuns,
@@ -34,7 +36,7 @@ const drizzleTables = [
 ];
 
 describe("Drizzle schema structure", () => {
-  it("matches the complete migration-derived manifest for all ten tables", () => {
+  it("matches the complete migration-derived manifest for all eleven tables", () => {
     const actual = extractDrizzleTablesManifest(drizzleTables);
     assertSchemaMatchesManifest(actual, phaseBSchemaManifest);
   });
@@ -42,7 +44,7 @@ describe("Drizzle schema structure", () => {
   it("keeps the retained generated snapshot consistent with the reviewed manifest", () => {
     const snapshot = JSON.parse(
       readFileSync(
-        resolve(process.cwd(), "migrations/generated/meta/0001_snapshot.json"),
+        resolve(process.cwd(), "migrations/generated/meta/0002_snapshot.json"),
         "utf8",
       ),
     ) as unknown;

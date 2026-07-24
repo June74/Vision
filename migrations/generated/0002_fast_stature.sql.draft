@@ -1,0 +1,40 @@
+CREATE TABLE "calendar_sync_jobs" (
+	"job_id" text PRIMARY KEY NOT NULL,
+	"owner_id" text NOT NULL,
+	"provider" text NOT NULL,
+	"provider_calendar_id" text NOT NULL,
+	"reason" text NOT NULL,
+	"status" text NOT NULL,
+	"attempts" integer DEFAULT 0 NOT NULL,
+	"claim_id" text,
+	"claimed_at" timestamp with time zone,
+	"completed_at" timestamp with time zone,
+	"last_error_category" text,
+	"action_required" boolean DEFAULT false NOT NULL,
+	"checkpoint_version" integer,
+	"page_count" integer,
+	"staged_count" integer,
+	"upserted_count" integer,
+	"deleted_count" integer,
+	"unchanged_count" integer,
+	"created_at" timestamp with time zone NOT NULL,
+	"updated_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "calendar_sync_jobs_owner_non_empty" CHECK ("calendar_sync_jobs"."owner_id" <> ''),
+	CONSTRAINT "calendar_sync_jobs_provider_non_empty" CHECK ("calendar_sync_jobs"."provider" <> ''),
+	CONSTRAINT "calendar_sync_jobs_calendar_non_empty" CHECK ("calendar_sync_jobs"."provider_calendar_id" <> ''),
+	CONSTRAINT "calendar_sync_jobs_reason_valid" CHECK ("calendar_sync_jobs"."reason" in ('initial', 'manual', 'push', 'rebuild', 'repair')),
+	CONSTRAINT "calendar_sync_jobs_status_valid" CHECK ("calendar_sync_jobs"."status" in ('pending_enqueue', 'enqueued', 'in_progress', 'retry_scheduled', 'succeeded', 'failed')),
+	CONSTRAINT "calendar_sync_jobs_attempts_non_negative" CHECK ("calendar_sync_jobs"."attempts" >= 0),
+	CONSTRAINT "calendar_sync_jobs_claim_consistent" CHECK (("calendar_sync_jobs"."status" = 'in_progress' and "calendar_sync_jobs"."claim_id" is not null and "calendar_sync_jobs"."claimed_at" is not null) or ("calendar_sync_jobs"."status" <> 'in_progress' and "calendar_sync_jobs"."claim_id" is null)),
+	CONSTRAINT "calendar_sync_jobs_error_category_valid" CHECK ("calendar_sync_jobs"."last_error_category" is null or "calendar_sync_jobs"."last_error_category" in ('authorization', 'concurrency', 'database', 'provider', 'payload_too_large', 'quota', 'schema', 'sync_token_invalid', 'transient')),
+	CONSTRAINT "calendar_sync_jobs_checkpoint_positive" CHECK ("calendar_sync_jobs"."checkpoint_version" is null or "calendar_sync_jobs"."checkpoint_version" > 0),
+	CONSTRAINT "calendar_sync_jobs_counts_non_negative" CHECK (("calendar_sync_jobs"."page_count" is null or "calendar_sync_jobs"."page_count" > 0) and ("calendar_sync_jobs"."staged_count" is null or "calendar_sync_jobs"."staged_count" >= 0) and ("calendar_sync_jobs"."upserted_count" is null or "calendar_sync_jobs"."upserted_count" >= 0) and ("calendar_sync_jobs"."deleted_count" is null or "calendar_sync_jobs"."deleted_count" >= 0) and ("calendar_sync_jobs"."unchanged_count" is null or "calendar_sync_jobs"."unchanged_count" >= 0)),
+	CONSTRAINT "calendar_sync_jobs_completed_consistent" CHECK (("calendar_sync_jobs"."status" in ('succeeded', 'failed')) = ("calendar_sync_jobs"."completed_at" is not null)),
+	CONSTRAINT "calendar_sync_jobs_action_required_terminal" CHECK (not "calendar_sync_jobs"."action_required" or "calendar_sync_jobs"."status" = 'failed'),
+	CONSTRAINT "calendar_sync_jobs_timestamps_valid" CHECK ("calendar_sync_jobs"."updated_at" >= "calendar_sync_jobs"."created_at" and ("calendar_sync_jobs"."claimed_at" is null or "calendar_sync_jobs"."claimed_at" >= "calendar_sync_jobs"."created_at") and ("calendar_sync_jobs"."completed_at" is null or "calendar_sync_jobs"."completed_at" >= "calendar_sync_jobs"."created_at"))
+);
+--> statement-breakpoint
+ALTER TABLE "sync_channels" ADD COLUMN "verification_token_hash" text;--> statement-breakpoint
+CREATE INDEX "calendar_sync_jobs_owner_calendar_updated_idx" ON "calendar_sync_jobs" USING btree ("owner_id","provider","provider_calendar_id","updated_at" DESC NULLS LAST);--> statement-breakpoint
+ALTER TABLE "sync_channels" ADD CONSTRAINT "sync_channels_provider_channel_lookup_uq" UNIQUE("provider","provider_channel_id");--> statement-breakpoint
+ALTER TABLE "sync_channels" ADD CONSTRAINT "sync_channels_token_hash_valid" CHECK ("sync_channels"."verification_token_hash" is null or "sync_channels"."verification_token_hash" ~ '^[A-Za-z0-9_-]{43}$');

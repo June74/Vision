@@ -1,7 +1,7 @@
 import type { SchemaTablesManifest } from "./schema-manifest";
 
 /**
- * Hand-authored from the ten authoritative tables in migrations 0001 and 0004.
+ * Hand-authored from the eleven authoritative tables in migrations 0001, 0004, and 0005.
  * Never regenerate this fixture from Drizzle metadata or the generated snapshot.
  *
  * Primary and unique keys intentionally record columns rather than generated names because the
@@ -31,6 +31,63 @@ export const phaseBSchemaManifest = {
     indexes: [],
     checks: [
       ["audit_events_owner_non_empty", "owner_id <> ''"],
+    ],
+  },
+
+  // Migration 0005: durable, claim-guarded Google change notification work.
+  calendar_sync_jobs: {
+    columns: [
+      ["job_id", "text", true],
+      ["owner_id", "text", true],
+      ["provider", "text", true],
+      ["provider_calendar_id", "text", true],
+      ["reason", "text", true],
+      ["status", "text", true],
+      ["attempts", "integer", true, "0"],
+      ["claim_id", "text", false],
+      ["claimed_at", "timestamptz", false],
+      ["completed_at", "timestamptz", false],
+      ["last_error_category", "text", false],
+      ["action_required", "boolean", true, "false"],
+      ["checkpoint_version", "integer", false],
+      ["page_count", "integer", false],
+      ["staged_count", "integer", false],
+      ["upserted_count", "integer", false],
+      ["deleted_count", "integer", false],
+      ["unchanged_count", "integer", false],
+      ["created_at", "timestamptz", true],
+      ["updated_at", "timestamptz", true],
+    ],
+    primaryKeys: [["job_id"]],
+    uniqueKeys: [],
+    foreignKeys: [],
+    indexes: [
+      [
+        "calendar_sync_jobs_owner_calendar_updated_idx",
+        false,
+        "btree",
+        [
+          ["owner_id", "asc", "last"],
+          ["provider", "asc", "last"],
+          ["provider_calendar_id", "asc", "last"],
+          ["updated_at", "desc", "last"],
+        ],
+      ],
+    ],
+    checks: [
+      ["calendar_sync_jobs_action_required_terminal", "not action_required or status = 'failed'"],
+      ["calendar_sync_jobs_attempts_non_negative", "attempts >= 0"],
+      ["calendar_sync_jobs_calendar_non_empty", "provider_calendar_id <> ''"],
+      ["calendar_sync_jobs_checkpoint_positive", "checkpoint_version is null or checkpoint_version > 0"],
+      ["calendar_sync_jobs_claim_consistent", "(status = 'in_progress' and claim_id is not null and claimed_at is not null) or (status <> 'in_progress' and claim_id is null)"],
+      ["calendar_sync_jobs_completed_consistent", "(status in ('succeeded', 'failed')) = (completed_at is not null)"],
+      ["calendar_sync_jobs_counts_non_negative", "(page_count is null or page_count > 0) and (staged_count is null or staged_count >= 0) and (upserted_count is null or upserted_count >= 0) and (deleted_count is null or deleted_count >= 0) and (unchanged_count is null or unchanged_count >= 0)"],
+      ["calendar_sync_jobs_error_category_valid", "last_error_category is null or last_error_category in ('authorization', 'concurrency', 'database', 'provider', 'payload_too_large', 'quota', 'schema', 'sync_token_invalid', 'transient')"],
+      ["calendar_sync_jobs_owner_non_empty", "owner_id <> ''"],
+      ["calendar_sync_jobs_provider_non_empty", "provider <> ''"],
+      ["calendar_sync_jobs_reason_valid", "reason in ('initial', 'manual', 'push', 'rebuild', 'repair')"],
+      ["calendar_sync_jobs_status_valid", "status in ('pending_enqueue', 'enqueued', 'in_progress', 'retry_scheduled', 'succeeded', 'failed')"],
+      ["calendar_sync_jobs_timestamps_valid", "updated_at >= created_at and (claimed_at is null or claimed_at >= created_at) and (completed_at is null or completed_at >= created_at)"],
     ],
   },
 
@@ -239,11 +296,13 @@ export const phaseBSchemaManifest = {
       ["provider_channel_id", "text", true],
       ["provider_resource_id", "text", true],
       ["verification_token_envelope", "bytea", true],
+      ["verification_token_hash", "text", false],
       ["expires_at", "timestamptz", true],
     ],
     primaryKeys: [["id"]],
     uniqueKeys: [
       ["owner_id", "provider", "provider_channel_id"],
+      ["provider", "provider_channel_id"],
     ],
     foreignKeys: [],
     indexes: [],
@@ -252,6 +311,7 @@ export const phaseBSchemaManifest = {
       ["sync_channels_channel_non_empty", "provider_channel_id <> ''"],
       ["sync_channels_provider_non_empty", "provider <> ''"],
       ["sync_channels_resource_non_empty", "provider_resource_id <> ''"],
+      ["sync_channels_token_hash_valid", "verification_token_hash is null or verification_token_hash ~ '^[A-Za-z0-9_-]{43}$'"],
     ],
   },
 

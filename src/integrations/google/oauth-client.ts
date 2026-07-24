@@ -46,6 +46,12 @@ const googleTokenResponseSchema = z.object({
   scope: z.string().min(1).max(8 * 1024),
   token_type: z.literal("Bearer"),
 });
+const googleRefreshTokenResponseSchema = z.object({
+  access_token: boundedProviderText,
+  expires_in: z.number().int().positive().max(86_400),
+  scope: z.string().min(1).max(8 * 1024).optional(),
+  token_type: z.literal("Bearer"),
+});
 const jwtHeaderSchema = z.object({
   alg: z.literal("RS256"),
   kid: z.string().min(1).max(256),
@@ -76,9 +82,19 @@ export interface GoogleTokenSet {
   readonly tokenType: "Bearer";
 }
 
+/** Rotated access-token facts returned without replacing the durable refresh token. */
+export interface GoogleAccessTokenRefresh {
+  readonly accessToken: string;
+  readonly expiresInSeconds: number;
+  readonly scopes?: readonly string[];
+  readonly tokenType: "Bearer";
+}
+
 /** Constant provider-boundary error that never includes request or response content. */
 export class GoogleOAuthError extends Error {
-  constructor() {
+  constructor(
+    readonly category: "authorization" | "provider" | "transient" = "provider",
+  ) {
     super("GOOGLE_OAUTH_FAILED");
     this.name = "GoogleOAuthError";
   }
@@ -261,6 +277,61 @@ export class GoogleOAuthClient {
         tokenType: "Bearer",
       };
     } catch {
+      throw new GoogleOAuthError();
+    }
+  }
+
+  /** Exchanges one retained refresh token for a bounded short-lived access token. */
+  async refreshAccessToken(
+    refreshToken: string,
+  ): Promise<GoogleAccessTokenRefresh> {
+    try {
+      validateBoundedString(refreshToken, 1, 16 * 1024);
+      const form = new URLSearchParams({
+        client_id: this.config.clientId,
+        client_secret: this.config.clientSecret,
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+      });
+      let response: Response;
+      try {
+        response = await this.fetcher(GOOGLE_TOKEN_ENDPOINT, {
+          method: "POST",
+          headers: {
+            accept: "application/json",
+            "content-type": "application/x-www-form-urlencoded",
+          },
+          body: form.toString(),
+        });
+      } catch {
+        throw new GoogleOAuthError("transient");
+      }
+      if (response.status === 400 || response.status === 401) {
+        throw new GoogleOAuthError("authorization");
+      }
+      if (
+        response.status === 429 ||
+        (response.status >= 500 && response.status <= 599)
+      ) {
+        throw new GoogleOAuthError("transient");
+      }
+      if (!response.ok) throw new GoogleOAuthError("provider");
+      const body = await readBoundedProviderJson(response);
+      const parsed = googleRefreshTokenResponseSchema.parse(body);
+      const scopes = parsed.scope?.split(" ");
+      if (
+        scopes?.some((scope) => scope.length === 0 || scope.length > 256)
+      ) {
+        throw new GoogleOAuthError();
+      }
+      return {
+        accessToken: parsed.access_token,
+        expiresInSeconds: parsed.expires_in,
+        ...(scopes ? { scopes } : {}),
+        tokenType: "Bearer",
+      };
+    } catch (error) {
+      if (error instanceof GoogleOAuthError) throw error;
       throw new GoogleOAuthError();
     }
   }

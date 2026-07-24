@@ -11,6 +11,7 @@ Sources consulted: [Google web-server OAuth](https://developers.google.com/ident
 ```ts
 createAuthorizationUrl(request: GoogleAuthorizationRequest): string;
 exchangeCode(code: string, codeVerifier: string): Promise<GoogleTokenSet>;
+refreshAccessToken(refreshToken: string): Promise<GoogleAccessTokenRefresh>;
 verifyIdToken(idToken: string): Promise<unknown>;
 verify(idToken: string): Promise<unknown>;
 ```
@@ -29,7 +30,7 @@ Authorization URL creation is pure. Code exchange POSTs only to Google's fixed t
 
 ## Failure behavior
 
-All provider, parse, size, key, signature, status, and hostile-object failures collapse to `GOOGLE_OAUTH_FAILED` or `GOOGLE_ID_TOKEN_INVALID`; response bodies, credentials, codes, and tokens are never copied into errors.
+All provider, parse, size, key, signature, status, and hostile-object failures retain only `GOOGLE_OAUTH_FAILED` or `GOOGLE_ID_TOKEN_INVALID`; refresh failures additionally carry a closed authorization, transient, or provider category for queue disposition. Response bodies, credentials, codes, and tokens are never copied into errors.
 
 ## Privacy and authorization
 
@@ -58,6 +59,10 @@ Snapshots exact plain-data input, enforces 43-128 character base64url protocol v
 ## `exchangeCode`
 
 Posts an `application/x-www-form-urlencoded` request containing the authorization code, client credentials, exact redirect URI, grant type, and PKCE verifier. It accepts only a bounded successful Bearer token response.
+
+## `refreshAccessToken`
+
+Posts the retained refresh token and server-only client credentials to Google's fixed token endpoint. It accepts only a bounded Bearer access-token response; the optional returned scope set is validated, and no refresh token is replaced. Network, 429, and 5xx failures are transient; a rejected grant is authorization failure.
 
 ## `verifyIdToken`
 
