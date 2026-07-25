@@ -70,3 +70,7 @@ Parses the Google OAuth client ID and secret, exact callback URI, allowed subjec
 ## `parseVisionUserTimeZone`
 
 Requires a bounded IANA-style zone or `UTC`; request bodies cannot choose it.
+
+## `parseOpenAiEnvironment`
+
+Validates the exact server-only OpenAI adapter binding pair. The base URL must be credential-free HTTPS; the API key remains an injected secret and is never included in validation messages or client bindings.

@@ -44,6 +44,33 @@ const userTimeZoneSchema = z
   .min(1)
   .max(255)
   .regex(/^(?:UTC|[A-Za-z_+-]+\/[A-Za-z0-9_+./-]+)$/u);
+const openAiGatewayBaseUrlSchema = z
+  .string()
+  .url()
+  .max(2_048)
+  .superRefine((baseUrl, context) => {
+    const parsed = new URL(baseUrl);
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.username !== "" ||
+      parsed.password !== "" ||
+      parsed.search !== "" ||
+      parsed.hash !== ""
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "OPENAI_GATEWAY_BASE_URL must be a credential-free HTTPS base URL.",
+      });
+    }
+  });
+
+/** Validates only the server-side configuration needed by the OpenAI adapter. */
+export const OpenAiEnvSchema = z
+  .object({
+    OPENAI_GATEWAY_BASE_URL: openAiGatewayBaseUrlSchema,
+    OPENAI_API_KEY: z.string().min(1).max(2_048),
+  })
+  .strict();
 
 /** Validates the server-only Google OAuth and private-pilot allowlist bindings as one exact unit. */
 export const GoogleAuthEnvSchema = z
@@ -81,22 +108,37 @@ export const GoogleAuthEnvSchema = z
   });
 
 /** Validates deployment bindings, including the Worker-only least-privileged database credential. */
-export const RuntimeEnvSchema = z.object({
-  VISION_ENV: visionEnvironmentSchema,
-  DATABASE_URL: z.string().url().superRefine((databaseUrl, context) => {
-    // The username is safe configuration metadata; never include the URL or password in a validation message.
-    if (new URL(databaseUrl).username !== "vision_app") {
-      context.addIssue({ code: "custom", message: "DATABASE_URL must authenticate as the vision_app role." });
+export const RuntimeEnvSchema = z
+  .object({
+    VISION_ENV: visionEnvironmentSchema,
+    DATABASE_URL: z.string().url().superRefine((databaseUrl, context) => {
+      // The username is safe configuration metadata; never include the URL or password in a validation message.
+      if (new URL(databaseUrl).username !== "vision_app") {
+        context.addIssue({ code: "custom", message: "DATABASE_URL must authenticate as the vision_app role." });
+      }
+    }),
+    KEY_ENCRYPTION_KEY: keyEncryptionKeySchema,
+    GOOGLE_CLIENT_ID: googleClientIdSchema.optional(),
+    GOOGLE_CLIENT_SECRET: googleClientSecretSchema.optional(),
+    GOOGLE_REDIRECT_URI: googleRedirectSchema.optional(),
+    GOOGLE_ALLOWED_SUB: googleAllowedSubjectSchema.optional(),
+    GOOGLE_ALLOWED_EMAIL: z.string().email().max(320).optional(),
+    VISION_USER_TIME_ZONE: userTimeZoneSchema.optional(),
+    OPENAI_GATEWAY_BASE_URL: openAiGatewayBaseUrlSchema.optional(),
+    OPENAI_API_KEY: z.string().min(1).max(2_048).optional(),
+  })
+  .superRefine((environment, context) => {
+    if (
+      (environment.OPENAI_GATEWAY_BASE_URL === undefined) !==
+      (environment.OPENAI_API_KEY === undefined)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "OPENAI_GATEWAY_BASE_URL and OPENAI_API_KEY must be configured together.",
+      });
     }
-  }),
-  KEY_ENCRYPTION_KEY: keyEncryptionKeySchema,
-  GOOGLE_CLIENT_ID: googleClientIdSchema.optional(),
-  GOOGLE_CLIENT_SECRET: googleClientSecretSchema.optional(),
-  GOOGLE_REDIRECT_URI: googleRedirectSchema.optional(),
-  GOOGLE_ALLOWED_SUB: googleAllowedSubjectSchema.optional(),
-  GOOGLE_ALLOWED_EMAIL: z.string().email().max(320).optional(),
-  VISION_USER_TIME_ZONE: userTimeZoneSchema.optional(),
-});
+  });
 
 /** Safely validates a Worker-only database URL without including credential text in errors. */
 export function parseVisionDatabaseUrl(databaseUrl: unknown): string {
@@ -121,6 +163,13 @@ export function parseGoogleAuthEnvironment(
 /** Validates the server-owned private-pilot time zone used for secondary-calendar creation. */
 export function parseVisionUserTimeZone(userTimeZone: unknown): string {
   return userTimeZoneSchema.parse(userTimeZone);
+}
+
+/** Validates the complete server-only OpenAI adapter environment before network dispatch. */
+export function parseOpenAiEnvironment(
+  environment: unknown,
+): z.infer<typeof OpenAiEnvSchema> {
+  return OpenAiEnvSchema.parse(environment);
 }
 
 /** Represents the validated server-only, secret-bearing Vision runtime environment. */

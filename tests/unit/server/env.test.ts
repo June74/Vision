@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   GoogleAuthEnvSchema,
+  OpenAiEnvSchema,
   RuntimeEnvSchema,
 } from "../../../src/server/env";
 
@@ -107,5 +108,61 @@ describe("GoogleAuthEnvSchema", () => {
     expect(() => GoogleAuthEnvSchema.parse(insecure)).not.toThrow(
       /CLIENT_SECRET_SENTINEL/u,
     );
+  });
+});
+
+describe("OpenAiEnvSchema", () => {
+  it("accepts only the injected server-side gateway and provider credential pair", () => {
+    expect(
+      OpenAiEnvSchema.parse({
+        OPENAI_GATEWAY_BASE_URL:
+          "https://gateway.ai.cloudflare.com/v1/account/gateway/openai",
+        OPENAI_API_KEY: "OPENAI_PROVIDER_SECRET_SENTINEL",
+      }),
+    ).toMatchObject({
+      OPENAI_GATEWAY_BASE_URL:
+        "https://gateway.ai.cloudflare.com/v1/account/gateway/openai",
+    });
+
+    for (const gatewayBaseUrl of [
+      "http://gateway.example.test/openai",
+      "https://user:password@gateway.example.test/openai",
+      "https://gateway.example.test/openai?secret=query",
+    ]) {
+      expect(() =>
+        OpenAiEnvSchema.parse({
+          OPENAI_GATEWAY_BASE_URL: gatewayBaseUrl,
+          OPENAI_API_KEY: "OPENAI_PROVIDER_SECRET_SENTINEL",
+        }),
+      ).toThrow(/credential-free HTTPS/u);
+      expect(() =>
+        OpenAiEnvSchema.parse({
+          OPENAI_GATEWAY_BASE_URL: gatewayBaseUrl,
+          OPENAI_API_KEY: "OPENAI_PROVIDER_SECRET_SENTINEL",
+        }),
+      ).not.toThrow(/OPENAI_PROVIDER_SECRET_SENTINEL/u);
+    }
+  });
+
+  it("rejects a partially configured runtime adapter", () => {
+    const runtime = {
+      VISION_ENV: "preview",
+      DATABASE_URL: "postgresql://vision_app:secret@db.example.test/vision",
+      KEY_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    };
+
+    expect(() =>
+      RuntimeEnvSchema.parse({
+        ...runtime,
+        OPENAI_GATEWAY_BASE_URL:
+          "https://gateway.ai.cloudflare.com/v1/account/gateway/openai",
+      }),
+    ).toThrow(/configured together/u);
+    expect(() =>
+      RuntimeEnvSchema.parse({
+        ...runtime,
+        OPENAI_API_KEY: "OPENAI_PROVIDER_SECRET_SENTINEL",
+      }),
+    ).toThrow(/configured together/u);
   });
 });

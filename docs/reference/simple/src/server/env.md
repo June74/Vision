@@ -26,3 +26,7 @@ Requires the complete server-only Google client, exact callback, and private-pil
 ## `parseVisionUserTimeZone`
 
 Checks the private-pilot time zone used for calendar creation.
+
+## `parseOpenAiEnvironment`
+
+Checks the server-only AI Gateway base URL and OpenAI provider key without exposing their values.
