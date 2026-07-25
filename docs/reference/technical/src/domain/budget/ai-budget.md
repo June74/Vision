@@ -10,10 +10,6 @@ Accepts safe non-negative integer cents and a closed request class. Returns an a
 
 Uses calendar parts rendered in America/Chicago, preserving correct month rollover across standard and daylight offsets.
 
-## `evaluateFoundationCapability`
-
-Makes the isolation contract explicit: event listing, sync status, category correction, and template diagnostics remain available; only the AI proposal delegates to the hard budget decision.
-
 ## `blocked`
 
 Constructs the immutable blocked shape used for invalid input and threshold failures.

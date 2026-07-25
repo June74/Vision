@@ -8,7 +8,16 @@ Generates an opaque operation identity, uses routine admission, and exposes only
 
 ## `proposeCategoryResult`
 
-Reserves projected cost, returns without provider invocation on budget/concurrency denial, marks dispatch, invokes once, and settles. Provider throws and Gateway failures are conservatively charged. Accounting failure after dispatch returns unavailable while leaving durable state for stale conservative recovery.
+Delegates eager requests through the same lazy admission path.
+
+## `proposeCategoryFromFactory`
+
+Reserves projected cost and returns without provider-context construction on budget/concurrency denial. After admission it builds the bounded request, marks dispatch, invokes once, and settles. Provider throws and Gateway failures are conservatively charged. Accounting failure after dispatch returns unavailable while leaving durable state for stale conservative recovery.
+
+## `requestFactory`
+
+Defers request construction and its potentially sensitive context copying until the durable repository admits the reservation.
+
 
 ## `releaseSafely`
 

@@ -1,6 +1,6 @@
 # `src/domain/budget/ai-budget.ts`
 
-This module applies Vision's exact personal AI limits and keeps calendar functions available when AI stops.
+This module applies Vision's exact personal AI limits.
 
 ## `evaluateAiBudget`
 
@@ -9,10 +9,6 @@ Allows normal AI below 800 cents, Luna-only work from 800 cents, stops optional 
 ## `getChicagoBudgetMonth`
 
 Maps an instant to its `YYYY-MM` accounting month in America/Chicago.
-
-## `evaluateFoundationCapability`
-
-Returns HTTP 200 availability for non-AI foundation functions even when AI is exhausted.
 
 ## `blocked`
 

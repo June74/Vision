@@ -10,6 +10,14 @@ Implements the provider-neutral category port through routine budget admission.
 
 Returns a provider result or a safe budget, concurrency, duplicate, or accounting-unavailable result.
 
+## `proposeCategoryFromFactory`
+
+Reserves budget before building provider context, then dispatches and settles the admitted request.
+
+## `requestFactory`
+
+Builds the provider request only after budget admission.
+
 ## `releaseSafely`
 
 Releases only a failed pre-dispatch reservation.

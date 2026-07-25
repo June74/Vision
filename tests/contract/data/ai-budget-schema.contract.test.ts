@@ -7,6 +7,27 @@ import {
   aiUsageMonths,
   aiUsageReservations,
 } from "../../../src/data/schema";
+import { phaseBAiUsagePrivilegeManifest } from "./phase-b-schema-manifest";
+
+function assertAiUsagePrivileges(migration: string): void {
+  const normalized = migration.toLowerCase().replace(/\s+/gu, " ");
+  const tables = Object.keys(phaseBAiUsagePrivilegeManifest);
+
+  expect(normalized).toContain(
+    `revoke all on ${tables.join(", ")} from public`,
+  );
+  for (const [table, privileges] of Object.entries(
+    phaseBAiUsagePrivilegeManifest,
+  )) {
+    expect(normalized).toContain(
+      `grant ${privileges.join(", ")} on ${table} to vision_app`,
+    );
+    const grant = normalized.match(
+      new RegExp(`grant ([a-z, ]+) on ${table} to vision_app`, "u"),
+    );
+    expect(grant?.[1]?.trim()).toBe(privileges.join(", "));
+  }
+}
 
 describe("AI budget database contract", () => {
   it("keeps all three reviewed Drizzle tables in the migration shape", () => {
@@ -52,14 +73,21 @@ describe("AI budget database contract", () => {
     expect(migration).toContain(
       "unique (owner_id, budget_month, idempotency_key)",
     );
-    expect(migration).toContain(
-      "revoke all on ai_usage_months, ai_usage_reservations, ai_usage_ledger from public",
-    );
-    expect(migration).toContain(
-      "grant select, insert on ai_usage_ledger to vision_app",
-    );
+    assertAiUsagePrivileges(migration);
     expect(migration).not.toContain("prompt");
     expect(migration).not.toContain("response");
     expect(migration).not.toContain("json");
+  });
+
+  it("rejects a weakened append-only ledger privilege", () => {
+    const migration = readFileSync(
+      resolve(process.cwd(), "migrations/0009_ai_usage_budget.sql"),
+      "utf8",
+    ).replace(
+      "grant select, insert on ai_usage_ledger to vision_app",
+      "grant select, insert, update on ai_usage_ledger to vision_app",
+    );
+
+    expect(() => assertAiUsagePrivileges(migration)).toThrow();
   });
 });

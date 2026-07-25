@@ -191,6 +191,31 @@ describe("BudgetedAiProvider", () => {
     ]);
   });
 
+  it("does not build provider context until after budget admission", async () => {
+    await pglite.query(
+      `insert into ai_usage_months (
+         owner_id, budget_month, settled_cents, reserved_cents, created_at, updated_at
+       ) values ($1, '2026-07', 950, 0, $2, $2)`,
+      [OWNER_ID, NOW.toISOString()],
+    );
+    const { budgeted, proposeCategoryResult } = createProvider();
+    const requestFactory = vi.fn(() => REQUEST);
+
+    await expect(
+      budgeted.proposeCategoryFromFactory({
+        requestFactory,
+        requestClass: "routine",
+        idempotencyKey: "operation-lazy-context",
+      }),
+    ).resolves.toEqual({
+      status: "unavailable",
+      code: "AI_BUDGET_EXHAUSTED",
+      mode: "blocked",
+    });
+    expect(requestFactory).not.toHaveBeenCalled();
+    expect(proposeCategoryResult).not.toHaveBeenCalled();
+  });
+
   it("allows exactly one in-flight AI request for the owner", async () => {
     let releaseFirst!: () => void;
     const firstBlocked = new Promise<void>((resolve) => {

@@ -1,7 +1,7 @@
 import type { SchemaTablesManifest } from "./schema-manifest";
 
 /**
- * Hand-authored from the sixteen authoritative tables in migrations 0001 and 0004 through 0008.
+ * Hand-authored from the nineteen authoritative tables in migrations 0001 and 0004 through 0009.
  * Never regenerate this fixture from Drizzle metadata or the generated snapshot.
  *
  * Primary and unique keys intentionally record columns rather than generated names because the
@@ -10,6 +10,131 @@ import type { SchemaTablesManifest } from "./schema-manifest";
  * clauses with `and`: domain state, timestamps, and inferred confidence.
  */
 export const phaseBSchemaManifest = {
+  // Migration 0009: append-only AI usage facts retained without prompt or response content.
+  ai_usage_ledger: {
+    columns: [
+      ["id", "text", true],
+      ["reservation_id", "text", true],
+      ["owner_id", "text", true],
+      ["budget_month", "text", true],
+      ["event_type", "text", true],
+      ["estimated_cents", "integer", true],
+      ["actual_cents", "integer", false],
+      ["provider_request_id", "text", false],
+      ["model_id", "text", false],
+      ["input_tokens", "integer", false],
+      ["output_tokens", "integer", false],
+      ["total_tokens", "integer", false],
+      ["occurred_at", "timestamptz", true],
+    ],
+    primaryKeys: [["id"]],
+    uniqueKeys: [],
+    foreignKeys: [
+      ["ai_usage_ledger_reservation_fk", ["reservation_id"], "ai_usage_reservations", ["id"], "no action", "no action"],
+    ],
+    indexes: [
+      [
+        "ai_usage_ledger_owner_month_occurred_idx",
+        false,
+        "btree",
+        [
+          ["owner_id", "asc", "last"],
+          ["budget_month", "asc", "last"],
+          ["occurred_at", "asc", "last"],
+        ],
+      ],
+    ],
+    checks: [
+      ["ai_usage_ledger_actual_non_negative", "actual_cents is null or actual_cents >= 0"],
+      ["ai_usage_ledger_estimate_positive", "estimated_cents > 0"],
+      ["ai_usage_ledger_event_valid", "event_type in ('reserved', 'dispatched', 'settled', 'settled_estimate', 'released')"],
+      ["ai_usage_ledger_month_valid", "budget_month ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'"],
+      ["ai_usage_ledger_owner_non_empty", "owner_id <> ''"],
+      ["ai_usage_ledger_token_counts_non_negative", "(input_tokens is null or input_tokens >= 0) and (output_tokens is null or output_tokens >= 0) and (total_tokens is null or total_tokens >= 0)"],
+    ],
+  },
+
+  // Migration 0009: one authoritative aggregate for each owner and Chicago budget month.
+  ai_usage_months: {
+    columns: [
+      ["owner_id", "text", true],
+      ["budget_month", "text", true],
+      ["settled_cents", "integer", true, "0"],
+      ["reserved_cents", "integer", true, "0"],
+      ["created_at", "timestamptz", true],
+      ["updated_at", "timestamptz", true],
+    ],
+    primaryKeys: [["owner_id", "budget_month"]],
+    uniqueKeys: [],
+    foreignKeys: [],
+    indexes: [],
+    checks: [
+      ["ai_usage_months_key_valid", "budget_month ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'"],
+      ["ai_usage_months_owner_non_empty", "owner_id <> ''"],
+      ["ai_usage_months_reserved_non_negative", "reserved_cents >= 0"],
+      ["ai_usage_months_settled_non_negative", "settled_cents >= 0"],
+      ["ai_usage_months_timestamps_valid", "updated_at >= created_at"],
+    ],
+  },
+
+  // Migration 0009: idempotent reservations and the single in-flight provider fence.
+  ai_usage_reservations: {
+    columns: [
+      ["id", "text", true],
+      ["owner_id", "text", true],
+      ["budget_month", "text", true],
+      ["idempotency_key", "text", true],
+      ["request_class", "text", true],
+      ["status", "text", true],
+      ["estimated_cents", "integer", true],
+      ["actual_cents", "integer", false],
+      ["provider_request_id", "text", false],
+      ["model_id", "text", false],
+      ["input_tokens", "integer", false],
+      ["output_tokens", "integer", false],
+      ["total_tokens", "integer", false],
+      ["created_at", "timestamptz", true],
+      ["expires_at", "timestamptz", true],
+      ["dispatched_at", "timestamptz", false],
+      ["completed_at", "timestamptz", false],
+    ],
+    primaryKeys: [["id"]],
+    uniqueKeys: [["owner_id", "budget_month", "idempotency_key"]],
+    foreignKeys: [],
+    indexes: [
+      [
+        "ai_usage_reservations_expiry_idx",
+        false,
+        "btree",
+        [
+          ["status", "asc", "last"],
+          ["expires_at", "asc", "last"],
+        ],
+      ],
+      [
+        "ai_usage_reservations_one_in_flight_uq",
+        true,
+        "btree",
+        [["owner_id", "asc", "last"]],
+      ],
+    ],
+    checks: [
+      ["ai_usage_reservations_actual_consistent", "(status in ('settled', 'settled_estimate')) = (actual_cents is not null)"],
+      ["ai_usage_reservations_actual_non_negative", "actual_cents is null or actual_cents >= 0"],
+      ["ai_usage_reservations_class_valid", "request_class in ('routine', 'optional', 'complex')"],
+      ["ai_usage_reservations_completion_consistent", "(status in ('settled', 'settled_estimate', 'released')) = (completed_at is not null)"],
+      ["ai_usage_reservations_dispatch_consistent", "(status in ('dispatched', 'settled', 'settled_estimate')) = (dispatched_at is not null)"],
+      ["ai_usage_reservations_estimate_positive", "estimated_cents > 0"],
+      ["ai_usage_reservations_expiry_after_created", "expires_at > created_at"],
+      ["ai_usage_reservations_idempotency_non_empty", "idempotency_key <> ''"],
+      ["ai_usage_reservations_month_valid", "budget_month ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'"],
+      ["ai_usage_reservations_owner_non_empty", "owner_id <> ''"],
+      ["ai_usage_reservations_status_valid", "status in ('reserved', 'dispatched', 'settled', 'settled_estimate', 'released')"],
+      ["ai_usage_reservations_timestamps_valid", "(dispatched_at is null or dispatched_at >= created_at) and (completed_at is null or completed_at >= created_at)"],
+      ["ai_usage_reservations_token_counts_non_negative", "(input_tokens is null or input_tokens >= 0) and (output_tokens is null or output_tokens >= 0) and (total_tokens is null or total_tokens >= 0)"],
+    ],
+  },
+
   // Migration lines 107-119: create table audit_events.
   audit_events: {
     columns: [
@@ -634,3 +759,13 @@ export const phaseBSchemaManifest = {
     ],
   },
 } satisfies SchemaTablesManifest;
+
+/**
+ * Canonical direct privileges for the three AI accounting tables.
+ * The ledger is append-only to the application role; aggregate and reservation rows are mutable.
+ */
+export const phaseBAiUsagePrivilegeManifest = {
+  ai_usage_months: ["select", "insert", "update"],
+  ai_usage_reservations: ["select", "insert", "update"],
+  ai_usage_ledger: ["select", "insert"],
+} as const;

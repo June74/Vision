@@ -29,6 +29,14 @@ export interface BudgetedCategoryProposalRequest {
   readonly idempotencyKey: string;
 }
 
+/** Defers provider context construction until durable budget admission has succeeded. */
+export interface BudgetedCategoryProposalFactoryRequest {
+  /** Builds the provider request only after admission succeeds. */
+  readonly requestFactory: () => CategoryProposalRequest;
+  readonly requestClass: AiRequestClass;
+  readonly idempotencyKey: string;
+}
+
 /** Enumerates typed admission failures that never invoke or expose provider content. */
 export type BudgetedAiUnavailableResult = {
   readonly status: "unavailable";
@@ -133,11 +141,24 @@ export class BudgetedAiProvider implements AiProvider {
   async proposeCategoryResult(
     input: BudgetedCategoryProposalRequest,
   ): Promise<BudgetedOpenAiProviderResult> {
+    return this.proposeCategoryFromFactory({
+      /** Returns the already-validated eager request through the lazy admission contract. */
+      requestFactory: () => input.request,
+      requestClass: input.requestClass,
+      idempotencyKey: input.idempotencyKey,
+    });
+  }
+
+  /** Reserves first, then builds bounded context, marks dispatch, invokes once, and settles. */
+  async proposeCategoryFromFactory(
+    input: BudgetedCategoryProposalFactoryRequest,
+  ): Promise<BudgetedOpenAiProviderResult> {
     const now = this.#now();
     const reservationId = this.#createReservationId();
     const estimatedCents = this.#pricing.worstCaseCents[input.requestClass];
     if (
       !isOpaqueIdentifier(input.idempotencyKey) ||
+      typeof input.requestFactory !== "function" ||
       !isOpaqueIdentifier(reservationId) ||
       !isValidDate(now) ||
       !Number.isSafeInteger(estimatedCents) ||
@@ -184,6 +205,14 @@ export class BudgetedAiProvider implements AiProvider {
       return unavailable("AI_BUDGET_EXHAUSTED", "blocked");
     }
 
+    let request: CategoryProposalRequest;
+    try {
+      request = input.requestFactory();
+    } catch (error) {
+      await this.releaseSafely(reservationId, now);
+      throw error;
+    }
+
     try {
       await this.#repository.markDispatched(
         reservationId,
@@ -197,7 +226,7 @@ export class BudgetedAiProvider implements AiProvider {
 
     let providerResult: OpenAiProviderResult;
     try {
-      providerResult = await this.#provider.proposeCategoryResult(input.request);
+      providerResult = await this.#provider.proposeCategoryResult(request);
     } catch {
       const settled = await this.settleSafely(
         reservationId,

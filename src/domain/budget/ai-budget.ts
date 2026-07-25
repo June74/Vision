@@ -16,23 +16,6 @@ export interface AiBudgetDecision {
     | "AI_COMPLEX_DISABLED";
 }
 
-/** Enumerates Phase B capabilities whose availability must not be coupled accidentally. */
-export type FoundationCapability =
-  | "calendar_event_listing"
-  | "sync_status"
-  | "category_correction"
-  | "template_diagnostics"
-  | "ai_proposal";
-
-/** Describes the HTTP-level availability contract consumed by foundation routes. */
-export type FoundationCapabilityDecision =
-  | { readonly allowed: true; readonly status: 200 }
-  | {
-      readonly allowed: false;
-      readonly status: 503;
-      readonly code: "AI_BUDGET_EXHAUSTED";
-    };
-
 /** Starts warning mode and removes complex/Terra eligibility. */
 export const AI_WARNING_CENTS = 800;
 /** Stops optional AI work. */
@@ -105,24 +88,6 @@ export function getChicagoBudgetMonth(now: Date): string {
     throw new Error("Invalid AI budget timestamp.");
   }
   return `${year}-${month}`;
-}
-
-/** Keeps non-AI foundation capabilities available even when AI reaches its hard stop. */
-export function evaluateFoundationCapability(
-  monthlyCents: number,
-  capability: FoundationCapability,
-): FoundationCapabilityDecision {
-  if (capability !== "ai_proposal") {
-    return { allowed: true, status: 200 };
-  }
-  const budget = evaluateAiBudget(monthlyCents, "routine");
-  return budget.allowed
-    ? { allowed: true, status: 200 }
-    : {
-        allowed: false,
-        status: 503,
-        code: "AI_BUDGET_EXHAUSTED",
-      };
 }
 
 /** Returns the single fail-closed budget decision shape. */

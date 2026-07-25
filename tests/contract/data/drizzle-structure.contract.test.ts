@@ -2,6 +2,9 @@ import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  aiUsageLedger,
+  aiUsageMonths,
+  aiUsageReservations,
   auditEvents,
   calendarSyncJobs,
   calendarSyncMaintenance,
@@ -27,6 +30,9 @@ import {
 } from "./schema-manifest";
 
 const drizzleTables = [
+  aiUsageLedger,
+  aiUsageMonths,
+  aiUsageReservations,
   nodes,
   events,
   eventSyncPayloads,
@@ -46,7 +52,7 @@ const drizzleTables = [
 ];
 
 describe("Drizzle schema structure", () => {
-  it("matches the complete migration-derived manifest for all sixteen tables", () => {
+  it("matches the complete migration-derived manifest for all nineteen tables", () => {
     const actual = extractDrizzleTablesManifest(drizzleTables);
     assertSchemaMatchesManifest(actual, phaseBSchemaManifest);
   });
@@ -59,7 +65,13 @@ describe("Drizzle schema structure", () => {
       ),
     ) as unknown;
     const actual = extractSnapshotTablesManifest(snapshot);
-    assertSchemaMatchesManifest(actual, phaseBSchemaManifest);
+    const {
+      ai_usage_ledger: _ledger,
+      ai_usage_months: _months,
+      ai_usage_reservations: _reservations,
+      ...preBudgetManifest
+    } = phaseBSchemaManifest;
+    assertSchemaMatchesManifest(actual, preBudgetManifest);
   });
 
   it("keeps generated Drizzle SQL non-deployable", () => {
@@ -139,6 +151,66 @@ describe("Drizzle schema structure", () => {
     );
     expect(protectedColumn).toBeDefined();
     protectedColumn![1] = "text";
+
+    expect(() =>
+      assertSchemaMatchesManifest(weakened, phaseBSchemaManifest),
+    ).toThrow();
+  });
+
+  it("rejects a weakened AI settlement consistency check", () => {
+    const weakened = structuredClone(
+      extractDrizzleTablesManifest(drizzleTables),
+    );
+    const check = weakened.ai_usage_reservations.checks.find(
+      ([name]) => name === "ai_usage_reservations_actual_consistent",
+    );
+    expect(check).toBeDefined();
+    check![1] = "actual_cents is null or actual_cents >= 0";
+
+    expect(() =>
+      assertSchemaMatchesManifest(weakened, phaseBSchemaManifest),
+    ).toThrow();
+  });
+
+  it("rejects an AI token column type or nullability change", () => {
+    const weakened = structuredClone(
+      extractDrizzleTablesManifest(drizzleTables),
+    );
+    const tokenColumn = weakened.ai_usage_ledger.columns.find(
+      ([name]) => name === "total_tokens",
+    );
+    expect(tokenColumn).toBeDefined();
+    tokenColumn![1] = "bigint";
+    tokenColumn![2] = true;
+
+    expect(() =>
+      assertSchemaMatchesManifest(weakened, phaseBSchemaManifest),
+    ).toThrow();
+  });
+
+  it("rejects a removed AI concurrency index", () => {
+    const weakened = structuredClone(
+      extractDrizzleTablesManifest(drizzleTables),
+    );
+    weakened.ai_usage_reservations.indexes =
+      weakened.ai_usage_reservations.indexes.filter(
+        ([name]) => name !== "ai_usage_reservations_one_in_flight_uq",
+      );
+
+    expect(() =>
+      assertSchemaMatchesManifest(weakened, phaseBSchemaManifest),
+    ).toThrow();
+  });
+
+  it("rejects a weakened AI ledger foreign-key action", () => {
+    const weakened = structuredClone(
+      extractDrizzleTablesManifest(drizzleTables),
+    );
+    const foreignKey = weakened.ai_usage_ledger.foreignKeys.find(
+      ([name]) => name === "ai_usage_ledger_reservation_fk",
+    );
+    expect(foreignKey).toBeDefined();
+    foreignKey![5] = "cascade";
 
     expect(() =>
       assertSchemaMatchesManifest(weakened, phaseBSchemaManifest),
