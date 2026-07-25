@@ -4,7 +4,15 @@ This module treats AI category output as a suggestion, never as authority. A use
 
 ## `CategoryProposalSchema`
 
-Accepts only personal, work, or school plus bounded confidence, opaque evidence IDs, an ambiguity flag, and a closed rationale code. It rejects extra fields and does not store free-form model reasoning.
+Accepts only personal, work, or school plus bounded confidence, opaque evidence IDs, an ambiguity flag, and a closed rationale code. Domain-specific reasons must match their domain; mixed or insufficient evidence must be marked ambiguous. Source and schedule reasons require matching evidence identifiers. It rejects extra fields and does not store free-form model reasoning.
+
+## `validateProposalSemantics`
+
+Checks that a proposal's domain, rationale, ambiguity, and evidence agree with each other.
+
+## `normalizeJsonData`
+
+Safely copies plain JSON-like proposal data without invoking getters. Invalid objects and trapped proxy operations are rejected.
 
 ## `CategoryEvaluationPolicySchema`
 
@@ -16,4 +24,4 @@ Records whether a decision came from the user, a confirmed source, inference, or
 
 ## `applyCategoryProposal`
 
-Preserves explicit and confirmed-source decisions. Ambiguous proposals and confidence at or below the configured threshold remain unresolved.
+Preserves explicit and confirmed-source decisions. Invalid or contradictory input, mixed or insufficient evidence, ambiguity, and confidence at or below the configured threshold remain unresolved.

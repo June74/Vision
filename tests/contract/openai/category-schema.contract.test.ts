@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { OpenAiCategoryOutputSchema } from "../../../src/integrations/openai/category-schema";
+import { z } from "zod";
+import {
+  OpenAiCategoryOutputSchema,
+  safeParseOpenAiCategoryOutput,
+} from "../../../src/integrations/openai/category-schema";
 
 const validOutput = {
   domain: "work",
@@ -59,7 +63,7 @@ describe("OpenAiCategoryOutputSchema", () => {
     const hostile = Object.create({ permissions: ["share"] }) as Record<string, unknown>;
     Object.assign(hostile, validOutput);
 
-    expect(OpenAiCategoryOutputSchema.safeParse(hostile).success).toBe(false);
+    expect(safeParseOpenAiCategoryOutput(hostile).success).toBe(false);
   });
 
   it("rejects a prototype pollution key", () => {
@@ -67,6 +71,64 @@ describe("OpenAiCategoryOutputSchema", () => {
       '{"domain":"work","confidence":0.92,"evidenceIds":["event:title:1"],"ambiguous":false,"rationaleCode":"work_context","__proto__":{"privacy":"public"}}',
     );
 
-    expect(OpenAiCategoryOutputSchema.safeParse(hostile).success).toBe(false);
+    expect(safeParseOpenAiCategoryOutput(hostile).success).toBe(false);
+  });
+
+  it("advertises the exact strict model-output property set", () => {
+    const schema = z.toJSONSchema(OpenAiCategoryOutputSchema) as {
+      additionalProperties?: boolean;
+      properties?: Record<string, unknown>;
+      required?: string[];
+    };
+
+    expect(Object.keys(schema.properties ?? {}).sort()).toEqual(
+      ["ambiguous", "confidence", "domain", "evidenceIds", "rationaleCode"].sort(),
+    );
+    expect(schema.required?.sort()).toEqual(
+      ["ambiguous", "confidence", "domain", "evidenceIds", "rationaleCode"].sort(),
+    );
+    expect(schema.additionalProperties).toBe(false);
+    expect(schema.properties).not.toHaveProperty("audit");
+    expect(schema.properties).not.toHaveProperty("action");
+    expect(schema.properties).not.toHaveProperty("tool");
+    expect(schema.properties).not.toHaveProperty("privacy");
+    expect(schema.properties).not.toHaveProperty("permissions");
+  });
+
+  it.each([
+    new Proxy(
+      {},
+      {
+        getPrototypeOf() {
+          throw new Error("prototype trap");
+        },
+      },
+    ),
+    new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error("own keys trap");
+        },
+      },
+    ),
+    Object.defineProperty(
+      {
+        confidence: 0.92,
+        evidenceIds: ["event:title:1"],
+        ambiguous: false,
+        rationaleCode: "work_context",
+      },
+      "domain",
+      {
+        enumerable: true,
+        get() {
+          throw new Error("getter trap");
+        },
+      },
+    ),
+  ])("fails safely when hostile objects trap property inspection", (hostile) => {
+    expect(() => safeParseOpenAiCategoryOutput(hostile)).not.toThrow();
+    expect(safeParseOpenAiCategoryOutput(hostile).success).toBe(false);
   });
 });
