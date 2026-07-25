@@ -13,9 +13,10 @@ export interface GoogleWebhookChannel {
   readonly ownerId: string;
   readonly calendarId: string;
   readonly providerChannelId: string;
-  readonly providerResourceId: string;
+  readonly providerResourceId: string | null;
   readonly verificationTokenHash: string;
   readonly expiresAt: Date;
+  readonly lifecycle: "pending" | "active";
 }
 
 /** Indicates whether a durable webhook job still needs its first queue send. */
@@ -54,6 +55,11 @@ export interface CalendarJobRepository {
   findGoogleChannel(
     providerChannelId: string,
     verificationTokenHash: string,
+  ): Promise<GoogleWebhookChannel | undefined>;
+  bindPendingGoogleChannelResource(
+    providerChannelId: string,
+    verificationTokenHash: string,
+    providerResourceId: string,
   ): Promise<GoogleWebhookChannel | undefined>;
   reserveWebhookJob(
     message: CalendarSyncMessage,
@@ -105,7 +111,8 @@ class DrizzleCalendarJobRepository implements CalendarJobRepository {
         channel.provider_channel_id as "providerChannelId",
         channel.provider_resource_id as "providerResourceId",
         channel.verification_token_hash as "verificationTokenHash",
-        channel.expires_at as "expiresAt"
+        channel.expires_at as "expiresAt",
+        channel.lifecycle as "lifecycle"
       from sync_channels as channel
       inner join sync_checkpoints as checkpoint
         on checkpoint.owner_id = channel.owner_id
@@ -115,7 +122,39 @@ class DrizzleCalendarJobRepository implements CalendarJobRepository {
       where channel.provider = 'google-calendar'
         and channel.provider_channel_id = ${providerChannelId}
         and channel.verification_token_hash = ${verificationTokenHash}
+        and channel.lifecycle in ('pending', 'active')
       limit 1
+    `);
+    return result.rows[0] ? decodeChannel(result.rows[0]) : undefined;
+  }
+
+  /** Atomically binds Google's early sync resource to a pre-registered pending channel. */
+  async bindPendingGoogleChannelResource(
+    providerChannelId: string,
+    verificationTokenHash: string,
+    providerResourceId: string,
+  ): Promise<GoogleWebhookChannel | undefined> {
+    const result = await this.database.execute<Record<string, unknown>>(sql`
+      update sync_channels as channel
+      set provider_resource_id = ${providerResourceId}
+      from sync_checkpoints as checkpoint
+      where channel.provider = 'google-calendar'
+        and channel.provider_channel_id = ${providerChannelId}
+        and channel.verification_token_hash = ${verificationTokenHash}
+        and channel.lifecycle = 'pending'
+        and channel.provider_resource_id is null
+        and checkpoint.owner_id = channel.owner_id
+        and checkpoint.provider = channel.provider
+        and checkpoint.provider_calendar_id = channel.provider_calendar_id
+        and checkpoint.status = 'connected'
+      returning
+        channel.owner_id as "ownerId",
+        channel.provider_calendar_id as "calendarId",
+        channel.provider_channel_id as "providerChannelId",
+        channel.provider_resource_id as "providerResourceId",
+        channel.verification_token_hash as "verificationTokenHash",
+        channel.expires_at as "expiresAt",
+        channel.lifecycle as "lifecycle"
     `);
     return result.rows[0] ? decodeChannel(result.rows[0]) : undefined;
   }
@@ -441,10 +480,20 @@ function decodeChannel(row: Record<string, unknown>): GoogleWebhookChannel {
     ownerId: readText(row.ownerId),
     calendarId: readText(row.calendarId),
     providerChannelId: readText(row.providerChannelId),
-    providerResourceId: readText(row.providerResourceId),
+    providerResourceId:
+      row.providerResourceId === null ? null : readText(row.providerResourceId),
     verificationTokenHash: readHash(row.verificationTokenHash),
     expiresAt,
+    lifecycle: readChannelLifecycle(row.lifecycle),
   };
+}
+
+/** Accepts only a notification-verifiable channel lifecycle. */
+function readChannelLifecycle(value: unknown): "pending" | "active" {
+  if (value !== "pending" && value !== "active") {
+    throw new Error("Invalid Google channel row.");
+  }
+  return value;
 }
 
 /** Decodes only the four opaque fields permitted in a queue message. */

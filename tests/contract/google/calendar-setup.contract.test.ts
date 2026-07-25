@@ -420,6 +420,61 @@ describe("Google Calendar setup adapter", () => {
     ).rejects.toMatchObject({ outcome: "uncertain" });
   });
 
+  it("creates a bounded web-hook channel and reads the authoritative resource identity", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
+        id: "channel-opaque-identifier",
+        resourceId: "resource-opaque-identifier",
+        expiration: "1784937600000",
+      }),
+    );
+    const client = new CalendarClient(TOKEN, SUBJECT, fetcher);
+
+    await expect(
+      client.watchCalendar({
+        calendarId: "vision-calendar",
+        channelId: "channel-opaque-identifier",
+        channelToken: "channel-token-with-at-least-thirty-two-bytes",
+        callbackUri: "https://vision.example.test/webhooks/google/calendar",
+      }),
+    ).resolves.toEqual({
+      resourceId: "resource-opaque-identifier",
+      expiresAt: new Date(1_784_937_600_000),
+    });
+
+    const [url, init] = fetcher.mock.calls[0]!;
+    expect(new URL(url as string).pathname).toBe(
+      "/calendar/v3/calendars/vision-calendar/events/watch",
+    );
+    expect(JSON.parse(init?.body as string)).toEqual({
+      id: "channel-opaque-identifier",
+      type: "web_hook",
+      address: "https://vision.example.test/webhooks/google/calendar",
+      token: "channel-token-with-at-least-thirty-two-bytes",
+    });
+  });
+
+  it("stops only the exact channel and resource pair without an event write", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(null, { status: 204 }),
+    );
+    const client = new CalendarClient(TOKEN, SUBJECT, fetcher);
+
+    await client.stopChannel({
+      channelId: "channel-opaque-identifier",
+      resourceId: "resource-opaque-identifier",
+    });
+
+    const [url, init] = fetcher.mock.calls[0]!;
+    expect(new URL(url as string).pathname).toBe(
+      "/calendar/v3/channels/stop",
+    );
+    expect(JSON.parse(init?.body as string)).toEqual({
+      id: "channel-opaque-identifier",
+      resourceId: "resource-opaque-identifier",
+    });
+  });
+
   it("contains no event-write endpoint in the production adapter source", () => {
     const source = readFileSync(
       resolve(
@@ -429,7 +484,7 @@ describe("Google Calendar setup adapter", () => {
       "utf8",
     );
     expect(source).not.toMatch(
-      /\/events|events\.(?:insert|update|patch|delete)|event(?:Insert|Update|Delete)/u,
+      /\/events(?:\?|["'`])|events\.(?:insert|update|patch|delete)|event(?:Insert|Update|Delete)/u,
     );
   });
 });

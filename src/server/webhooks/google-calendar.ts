@@ -47,7 +47,7 @@ export function registerGoogleCalendarWebhook(
         : dependencies;
     const now = resolved.now?.() ?? new Date();
     const tokenHash = await sha256Base64Url(parsed.channelToken);
-    const channel = await resolved.repository.findGoogleChannel(
+    let channel = await resolved.repository.findGoogleChannel(
       parsed.channelId,
       tokenHash,
     );
@@ -57,9 +57,33 @@ export function registerGoogleCalendarWebhook(
       !channel ||
       !tokenMatches ||
       channel.providerChannelId !== parsed.channelId ||
-      channel.providerResourceId !== parsed.resourceId ||
       channel.expiresAt.getTime() <= now.getTime()
     ) {
+      return context.body(null, 204);
+    }
+    if (channel.lifecycle === "pending") {
+      if (
+        parsed.resourceState !== "sync" ||
+        (channel.providerResourceId !== null &&
+          channel.providerResourceId !== parsed.resourceId)
+      ) {
+        return context.body(null, 204);
+      }
+      channel =
+        channel.providerResourceId === null
+          ? (await resolved.repository.bindPendingGoogleChannelResource(
+                parsed.channelId,
+                tokenHash,
+                parsed.resourceId,
+              )) ??
+            (await resolved.repository.findGoogleChannel(
+              parsed.channelId,
+              tokenHash,
+            ))
+          : channel;
+      if (!channel) return context.body(null, 204);
+    }
+    if (channel.providerResourceId !== parsed.resourceId) {
       return context.body(null, 204);
     }
     if (parsed.resourceState === "not_exists") {

@@ -8,6 +8,10 @@ Returns exact-name, owned, active, non-primary candidates.
 Sends only `Vision` and the configured time zone.
 ## `getCalendar`
 Rechecks one encoded stable ID.
+## `watchCalendar`
+Starts the Vision calendar notification channel.
+## `stopChannel`
+Stops one exact channel/resource pair.
 ## `request`
 Adds server authorization and hides raw failures.
 ## `readBoundedJson`
@@ -20,5 +24,9 @@ Applies the complete candidate rule.
 Binds evidence to the verified Google account.
 ## `isBoundedText`
 Checks nonempty text size.
+## `isOpaqueText`
+Checks base64url channel credentials.
+## `isWebhookUri`
+Requires the fixed HTTPS webhook path.
 ## `readPositiveBound`
 Checks testable limits without exceeding production ceilings.

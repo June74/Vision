@@ -24,6 +24,9 @@
       }
     ]
   },
+  "triggers": {
+    "crons": ["*/15 * * * *"]
+  },
   "vars": {
     "VISION_ENV": "local"
   }

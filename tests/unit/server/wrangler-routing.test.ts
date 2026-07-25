@@ -18,6 +18,7 @@ describe("Cloudflare asset routing", () => {
           max_concurrency?: number;
         }>;
       };
+      triggers?: { crons?: string[] };
     };
 
     expect(config.assets?.run_worker_first).toEqual([
@@ -37,5 +38,6 @@ describe("Cloudflare asset routing", () => {
         max_concurrency: 1,
       }),
     ]);
+    expect(config.triggers?.crons).toEqual(["*/15 * * * *"]);
   });
 });

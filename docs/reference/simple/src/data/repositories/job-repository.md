@@ -6,6 +6,10 @@ This repository stores verified notification jobs and prevents duplicate queue d
 
 Finds a channel only when its Google channel ID and hashed secret token both match and its checkpoint is connected.
 
+## `bindPendingGoogleChannelResource`
+
+Binds Google's first authenticated `sync` resource to a pending channel.
+
 ## `reserveWebhookJob`
 
 Creates one durable job for a notification or returns the existing job for the same signal.
@@ -45,6 +49,10 @@ Creates the PostgreSQL-backed repository.
 ## `decodeChannel`
 
 Validates queryable channel facts returned by the database.
+
+## `readChannelLifecycle`
+
+Accepts only pending or active webhook channels.
 
 ## `decodeMessage`
 

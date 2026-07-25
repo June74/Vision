@@ -1,0 +1,14 @@
+ALTER TABLE "sync_channels" DROP CONSTRAINT "sync_channels_resource_non_empty";--> statement-breakpoint
+ALTER TABLE "sync_channels" ALTER COLUMN "provider_resource_id" DROP NOT NULL;--> statement-breakpoint
+ALTER TABLE "sync_channels" ADD COLUMN "lifecycle" text DEFAULT 'active' NOT NULL;--> statement-breakpoint
+ALTER TABLE "sync_channels" ADD COLUMN "created_at" timestamp with time zone DEFAULT now() NOT NULL;--> statement-breakpoint
+ALTER TABLE "sync_channels" ADD COLUMN "activated_at" timestamp with time zone DEFAULT now();--> statement-breakpoint
+ALTER TABLE "sync_channels" ADD COLUMN "retired_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "sync_channels" ADD COLUMN "failure_count" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "sync_channels" ADD COLUMN "last_failure_at" timestamp with time zone;--> statement-breakpoint
+CREATE INDEX "sync_channels_renewal_idx" ON "sync_channels" USING btree ("owner_id","provider","provider_calendar_id","lifecycle","expires_at");--> statement-breakpoint
+ALTER TABLE "sync_channels" ADD CONSTRAINT "sync_channels_lifecycle_valid" CHECK ("sync_channels"."lifecycle" in ('pending', 'active', 'retired', 'failed'));--> statement-breakpoint
+ALTER TABLE "sync_channels" ADD CONSTRAINT "sync_channels_resource_lifecycle_consistent" CHECK (("sync_channels"."lifecycle" in ('active', 'retired') and "sync_channels"."provider_resource_id" is not null) or "sync_channels"."lifecycle" in ('pending', 'failed'));--> statement-breakpoint
+ALTER TABLE "sync_channels" ADD CONSTRAINT "sync_channels_activation_consistent" CHECK (("sync_channels"."lifecycle" = 'active' and "sync_channels"."activated_at" is not null and "sync_channels"."retired_at" is null) or ("sync_channels"."lifecycle" = 'retired' and "sync_channels"."activated_at" is not null and "sync_channels"."retired_at" is not null) or "sync_channels"."lifecycle" in ('pending', 'failed'));--> statement-breakpoint
+ALTER TABLE "sync_channels" ADD CONSTRAINT "sync_channels_failure_count_non_negative" CHECK ("sync_channels"."failure_count" >= 0);--> statement-breakpoint
+ALTER TABLE "sync_channels" ADD CONSTRAINT "sync_channels_resource_non_empty" CHECK ("sync_channels"."provider_resource_id" is null or "sync_channels"."provider_resource_id" <> '');

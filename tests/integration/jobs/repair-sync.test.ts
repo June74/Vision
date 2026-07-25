@@ -1,0 +1,165 @@
+import { describe, expect, it, vi } from "vitest";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { PGlite } from "@electric-sql/pglite";
+import { drizzle } from "drizzle-orm/pglite";
+import type { VisionDatabase } from "../../../src/data/db";
+import { createChannelMaintenanceRepository } from "../../../src/data/repositories/channel-maintenance-repository";
+import {
+  repairCalendarSync,
+  type RepairCalendar,
+  type RepairDependencies,
+} from "../../../src/jobs/repair-calendar-sync";
+import { runScheduledCalendarMaintenance } from "../../../src/jobs/scheduled";
+
+const NOW = new Date("2026-07-24T16:15:00.000Z");
+const STALE: RepairCalendar = {
+  ownerId: "owner-1",
+  calendarId: "calendar-1",
+  checkpointVersion: 3,
+};
+
+function dependencies(): RepairDependencies {
+  return {
+    repository: {
+      listRepairCandidates: vi.fn(async () => [STALE]),
+      reserveRepairJob: vi.fn(async (message) => ({
+        message,
+        shouldEnqueue: true,
+      })),
+      markEnqueued: vi.fn(async () => undefined),
+    },
+    queue: {
+      send: vi.fn(async () => undefined),
+    },
+  };
+}
+
+describe("scheduled calendar repair", () => {
+  it("repairs a missed notification on the first eligible 15-minute run", async () => {
+    const deps = dependencies();
+
+    await repairCalendarSync(NOW, deps);
+
+    expect(deps.queue.send).toHaveBeenCalledWith({
+      jobId: expect.stringMatching(/^repair_[A-Za-z0-9_-]{43}$/u),
+      ownerId: STALE.ownerId,
+      calendarId: STALE.calendarId,
+      reason: "repair",
+    });
+    expect(deps.repository.markEnqueued).toHaveBeenCalledOnce();
+  });
+
+  it("does not enqueue duplicate work on repeated scheduled invocation", async () => {
+    const deps = dependencies();
+    vi.mocked(deps.repository.reserveRepairJob)
+      .mockResolvedValueOnce({
+        message: {
+          jobId: "repair_duplicate",
+          ownerId: STALE.ownerId,
+          calendarId: STALE.calendarId,
+          reason: "repair",
+        },
+        shouldEnqueue: true,
+      })
+      .mockResolvedValueOnce({
+        message: {
+          jobId: "repair_duplicate",
+          ownerId: STALE.ownerId,
+          calendarId: STALE.calendarId,
+          reason: "repair",
+        },
+        shouldEnqueue: false,
+      });
+
+    await repairCalendarSync(NOW, deps);
+    await repairCalendarSync(NOW, deps);
+
+    expect(deps.queue.send).toHaveBeenCalledOnce();
+  });
+
+  it("runs renewal and repair without fetching calendar events in the scheduler", async () => {
+    const renew = vi.fn(async () => undefined);
+    const repair = vi.fn(async () => undefined);
+
+    await runScheduledCalendarMaintenance(NOW, { renew, repair });
+
+    expect(renew).toHaveBeenCalledWith(NOW);
+    expect(repair).toHaveBeenCalledWith(NOW);
+  });
+
+  it("selects a missed sync and durably deduplicates its scheduled repair", async () => {
+    const postgres = new PGlite();
+    try {
+      for (const migration of [
+        "0001_phase_b_foundation.sql",
+        "0002_google_auth_sessions.sql",
+        "0003_calendar_setup.sql",
+        "0004_incremental_event_sync.sql",
+        "0005_google_notification_jobs.sql",
+        "0006_google_channel_lifecycle.sql",
+      ]) {
+        await postgres.exec(
+          await readFile(resolve(process.cwd(), "migrations", migration), "utf8"),
+        );
+      }
+      await postgres.query(
+        `insert into sync_checkpoints (
+           id, owner_id, provider, provider_calendar_id, sync_token_envelope,
+           key_version, committed_at, version, status, updated_at
+         ) values ('checkpoint-repair', $1, 'google-calendar', $2, $3, 1, $4, 3,
+           'connected', $4)`,
+        [
+          STALE.ownerId,
+          STALE.calendarId,
+          new Uint8Array([1]),
+          new Date(NOW.getTime() - 16 * 60_000).toISOString(),
+        ],
+      );
+      await postgres.query(
+        `insert into sync_checkpoints (
+           id, owner_id, provider, provider_calendar_id, sync_token_envelope,
+           key_version, committed_at, version, status, updated_at
+         ) values ('checkpoint-other-owner', 'owner-other', 'google-calendar',
+           'calendar-other', $1, 1, $2, 2, 'connected', $2)`,
+        [
+          new Uint8Array([2]),
+          new Date(NOW.getTime() - 16 * 60_000).toISOString(),
+        ],
+      );
+      const repository = createChannelMaintenanceRepository(
+        drizzle(postgres) as unknown as VisionDatabase,
+        STALE.ownerId,
+      );
+      const send = vi.fn(async () => undefined);
+
+      await repairCalendarSync(NOW, {
+        repository,
+        queue: { send },
+      });
+      await repairCalendarSync(NOW, {
+        repository,
+        queue: { send },
+      });
+
+      expect(send).toHaveBeenCalledOnce();
+      expect(
+        (
+          await postgres.query(
+            `select reason, status, owner_id, provider_calendar_id
+             from calendar_sync_jobs`,
+          )
+        ).rows,
+      ).toEqual([
+        {
+          reason: "repair",
+          status: "enqueued",
+          owner_id: STALE.ownerId,
+          provider_calendar_id: STALE.calendarId,
+        },
+      ]);
+    } finally {
+      await postgres.close();
+    }
+  }, 30_000);
+});

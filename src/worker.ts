@@ -22,6 +22,7 @@ import {
 } from "./server/webhooks/google-calendar";
 import { consumer } from "./jobs/queue-consumer";
 import type { CalendarSyncMessage } from "./jobs/queue-message";
+import { scheduled } from "./jobs/scheduled";
 
 /** Supplies replaceable runtime boundaries for deterministic, side-effect-free application tests. */
 export interface AppDependencies {
@@ -100,6 +101,7 @@ const worker: ExportedHandler<Env, CalendarSyncMessage> = {
   fetch: (request, environment, context) =>
     app.fetch(request, environment, context),
   queue: consumer,
+  scheduled,
 };
 
 export default worker;

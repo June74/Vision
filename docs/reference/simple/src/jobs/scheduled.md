@@ -1,0 +1,32 @@
+# `src/jobs/scheduled.ts`
+
+Runs Google channel renewal and missed-notification repair every 15 minutes.
+
+## `runScheduledCalendarMaintenance`
+Runs renewal before repair.
+## `scheduled`
+Connects Cloudflare scheduled events to maintenance.
+## `createProductionScheduledCalendarMaintenanceDependencies`
+Builds owner-bound database, encryption, Google, and Queue dependencies.
+## `verify`
+Rejects ID-token verification in the refresh-only client.
+## `renew`
+Runs channel lifecycle maintenance.
+## `watch`
+Starts the exact Google watch channel.
+## `stop`
+Stops the exact old channel.
+## `createChannelId`
+Creates an opaque channel identifier.
+## `createChannelToken`
+Creates a secret callback token.
+## `encryptToken`
+Encrypts the recovery copy of the token.
+## `repair`
+Reserves stale-calendar repair work.
+## `randomOpaque`
+Creates canonical random base64url text.
+## `sha256Base64Url`
+Hashes channel tokens and owner identifiers.
+## `deriveOwnerId`
+Derives the authentication-compatible owner key.

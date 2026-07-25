@@ -6,6 +6,10 @@ The job repository is the PostgreSQL authority between an unauthenticated Google
 
 Queries `sync_channels` with provider, channel ID, and the SHA-256 token digest, then joins the authoritative checkpoint and requires `connected`. It returns only owner, calendar, resource identity, digest, and expiry; the encrypted recovery token never crosses this boundary.
 
+## `bindPendingGoogleChannelResource`
+
+Atomically attaches the initial authenticated `sync` resource only while the digest-backed row is pending and connected.
+
 ## `reserveWebhookJob`
 
 Inserts `pending_enqueue` with a stable job ID. A conflict is accepted only when owner, calendar, provider, and reason exactly match. A still-pending winner can be sent again after an uncertain Queue call.
@@ -45,6 +49,10 @@ Constructs the repository over the typed Vision database.
 ## `decodeChannel`
 
 Strictly decodes the safe channel projection and rejects malformed digests or timestamps.
+
+## `readChannelLifecycle`
+
+Rejects failed and retired rows at the webhook boundary.
 
 ## `decodeMessage`
 

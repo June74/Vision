@@ -8,6 +8,10 @@ Uses 250-row pages, detects token cycles, and locally requires exact `Vision`, `
 POSTs exactly `{summary: "Vision", timeZone}` and marks ambiguous failures uncertain.
 ## `getCalendar`
 Percent-encodes the ID and validates the CalendarList resource.
+## `watchCalendar`
+Calls only `events.watch` and validates Google's returned channel, resource, and expiration.
+## `stopChannel`
+Calls only `channels.stop` with the exact stored pair.
 ## `request`
 Uses a fixed Google origin and collapses token/provider details.
 ## `readBoundedJson`
@@ -20,5 +24,9 @@ Independently validates provider filtering.
 Adds the server-verified token subject.
 ## `isBoundedText`
 Applies protocol-specific scalar bounds.
+## `isOpaqueText`
+Restricts channel credentials to bounded base64url text.
+## `isWebhookUri`
+Rejects credentials, query text, fragments, non-HTTPS origins, and wrong paths.
 ## `readPositiveBound`
 Allows test overrides only below the 30-second and one-megabyte production ceilings.

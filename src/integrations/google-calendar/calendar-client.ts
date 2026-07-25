@@ -36,6 +36,13 @@ const insertedCalendarSchema = z
     etag: etagText,
   })
   .passthrough();
+const watchedChannelSchema = z
+  .object({
+    id: protocolText,
+    resourceId: protocolText,
+    expiration: z.string().regex(/^[1-9]\d{12}$/u),
+  })
+  .passthrough();
 
 /** Provider outcome categories used to decide whether creation may safely be reconciled. */
 export type CalendarProviderOutcome = "definite_failure" | "uncertain";
@@ -185,11 +192,83 @@ export class CalendarClient {
     return bindOwnership(payload.data, this.verifiedGoogleSubject);
   }
 
+  /** Starts a notification channel for the private Vision calendar without reading event content. */
+  async watchCalendar(input: {
+    readonly calendarId: string;
+    readonly channelId: string;
+    readonly channelToken: string;
+    readonly callbackUri: string;
+  }): Promise<{ readonly resourceId: string; readonly expiresAt: Date }> {
+    if (
+      !isBoundedText(input.calendarId, 1_024) ||
+      !isOpaqueText(input.channelId, 256, 16) ||
+      !isOpaqueText(input.channelToken, 256, 32) ||
+      !isWebhookUri(input.callbackUri)
+    ) {
+      throw new CalendarProviderError("definite_failure");
+    }
+    const payload = watchedChannelSchema.safeParse(
+      await this.request(
+        `${GOOGLE_CALENDAR_BASE_URL}/calendars/${encodeURIComponent(input.calendarId)}/events/watch`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            id: input.channelId,
+            type: "web_hook",
+            address: input.callbackUri,
+            token: input.channelToken,
+          }),
+        },
+        true,
+      ),
+    );
+    if (!payload.success || payload.data.id !== input.channelId) {
+      throw new CalendarProviderError("uncertain");
+    }
+    const expiration = Number(payload.data.expiration);
+    const expiresAt = new Date(expiration);
+    if (!Number.isSafeInteger(expiration) || Number.isNaN(expiresAt.getTime())) {
+      throw new CalendarProviderError("uncertain");
+    }
+    return Object.freeze({
+      resourceId: payload.data.resourceId,
+      expiresAt,
+    });
+  }
+
+  /** Stops exactly one known channel/resource pair and cannot mutate calendar events. */
+  async stopChannel(input: {
+    readonly channelId: string;
+    readonly resourceId: string;
+  }): Promise<void> {
+    if (
+      !isOpaqueText(input.channelId, 256, 16) ||
+      !isBoundedText(input.resourceId, 1_024)
+    ) {
+      throw new CalendarProviderError("definite_failure");
+    }
+    await this.request(
+      `${GOOGLE_CALENDAR_BASE_URL}/channels/stop`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: input.channelId,
+          resourceId: input.resourceId,
+        }),
+      },
+      true,
+      true,
+    );
+  }
+
   /** Executes one fixed-origin bearer request and removes all raw failures at the boundary. */
   private async request(
     url: string,
     init: RequestInit,
     mutationMayHaveSucceeded: boolean,
+    emptyResponseAllowed = false,
   ): Promise<unknown> {
     const controller = new AbortController();
     let rejectDeadline!: (reason: CalendarDeadlineExceeded) => void;
@@ -220,6 +299,7 @@ export class CalendarClient {
             : "definite_failure",
         );
       }
+      if (emptyResponseAllowed && response.status === 204) return undefined;
       return await readBoundedJson(
         response,
         deadline,
@@ -333,6 +413,38 @@ function isBoundedText(value: unknown, maximum: number): value is string {
     value.trim().length > 0 &&
     value.length <= maximum
   );
+}
+
+/** Accepts one provider-safe opaque base64url identifier or token. */
+function isOpaqueText(
+  value: unknown,
+  maximum: number,
+  minimum: number,
+): value is string {
+  return (
+    typeof value === "string" &&
+    value.length >= minimum &&
+    value.length <= maximum &&
+    /^[A-Za-z0-9_-]+$/u.test(value)
+  );
+}
+
+/** Requires the fixed public webhook path on a credential-free HTTPS origin. */
+function isWebhookUri(value: unknown): value is string {
+  if (typeof value !== "string" || value.length > 2_048) return false;
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      url.username === "" &&
+      url.password === "" &&
+      url.pathname === "/webhooks/google/calendar" &&
+      url.search === "" &&
+      url.hash === ""
+    );
+  } catch {
+    return false;
+  }
 }
 
 /** Validates a positive integer test override without exceeding the production ceiling. */

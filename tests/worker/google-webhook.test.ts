@@ -22,6 +22,7 @@ class MemoryWebhookRepository implements CalendarJobRepository {
     providerResourceId: RESOURCE_ID,
     verificationTokenHash: "",
     expiresAt: new Date(NOW.getTime() + 60_000),
+    lifecycle: "active",
   };
   lookup = vi.fn<
     (
@@ -34,6 +35,18 @@ class MemoryWebhookRepository implements CalendarJobRepository {
   }));
 
   findGoogleChannel = this.lookup;
+
+  async bindPendingGoogleChannelResource(
+    _channelId: string,
+    _tokenHash: string,
+    resourceId: string,
+  ): Promise<GoogleWebhookChannel | undefined> {
+    return {
+      ...this.channel,
+      providerResourceId: resourceId,
+      lifecycle: "pending",
+    };
+  }
 
   async reserveWebhookJob(
     message: CalendarSyncMessage,
@@ -171,6 +184,72 @@ describe("Google Calendar notification webhook", () => {
       });
     },
   );
+
+  it("accepts Google's early sync signal by atomically binding a pending resource", async () => {
+    const { app, repository, send } = harness({
+      channel: {
+        providerResourceId: null,
+        lifecycle: "pending",
+      },
+    });
+    const bind = vi.spyOn(repository, "bindPendingGoogleChannelResource");
+
+    const response = await post(
+      app,
+      headers({ "x-goog-resource-state": "sync" }),
+    );
+
+    expect(response.status).toBe(204);
+    expect(bind).toHaveBeenCalledWith(
+      CHANNEL_ID,
+      expect.stringMatching(/^[A-Za-z0-9_-]{43}$/u),
+      RESOURCE_ID,
+    );
+    expect(send).toHaveBeenCalledOnce();
+  });
+
+  it("does not bind non-sync traffic to a pending channel", async () => {
+    const { app, repository, send } = harness({
+      channel: {
+        providerResourceId: null,
+        lifecycle: "pending",
+      },
+    });
+    const bind = vi.spyOn(repository, "bindPendingGoogleChannelResource");
+
+    const response = await post(app, headers());
+
+    expect(response.status).toBe(204);
+    expect(bind).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("accepts an early sync when activation wins the pending-resource bind race", async () => {
+    const { app, repository, send } = harness({
+      channel: {
+        providerResourceId: null,
+        lifecycle: "pending",
+      },
+    });
+    vi.spyOn(repository, "bindPendingGoogleChannelResource").mockImplementation(
+      async () => {
+        Object.assign(repository.channel, {
+          providerResourceId: RESOURCE_ID,
+          lifecycle: "active",
+        });
+        return undefined;
+      },
+    );
+
+    const response = await post(
+      app,
+      headers({ "x-goog-resource-state": "sync" }),
+    );
+
+    expect(response.status).toBe(204);
+    expect(repository.lookup).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenCalledOnce();
+  });
 
   it("authenticates and acknowledges not_exists without enqueueing work", async () => {
     const { app, repository, send } = harness();
