@@ -202,6 +202,36 @@ describe("Drizzle schema structure", () => {
     ).toThrow();
   });
 
+  it("rejects a weakened AI concurrency predicate", () => {
+    const weakened = structuredClone(
+      extractDrizzleTablesManifest(drizzleTables),
+    );
+    const index = weakened.ai_usage_reservations.indexes.find(
+      ([name]) => name === "ai_usage_reservations_one_in_flight_uq",
+    );
+    expect(index).toBeDefined();
+    index![4] = "status = 'reserved'";
+
+    expect(() =>
+      assertSchemaMatchesManifest(weakened, phaseBSchemaManifest),
+    ).toThrow();
+  });
+
+  it("rejects a removed AI concurrency predicate", () => {
+    const weakened = structuredClone(
+      extractDrizzleTablesManifest(drizzleTables),
+    );
+    const index = weakened.ai_usage_reservations.indexes.find(
+      ([name]) => name === "ai_usage_reservations_one_in_flight_uq",
+    );
+    expect(index).toBeDefined();
+    index!.splice(4, 1);
+
+    expect(() =>
+      assertSchemaMatchesManifest(weakened, phaseBSchemaManifest),
+    ).toThrow();
+  });
+
   it("rejects a weakened AI ledger foreign-key action", () => {
     const weakened = structuredClone(
       extractDrizzleTablesManifest(drizzleTables),

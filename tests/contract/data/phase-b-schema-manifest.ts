@@ -116,6 +116,7 @@ export const phaseBSchemaManifest = {
         true,
         "btree",
         [["owner_id", "asc", "last"]],
+        "status in ('reserved', 'dispatched')",
       ],
     ],
     checks: [
@@ -650,6 +651,7 @@ export const phaseBSchemaManifest = {
           ["provider", "asc", "last"],
           ["provider_calendar_id", "asc", "last"],
         ],
+        "lifecycle = 'pending'",
       ],
       [
         "sync_channels_renewal_idx",
@@ -765,7 +767,16 @@ export const phaseBSchemaManifest = {
  * The ledger is append-only to the application role; aggregate and reservation rows are mutable.
  */
 export const phaseBAiUsagePrivilegeManifest = {
-  ai_usage_months: ["select", "insert", "update"],
-  ai_usage_reservations: ["select", "insert", "update"],
-  ai_usage_ledger: ["select", "insert"],
+  ai_usage_months: {
+    vision_app: ["select", "insert", "update"],
+    public: [],
+  },
+  ai_usage_reservations: {
+    vision_app: ["select", "insert", "update"],
+    public: [],
+  },
+  ai_usage_ledger: {
+    vision_app: ["select", "insert"],
+    public: [],
+  },
 } as const;

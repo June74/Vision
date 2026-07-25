@@ -16,7 +16,7 @@ Reserves budget before building provider context, then dispatches and settles th
 
 ## `requestFactory`
 
-Builds the provider request only after budget admission.
+Builds or asynchronously loads the provider request only after budget admission.
 
 ## `releaseSafely`
 

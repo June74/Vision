@@ -1,6 +1,6 @@
 # `src/server/api/ai-category-proposal-routes.ts`
 
-This module exposes one authenticated AI category-proposal boundary. It validates the server session and CSRF token before streaming at most 32 KiB, prevents callers from choosing request class, and defers the allowlisted context builder until the durable budget reservation succeeds.
+This module exposes one authenticated AI category-proposal boundary. It validates the server session and CSRF token before streaming at most 32 KiB, accepts only an opaque event reference and idempotency key, and defers protected event access until the durable budget reservation succeeds.
 
 ## `registerAiCategoryProposalRoute`
 
@@ -8,19 +8,23 @@ Registers `POST /api/ai/category-proposals` before the generic API fallback. Onl
 
 ## `createProductionAiCategoryProposalDependencies`
 
-Builds the encrypted session authority, least-privileged AI repository, canonical Cloudflare Gateway OpenAI adapter, exact injected pricing, and owner-bound budget wrapper from validated Worker bindings.
+Builds the encrypted session authority, least-privileged AI repository, canonical Cloudflare Gateway OpenAI adapter, exact injected pricing, and an owner-bound protected-event loader from validated Worker bindings.
 
 ## `createBudgetedProvider`
 
 Creates a routine-capable `BudgetedAiProvider` bound to the authenticated owner and durable repository.
 
-## `buildCategoryRequest`
+## `createContextLoader`
 
-Uses `buildCategoryContext` to copy a bounded minimum-context packet, then derives subject, evidence, and policy fields from that accepted packet.
+Creates the protected repository capability for the authenticated owner only inside the admitted request factory.
+
+## `load`
+
+Looks up the opaque event reference through the owner-scoped encrypted repository and returns only the server-policy-minimized category request.
 
 ## `requestFactory`
 
-Invokes the allowlisted context builder only inside the budget wrapper after reservation admission.
+Invokes the owner-bound loader only inside the budget wrapper after reservation admission, so budget or concurrency denial performs no event lookup or decryption.
 
 ## `now`
 
@@ -53,6 +57,10 @@ Returns the exact hard-stop code at 950 cents, preserves duplicate semantics, an
 ## `invalidAiCategoryRequest`
 
 Builds the constant 400 error for malformed, oversized, or non-allowlisted input.
+
+## `aiEventNotAvailable`
+
+Builds the constant 404 response shared by missing, cross-owner, restricted, and cancelled references so callers cannot probe protected-event existence.
 
 ## `aiCategoryUnavailable`
 

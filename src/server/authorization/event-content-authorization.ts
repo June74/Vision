@@ -3,6 +3,8 @@ import type { PrivacyLevel } from "../../domain/privacy/privacy";
 import {
   hasEventContentAuthorizationDecision,
   hasVerifiedEventRepositoryAccess,
+  registerEventContentAuthorizationDecision,
+  registerVerifiedEventRepositoryAccess,
 } from "./event-content-capability-internal";
 
 const decisionTypeBrand: unique symbol = Symbol("vision.event-content-decision-type");
@@ -28,6 +30,39 @@ export interface VerifiedEventRepositoryAccess {
   authorize(
     request: EventContentAuthorizationRequest,
   ): EventContentAuthorizationDecision | undefined;
+}
+
+/** Creates the narrow production capability used for owner-requested AI event categorization. */
+export function createAiEventRepositoryAccess(
+  authenticatedOwnerId: string,
+): VerifiedEventRepositoryAccess {
+  if (
+    typeof authenticatedOwnerId !== "string" ||
+    authenticatedOwnerId.length < 1 ||
+    authenticatedOwnerId.length > 128 ||
+    !/^[A-Za-z0-9][A-Za-z0-9._:/-]*$/u.test(authenticatedOwnerId)
+  ) {
+    throw new Error("AI event authorization owner is invalid.");
+  }
+
+  const access = Object.freeze({
+    authenticatedOwnerId,
+    /** Authorizes only the exact authenticated owner and never a restricted event. */
+    authorize(request: EventContentAuthorizationRequest) {
+      if (
+        request.authenticatedOwnerId !== authenticatedOwnerId ||
+        request.eventOwnerId !== authenticatedOwnerId ||
+        request.privacy === "restricted"
+      ) {
+        return undefined;
+      }
+      return registerEventContentAuthorizationDecision(
+        Object.freeze({ ...request }),
+      ) as EventContentAuthorizationDecision;
+    },
+  });
+  registerVerifiedEventRepositoryAccess(access);
+  return access as unknown as VerifiedEventRepositoryAccess;
 }
 
 /** Rejects caller-shaped objects that were not issued by the server capability boundary. */

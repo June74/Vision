@@ -1,19 +1,21 @@
 /** Registers the authenticated, CSRF-protected, budgeted AI category proposal route. */
 import type { Context, Hono } from "hono";
 import { z } from "zod";
+import { createWrappedKeyProvider } from "../../crypto/key-provider";
 import { createDb } from "../../data/db";
 import { createAiUsageRepository } from "../../data/repositories/ai-usage-repository";
+import { createEventRepository } from "../../data/repositories/event-repository";
 import type { EncryptedSessionRepository } from "../../data/repositories/session-repository";
-import type { CategoryProposalRequest } from "../../integrations/openai/ai-provider";
+import { DrizzleWrappedDataKeyStore } from "../../data/repositories/token-repository";
 import {
   BudgetedAiProvider,
   type BudgetedCategoryProposalFactoryRequest,
 } from "../../integrations/openai/budgeted-ai-provider";
-import {
-  buildCategoryContext,
-  CategoryContextError,
-} from "../../integrations/openai/context-builder";
 import { OpenAiProvider } from "../../integrations/openai/openai-provider";
+import {
+  createAiCategoryContextLoader,
+  type AiCategoryContextLoader,
+} from "../ai/category-context-loader";
 import { verifyCsrfToken } from "../auth/csrf";
 import { createProductionAuthDependencies } from "../auth/oauth-routes";
 import {
@@ -26,18 +28,31 @@ import type { Env } from "../env";
 import {
   parseAiBudgetEnvironment,
   parseOpenAiEnvironment,
+  parseVisionKeyEncryptionKey,
 } from "../env";
 import { throwVisionError, VisionError } from "../errors";
 import type { SafeLogger } from "../logging";
+import { createAiEventRepositoryAccess } from "../authorization/event-content-authorization";
 
 const MAX_AI_CATEGORY_REQUEST_BODY_BYTES = 32 * 1_024;
 const aiCategoryProposalSchema = z
   .object({
     idempotencyKey: z.string().uuid(),
-    event: z.object({}).passthrough(),
-    permissions: z.object({}).passthrough(),
+    eventId: z
+      .string()
+      .min(1)
+      .max(128)
+      .regex(/^[A-Za-z0-9][A-Za-z0-9._:/-]*$/u),
   })
   .strict();
+
+/** Distinguishes one absent, cross-owner, restricted, stale, or cancelled event without exposing which. */
+class AiEventNotAvailableError extends Error {
+  constructor() {
+    super("AI event is not available.");
+    this.name = "AiEventNotAvailableError";
+  }
+}
 
 /** Narrows the budgeted provider surface that an HTTP route is allowed to invoke. */
 export interface AiCategoryProposalProvider {
@@ -53,10 +68,9 @@ export interface AiCategoryProposalRouteDependencies {
   readonly createBudgetedProvider: (
     ownerId: string,
   ) => AiCategoryProposalProvider;
-  readonly buildCategoryRequest: (
-    event: unknown,
-    permissions: unknown,
-  ) => CategoryProposalRequest;
+  readonly createContextLoader: (
+    ownerId: string,
+  ) => AiCategoryContextLoader;
 }
 
 /** Resolves AI proposal dependencies from Worker bindings or deterministic tests. */
@@ -96,16 +110,20 @@ export function registerAiCategoryProposalRoute(
       result = await provider.proposeCategoryFromFactory({
         idempotencyKey: input.data.idempotencyKey,
         requestClass: "routine",
-        /** Builds the minimum provider packet only after budget admission succeeds. */
-        requestFactory: () =>
-          dependencies.buildCategoryRequest(
-            input.data.event,
-            input.data.permissions,
-          ),
+        /** Loads and minimizes trusted owner-bound event state only after budget admission succeeds. */
+        requestFactory: async () => {
+          const request = await dependencies
+            .createContextLoader(session.ownerId)
+            .load(input.data.eventId);
+          if (request === undefined) {
+            throw new AiEventNotAvailableError();
+          }
+          return request;
+        },
       });
     } catch (error) {
-      if (error instanceof CategoryContextError) {
-        throw invalidAiCategoryRequest();
+      if (error instanceof AiEventNotAvailableError) {
+        throw aiEventNotAvailable();
       }
       throw aiCategoryUnavailable();
     }
@@ -141,9 +159,8 @@ export async function createProductionAiCategoryProposalDependencies(
     AI_OPTIONAL_WORST_CASE_CENTS: environment.AI_OPTIONAL_WORST_CASE_CENTS,
     AI_COMPLEX_WORST_CASE_CENTS: environment.AI_COMPLEX_WORST_CASE_CENTS,
   });
-  const repository = createAiUsageRepository(
-    createDb(environment.DATABASE_URL),
-  );
+  const database = createDb(environment.DATABASE_URL);
+  const repository = createAiUsageRepository(database);
   const provider = new OpenAiProvider({
     fetch: fetch.bind(globalThis),
     gatewayBaseUrl: openAi.OPENAI_GATEWAY_BASE_URL,
@@ -177,16 +194,24 @@ export async function createProductionAiCategoryProposalDependencies(
         /** Generates an opaque durable reservation identifier. */
         createReservationId: () => crypto.randomUUID(),
       }),
-    /** Copies only explicitly permitted event facts into the provider request. */
-    buildCategoryRequest: (event, permissions) => {
-      const packet = buildCategoryContext(event, permissions);
-      return {
-        subjectId: packet.eventId,
-        evidenceIds: packet.evidence.map(({ id }) => id),
-        policyVersion: packet.policyVersion,
-        context: { ...packet },
-      };
-    },
+    /** Creates the real owner-scoped encrypted-event loader only inside admitted work. */
+    createContextLoader: (ownerId) => ({
+      /** Resolves the data-key and event repository only after the budget wrapper invokes the loader. */
+      async load(eventId) {
+        const keyProvider = await createWrappedKeyProvider(
+          parseVisionKeyEncryptionKey(environment.KEY_ENCRYPTION_KEY),
+          new DrizzleWrappedDataKeyStore(database),
+          1,
+        );
+        return createAiCategoryContextLoader(
+          createEventRepository(
+            database,
+            keyProvider,
+            createAiEventRepositoryAccess(ownerId),
+          ),
+        ).load(eventId);
+      },
+    }),
   };
 }
 
@@ -212,7 +237,7 @@ async function authenticateAiRequest(
   return requireSession(context);
 }
 
-/** Requires the exact decrypted session CSRF value before accepting event facts. */
+/** Requires the exact decrypted session CSRF value before accepting an event reference. */
 async function requireAiCsrf(
   context: Context<{ Bindings: Env; Variables: AuthRequestVariables }>,
   session: AuthenticatedSession,
@@ -324,6 +349,17 @@ function invalidAiCategoryRequest(): never {
       "INVALID_AI_CATEGORY_REQUEST",
       400,
       "AI category proposal request is invalid.",
+    ),
+  );
+}
+
+/** Creates one indistinguishable missing, cross-owner, privacy, stale, or lifecycle failure. */
+function aiEventNotAvailable(): never {
+  throwVisionError(
+    new VisionError(
+      "AI_EVENT_NOT_AVAILABLE",
+      404,
+      "The requested event is not available for AI categorization.",
     ),
   );
 }

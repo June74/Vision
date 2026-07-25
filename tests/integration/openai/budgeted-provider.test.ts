@@ -216,6 +216,21 @@ describe("BudgetedAiProvider", () => {
     expect(proposeCategoryResult).not.toHaveBeenCalled();
   });
 
+  it("awaits trusted asynchronous context loading after admission", async () => {
+    const { budgeted, proposeCategoryResult } = createProvider();
+    const requestFactory = vi.fn(async () => REQUEST);
+
+    await expect(
+      budgeted.proposeCategoryFromFactory({
+        requestFactory,
+        requestClass: "routine",
+        idempotencyKey: "operation-async-context",
+      }),
+    ).resolves.toMatchObject({ status: "success" });
+    expect(requestFactory).toHaveBeenCalledOnce();
+    expect(proposeCategoryResult).toHaveBeenCalledWith(REQUEST);
+  });
+
   it("allows exactly one in-flight AI request for the owner", async () => {
     let releaseFirst!: () => void;
     const firstBlocked = new Promise<void>((resolve) => {

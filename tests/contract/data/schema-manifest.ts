@@ -19,6 +19,7 @@ export type IndexManifest = [
   unique: boolean,
   method: string,
   columns: Array<[name: string, order: string, nulls: string]>,
+  predicate?: string,
 ];
 export type CheckManifest = [name: string, expression: string];
 
@@ -61,6 +62,7 @@ interface DrizzleSnapshotTable {
     }>;
     isUnique: boolean;
     method: string;
+    where?: string;
   }>;
   compositePrimaryKeys: Record<string, { columns: string[] }>;
   uniqueConstraints: Record<string, { columns: string[] }>;
@@ -170,22 +172,40 @@ export function extractDrizzleTablesManifest(tables: PgTable[]): SchemaTablesMan
               })
               .sort(bySerializedValue),
             indexes: config.indexes
-              .map((declaredIndex): IndexManifest => [
-                declaredIndex.config.name ?? "",
-                declaredIndex.config.unique,
-                declaredIndex.config.method ?? "btree",
-                declaredIndex.config.columns.map((column) => {
-                  if (!("name" in column) || !column.name || !("indexConfig" in column)) {
-                    throw new Error("Only named-column indexes are supported by the schema manifest.");
-                  }
-                  const indexConfig = column.indexConfig;
-                  return [
-                    column.name,
-                    indexConfig?.order ?? "asc",
-                    indexConfig?.nulls ?? "last",
-                  ];
-                }),
-              ])
+              .map((declaredIndex): IndexManifest => {
+                const columns: IndexManifest[3] =
+                  declaredIndex.config.columns.map((column) => {
+                    if (!("name" in column) || !column.name || !("indexConfig" in column)) {
+                      throw new Error("Only named-column indexes are supported by the schema manifest.");
+                    }
+                    const indexConfig = column.indexConfig;
+                    return [
+                      column.name,
+                      indexConfig?.order ?? "asc",
+                      indexConfig?.nulls ?? "last",
+                    ];
+                  });
+                const predicate =
+                  declaredIndex.config.where === undefined
+                    ? undefined
+                    : normalizeSqlExpression(
+                        dialect.sqlToQuery(declaredIndex.config.where).sql,
+                      );
+                return predicate === undefined
+                  ? [
+                      declaredIndex.config.name ?? "",
+                      declaredIndex.config.unique,
+                      declaredIndex.config.method ?? "btree",
+                      columns,
+                    ]
+                  : [
+                      declaredIndex.config.name ?? "",
+                      declaredIndex.config.unique,
+                      declaredIndex.config.method ?? "btree",
+                      columns,
+                      predicate,
+                    ];
+              })
               .sort(bySerializedValue),
             checks: config.checks
               .map((check): CheckManifest => [
@@ -243,16 +263,32 @@ export function extractSnapshotTablesManifest(snapshot: unknown): SchemaTablesMa
               ])
               .sort(bySerializedValue),
             indexes: Object.values(table.indexes)
-              .map((declaredIndex): IndexManifest => [
-                declaredIndex.name,
-                declaredIndex.isUnique,
-                declaredIndex.method,
-                declaredIndex.columns.map((column) => [
-                  column.expression,
-                  column.asc ? "asc" : "desc",
-                  column.nulls,
-                ]),
-              ])
+              .map((declaredIndex): IndexManifest => {
+                const columns: IndexManifest[3] =
+                  declaredIndex.columns.map((column) => [
+                    column.expression,
+                    column.asc ? "asc" : "desc",
+                    column.nulls,
+                  ]);
+                const predicate =
+                  declaredIndex.where === undefined
+                    ? undefined
+                    : normalizeSqlExpression(declaredIndex.where);
+                return predicate === undefined
+                  ? [
+                      declaredIndex.name,
+                      declaredIndex.isUnique,
+                      declaredIndex.method,
+                      columns,
+                    ]
+                  : [
+                      declaredIndex.name,
+                      declaredIndex.isUnique,
+                      declaredIndex.method,
+                      columns,
+                      predicate,
+                    ];
+              })
               .sort(bySerializedValue),
             checks: Object.values(table.checkConstraints)
               .map((check): CheckManifest => [

@@ -1,6 +1,6 @@
 # AI category proposal route
 
-The single Phase B AI endpoint requires a live session and CSRF token, reads a small strict request, and reserves the monthly budget before building or sending AI context.
+The single Phase B AI endpoint requires a live session and CSRF token, accepts only an opaque event reference, and reserves the monthly budget before loading, decrypting, or sending AI context.
 
 ## `registerAiCategoryProposalRoute`
 
@@ -8,19 +8,23 @@ Registers the authenticated category proposal POST route.
 
 ## `createProductionAiCategoryProposalDependencies`
 
-Connects sessions, AI accounting, approved context copying, and the OpenAI Gateway adapter.
+Connects sessions, AI accounting, the owner-bound trusted event loader, and the OpenAI Gateway adapter.
 
 ## `createBudgetedProvider`
 
 Creates an owner-bound budget wrapper.
 
-## `buildCategoryRequest`
+## `createContextLoader`
 
-Copies only explicitly permitted event facts into an AI request.
+Creates an owner-bound event loader only after budget admission.
+
+## `load`
+
+Loads the referenced event through the protected repository and applies the server disclosure policy.
 
 ## `requestFactory`
 
-Defers permitted context copying until budget admission.
+Defers event loading, decryption, and permitted context copying until budget admission.
 
 ## `now`
 
@@ -53,6 +57,10 @@ Maps budget admission outcomes to safe errors.
 ## `invalidAiCategoryRequest`
 
 Returns the safe input error.
+
+## `aiEventNotAvailable`
+
+Returns one indistinguishable safe error for missing, cross-owner, restricted, or cancelled events.
 
 ## `aiCategoryUnavailable`
 

@@ -16,17 +16,53 @@ function assertAiUsagePrivileges(migration: string): void {
   expect(normalized).toContain(
     `revoke all on ${tables.join(", ")} from public`,
   );
-  for (const [table, privileges] of Object.entries(
-    phaseBAiUsagePrivilegeManifest,
-  )) {
-    expect(normalized).toContain(
-      `grant ${privileges.join(", ")} on ${table} to vision_app`,
-    );
-    const grant = normalized.match(
-      new RegExp(`grant ([a-z, ]+) on ${table} to vision_app`, "u"),
-    );
-    expect(grant?.[1]?.trim()).toBe(privileges.join(", "));
+
+  const actual = Object.fromEntries(
+    tables.map((table) => [
+      table,
+      { vision_app: new Set<string>(), public: new Set<string>() },
+    ]),
+  ) as Record<
+    string,
+    { vision_app: Set<string>; public: Set<string> }
+  >;
+  const directGrantPattern =
+    /\bgrant\s+([a-z]+(?:\s*,\s*[a-z]+)*)\s+on\s+([a-z_]+(?:\s*,\s*[a-z_]+)*)\s+to\s+(vision_app|public)\s*;/gu;
+  for (const match of normalized.matchAll(directGrantPattern)) {
+    const privileges = match[1]!.split(",").map((value) => value.trim());
+    const grantedTables = match[2]!.split(",").map((value) => value.trim());
+    const role = match[3] as "vision_app" | "public";
+    for (const table of grantedTables) {
+      if (!tables.includes(table)) continue;
+      for (const privilege of privileges) {
+        actual[table]![role].add(privilege);
+      }
+    }
   }
+
+  expect(
+    Object.fromEntries(
+      tables.map((table) => [
+        table,
+        {
+          vision_app: [...actual[table]!.vision_app].sort(),
+          public: [...actual[table]!.public].sort(),
+        },
+      ]),
+    ),
+  ).toEqual(
+    Object.fromEntries(
+      Object.entries(phaseBAiUsagePrivilegeManifest).map(
+        ([table, roles]) => [
+          table,
+          {
+            vision_app: [...roles.vision_app].sort(),
+            public: [...roles.public].sort(),
+          },
+        ],
+      ),
+    ),
+  );
 }
 
 describe("AI budget database contract", () => {
@@ -87,6 +123,17 @@ describe("AI budget database contract", () => {
       "grant select, insert on ai_usage_ledger to vision_app",
       "grant select, insert, update on ai_usage_ledger to vision_app",
     );
+
+    expect(() => assertAiUsagePrivileges(migration)).toThrow();
+  });
+
+  it("rejects a separate later UPDATE grant on the append-only ledger", () => {
+    const migration = `${readFileSync(
+      resolve(process.cwd(), "migrations/0009_ai_usage_budget.sql"),
+      "utf8",
+    )}
+grant update on ai_usage_ledger to vision_app;
+`;
 
     expect(() => assertAiUsagePrivileges(migration)).toThrow();
   });

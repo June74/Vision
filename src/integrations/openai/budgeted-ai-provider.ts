@@ -32,7 +32,9 @@ export interface BudgetedCategoryProposalRequest {
 /** Defers provider context construction until durable budget admission has succeeded. */
 export interface BudgetedCategoryProposalFactoryRequest {
   /** Builds the provider request only after admission succeeds. */
-  readonly requestFactory: () => CategoryProposalRequest;
+  readonly requestFactory: () =>
+    | CategoryProposalRequest
+    | Promise<CategoryProposalRequest>;
   readonly requestClass: AiRequestClass;
   readonly idempotencyKey: string;
 }
@@ -207,7 +209,7 @@ export class BudgetedAiProvider implements AiProvider {
 
     let request: CategoryProposalRequest;
     try {
-      request = input.requestFactory();
+      request = await input.requestFactory();
     } catch (error) {
       await this.releaseSafely(reservationId, now);
       throw error;

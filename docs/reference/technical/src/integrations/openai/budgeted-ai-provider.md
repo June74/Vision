@@ -16,7 +16,7 @@ Reserves projected cost and returns without provider-context construction on bud
 
 ## `requestFactory`
 
-Defers request construction and its potentially sensitive context copying until the durable repository admits the reservation.
+Defers synchronous construction or asynchronous protected-data loading until the durable repository admits the reservation.
 
 
 ## `releaseSafely`

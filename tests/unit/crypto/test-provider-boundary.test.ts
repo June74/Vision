@@ -20,4 +20,23 @@ describe("production crypto build boundary", () => {
     expect(source).not.toContain("export class DrizzleDeletionRepository");
     expect(source).not.toContain("export class DrizzleDeletionPurgeRepository");
   });
+
+  it("keeps the production AI issuer behind the event authorization verifier", () => {
+    const routeSource = readFileSync(
+      resolve(import.meta.dirname, "../../../src/server/api/ai-category-proposal-routes.ts"),
+      "utf8",
+    );
+    const verifierSource = readFileSync(
+      resolve(import.meta.dirname, "../../../src/server/authorization/event-content-authorization.ts"),
+      "utf8",
+    );
+
+    expect(routeSource).toContain(
+      'from "../authorization/event-content-authorization"',
+    );
+    expect(routeSource).not.toContain("event-content-capability-internal");
+    expect(verifierSource).toContain(
+      "export function createAiEventRepositoryAccess",
+    );
+  });
 });
