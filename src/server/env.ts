@@ -1,6 +1,7 @@
 /** Defines the validated runtime bindings available to the Vision Worker. */
 import { z } from "zod";
 import { decodeBase64Url } from "../crypto/envelope";
+import { parseCloudflareOpenAiGatewayBaseUrl } from "../integrations/openai/cloudflare-gateway-url";
 
 const keyEncryptionKeySchema = z.string().superRefine((keyEncryptionKey, context) => {
   let decoded: Uint8Array | undefined;
@@ -46,20 +47,15 @@ const userTimeZoneSchema = z
   .regex(/^(?:UTC|[A-Za-z_+-]+\/[A-Za-z0-9_+./-]+)$/u);
 const openAiGatewayBaseUrlSchema = z
   .string()
-  .url()
   .max(2_048)
   .superRefine((baseUrl, context) => {
-    const parsed = new URL(baseUrl);
-    if (
-      parsed.protocol !== "https:" ||
-      parsed.username !== "" ||
-      parsed.password !== "" ||
-      parsed.search !== "" ||
-      parsed.hash !== ""
-    ) {
+    try {
+      parseCloudflareOpenAiGatewayBaseUrl(baseUrl);
+    } catch {
       context.addIssue({
         code: "custom",
-        message: "OPENAI_GATEWAY_BASE_URL must be a credential-free HTTPS base URL.",
+        message:
+          "OPENAI_GATEWAY_BASE_URL must be the canonical Cloudflare OpenAI gateway base URL.",
       });
     }
   });

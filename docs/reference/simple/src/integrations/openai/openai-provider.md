@@ -1,6 +1,10 @@
 # `src/integrations/openai/openai-provider.ts`
 
-This module sends one minimum category packet through the configured Cloudflare AI Gateway. It requests strict JSON, provides no tools, bounds time and response size, and returns only a proposal or safe error category.
+This module sends one minimum category packet through the pinned Cloudflare AI Gateway OpenAI endpoint. It disables gateway payload logging and caching, rejects redirects, requests strict JSON, provides no tools, bounds time and response size, and returns only a proposal or safe error category.
+
+## `isApprovedLunaResponseModel`
+
+Accepts only the Luna alias or a canonical, calendar-valid Luna snapshot ID.
 
 ## `isPlainRecord`
 
@@ -24,7 +28,7 @@ Reads a JSON response with content-type and byte limits.
 
 ## `extractOutput`
 
-Finds exactly one official output-text item or a refusal.
+Reads exactly one validated completed assistant output-text item or refusal. One safe reasoning summary item may precede the message and is discarded.
 
 ## `mapUsage`
 

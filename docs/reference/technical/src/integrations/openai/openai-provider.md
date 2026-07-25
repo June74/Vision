@@ -1,10 +1,14 @@
 # `src/integrations/openai/openai-provider.ts`
 
-This adapter has no global credential lookup, persistence, Google tool, or event-write capability. Callers inject `fetch`, a credential-free AI Gateway base URL, provider key, and finite request bounds. Category routing is statically Luna-only.
+This adapter has no global credential lookup, persistence, Google tool, or event-write capability. Callers inject `fetch`, the canonical provider-specific Cloudflare AI Gateway OpenAI base URL, provider key, and finite request bounds. Category routing is statically Luna-only.
 
-Requests use `store: false`, strict `text.format` JSON Schema, and bounded output tokens. Tool, tool-choice, action, and parallel-tool fields are absent. Developer instructions label every event fact as untrusted data. The response body remains under one abort deadline and declared plus streamed byte limits.
+Requests use `store: false`, `cf-aig-collect-log-payload: false`, `cf-aig-skip-cache: true`, `redirect: "error"`, strict `text.format` JSON Schema, and bounded output tokens. Tool, tool-choice, action, and parallel-tool fields are absent. Developer instructions label every event fact as untrusted data. The response body remains under one abort deadline and declared plus streamed byte limits.
 
-Only validated proposal fields, safe model/request IDs, policy version, evidence IDs, and numeric token counters survive parsing. Raw model text, refusals, reasoning, output items, HTTP error bodies, and caught exceptions are never returned.
+Only validated proposal fields, requested and actual Luna model IDs, safe request IDs, policy version, evidence IDs, and numeric token counters survive parsing. Raw model text, refusals, reasoning, output items, HTTP error bodies, and caught exceptions are never returned.
+
+## `isApprovedLunaResponseModel`
+
+Accepts the exact Luna alias and canonical `gpt-5.6-luna-YYYY-MM-DD` snapshots whose date is calendar-valid. It rejects other model families, prefixes, suffixes, malformed dates, and lookalike identifiers.
 
 ## `isPlainRecord`
 
@@ -28,7 +32,7 @@ Requires `application/json`, validates `Content-Length`, reads incrementally, ca
 
 ## `extractOutput`
 
-Traverses official message output items while ignoring non-message diagnostic items. It accepts exactly one output text, prefers a refusal marker, and rejects unknown or multiple message content items.
+Reads the one completed assistant message after the full envelope has been validated. The envelope permits exactly one message and, optionally, one documented reasoning-summary item before it; all actionable, unknown, incomplete, multiple, or out-of-order items fail closed.
 
 ## `mapUsage`
 

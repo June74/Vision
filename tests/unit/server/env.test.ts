@@ -116,25 +116,28 @@ describe("OpenAiEnvSchema", () => {
     expect(
       OpenAiEnvSchema.parse({
         OPENAI_GATEWAY_BASE_URL:
-          "https://gateway.ai.cloudflare.com/v1/account/gateway/openai",
+          "https://gateway.ai.cloudflare.com/v1/0123456789abcdef0123456789abcdef/vision-preview/openai",
         OPENAI_API_KEY: "OPENAI_PROVIDER_SECRET_SENTINEL",
       }),
     ).toMatchObject({
       OPENAI_GATEWAY_BASE_URL:
-        "https://gateway.ai.cloudflare.com/v1/account/gateway/openai",
+        "https://gateway.ai.cloudflare.com/v1/0123456789abcdef0123456789abcdef/vision-preview/openai",
     });
 
     for (const gatewayBaseUrl of [
       "http://gateway.example.test/openai",
       "https://user:password@gateway.example.test/openai",
       "https://gateway.example.test/openai?secret=query",
+      "https://gateway.ai.cloudflare.com.evil.test/v1/0123456789abcdef0123456789abcdef/vision-preview/openai",
+      "https://gateway.ai.cloudflare.com/v1/0123456789abcdef0123456789abcdef/vision-preview/openai/responses",
+      "https://gateway.ai.cloudflare.com/v1/0123456789abcdef0123456789abcdef/vision%2Fpreview/openai",
     ]) {
       expect(() =>
         OpenAiEnvSchema.parse({
           OPENAI_GATEWAY_BASE_URL: gatewayBaseUrl,
           OPENAI_API_KEY: "OPENAI_PROVIDER_SECRET_SENTINEL",
         }),
-      ).toThrow(/credential-free HTTPS/u);
+      ).toThrow(/canonical Cloudflare OpenAI gateway/u);
       expect(() =>
         OpenAiEnvSchema.parse({
           OPENAI_GATEWAY_BASE_URL: gatewayBaseUrl,
@@ -155,7 +158,7 @@ describe("OpenAiEnvSchema", () => {
       RuntimeEnvSchema.parse({
         ...runtime,
         OPENAI_GATEWAY_BASE_URL:
-          "https://gateway.ai.cloudflare.com/v1/account/gateway/openai",
+          "https://gateway.ai.cloudflare.com/v1/0123456789abcdef0123456789abcdef/vision-preview/openai",
       }),
     ).toThrow(/configured together/u);
     expect(() =>

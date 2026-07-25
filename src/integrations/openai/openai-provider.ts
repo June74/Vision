@@ -9,6 +9,7 @@ import {
   OpenAiCategoryOutputSchema,
   safeParseOpenAiCategoryOutput,
 } from "./category-schema";
+import { parseCloudflareOpenAiGatewayBaseUrl } from "./cloudflare-gateway-url";
 import { routeModel } from "./model-router";
 
 const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]*$/u;
@@ -44,13 +45,139 @@ const UsageSchema = z
     "Total token usage cannot be lower than input plus output.",
   );
 
+/** Enumerates the only provider-returned Luna identifiers accepted by this adapter. */
+export type OpenAiLunaModelId =
+  | "gpt-5.6-luna"
+  | `gpt-5.6-luna-${number}-${number}-${number}`;
+
+/** Accepts the Luna alias or one canonical, calendar-valid Luna snapshot identifier. */
+function isApprovedLunaResponseModel(value: unknown): value is OpenAiLunaModelId {
+  if (value === "gpt-5.6-luna") {
+    return true;
+  }
+  if (typeof value !== "string" || value.length > 64) {
+    return false;
+  }
+
+  const match = /^gpt-5\.6-luna-(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
+  if (match === null) {
+    return false;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const snapshotDate = new Date(Date.UTC(year, month - 1, day));
+  return (
+    year >= 2000 &&
+    year <= 2099 &&
+    snapshotDate.getUTCFullYear() === year &&
+    snapshotDate.getUTCMonth() === month - 1 &&
+    snapshotDate.getUTCDate() === day
+  );
+}
+
+const SafeProviderIdSchema = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(SAFE_IDENTIFIER_PATTERN);
+
+const OutputTextContentSchema = z
+  .object({
+    type: z.literal("output_text"),
+    text: z.string().max(DEFAULT_MAX_RESPONSE_BYTES),
+    annotations: z.array(z.unknown()).max(16),
+    logprobs: z.array(z.unknown()).max(4_096).optional(),
+  })
+  .strict();
+
+const RefusalContentSchema = z
+  .object({
+    type: z.literal("refusal"),
+    refusal: z.string().max(DEFAULT_MAX_RESPONSE_BYTES),
+  })
+  .strict();
+
+const MessageOutputItemSchema = z
+  .object({
+    id: SafeProviderIdSchema,
+    type: z.literal("message"),
+    status: z.literal("completed"),
+    role: z.literal("assistant"),
+    content: z
+      .array(
+        z.discriminatedUnion("type", [
+          OutputTextContentSchema,
+          RefusalContentSchema,
+        ]),
+      )
+      .length(1),
+  })
+  .strict();
+
+const ReasoningSummarySchema = z
+  .object({
+    type: z.literal("summary_text"),
+    text: z.string().max(DEFAULT_MAX_RESPONSE_BYTES),
+  })
+  .strict();
+
+const ReasoningOutputItemSchema = z
+  .object({
+    id: SafeProviderIdSchema,
+    type: z.literal("reasoning"),
+    summary: z.array(ReasoningSummarySchema).max(8),
+    status: z.literal("completed").optional(),
+    encrypted_content: z
+      .string()
+      .max(DEFAULT_MAX_RESPONSE_BYTES)
+      .nullable()
+      .optional(),
+  })
+  .strict();
+
+const ResponseOutputSchema = z
+  .array(
+    z.discriminatedUnion("type", [
+      MessageOutputItemSchema,
+      ReasoningOutputItemSchema,
+    ]),
+  )
+  .min(1)
+  .max(2)
+  .superRefine((items, context) => {
+    const messageIndexes = items
+      .map((item, index) => (item.type === "message" ? index : -1))
+      .filter((index) => index >= 0);
+    const reasoningIndexes = items
+      .map((item, index) => (item.type === "reasoning" ? index : -1))
+      .filter((index) => index >= 0);
+
+    if (
+      messageIndexes.length !== 1 ||
+      reasoningIndexes.length > 1 ||
+      (reasoningIndexes.length === 1 &&
+        (reasoningIndexes[0] !== 0 || messageIndexes[0] !== 1))
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "Response output must contain one completed assistant message, optionally preceded by one reasoning item.",
+      });
+    }
+  });
+
 const ResponseEnvelopeSchema = z
   .object({
-    id: z.string().min(1).max(128).regex(SAFE_IDENTIFIER_PATTERN),
+    id: SafeProviderIdSchema,
+    object: z.literal("response"),
     status: z.literal("completed"),
-    model: z.string().min(1).max(128).regex(SAFE_IDENTIFIER_PATTERN),
-    output: z.array(z.unknown()).max(32),
+    model: z.string().refine(isApprovedLunaResponseModel),
+    output: ResponseOutputSchema,
     usage: UsageSchema,
+    error: z.null().optional(),
+    incomplete_details: z.null().optional(),
   })
   .passthrough();
 
@@ -65,7 +192,8 @@ export interface OpenAiUsageMetadata {
 
 /** Describes the bounded trusted metadata retained from one provider request. */
 export interface OpenAiRequestMetadata {
-  readonly modelId: "gpt-5.6-luna";
+  readonly requestedModelId: "gpt-5.6-luna";
+  readonly modelId: OpenAiLunaModelId;
   readonly requestId?: string;
   readonly policyVersion: string;
   readonly evidenceIds: readonly string[];
@@ -438,36 +566,16 @@ async function readBoundedJson(response: Response, maximumBytes: number): Promis
 
 /** Extracts exactly one output text or a refusal marker from the official output item shape. */
 function extractOutput(
-  output: readonly unknown[],
+  output: z.infer<typeof ResponseOutputSchema>,
 ): { readonly kind: "text"; readonly text: string } | { readonly kind: "refusal" } | undefined {
-  const texts: string[] = [];
-  let refused = false;
-
-  for (const item of output) {
-    if (!isPlainRecord(item) || item.type !== "message") {
-      continue;
-    }
-    if (!Array.isArray(item.content) || item.content.length > 16) {
-      return undefined;
-    }
-    for (const content of item.content) {
-      if (!isPlainRecord(content)) {
-        return undefined;
-      }
-      if (content.type === "refusal" && typeof content.refusal === "string") {
-        refused = true;
-      } else if (content.type === "output_text" && typeof content.text === "string") {
-        texts.push(content.text);
-      } else {
-        return undefined;
-      }
-    }
-  }
-
-  if (refused) {
+  const message = output.find((item) => item.type === "message");
+  const content = message?.content[0];
+  if (content?.type === "refusal") {
     return { kind: "refusal" };
   }
-  return texts.length === 1 ? { kind: "text", text: texts[0]! } : undefined;
+  return content?.type === "output_text"
+    ? { kind: "text", text: content.text }
+    : undefined;
 }
 
 /** Converts official usage counters into the only provider cost inputs retained by Vision. */
@@ -507,18 +615,16 @@ export class OpenAiProvider implements AiProvider {
   readonly #maxOutputTokens: number;
 
   constructor(options: OpenAiProviderOptions) {
-    let baseUrl: URL;
+    let gatewayBaseUrl: string;
     try {
-      baseUrl = new URL(options.gatewayBaseUrl);
+      gatewayBaseUrl = parseCloudflareOpenAiGatewayBaseUrl(
+        options.gatewayBaseUrl,
+      );
     } catch {
       throw new Error("OpenAI provider configuration is invalid.");
     }
     if (
-      baseUrl.protocol !== "https:" ||
-      baseUrl.username !== "" ||
-      baseUrl.password !== "" ||
-      baseUrl.search !== "" ||
-      baseUrl.hash !== "" ||
+      typeof options.fetch !== "function" ||
       typeof options.providerKey !== "string" ||
       options.providerKey.length < 1 ||
       options.providerKey.length > 2_048
@@ -544,7 +650,7 @@ export class OpenAiProvider implements AiProvider {
     }
 
     this.#fetch = options.fetch;
-    this.#endpoint = `${baseUrl.toString().replace(/\/+$/u, "")}/responses`;
+    this.#endpoint = `${gatewayBaseUrl}/responses`;
     this.#providerKey = options.providerKey;
     this.#timeoutMs = timeoutMs;
     this.#maxResponseBytes = maximumBytes;
@@ -564,9 +670,10 @@ export class OpenAiProvider implements AiProvider {
   async proposeCategoryResult(
     request: CategoryProposalRequest,
   ): Promise<OpenAiProviderResult> {
-    const modelId = routeModel({ kind: "category" });
+    const requestedModelId = routeModel({ kind: "category" });
     let metadata: OpenAiRequestMetadata = {
-      modelId,
+      requestedModelId,
+      modelId: requestedModelId,
       policyVersion: "",
       evidenceIds: [],
     };
@@ -602,7 +709,7 @@ export class OpenAiProvider implements AiProvider {
     }
 
     const body = {
-      model: modelId,
+      model: requestedModelId,
       store: false,
       input: [
         {
@@ -640,9 +747,12 @@ export class OpenAiProvider implements AiProvider {
         method: "POST",
         headers: {
           authorization: `Bearer ${this.#providerKey}`,
+          "cf-aig-collect-log-payload": "false",
+          "cf-aig-skip-cache": "true",
           "content-type": "application/json",
         },
         body: JSON.stringify(body),
+        redirect: "error",
         signal: controller.signal,
       });
       if (!response.ok) {
@@ -663,13 +773,15 @@ export class OpenAiProvider implements AiProvider {
     }
 
     const envelopeResult = ResponseEnvelopeSchema.safeParse(rawResponse);
-    if (!envelopeResult.success || envelopeResult.data.model !== modelId) {
+    if (!envelopeResult.success) {
       return failure("provider_error", "AI_PROVIDER_ERROR", metadata);
     }
     const envelope = envelopeResult.data;
+    const actualModelId = envelope.model as OpenAiLunaModelId;
     const usage = mapUsage(envelope.usage);
     metadata = {
       ...metadata,
+      modelId: actualModelId,
       requestId: envelope.id,
       usage,
     };
@@ -704,13 +816,14 @@ export class OpenAiProvider implements AiProvider {
     const proposal: CategoryProposal = {
       ...proposalResult.data,
       audit: {
-        modelId,
+        modelId: actualModelId,
         requestId: envelope.id,
         policyVersion: metadata.policyVersion,
       },
     };
     const successMetadata = {
-      modelId,
+      requestedModelId,
+      modelId: actualModelId,
       requestId: envelope.id,
       policyVersion: metadata.policyVersion,
       evidenceIds: metadata.evidenceIds,

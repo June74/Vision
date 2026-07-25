@@ -30,6 +30,21 @@ const validOutput = {
   rationaleCode: "work_context",
 };
 
+const gatewayBaseUrl =
+  "https://gateway.ai.cloudflare.com/v1/0123456789abcdef0123456789abcdef/vision-preview/openai";
+
+function officialMessage(
+  content: readonly Record<string, unknown>[],
+): Record<string, unknown> {
+  return {
+    id: "msg_safe-1",
+    type: "message",
+    status: "completed",
+    role: "assistant",
+    content,
+  };
+}
+
 function responseBody(output: unknown = validOutput) {
   return {
     id: "resp_safe-1",
@@ -37,11 +52,9 @@ function responseBody(output: unknown = validOutput) {
     status: "completed",
     model: "gpt-5.6-luna",
     output: [
-      {
-        type: "message",
-        role: "assistant",
-        content: [{ type: "output_text", text: JSON.stringify(output), annotations: [] }],
-      },
+      officialMessage([
+        { type: "output_text", text: JSON.stringify(output), annotations: [] },
+      ]),
     ],
     usage: {
       input_tokens: 120,
@@ -56,7 +69,7 @@ function responseBody(output: unknown = validOutput) {
 function createProvider(fetch: typeof globalThis.fetch, timeoutMs = 2_000) {
   return new OpenAiProvider({
     fetch,
-    gatewayBaseUrl: "https://gateway.example.test/v1/account/gateway/openai/",
+    gatewayBaseUrl,
     providerKey: "provider-secret",
     timeoutMs,
     maxResponseBytes: 16_384,
@@ -90,6 +103,7 @@ describe("OpenAiProvider Responses API contract", () => {
         },
       },
       metadata: {
+        requestedModelId: "gpt-5.6-luna",
         modelId: "gpt-5.6-luna",
         requestId: "resp_safe-1",
         policyVersion: "category-v1",
@@ -106,10 +120,15 @@ describe("OpenAiProvider Responses API contract", () => {
 
     expect(fetch).toHaveBeenCalledTimes(1);
     const [url, init] = fetch.mock.calls[0]!;
-    expect(url).toBe("https://gateway.example.test/v1/account/gateway/openai/responses");
+    expect(url).toBe(`${gatewayBaseUrl}/responses`);
     expect(init?.method).toBe("POST");
-    expect(new Headers(init?.headers).get("authorization")).toBe("Bearer provider-secret");
-    expect(new Headers(init?.headers).get("content-type")).toBe("application/json");
+    expect(init?.redirect).toBe("error");
+    const headers = new Headers(init?.headers);
+    expect(headers.get("authorization")).toBe("Bearer provider-secret");
+    expect(headers.get("content-type")).toBe("application/json");
+    expect(headers.get("CF-AIG-COLLECT-LOG-PAYLOAD")).toBe("false");
+    expect(headers.get("Cf-Aig-Skip-Cache")).toBe("true");
+    expect(headers.has("cf-aig-collect-log")).toBe(false);
 
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
     expect(body).toMatchObject({
@@ -151,6 +170,53 @@ describe("OpenAiProvider Responses API contract", () => {
     expect(serialized).not.toContain("tools available");
   });
 
+  it.each([
+    "https://not-cloudflare.example/v1/0123456789abcdef0123456789abcdef/vision-preview/openai",
+    "https://gateway.ai.cloudflare.com.evil.test/v1/0123456789abcdef0123456789abcdef/vision-preview/openai",
+    "https://gateway.ai.cloudflar\u0435.com/v1/0123456789abcdef0123456789abcdef/vision-preview/openai",
+    "https://user:password@gateway.ai.cloudflare.com/v1/0123456789abcdef0123456789abcdef/vision-preview/openai",
+    "https://gateway.ai.cloudflare.com:444/v1/0123456789abcdef0123456789abcdef/vision-preview/openai",
+    "https://gateway.ai.cloudflare.com/v1/account/vision-preview/openai",
+    "https://gateway.ai.cloudflare.com/v1/0123456789abcdef0123456789abcdef/vision-preview/openai/",
+    "https://gateway.ai.cloudflare.com/v1/0123456789abcdef0123456789abcdef/vision-preview/openai/responses",
+    "https://gateway.ai.cloudflare.com/v1/0123456789abcdef0123456789abcdef/vision-preview/%6fpenai",
+    "https://gateway.ai.cloudflare.com/v1/0123456789abcdef0123456789abcdef/vision-preview/%2e%2e/openai",
+    "https://gateway.ai.cloudflare.com/v1/0123456789abcdef0123456789abcdef/vision%2Fpreview/openai",
+    "https://gateway.ai.cloudflare.com\\@evil.test/v1/0123456789abcdef0123456789abcdef/vision-preview/openai",
+    "https://gateway.ai.cloudflare.com/v1/0123456789abcdef0123456789abcdef/vision-preview/openai?redirect=evil",
+    "https://gateway.ai.cloudflare.com/v1/0123456789abcdef0123456789abcdef/vision-preview/openai#fragment",
+  ])("rejects an unpinned or noncanonical gateway base URL: %s", (baseUrl) => {
+    expect(
+      () =>
+        new OpenAiProvider({
+          fetch: vi.fn<typeof globalThis.fetch>(),
+          gatewayBaseUrl: baseUrl,
+          providerKey: "provider-secret",
+        }),
+    ).toThrow(/configuration is invalid/u);
+  });
+
+  it.each([
+    ["same-origin redirect", `${gatewayBaseUrl}/other`],
+    ["cross-origin redirect", "https://evil.example/collect"],
+  ])("fails closed on a %s without a second dispatch", async (_name, location) => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation((_input, init) => {
+      expect(init?.redirect).toBe("error");
+      return Promise.resolve(
+        new Response(null, {
+          status: 302,
+          headers: { location },
+        }),
+      );
+    });
+
+    await expect(createProvider(fetch).proposeCategoryResult(request)).resolves.toMatchObject({
+      status: "provider_error",
+      code: "AI_PROVIDER_ERROR",
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("implements AiProvider by returning the validated proposal only", async () => {
     const provider = createProvider(async () => Response.json(responseBody()));
 
@@ -165,11 +231,9 @@ describe("OpenAiProvider Responses API contract", () => {
       Response.json({
         ...responseBody(),
         output: [
-          {
-            type: "message",
-            role: "assistant",
-            content: [{ type: "refusal", refusal: "Sensitive raw refusal explanation" }],
-          },
+          officialMessage([
+            { type: "refusal", refusal: "Sensitive raw refusal explanation" },
+          ]),
         ],
       }),
     );
@@ -190,21 +254,12 @@ describe("OpenAiProvider Responses API contract", () => {
   it.each([
     ["malformed JSON", "{not-json"],
     ["schema mismatch", JSON.stringify({ ...validOutput, action: "delete_event" })],
-    ["multiple output texts", null],
   ])("classifies %s as invalid schema without retaining output", async (_name, text) => {
-    const output =
-      text === null
-        ? [
-            {
-              type: "message",
-              role: "assistant",
-              content: [
-                { type: "output_text", text: JSON.stringify(validOutput) },
-                { type: "output_text", text: JSON.stringify(validOutput) },
-              ],
-            },
-          ]
-        : [{ type: "message", role: "assistant", content: [{ type: "output_text", text }] }];
+    const output = [
+      officialMessage([
+        { type: "output_text", text, annotations: [] },
+      ]),
+    ];
     const provider = createProvider(async () =>
       Response.json({ ...responseBody(), output }),
     );
@@ -229,6 +284,48 @@ describe("OpenAiProvider Responses API contract", () => {
     await expect(provider.proposeCategoryResult(request)).resolves.toMatchObject({
       status: "invalid_schema",
       code: "AI_INVALID_SCHEMA",
+    });
+  });
+
+  it.each([
+    "gpt-5.6-luna",
+    "gpt-5.6-luna-2026-07-01",
+    "gpt-5.6-luna-2027-12-31",
+  ])("accepts the closed Luna response model %s and retains the actual ID", async (model) => {
+    const provider = createProvider(async () =>
+      Response.json({ ...responseBody(), model }),
+    );
+
+    await expect(provider.proposeCategoryResult(request)).resolves.toMatchObject({
+      status: "success",
+      metadata: {
+        requestedModelId: "gpt-5.6-luna",
+        modelId: model,
+      },
+      proposal: {
+        audit: { modelId: model },
+      },
+    });
+  });
+
+  it.each([
+    "gpt-5.6-terra",
+    "gpt-5.6-sol",
+    "gpt-5.6",
+    "gpt-5.6-luna-pro",
+    "gpt-5.6-luna-2026-7-1",
+    "gpt-5.6-luna-2026-02-30",
+    "gpt-5.6-luna-2026-07-01-extra",
+    "prefix-gpt-5.6-luna",
+    "gpt-5x6-luna-2026-07-01",
+  ])("rejects an unapproved response model %s", async (model) => {
+    const provider = createProvider(async () =>
+      Response.json({ ...responseBody(), model }),
+    );
+
+    await expect(provider.proposeCategoryResult(request)).resolves.toMatchObject({
+      status: "provider_error",
+      code: "AI_PROVIDER_ERROR",
     });
   });
 
@@ -377,16 +474,139 @@ describe("OpenAiProvider Responses API contract", () => {
     });
   });
 
-  it("does not retain raw response, reasoning, output, or provider error fields", async () => {
+  it.each([
+    ["missing response discriminator", { object: undefined }],
+    ["wrong response discriminator", { object: "list" }],
+    [
+      "message without an ID",
+      {
+        output: [
+          {
+            type: "message",
+            status: "completed",
+            role: "assistant",
+            content: [{ type: "output_text", text: JSON.stringify(validOutput), annotations: [] }],
+          },
+        ],
+      },
+    ],
+    [
+      "incomplete message",
+      {
+        output: [
+          {
+            ...officialMessage([
+              { type: "output_text", text: JSON.stringify(validOutput), annotations: [] },
+            ]),
+            status: "incomplete",
+          },
+        ],
+      },
+    ],
+    [
+      "non-assistant message",
+      {
+        output: [
+          {
+            ...officialMessage([
+              { type: "output_text", text: JSON.stringify(validOutput), annotations: [] },
+            ]),
+            role: "developer",
+          },
+        ],
+      },
+    ],
+    [
+      "unknown message content",
+      {
+        output: [
+          officialMessage([{ type: "input_text", text: JSON.stringify(validOutput) }]),
+        ],
+      },
+    ],
+    [
+      "multiple messages",
+      {
+        output: [
+          officialMessage([
+            { type: "output_text", text: JSON.stringify(validOutput), annotations: [] },
+          ]),
+          {
+            ...officialMessage([
+              { type: "output_text", text: JSON.stringify(validOutput), annotations: [] },
+            ]),
+            id: "msg_safe-2",
+          },
+        ],
+      },
+    ],
+    [
+      "multiple message content items",
+      {
+        output: [
+          officialMessage([
+            { type: "output_text", text: JSON.stringify(validOutput), annotations: [] },
+            { type: "output_text", text: JSON.stringify(validOutput), annotations: [] },
+          ]),
+        ],
+      },
+    ],
+    [
+      "actionable output item",
+      {
+        output: [
+          { type: "function_call", id: "fc_safe-1", name: "delete_event", arguments: "{}" },
+          officialMessage([
+            { type: "output_text", text: JSON.stringify(validOutput), annotations: [] },
+          ]),
+        ],
+      },
+    ],
+    [
+      "malformed reasoning item",
+      {
+        output: [
+          { type: "reasoning", summary: [{ text: "private" }] },
+          officialMessage([
+            { type: "output_text", text: JSON.stringify(validOutput), annotations: [] },
+          ]),
+        ],
+      },
+    ],
+    ["completed response with provider error", { error: { message: "private error" } }],
+  ])("rejects the ambiguous official envelope case: %s", async (_name, override) => {
+    const base = responseBody() as Record<string, unknown>;
+    const body: Record<string, unknown> = { ...base, ...override };
+    const overrideRecord = override as Record<string, unknown>;
+    if (
+      Object.hasOwn(overrideRecord, "object") &&
+      overrideRecord.object === undefined
+    ) {
+      delete body.object;
+    }
+    const provider = createProvider(async () => Response.json(body));
+
+    const result = await provider.proposeCategoryResult(request);
+
+    expect(result).toMatchObject({ status: "provider_error", code: "AI_PROVIDER_ERROR" });
+    expect(JSON.stringify(result)).not.toContain("delete_event");
+    expect(JSON.stringify(result)).not.toContain("private error");
+  });
+
+  it("accepts one documented reasoning diagnostic before the completed message", async () => {
     const body = responseBody();
     const provider = createProvider(async () =>
       Response.json({
         ...body,
-        reasoning: "private chain of thought",
-        error: { message: "provider-secret-error-body" },
         output: [
+          {
+            id: "rs_safe-1",
+            type: "reasoning",
+            summary: [
+              { type: "summary_text", text: "private chain of thought" },
+            ],
+          },
           ...body.output,
-          { type: "reasoning", summary: [{ text: "private chain of thought" }] },
         ],
       }),
     );
@@ -396,7 +616,6 @@ describe("OpenAiProvider Responses API contract", () => {
     expect(result.status).toBe("success");
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain("chain of thought");
-    expect(serialized).not.toContain("provider-secret-error-body");
     expect(serialized).not.toContain('"output"');
   });
 });
