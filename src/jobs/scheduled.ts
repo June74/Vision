@@ -1,6 +1,7 @@
 /** Coordinates periodic channel renewal and missed-notification repair. */
 import { createDb } from "../data/db";
 import { createChannelMaintenanceRepository } from "../data/repositories/channel-maintenance-repository";
+import { createProjectionRepository } from "../data/repositories/projection-repository";
 import {
   DrizzleTokenStore,
   DrizzleWrappedDataKeyStore,
@@ -28,6 +29,8 @@ import { SyncCalendarError } from "./sync-calendar";
 
 /** Injected maintenance functions keep the scheduler free of event-fetching capability. */
 export interface ScheduledCalendarMaintenanceDependencies {
+  /** Removes only expired nonactivated rebuild staging; it never reads provider events or OAuth credentials. */
+  readonly cleanupProjectionRebuilds?: (now: Date) => Promise<number>;
   readonly renew: (now: Date) => Promise<void>;
   readonly repair: (now: Date) => Promise<void>;
   /** Persists typed OAuth failure against only the maintained checkpoint generation. */
@@ -63,8 +66,14 @@ export async function runScheduledCalendarMaintenance(
   now: Date,
   dependencies: ScheduledCalendarMaintenanceDependencies,
 ): Promise<void> {
+  let cleanupFailure: unknown;
   let repairFailure: unknown;
   let renewalFailure: unknown;
+  try {
+    await dependencies.cleanupProjectionRebuilds?.(now);
+  } catch (error) {
+    cleanupFailure = error;
+  }
   try {
     await dependencies.repair(now);
   } catch (error) {
@@ -86,6 +95,7 @@ export async function runScheduledCalendarMaintenance(
       }
     }
   }
+  if (cleanupFailure !== undefined) throw cleanupFailure;
   if (repairFailure !== undefined) throw repairFailure;
   if (renewalFailure !== undefined) throw renewalFailure;
 }
@@ -117,6 +127,11 @@ async function createProductionScheduledCalendarMaintenanceDependencies(
     1,
   );
   const repository = createChannelMaintenanceRepository(database, ownerId);
+  const projectionRepository = createProjectionRepository(
+    database,
+    keyProvider,
+    ownerId,
+  );
   const callbackUri = new URL("/webhooks/google/calendar", auth.GOOGLE_REDIRECT_URI)
     .toString();
   const tokens = new EncryptedTokenRepository(
@@ -139,6 +154,9 @@ async function createProductionScheduledCalendarMaintenanceDependencies(
     },
   );
   return {
+    /** Purges only owner-scoped expired staging before any credential-dependent renewal begins. */
+    cleanupProjectionRebuilds: (now) =>
+      projectionRepository.cleanupExpired(now),
     /** Renews eligible provider channels using the lifecycle repository. */
     renew: async (now) => {
       const accessToken = await resolveScheduledGoogleAccessToken({

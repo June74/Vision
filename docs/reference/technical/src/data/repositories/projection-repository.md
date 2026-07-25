@@ -37,6 +37,13 @@ planning/protected value.
 
 Transitions only `staging` or `ready` generations; it cannot rewrite activated history.
 
+## `cleanupExpired`
+
+Calculates an inclusive seven-day cutoff, locks a batch of at most 100 eligible `staging`, `ready`, or `abandoned`
+generation rows, and revalidates owner, provider, calendar, job, status, and timestamp predicates during deletion.
+A recent matching Queue job prevents cleanup. The generation foreign key cascades deletion only to its encrypted
+staged changes, while activated generation evidence is ineligible.
+
 ## `assertOwner`
 
 Enforces the repository's construction-time owner before database or key access.
@@ -48,6 +55,10 @@ Composes the production database, key provider, and authenticated owner.
 ## `validateBegin`
 
 Checks all bounded identifiers, positive checkpoint generation, and genuine timestamp.
+
+## `readCleanupTime`
+
+Uses the intrinsic `Date` method and rejects invalid or spoofed cleanup timestamps before cutoff arithmetic.
 
 ## `digestIdentity`
 
@@ -76,6 +87,10 @@ Requires the exact 43-character canonical SHA-256 base64url shape.
 ## `readPositiveInteger`
 
 Accepts safe positive integers from numeric or decimal database representations.
+
+## `readNonNegativeInteger`
+
+Normalizes PostgreSQL numeric, bigint, or decimal aggregate output into a safe nonnegative cleanup count.
 
 ## `readBytes`
 

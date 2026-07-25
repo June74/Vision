@@ -19,6 +19,10 @@ import {
 import type { VisionDatabase } from "../db";
 
 const PROVIDER = "google-calendar";
+/** Nonactivated rebuild ciphertext is retained long enough for delayed Queue retries, then becomes purgeable. */
+export const PROJECTION_REBUILD_RETENTION_MS = 7 * 24 * 60 * 60 * 1_000;
+/** One maintenance pass is bounded so cleanup cannot monopolize the scheduled Worker. */
+export const PROJECTION_REBUILD_CLEANUP_BATCH_SIZE = 100;
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder("utf-8", { fatal: true });
 
@@ -49,6 +53,7 @@ export interface ProjectionRepository {
   markReady(generationId: string, pageCount: number, now: Date): Promise<boolean>;
   loadStagedChanges(generationId: string): Promise<readonly ProviderEventChange[]>;
   abandon(generationId: string, now: Date): Promise<void>;
+  cleanupExpired(now: Date): Promise<number>;
 }
 
 interface GenerationRow extends Record<string, unknown> {
@@ -60,6 +65,10 @@ interface StagedRow extends Record<string, unknown> {
   planningJson: unknown;
   protectedPayloadEnvelope: unknown;
   protectedKeyVersion: unknown;
+}
+
+interface CleanupRow extends Record<string, unknown> {
+  removedCount: unknown;
 }
 
 /** PostgreSQL implementation that never stores provider protected content outside an authenticated envelope. */
@@ -270,6 +279,91 @@ class EncryptedProjectionRepository implements ProjectionRepository {
     `);
   }
 
+  /**
+   * Removes one bounded batch of stale nonactivated generations and their cascaded encrypted changes.
+   *
+   * The locked candidate and delete predicates repeat the owner, provider, calendar, job, status, and
+   * timestamp boundary. A recent matching Queue job protects an otherwise stale generation; a missing
+   * or equally stale job permits crash-orphan cleanup. Activated evidence is never eligible.
+   */
+  async cleanupExpired(now: Date): Promise<number> {
+    const cleanupTime = readCleanupTime(now);
+    const cutoff = new Date(cleanupTime - PROJECTION_REBUILD_RETENTION_MS);
+    const result = await this.database.execute<CleanupRow>(sql`
+      with cleanup_candidates as materialized (
+        select
+          generation.id,
+          generation.owner_id,
+          generation.provider,
+          generation.provider_calendar_id,
+          generation.job_id,
+          generation.status,
+          generation.updated_at
+        from projection_rebuild_generations generation
+        where generation.owner_id = ${this.ownerId}
+          and generation.provider = ${PROVIDER}
+          and generation.status in ('staging', 'ready', 'abandoned')
+          and generation.updated_at <= ${cutoff}
+          and (
+            not exists (
+              select 1
+              from calendar_sync_jobs any_job
+              where any_job.job_id = generation.job_id
+            )
+            or exists (
+              select 1
+              from calendar_sync_jobs matching_job
+              where matching_job.job_id = generation.job_id
+                and matching_job.owner_id = generation.owner_id
+                and matching_job.provider = generation.provider
+                and matching_job.provider_calendar_id =
+                  generation.provider_calendar_id
+                and matching_job.updated_at <= ${cutoff}
+            )
+          )
+        order by generation.updated_at, generation.id
+        limit ${PROJECTION_REBUILD_CLEANUP_BATCH_SIZE}
+        for update of generation skip locked
+      ),
+      removed_generations as (
+        delete from projection_rebuild_generations generation
+        using cleanup_candidates candidate
+        where generation.id = candidate.id
+          and generation.owner_id = candidate.owner_id
+          and generation.provider = candidate.provider
+          and generation.provider_calendar_id = candidate.provider_calendar_id
+          and generation.job_id = candidate.job_id
+          and generation.status = candidate.status
+          and generation.updated_at = candidate.updated_at
+          and generation.owner_id = ${this.ownerId}
+          and generation.provider = ${PROVIDER}
+          and generation.status in ('staging', 'ready', 'abandoned')
+          and generation.updated_at <= ${cutoff}
+          and (
+            not exists (
+              select 1
+              from calendar_sync_jobs any_job
+              where any_job.job_id = generation.job_id
+            )
+            or exists (
+              select 1
+              from calendar_sync_jobs matching_job
+              where matching_job.job_id = generation.job_id
+                and matching_job.owner_id = generation.owner_id
+                and matching_job.provider = generation.provider
+                and matching_job.provider_calendar_id =
+                  generation.provider_calendar_id
+                and matching_job.updated_at <= ${cutoff}
+            )
+          )
+        returning generation.id
+      )
+      select count(*)::integer as "removedCount"
+      from removed_generations
+    `);
+    return readNonNegativeInteger(result.rows[0]?.removedCount);
+  }
+
   /** Rejects every cross-owner staging attempt before any database or key access. */
   private assertOwner(ownerId: string): void {
     if (ownerId !== this.ownerId) {
@@ -302,6 +396,18 @@ function validateBegin(input: BeginProjectionRebuild): void {
   ) {
     throw new Error("Projection rebuild generation is invalid.");
   }
+}
+
+/** Rejects invalid or spoofed maintenance clocks before deriving a retention cutoff. */
+function readCleanupTime(now: Date): number {
+  if (!(now instanceof Date)) {
+    throw new Error("Projection rebuild cleanup timestamp is invalid.");
+  }
+  const value = Date.prototype.getTime.call(now);
+  if (!Number.isFinite(value)) {
+    throw new Error("Projection rebuild cleanup timestamp is invalid.");
+  }
+  return value;
 }
 
 /** Produces the fixed-size opaque identity used for stage deduplication. */
@@ -376,6 +482,22 @@ function readPositiveInteger(value: unknown): number {
         : Number.NaN;
   if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     throw new Error("Projection rebuild key metadata is invalid.");
+  }
+  return parsed;
+}
+
+/** Reads the aggregate returned by PostgreSQL without accepting fractional or negative cleanup counts. */
+function readNonNegativeInteger(value: unknown): number {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "bigint"
+        ? Number(value)
+        : typeof value === "string" && /^(?:0|[1-9]\d*)$/u.test(value)
+          ? Number(value)
+          : Number.NaN;
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new Error("Projection rebuild cleanup result is invalid.");
   }
   return parsed;
 }

@@ -575,6 +575,13 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
             )
           )
       ),
+      retired_provider_payloads as (
+        delete from event_sync_payloads payload
+        using delete_targets target
+        where payload.node_id = target.node_id
+          and payload.owner_id = ${commit.ownerId}
+        returning payload.node_id
+      ),
       deleted_events as (
         update events as persisted
         set status = 'cancelled'
@@ -673,6 +680,7 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
         counts.deleted,
         counts.unchanged,
         (select count(*) from payload_writes) as "payloadWrites",
+        (select count(*) from retired_provider_payloads) as "retiredProviderPayloads",
         (select count(*) from cleared_recoverable_deletions) as "clearedRecoverableDeletions",
         (select count(*) from retained_deletions) as "retainedDeletions",
         (select count(*) from invalidated_edges) as "invalidatedEdges",

@@ -114,6 +114,32 @@ function renewalDependencies(
 }
 
 describe("adversarial calendar maintenance", () => {
+  it("runs projection cleanup before credential-dependent maintenance and does not suppress it on renewal failure", async () => {
+    const order: string[] = [];
+    const renewalFailure = new SyncCalendarError(
+      "authorization",
+      "disconnected",
+      false,
+    );
+
+    await expect(
+      runScheduledCalendarMaintenance(NOW, {
+        cleanupProjectionRebuilds: async () => {
+          order.push("cleanup");
+          return 2;
+        },
+        repair: async () => {
+          order.push("repair");
+        },
+        renew: async () => {
+          order.push("renew");
+          throw renewalFailure;
+        },
+      }),
+    ).rejects.toBe(renewalFailure);
+    expect(order).toEqual(["cleanup", "repair", "renew"]);
+  });
+
   it("migrates legacy provisional rows without blocking the pending-row election", async () => {
     const legacy = new PGlite();
     try {

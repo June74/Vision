@@ -274,14 +274,11 @@ describe("encrypted atomic synchronization repository", () => {
       domain_state: string;
       lifecycle: string;
       status: string;
-      protected_payload_envelope: Uint8Array;
       node_id: string;
     }>(
-      `select node.domain, node.domain_state, node.lifecycle, event.status, event.node_id,
-              payload.protected_payload_envelope
+      `select node.domain, node.domain_state, node.lifecycle, event.status, event.node_id
        from nodes node
-       join events event on event.node_id = node.id
-       join event_sync_payloads payload on payload.node_id = node.id`,
+       join events event on event.node_id = node.id`,
     );
     expect(deleted.rows[0]).toMatchObject({
       domain: "work",
@@ -289,7 +286,7 @@ describe("encrypted atomic synchronization repository", () => {
       lifecycle: "deleted",
       status: "cancelled",
     });
-    expect(deleted.rows[0]!.protected_payload_envelope).toBeInstanceOf(Uint8Array);
+    expect((await pglite.query(`select * from event_sync_payloads`)).rows).toEqual([]);
     expect((await pglite.query(`select * from recoverable_deletions`)).rows).toHaveLength(1);
 
     await expect(

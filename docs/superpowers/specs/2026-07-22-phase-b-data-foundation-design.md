@@ -225,6 +225,8 @@ Push notifications are the near-real-time path. A scheduled incremental repair r
 
 If Google returns `410 Gone` for an invalid sync token, Vision rebuilds only the Google-backed projection, then reconciles Vision-only categories, annotations, and relationships by deterministic provider identity. It does not destroy Vision-only records.
 
+Full-rebuild pages are staged as bounded encrypted generations and become visible only through the atomic checkpoint activation. Activated generation evidence is retained, while nonactivated `staging`, `ready`, and `abandoned` generations are eligible for owner-scoped scheduled cleanup after seven days. Cleanup locks and revalidates the exact provider, calendar, job, status, and age boundary, removes at most 100 generations per pass, and cascades only their encrypted staged changes.
+
 References: [Google push notifications](https://developers.google.com/workspace/calendar/api/guides/push) and [incremental synchronization](https://developers.google.com/workspace/calendar/api/guides/sync).
 
 ### Outgoing Google changes

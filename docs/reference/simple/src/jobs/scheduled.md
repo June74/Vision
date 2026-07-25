@@ -3,7 +3,9 @@
 Runs Google channel renewal and missed-notification repair every 15 minutes.
 
 ## `runScheduledCalendarMaintenance`
-Queues repair first, still attempts renewal if repair fails, and reports either failure afterward.
+Runs expired rebuild cleanup, queues repair, still attempts renewal if either fails, and reports a failure afterward.
+## `cleanupProjectionRebuilds`
+Removes expired encrypted rebuild staging before Google credentials are needed.
 ## `recordCredentialFailure`
 Stores a safe credential failure before the scheduler reports it.
 ## `scheduled`

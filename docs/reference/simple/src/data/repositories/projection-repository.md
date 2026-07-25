@@ -28,6 +28,10 @@ Authenticates, decrypts, and revalidates the closed provider-change contract bef
 
 Marks a failed pre-activation generation safe for later cleanup.
 
+## `cleanupExpired`
+
+Removes at most 100 owner-bound rebuild generations that have remained nonactivated for seven days, including their encrypted staged changes. Recent generations and activated evidence stay intact.
+
 ## `assertOwner`
 
 Rejects access through a repository created for a different owner.
@@ -35,6 +39,10 @@ Rejects access through a repository created for a different owner.
 ## `validateBegin`
 
 Checks bounded generation, calendar, job, version, claim, and timestamp metadata.
+
+## `readCleanupTime`
+
+Accepts only a genuine finite date before calculating the seven-day cleanup boundary.
 
 ## `digestIdentity`
 
@@ -63,6 +71,10 @@ Validates a canonical SHA-256 base64url digest.
 ## `readPositiveInteger`
 
 Validates positive key-version metadata returned by PostgreSQL.
+
+## `readNonNegativeInteger`
+
+Validates the number of generations PostgreSQL reports as removed.
 
 ## `readBytes`
 

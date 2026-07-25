@@ -204,6 +204,20 @@ class DrizzleDeletionPurgeRepository implements DeletionPurgeRepository {
           and (edge.source_node_id = claimed_recovery.node_id or edge.destination_node_id = claimed_recovery.node_id)
         returning edge.id
       ),
+      removed_annotations as (
+        delete from node_annotations annotation
+        using claimed_recovery
+        where annotation.node_id = claimed_recovery.node_id
+          and annotation.owner_id = claimed_recovery.owner_id
+        returning annotation.id
+      ),
+      removed_category_assignments as (
+        delete from node_category_assignments assignment
+        using claimed_recovery
+        where assignment.node_id = claimed_recovery.node_id
+          and assignment.owner_id = claimed_recovery.owner_id
+        returning assignment.node_id
+      ),
       removed_events as (
         delete from events event
         using claimed_recovery

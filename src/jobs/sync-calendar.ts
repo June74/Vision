@@ -207,7 +207,6 @@ export async function syncCalendar(
         });
       } catch (error) {
         if (
-          pages === 0 &&
           checkpoint !== undefined &&
           dependencies.projectionRepository !== undefined &&
           error instanceof EventSyncClientError &&

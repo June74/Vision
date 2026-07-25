@@ -3,7 +3,9 @@
 The scheduled entry point performs lifecycle control and only reserves event synchronization through the normal opaque Queue. Credentials and provider content never enter a job.
 
 ## `runScheduledCalendarMaintenance`
-Runs repair before renewal, isolates their execution, and reports a failure only after both maintenance paths have been attempted.
+Runs projection cleanup and repair before renewal, isolates all three operations, and reports a failure only after every maintenance path has been attempted.
+## `cleanupProjectionRebuilds`
+Invokes the owner-scoped database-only projection retention boundary before credential-dependent renewal; it never fetches events or reads OAuth tokens.
 ## `recordCredentialFailure`
 Routes typed OAuth failure through the generation-safe maintenance checkpoint transition before rethrowing.
 ## `scheduled`

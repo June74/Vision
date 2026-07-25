@@ -5,6 +5,7 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  DeletionOwnerAccessDeniedError,
   DeletionStateConflictError,
   createDeletionPurgeRepository,
   createDeletionRepository,
@@ -57,6 +58,32 @@ async function seedEvent(id = nodeId, owner = ownerId, suffix = "1"): Promise<vo
   );
 }
 
+async function seedVisionMetadata(
+  id = nodeId,
+  owner = ownerId,
+  suffix = "1",
+): Promise<void> {
+  await pglite.query(
+    `insert into node_category_assignments (
+       node_id, owner_id, domain, domain_state, provenance, assigned_at, version
+     ) values ($1, $2, 'work', 'confirmed', 'user', $3, 1)`,
+    [id, owner, deletedAt.toISOString()],
+  );
+  await pglite.query(
+    `insert into node_annotations (
+       id, owner_id, node_id, provenance, annotation_envelope,
+       key_version, created_at, updated_at
+     ) values ($1, $2, $3, 'user', $4, 1, $5, $5)`,
+    [
+      `annotation_${suffix}`,
+      owner,
+      id,
+      new TextEncoder().encode(`${sentinel}:${suffix}`),
+      deletedAt.toISOString(),
+    ],
+  );
+}
+
 function ownerRepository(owner = ownerId) {
   return createDeletionRepository(database, createTestDeletionRepositoryAccess(owner));
 }
@@ -97,14 +124,18 @@ async function seedPurgeAuditConflict(
 }
 
 async function expectAuditConflictRollback(): Promise<void> {
+  await seedVisionMetadata();
   await expect(purgeJob().purgeExpiredDeletions(purgeAfter)).rejects.toThrow();
   expect((await pglite.query("select * from events where node_id = $1", [nodeId])).rows).toHaveLength(1);
   expect((await pglite.query("select * from recoverable_deletions where node_id = $1", [nodeId])).rows).toHaveLength(1);
+  expect((await pglite.query("select * from node_annotations where node_id = $1", [nodeId])).rows).toHaveLength(1);
+  expect((await pglite.query("select * from node_category_assignments where node_id = $1", [nodeId])).rows).toHaveLength(1);
 }
 
 beforeEach(async () => {
   pglite = new PGlite();
   await pglite.exec(await readFile(resolve(process.cwd(), "migrations/0001_phase_b_foundation.sql"), "utf8"));
+  await pglite.exec(await readFile(resolve(process.cwd(), "migrations/0008_google_projection_rebuild.sql"), "utf8"));
   executedSql = [];
   database = {
     execute: async (statement: SQL) => {
@@ -134,6 +165,9 @@ afterEach(async () => {
 
 describe("expired-deletion purge job", () => {
   it("deletes ciphertext, connected edges, and recovery data while retaining only privacy-safe audit facts idempotently", async () => {
+    await seedVisionMetadata();
+    await seedEvent("node_other_owner", otherOwnerId, "other-owner");
+    await seedVisionMetadata("node_other_owner", otherOwnerId, "other-owner");
     await markForDeletion();
     const job = purgeJob();
 
@@ -141,7 +175,11 @@ describe("expired-deletion purge job", () => {
     expect((await pglite.query("select * from events where node_id = $1", [nodeId])).rows).toEqual([]);
     expect((await pglite.query("select * from edges where source_node_id = $1 or destination_node_id = $1", [nodeId])).rows).toEqual([]);
     expect((await pglite.query("select * from recoverable_deletions where node_id = $1", [nodeId])).rows).toEqual([]);
+    expect((await pglite.query("select * from node_annotations where node_id = $1", [nodeId])).rows).toEqual([]);
+    expect((await pglite.query("select * from node_category_assignments where node_id = $1", [nodeId])).rows).toEqual([]);
     expect((await pglite.query("select * from nodes where id = $1", [nodeId])).rows).toEqual([]);
+    expect((await pglite.query("select node_id from node_annotations where node_id = 'node_other_owner'")).rows).toEqual([{ node_id: "node_other_owner" }]);
+    expect((await pglite.query("select node_id from node_category_assignments where node_id = 'node_other_owner'")).rows).toEqual([{ node_id: "node_other_owner" }]);
     const audit = await pglite.query("select action, outcome, node_id from audit_events order by id");
     expect(audit.rows).toEqual([{ action: "event.saved", outcome: "succeeded", node_id: null }, { action: "record.purged", outcome: "succeeded", node_id: null }]);
     expect(JSON.stringify(audit.rows)).not.toContain(sentinel);
@@ -238,6 +276,7 @@ describe("expired-deletion purge job", () => {
     expect((await pglite.query("select lifecycle, version from nodes where id = $1", [nodeId])).rows).toEqual([{ lifecycle: "active", version: 3 }]);
 
     await seedEvent("node_event_purge", ownerId, "purge");
+    await seedVisionMetadata("node_event_purge", ownerId, "purge");
     await markForDeletion("node_event_purge");
     const [firstPurge, secondPurge] = await Promise.all([
       job.purgeExpiredDeletions(purgeAfter),
@@ -245,8 +284,11 @@ describe("expired-deletion purge job", () => {
     ]);
     expect([firstPurge, secondPurge]).toContainEqual({ purgedNodeIds: ["node_event_purge"] });
     expect([firstPurge, secondPurge]).toContainEqual({ purgedNodeIds: [] });
+    expect((await pglite.query("select * from node_annotations where node_id = 'node_event_purge'")).rows).toEqual([]);
+    expect((await pglite.query("select * from node_category_assignments where node_id = 'node_event_purge'")).rows).toEqual([]);
 
     await seedEvent("node_event_race", ownerId, "race");
+    await seedVisionMetadata("node_event_race", ownerId, "race");
     await markForDeletion("node_event_race");
     const [purgeWins, restoreAfterPurge] = await Promise.all([
       job.purgeExpiredDeletions(purgeAfter),
@@ -255,6 +297,8 @@ describe("expired-deletion purge job", () => {
     expect(purgeWins.purgedNodeIds).toContain("node_event_race");
     expect(restoreAfterPurge).toBe(false);
     expect((await pglite.query("select * from events where node_id = 'node_event_race'")).rows).toEqual([]);
+    expect((await pglite.query("select * from node_annotations where node_id = 'node_event_race'")).rows).toEqual([]);
+    expect((await pglite.query("select * from node_category_assignments where node_id = 'node_event_race'")).rows).toEqual([]);
   });
 
   it("renders owner predicates, deterministic recovery/node locks, and current eligibility checks", async () => {
@@ -268,6 +312,17 @@ describe("expired-deletion purge job", () => {
     expect(sqlText).toContain("recovery.owner_id =");
     expect(sqlText).toContain("node.lifecycle = 'deleted'");
     expect(sqlText).toContain("recovery.purge_after <=");
+    expect(sqlText).toContain("delete from node_annotations");
+    expect(sqlText).toContain("delete from node_category_assignments");
+  });
+
+  it("rejects a caller-shaped purge authority before any metadata can be removed", () => {
+    expect(() =>
+      createDeletionPurgeRepository(
+        database,
+        {} as Parameters<typeof createDeletionPurgeRepository>[1],
+      ),
+    ).toThrow(DeletionOwnerAccessDeniedError);
   });
 
   it("keeps test-only authority issuers out of production lifecycle source", async () => {

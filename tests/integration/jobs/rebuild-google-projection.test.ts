@@ -165,12 +165,14 @@ async function seedVisionMetadata(): Promise<{
   readonly unchangedNodeId: string;
   readonly changedNodeId: string;
   readonly removedNodeId: string;
+  readonly explicitRemovedNodeId: string;
   readonly noteNodeId: string;
   readonly annotationBytes: Uint8Array;
 }> {
   const unchangedNodeId = await eventNodeId("unchanged");
   const changedNodeId = await eventNodeId("changed");
   const removedNodeId = await eventNodeId("removed");
+  const explicitRemovedNodeId = await eventNodeId("explicit-removed");
   const noteNodeId = "vision-note-1";
   await postgres.query(
     `update nodes
@@ -194,8 +196,15 @@ async function seedVisionMetadata(): Promise<{
      ) values
        ($1, $4, 'personal', 'confirmed', 'user', '2026-07-25T12:01:00Z', 1),
        ($2, $4, 'work', 'confirmed', 'user', '2026-07-25T12:01:00Z', 1),
-       ($3, $4, 'school', 'confirmed', 'user', '2026-07-25T12:01:00Z', 1)`,
-    [unchangedNodeId, changedNodeId, removedNodeId, ownerId],
+       ($3, $4, 'school', 'confirmed', 'user', '2026-07-25T12:01:00Z', 1),
+       ($5, $4, 'school', 'confirmed', 'user', '2026-07-25T12:01:00Z', 1)`,
+    [
+      unchangedNodeId,
+      changedNodeId,
+      removedNodeId,
+      ownerId,
+      explicitRemovedNodeId,
+    ],
   );
   await postgres.query(
     `insert into nodes (
@@ -220,8 +229,22 @@ async function seedVisionMetadata(): Promise<{
        'edge-note-unchanged', $1, $2, 'note', $3, 'event',
        'note_about_event', 'user', 'explicit', null, 'confirmed',
        'private', '2026-07-25T12:01:00Z', null, 1
+     ), (
+       'edge-note-missing', $1, $2, 'note', $4, 'event',
+       'note_about_event', 'user', 'explicit', null, 'confirmed',
+       'private', '2026-07-25T12:01:00Z', null, 1
+     ), (
+       'edge-note-explicit', $1, $2, 'note', $5, 'event',
+       'note_about_event', 'user', 'explicit', null, 'confirmed',
+       'private', '2026-07-25T12:01:00Z', null, 1
      )`,
-    [ownerId, noteNodeId, unchangedNodeId],
+    [
+      ownerId,
+      noteNodeId,
+      unchangedNodeId,
+      removedNodeId,
+      explicitRemovedNodeId,
+    ],
   );
   const encrypted = await encryptProtectedFields(
     keyProvider,
@@ -249,10 +272,38 @@ async function seedVisionMetadata(): Promise<{
       encrypted.annotation.keyVersion,
     ],
   );
+  for (const [id, nodeId] of [
+    ["annotation-missing", removedNodeId],
+    ["annotation-explicit", explicitRemovedNodeId],
+  ] as const) {
+    const retained = await encryptProtectedFields(
+      keyProvider,
+      { ownerId, nodeId, domain: "school" },
+      { annotation: `${annotationSentinel}:${id}` },
+    );
+    if (retained.annotation === null) {
+      throw new Error("Deleted-event annotation did not encrypt.");
+    }
+    await postgres.query(
+      `insert into node_annotations (
+         id, owner_id, node_id, provenance, annotation_envelope,
+         key_version, created_at, updated_at
+       ) values ($1, $2, $3, 'user', $4, $5,
+         '2026-07-25T12:01:00Z', '2026-07-25T12:01:00Z')`,
+      [
+        id,
+        ownerId,
+        nodeId,
+        new TextEncoder().encode(serializeCipherEnvelope(retained.annotation)),
+        retained.annotation.keyVersion,
+      ],
+    );
+  }
   return {
     unchangedNodeId,
     changedNodeId,
     removedNodeId,
+    explicitRemovedNodeId,
     noteNodeId,
     annotationBytes,
   };
@@ -264,6 +315,7 @@ describe("invalid Google projection rebuild", () => {
       upsert("unchanged", 1),
       upsert("changed", 1),
       upsert("removed", 1),
+      upsert("explicit-removed", 1),
       upsert("series", 1, {
         recurrence: { kind: "master", masterEventId: "series" },
       }),
@@ -299,6 +351,7 @@ describe("invalid Google projection rebuild", () => {
             },
           }),
           upsert("new", 1),
+          deletion("explicit-removed"),
         ],
         calendarTimeZone: "America/Chicago",
         nextSyncToken: "rebuilt-sync-token",
@@ -346,9 +399,9 @@ describe("invalid Google projection rebuild", () => {
       status: "succeeded",
       reason: "rebuild",
       pages: 2,
-      staged: 5,
+      staged: 6,
       upserted: 2,
-      deleted: 1,
+      deleted: 2,
       unchanged: 3,
       checkpointVersion: 2,
     });
@@ -395,6 +448,11 @@ describe("invalid Google projection rebuild", () => {
       lifecycle: "deleted",
       status: "cancelled",
     });
+    expect(byId.get("explicit-removed")).toMatchObject({
+      node_id: metadata.explicitRemovedNodeId,
+      lifecycle: "deleted",
+      status: "cancelled",
+    });
     expect(byId.get("series_20260725")).toMatchObject({
       recurrence_id: "series",
       lifecycle: "active",
@@ -409,7 +467,9 @@ describe("invalid Google projection rebuild", () => {
         await postgres.query(
           `select node_id, domain, domain_state, provenance, version
            from node_category_assignments
+           where node_id <> $1
            order by domain`,
+          [metadata.explicitRemovedNodeId],
         )
       ).rows,
     ).toEqual([
@@ -435,6 +495,23 @@ describe("invalid Google projection rebuild", () => {
         version: 1,
       },
     ]);
+    expect(
+      (
+        await postgres.query(
+          `select node_id, domain, domain_state, provenance, version
+           from node_category_assignments where node_id = $1`,
+          [metadata.explicitRemovedNodeId],
+        )
+      ).rows,
+    ).toEqual([
+      {
+        node_id: metadata.explicitRemovedNodeId,
+        domain: "school",
+        domain_state: "confirmed",
+        provenance: "user",
+        version: 1,
+      },
+    ]);
 
     expect(
       (
@@ -448,6 +525,26 @@ describe("invalid Google projection rebuild", () => {
         id: "edge-note-unchanged",
         source_node_id: metadata.noteNodeId,
         destination_node_id: metadata.unchangedNodeId,
+        lifecycle: "confirmed",
+      },
+    ]);
+    expect(
+      (
+        await postgres.query(
+          `select id, destination_node_id, lifecycle
+           from edges where id in ('edge-note-missing', 'edge-note-explicit')
+           order by id`,
+        )
+      ).rows,
+    ).toEqual([
+      {
+        id: "edge-note-explicit",
+        destination_node_id: metadata.explicitRemovedNodeId,
+        lifecycle: "confirmed",
+      },
+      {
+        id: "edge-note-missing",
+        destination_node_id: metadata.removedNodeId,
         lifecycle: "confirmed",
       },
     ]);
@@ -469,11 +566,41 @@ describe("invalid Google projection rebuild", () => {
     expect(
       (
         await postgres.query(
-          `select node_id from recoverable_deletions where node_id = $1`,
-          [metadata.removedNodeId],
+          `select id, node_id from node_annotations
+           where id in ('annotation-missing', 'annotation-explicit')
+           order by id`,
         )
       ).rows,
-    ).toEqual([{ node_id: metadata.removedNodeId }]);
+    ).toEqual([
+      {
+        id: "annotation-explicit",
+        node_id: metadata.explicitRemovedNodeId,
+      },
+      {
+        id: "annotation-missing",
+        node_id: metadata.removedNodeId,
+      },
+    ]);
+    expect(
+      (
+        await postgres.query<{ node_id: string }>(
+          `select node_id from recoverable_deletions
+           where node_id in ($1, $2) order by node_id`,
+          [metadata.removedNodeId, metadata.explicitRemovedNodeId],
+        )
+      ).rows.map(({ node_id }) => node_id).sort(),
+    ).toEqual(
+      [metadata.removedNodeId, metadata.explicitRemovedNodeId].sort(),
+    );
+    expect(
+      (
+        await postgres.query(
+          `select node_id from event_sync_payloads
+           where node_id in ($1, $2) order by node_id`,
+          [metadata.removedNodeId, metadata.explicitRemovedNodeId],
+        )
+      ).rows,
+    ).toEqual([]);
     expect(
       (
         await postgres.query(
@@ -508,6 +635,133 @@ describe("invalid Google projection rebuild", () => {
           .rows,
       ),
     ).not.toContain("initial-sync-token");
+  });
+
+  it("discards partial incremental pages when a later page invalidates the cursor and activates only the full rebuild", async () => {
+    await runInitial([
+      upsert("retained-after-late-410", 1),
+      upsert("missing-after-late-410", 1),
+    ]);
+    const requests: EventSyncListRequest[] = [];
+    const client = pageClient(async (request) => {
+      requests.push({ ...request });
+      if (
+        request.syncToken === "initial-sync-token" &&
+        request.pageToken === undefined
+      ) {
+        return {
+          changes: [upsert("incremental-partial-must-discard", 1)],
+          calendarTimeZone: "America/Chicago",
+          nextPageToken: "incremental-page-2",
+        };
+      }
+      if (
+        request.syncToken === "initial-sync-token" &&
+        request.pageToken === "incremental-page-2"
+      ) {
+        throw new EventSyncClientError("sync_token_invalid", 410);
+      }
+      if (request.syncToken === undefined && request.pageToken === undefined) {
+        return {
+          changes: [
+            upsert("retained-after-late-410", 2),
+            upsert("rebuilt-only", 1),
+          ],
+          calendarTimeZone: "America/Chicago",
+          nextSyncToken: "late-410-rebuilt-token",
+        };
+      }
+      throw new Error("Unexpected late-410 request.");
+    });
+
+    await expect(
+      syncCalendar(
+        {
+          ownerId,
+          calendarId,
+          reason: "repair",
+          jobId: "job-late-page-invalid-token",
+        },
+        {
+          client,
+          repository: createSyncRepository(database, keyProvider, ownerId),
+          projectionRepository: createProjectionRepository(
+            database,
+            keyProvider,
+            ownerId,
+          ),
+          now: () => new Date("2026-07-25T14:00:00.000Z"),
+          random: () => 0,
+        },
+      ),
+    ).resolves.toMatchObject({
+      status: "succeeded",
+      reason: "rebuild",
+      checkpointVersion: 2,
+      staged: 2,
+    });
+    expect(requests).toEqual([
+      {
+        calendarId,
+        syncToken: "initial-sync-token",
+        pageToken: undefined,
+      },
+      {
+        calendarId,
+        syncToken: "initial-sync-token",
+        pageToken: "incremental-page-2",
+      },
+      { calendarId, syncToken: undefined, pageToken: undefined },
+    ]);
+    expect(
+      (
+        await postgres.query(
+          `select event.provider_event_id, event.provider_version,
+                  event.status, node.lifecycle
+           from events event
+           join nodes node on node.id = event.node_id
+           where event.owner_id = $1 and event.provider_calendar_id = $2
+           order by event.provider_event_id`,
+          [ownerId, calendarId],
+        )
+      ).rows,
+    ).toEqual([
+      {
+        provider_event_id: "missing-after-late-410",
+        provider_version: "00000000000000000001",
+        status: "cancelled",
+        lifecycle: "deleted",
+      },
+      {
+        provider_event_id: "rebuilt-only",
+        provider_version: "00000000000000000001",
+        status: "confirmed",
+        lifecycle: "active",
+      },
+      {
+        provider_event_id: "retained-after-late-410",
+        provider_version: "00000000000000000002",
+        status: "confirmed",
+        lifecycle: "active",
+      },
+    ]);
+    expect(
+      (
+        await postgres.query(
+          `select provider_event_id from events
+           where provider_event_id = 'incremental-partial-must-discard'`,
+        )
+      ).rows,
+    ).toEqual([]);
+    expect(
+      (
+        await postgres.query(
+          `select version, status from sync_checkpoints
+           where owner_id = $1 and provider_calendar_id = $2`,
+          [ownerId, calendarId],
+        )
+      ).rows,
+    ).toEqual([{ version: 2, status: "connected" }]);
   });
 
   it("revives a recoverable event with the same provider revision while retaining its user category", async () => {
@@ -647,6 +901,9 @@ describe("invalid Google projection rebuild", () => {
       abandon(generationId, now) {
         return productionRepository.abandon(generationId, now);
       },
+      cleanupExpired(now) {
+        return productionRepository.cleanupExpired(now);
+      },
     };
     await expect(
       syncCalendar(
@@ -749,6 +1006,9 @@ describe("invalid Google projection rebuild", () => {
       abandon(generationId, now) {
         return productionRepository.abandon(generationId, now);
       },
+      cleanupExpired(now) {
+        return productionRepository.cleanupExpired(now);
+      },
     };
     const request = {
       ownerId,
@@ -799,6 +1059,311 @@ describe("invalid Google projection rebuild", () => {
         )
       ).rows,
     ).toEqual([{ status: "activated", count: 1 }]);
+  });
+
+  it("removes only this owner's nonactivated generations at the seven-day retention boundary", async () => {
+    await runInitial([upsert("retention-anchor", 1)]);
+    const cleanupNow = new Date("2026-08-02T12:00:00.000Z");
+    const cutoff = new Date(cleanupNow.getTime() - 7 * 24 * 60 * 60 * 1_000);
+    const recent = new Date(cutoff.getTime() + 1);
+    const repository = createProjectionRepository(
+      database,
+      keyProvider,
+      ownerId,
+    );
+    const otherRepository = createProjectionRepository(
+      database,
+      keyProvider,
+      "owner-rebuild-other",
+    );
+    const createGeneration = async (
+      target: ProjectionRepository,
+      input: {
+        readonly id: string;
+        readonly jobId: string;
+        readonly at: Date;
+        readonly status: "staging" | "ready" | "abandoned";
+        readonly eventId: string;
+        readonly owner?: string;
+      },
+    ) => {
+      const generationOwner = input.owner ?? ownerId;
+      await target.beginRebuild({
+        generationId: input.id,
+        ownerId: generationOwner,
+        calendarId,
+        jobId: input.jobId,
+        baseCheckpointVersion: 1,
+        now: input.at,
+      });
+      await target.stageChanges(input.id, 0, [upsert(input.eventId, 2)]);
+      if (input.status === "ready") {
+        await target.markReady(input.id, 1, input.at);
+      } else if (input.status === "abandoned") {
+        await target.abandon(input.id, input.at);
+      }
+    };
+    const createJob = async (input: {
+      readonly jobId: string;
+      readonly owner: string;
+      readonly updatedAt: Date;
+      readonly status: "failed" | "in_progress";
+    }) => {
+      const createdAt = new Date(cutoff.getTime() - 1);
+      await postgres.query(
+        `insert into calendar_sync_jobs (
+           job_id, owner_id, provider, provider_calendar_id, reason,
+           status, attempts, claim_id, claimed_at, completed_at,
+           last_error_category, action_required, checkpoint_version,
+           page_count, staged_count, upserted_count, deleted_count,
+           unchanged_count, created_at, updated_at
+         ) values (
+           $1, $2, 'google-calendar', $3, 'rebuild', $4, 1,
+           case when $4 = 'in_progress' then 'claim-retention' else null end,
+           case when $4 = 'in_progress' then $5::timestamptz else null end,
+           case when $4 = 'failed' then $5::timestamptz else null end,
+           case when $4 = 'failed' then 'database' else null end,
+           false, null, null, null, null, null, null, $6, $5
+         )`,
+        [
+          input.jobId,
+          input.owner,
+          calendarId,
+          input.status,
+          input.updatedAt.toISOString(),
+          createdAt.toISOString(),
+        ],
+      );
+    };
+    await createGeneration(repository, {
+      id: "generation-stale-staging",
+      jobId: "job-stale-staging",
+      at: cutoff,
+      status: "staging",
+      eventId: "stale-staging",
+    });
+    await createGeneration(repository, {
+      id: "generation-stale-ready",
+      jobId: "job-stale-ready",
+      at: cutoff,
+      status: "ready",
+      eventId: "stale-ready",
+    });
+    await createGeneration(repository, {
+      id: "generation-stale-abandoned",
+      jobId: "job-stale-abandoned",
+      at: cutoff,
+      status: "abandoned",
+      eventId: "stale-abandoned",
+    });
+    await createGeneration(repository, {
+      id: "generation-recent-abandoned",
+      jobId: "job-recent-abandoned",
+      at: recent,
+      status: "abandoned",
+      eventId: "recent-abandoned",
+    });
+    await createGeneration(repository, {
+      id: "generation-stale-failed-job",
+      jobId: "job-stale-failed",
+      at: cutoff,
+      status: "staging",
+      eventId: "stale-failed-job",
+    });
+    await createJob({
+      jobId: "job-stale-failed",
+      owner: ownerId,
+      updatedAt: cutoff,
+      status: "failed",
+    });
+    await createGeneration(repository, {
+      id: "generation-stale-recent-job",
+      jobId: "job-recent-in-progress",
+      at: cutoff,
+      status: "ready",
+      eventId: "stale-recent-job",
+    });
+    await createJob({
+      jobId: "job-recent-in-progress",
+      owner: ownerId,
+      updatedAt: recent,
+      status: "in_progress",
+    });
+    await createGeneration(repository, {
+      id: "generation-stale-mismatched-job",
+      jobId: "job-mismatched-owner",
+      at: cutoff,
+      status: "abandoned",
+      eventId: "stale-mismatched-job",
+    });
+    await createJob({
+      jobId: "job-mismatched-owner",
+      owner: "owner-rebuild-other",
+      updatedAt: cutoff,
+      status: "failed",
+    });
+    await createGeneration(otherRepository, {
+      id: "generation-other-owner-stale",
+      jobId: "job-other-owner-stale",
+      at: cutoff,
+      status: "abandoned",
+      eventId: "other-owner-stale",
+      owner: "owner-rebuild-other",
+    });
+    await postgres.query(
+      `insert into projection_rebuild_generations (
+         id, owner_id, provider, provider_calendar_id, job_id,
+         queue_claim_id, base_checkpoint_version, status, page_count,
+         created_at, updated_at, activated_at
+       ) values (
+         'generation-activated-evidence', $1, 'google-calendar', $2,
+         'job-activated-evidence', null, 1, 'activated', 1, $3, $3, $3
+       )`,
+      [ownerId, calendarId, cutoff.toISOString()],
+    );
+
+    await expect(repository.cleanupExpired(cleanupNow)).resolves.toBe(4);
+    expect(
+      (
+        await postgres.query(
+          `select id, owner_id, status
+           from projection_rebuild_generations order by id`,
+        )
+      ).rows,
+    ).toEqual([
+      {
+        id: "generation-activated-evidence",
+        owner_id: ownerId,
+        status: "activated",
+      },
+      {
+        id: "generation-other-owner-stale",
+        owner_id: "owner-rebuild-other",
+        status: "abandoned",
+      },
+      {
+        id: "generation-recent-abandoned",
+        owner_id: ownerId,
+        status: "abandoned",
+      },
+      {
+        id: "generation-stale-mismatched-job",
+        owner_id: ownerId,
+        status: "abandoned",
+      },
+      {
+        id: "generation-stale-recent-job",
+        owner_id: ownerId,
+        status: "ready",
+      },
+    ]);
+    expect(
+      (
+        await postgres.query(
+          `select generation_id from projection_rebuild_changes
+           order by generation_id`,
+        )
+      ).rows,
+    ).toEqual([
+      { generation_id: "generation-other-owner-stale" },
+      { generation_id: "generation-recent-abandoned" },
+      { generation_id: "generation-stale-mismatched-job" },
+      { generation_id: "generation-stale-recent-job" },
+    ]);
+  });
+
+  it("serializes stale cleanup against activation without deleting activated evidence or partially replacing projection", async () => {
+    await runInitial([upsert("cleanup-race", 1)]);
+    const repository = createProjectionRepository(
+      database,
+      keyProvider,
+      ownerId,
+    );
+    const syncRepository = createSyncRepository(
+      database,
+      keyProvider,
+      ownerId,
+    );
+    const staleAt = new Date("2026-07-25T12:00:00.000Z");
+    const cleanupNow = new Date("2026-08-02T12:00:00.000Z");
+    await repository.beginRebuild({
+      generationId: "generation-cleanup-activation-race",
+      ownerId,
+      calendarId,
+      jobId: "job-cleanup-activation-race",
+      baseCheckpointVersion: 1,
+      now: staleAt,
+    });
+    await repository.stageChanges(
+      "generation-cleanup-activation-race",
+      0,
+      [upsert("cleanup-race", 2)],
+    );
+    await repository.markReady(
+      "generation-cleanup-activation-race",
+      1,
+      staleAt,
+    );
+    const staged = await repository.loadStagedChanges(
+      "generation-cleanup-activation-race",
+    );
+    const [activation, removed] = await Promise.all([
+      syncRepository.applyChanges({
+        ownerId,
+        calendarId,
+        expectedCheckpointVersion: 1,
+        changes: staged,
+        nextCheckpoint: {
+          calendarId,
+          syncToken: "cleanup-race-token",
+          committedAt: cleanupNow.toISOString(),
+          version: 2,
+        },
+        jobId: "job-cleanup-activation-race",
+        reason: "rebuild",
+        pageCount: 1,
+        startedAt: staleAt.toISOString(),
+        replaceProjection: true,
+        rebuildGenerationId: "generation-cleanup-activation-race",
+      }),
+      repository.cleanupExpired(cleanupNow),
+    ]);
+    const state = await postgres.query<{
+      checkpoint_version: number;
+      provider_version: string;
+      generation_status: string | null;
+    }>(
+      `select checkpoint.version as checkpoint_version,
+              event.provider_version,
+              generation.status as generation_status
+       from sync_checkpoints checkpoint
+       cross join events event
+       left join projection_rebuild_generations generation
+         on generation.id = 'generation-cleanup-activation-race'
+       where checkpoint.owner_id = $1
+         and checkpoint.provider_calendar_id = $2
+         and event.provider_event_id = 'cleanup-race'`,
+      [ownerId, calendarId],
+    );
+    if (activation.outcome === "committed") {
+      expect(removed).toBe(0);
+      expect(state.rows).toEqual([
+        {
+          checkpoint_version: 2,
+          provider_version: "00000000000000000002",
+          generation_status: "activated",
+        },
+      ]);
+    } else {
+      expect(removed).toBe(1);
+      expect(state.rows).toEqual([
+        {
+          checkpoint_version: 1,
+          provider_version: "00000000000000000001",
+          generation_status: null,
+        },
+      ]);
+    }
   });
 
   it("refuses activation after the durable queue claim is superseded", async () => {
