@@ -30,3 +30,7 @@ Checks the private-pilot time zone used for calendar creation.
 ## `parseOpenAiEnvironment`
 
 Checks the server-only AI Gateway base URL and OpenAI provider key without exposing their values.
+
+## `parseAiBudgetEnvironment`
+
+Checks the exact 950-cent Gateway barrier and the complete injected provider pricing and reservation estimates.

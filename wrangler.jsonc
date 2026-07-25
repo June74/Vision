@@ -28,6 +28,7 @@
     "crons": ["*/15 * * * *"]
   },
   "vars": {
-    "VISION_ENV": "local"
+    "VISION_ENV": "local",
+    "AI_MONTHLY_HARD_LIMIT_CENTS": "950"
   }
 }

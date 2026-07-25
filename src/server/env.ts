@@ -1,6 +1,7 @@
 /** Defines the validated runtime bindings available to the Vision Worker. */
 import { z } from "zod";
 import { decodeBase64Url } from "../crypto/envelope";
+import { AI_HARD_STOP_CENTS } from "../domain/budget/ai-budget";
 import { parseCloudflareOpenAiGatewayBaseUrl } from "../integrations/openai/cloudflare-gateway-url";
 
 const keyEncryptionKeySchema = z.string().superRefine((keyEncryptionKey, context) => {
@@ -59,12 +60,41 @@ const openAiGatewayBaseUrlSchema = z
       });
     }
   });
+const injectedNonNegativeIntegerSchema = z.coerce
+  .number()
+  .int()
+  .nonnegative()
+  .max(100_000);
+const injectedPositiveCentsSchema = z.coerce
+  .number()
+  .int()
+  .positive()
+  .max(949);
+const aiMonthlyHardLimitSchema = z.coerce
+  .number()
+  .int()
+  .refine((value) => value === AI_HARD_STOP_CENTS, {
+    message:
+      "AI_MONTHLY_HARD_LIMIT_CENTS must remain 950 and match the Cloudflare AI Gateway barrier.",
+  });
 
 /** Validates only the server-side configuration needed by the OpenAI adapter. */
 export const OpenAiEnvSchema = z
   .object({
     OPENAI_GATEWAY_BASE_URL: openAiGatewayBaseUrlSchema,
     OPENAI_API_KEY: z.string().min(1).max(2_048),
+  })
+  .strict();
+
+/** Validates injected provider pricing and the exact private-pilot Gateway spend barrier. */
+export const AiBudgetEnvSchema = z
+  .object({
+    AI_MONTHLY_HARD_LIMIT_CENTS: aiMonthlyHardLimitSchema,
+    AI_INPUT_CENTS_PER_MILLION_TOKENS: injectedNonNegativeIntegerSchema,
+    AI_OUTPUT_CENTS_PER_MILLION_TOKENS: injectedNonNegativeIntegerSchema,
+    AI_ROUTINE_WORST_CASE_CENTS: injectedPositiveCentsSchema,
+    AI_OPTIONAL_WORST_CASE_CENTS: injectedPositiveCentsSchema,
+    AI_COMPLEX_WORST_CASE_CENTS: injectedPositiveCentsSchema,
   })
   .strict();
 
@@ -122,6 +152,14 @@ export const RuntimeEnvSchema = z
     VISION_USER_TIME_ZONE: userTimeZoneSchema.optional(),
     OPENAI_GATEWAY_BASE_URL: openAiGatewayBaseUrlSchema.optional(),
     OPENAI_API_KEY: z.string().min(1).max(2_048).optional(),
+    AI_MONTHLY_HARD_LIMIT_CENTS: aiMonthlyHardLimitSchema.optional(),
+    AI_INPUT_CENTS_PER_MILLION_TOKENS:
+      injectedNonNegativeIntegerSchema.optional(),
+    AI_OUTPUT_CENTS_PER_MILLION_TOKENS:
+      injectedNonNegativeIntegerSchema.optional(),
+    AI_ROUTINE_WORST_CASE_CENTS: injectedPositiveCentsSchema.optional(),
+    AI_OPTIONAL_WORST_CASE_CENTS: injectedPositiveCentsSchema.optional(),
+    AI_COMPLEX_WORST_CASE_CENTS: injectedPositiveCentsSchema.optional(),
   })
   .superRefine((environment, context) => {
     if (
@@ -132,6 +170,25 @@ export const RuntimeEnvSchema = z
         code: "custom",
         message:
           "OPENAI_GATEWAY_BASE_URL and OPENAI_API_KEY must be configured together.",
+      });
+    }
+    const pricingFields = [
+      environment.AI_INPUT_CENTS_PER_MILLION_TOKENS,
+      environment.AI_OUTPUT_CENTS_PER_MILLION_TOKENS,
+      environment.AI_ROUTINE_WORST_CASE_CENTS,
+      environment.AI_OPTIONAL_WORST_CASE_CENTS,
+      environment.AI_COMPLEX_WORST_CASE_CENTS,
+    ];
+    const configuredPricingFields = pricingFields.filter(
+      (value) => value !== undefined,
+    ).length;
+    if (
+      configuredPricingFields !== 0 &&
+      configuredPricingFields !== pricingFields.length
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "All AI pricing fields must be configured together.",
       });
     }
   });
@@ -166,6 +223,13 @@ export function parseOpenAiEnvironment(
   environment: unknown,
 ): z.infer<typeof OpenAiEnvSchema> {
   return OpenAiEnvSchema.parse(environment);
+}
+
+/** Validates injected AI rates and estimates before constructing the budget wrapper. */
+export function parseAiBudgetEnvironment(
+  environment: unknown,
+): z.infer<typeof AiBudgetEnvSchema> {
+  return AiBudgetEnvSchema.parse(environment);
 }
 
 /** Represents the validated server-only, secret-bearing Vision runtime environment. */

@@ -1,5 +1,8 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  AiBudgetEnvSchema,
   GoogleAuthEnvSchema,
   OpenAiEnvSchema,
   RuntimeEnvSchema,
@@ -167,5 +170,73 @@ describe("OpenAiEnvSchema", () => {
         OPENAI_API_KEY: "OPENAI_PROVIDER_SECRET_SENTINEL",
       }),
     ).toThrow(/configured together/u);
+  });
+});
+
+describe("AiBudgetEnvSchema", () => {
+  it("pins the Worker-side Gateway limit contract to 950 cents", () => {
+    const wrangler = JSON.parse(
+      readFileSync(resolve(process.cwd(), "wrangler.jsonc"), "utf8"),
+    ) as { vars?: Record<string, string> };
+
+    expect(wrangler.vars?.AI_MONTHLY_HARD_LIMIT_CENTS).toBe("950");
+  });
+
+  it("accepts only an injected price contract with the exact 950-cent Gateway barrier", () => {
+    expect(
+      AiBudgetEnvSchema.parse({
+        AI_MONTHLY_HARD_LIMIT_CENTS: "950",
+        AI_INPUT_CENTS_PER_MILLION_TOKENS: "1000",
+        AI_OUTPUT_CENTS_PER_MILLION_TOKENS: "4000",
+        AI_ROUTINE_WORST_CASE_CENTS: "10",
+        AI_OPTIONAL_WORST_CASE_CENTS: "20",
+        AI_COMPLEX_WORST_CASE_CENTS: "50",
+      }),
+    ).toEqual({
+      AI_MONTHLY_HARD_LIMIT_CENTS: 950,
+      AI_INPUT_CENTS_PER_MILLION_TOKENS: 1000,
+      AI_OUTPUT_CENTS_PER_MILLION_TOKENS: 4000,
+      AI_ROUTINE_WORST_CASE_CENTS: 10,
+      AI_OPTIONAL_WORST_CASE_CENTS: 20,
+      AI_COMPLEX_WORST_CASE_CENTS: 50,
+    });
+
+    expect(() =>
+      AiBudgetEnvSchema.parse({
+        AI_MONTHLY_HARD_LIMIT_CENTS: "951",
+        AI_INPUT_CENTS_PER_MILLION_TOKENS: "1000",
+        AI_OUTPUT_CENTS_PER_MILLION_TOKENS: "4000",
+        AI_ROUTINE_WORST_CASE_CENTS: "10",
+        AI_OPTIONAL_WORST_CASE_CENTS: "20",
+        AI_COMPLEX_WORST_CASE_CENTS: "50",
+      }),
+    ).toThrow(/950/u);
+  });
+
+  it("rejects partial, fractional, negative, or zero reservation pricing", () => {
+    const runtime = {
+      VISION_ENV: "preview",
+      DATABASE_URL: "postgresql://vision_app:secret@db.example.test/vision",
+      KEY_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      AI_MONTHLY_HARD_LIMIT_CENTS: "950",
+    };
+    expect(() =>
+      RuntimeEnvSchema.parse({
+        ...runtime,
+        AI_INPUT_CENTS_PER_MILLION_TOKENS: "1000",
+      }),
+    ).toThrow(/pricing fields must be configured together/u);
+    for (const invalid of ["0", "-1", "1.5", "NaN"]) {
+      expect(() =>
+        AiBudgetEnvSchema.parse({
+          AI_MONTHLY_HARD_LIMIT_CENTS: "950",
+          AI_INPUT_CENTS_PER_MILLION_TOKENS: "1000",
+          AI_OUTPUT_CENTS_PER_MILLION_TOKENS: "4000",
+          AI_ROUTINE_WORST_CASE_CENTS: invalid,
+          AI_OPTIONAL_WORST_CASE_CENTS: "20",
+          AI_COMPLEX_WORST_CASE_CENTS: "50",
+        }),
+      ).toThrow();
+    }
   });
 });
