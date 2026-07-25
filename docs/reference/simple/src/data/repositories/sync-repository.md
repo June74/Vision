@@ -17,6 +17,9 @@ Reads planning-only node category, privacy, and version facts for one owner and 
 Uses one checkpoint compare-and-swap SQL statement to apply events, tombstones, derived invalidations, safe metrics, and
 the terminal encrypted token. Queue commits also require the exact active job claim before any mutation.
 
+For a full rebuild, the same statement also verifies the ready generation, tombstones provider identities absent from
+the full listing, revives recoverable equal-version events, activates the generation, and clears its stage rows.
+
 ## `recordFailure`
 
 Updates safe health classification without modifying the cursor or its version.

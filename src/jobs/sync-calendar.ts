@@ -1,5 +1,6 @@
 /** Stages every provider page before one atomic event-projection and checkpoint commit. */
 import type { ProviderEventChange } from "../domain/sync/change";
+import type { ProjectionRepository } from "../data/repositories/projection-repository";
 import { MAX_PROTECTED_PLAINTEXT_BYTES } from "../crypto/envelope";
 import {
   SyncCheckpointSchema,
@@ -9,6 +10,7 @@ import {
   EventSyncClientError,
   type EventSyncClient,
 } from "../integrations/google-calendar/event-sync-client";
+import { rebuildGoogleProjection } from "./rebuild-google-projection";
 
 const MAX_STAGED_CHANGES = 25_000;
 const MAX_PAGES = 10_000;
@@ -43,6 +45,9 @@ export interface SyncApplyRequest {
   readonly pageCount: number;
   readonly startedAt: string;
   readonly queueClaimId?: string;
+  readonly queueJobReason?: SyncReason;
+  readonly replaceProjection?: boolean;
+  readonly rebuildGenerationId?: string;
 }
 
 /** Safe atomic repository outcome with no provider or protected content. */
@@ -92,6 +97,7 @@ export interface SyncRepository {
 export interface SyncCalendarDependencies {
   readonly client: EventSyncClient;
   readonly repository: SyncRepository;
+  readonly projectionRepository?: ProjectionRepository;
   readonly queueLease?: { readonly claimId: string };
   readonly persistFailure?: boolean;
   readonly now?: () => Date;
@@ -192,11 +198,40 @@ export async function syncCalendar(
       if (pages >= MAX_PAGES) {
         throw new SyncCalendarError("schema", "action_required", false);
       }
-      const page = await dependencies.client.listChanges({
-        calendarId: input.calendarId,
-        syncToken: checkpoint?.syncToken,
-        pageToken,
-      });
+      let page;
+      try {
+        page = await dependencies.client.listChanges({
+          calendarId: input.calendarId,
+          syncToken: checkpoint?.syncToken,
+          pageToken,
+        });
+      } catch (error) {
+        if (
+          pages === 0 &&
+          checkpoint !== undefined &&
+          dependencies.projectionRepository !== undefined &&
+          error instanceof EventSyncClientError &&
+          error.category === "sync_token_invalid"
+        ) {
+          return await rebuildGoogleProjection(
+            input.ownerId,
+            input.calendarId,
+            {
+              client: dependencies.client,
+              repository: dependencies.repository,
+              projectionRepository: dependencies.projectionRepository,
+              checkpoint,
+              jobId: input.jobId,
+              jobReason: input.reason,
+              ...(queueClaimId === undefined
+                ? {}
+                : { queueClaimId }),
+              now,
+            },
+          );
+        }
+        throw error;
+      }
       pages += 1;
 
       if (

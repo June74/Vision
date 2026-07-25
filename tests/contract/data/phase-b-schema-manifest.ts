@@ -1,7 +1,7 @@
 import type { SchemaTablesManifest } from "./schema-manifest";
 
 /**
- * Hand-authored from the twelve authoritative tables in migrations 0001 and 0004 through 0007.
+ * Hand-authored from the sixteen authoritative tables in migrations 0001 and 0004 through 0008.
  * Never regenerate this fixture from Drizzle metadata or the generated snapshot.
  *
  * Primary and unique keys intentionally record columns rather than generated names because the
@@ -234,6 +234,79 @@ export const phaseBSchemaManifest = {
     ],
   },
 
+  // Migration 0008: encrypted Vision-owned annotations independent from provider projection payloads.
+  node_annotations: {
+    columns: [
+      ["id", "text", true],
+      ["owner_id", "text", true],
+      ["node_id", "text", true],
+      ["provenance", "text", true],
+      ["annotation_envelope", "bytea", true],
+      ["key_version", "integer", true],
+      ["created_at", "timestamptz", true],
+      ["updated_at", "timestamptz", true],
+    ],
+    primaryKeys: [["id"]],
+    uniqueKeys: [],
+    foreignKeys: [
+      ["node_annotations_node_owner_fk", ["node_id", "owner_id"], "nodes", ["id", "owner_id"], "no action", "no action"],
+    ],
+    indexes: [
+      [
+        "node_annotations_owner_node_idx",
+        false,
+        "btree",
+        [
+          ["owner_id", "asc", "last"],
+          ["node_id", "asc", "last"],
+          ["updated_at", "desc", "last"],
+        ],
+      ],
+    ],
+    checks: [
+      ["node_annotations_key_version_positive", "key_version > 0"],
+      ["node_annotations_owner_non_empty", "owner_id <> ''"],
+      ["node_annotations_provenance_valid", "provenance in ('user', 'system', 'model')"],
+      ["node_annotations_timestamps_valid", "updated_at >= created_at"],
+    ],
+  },
+
+  // Migration 0008: explicit category provenance preserved separately from provider node provenance.
+  node_category_assignments: {
+    columns: [
+      ["node_id", "text", true],
+      ["owner_id", "text", true],
+      ["domain", "text", true],
+      ["domain_state", "text", true],
+      ["provenance", "text", true],
+      ["assigned_at", "timestamptz", true],
+      ["version", "integer", true],
+    ],
+    primaryKeys: [["node_id"]],
+    uniqueKeys: [],
+    foreignKeys: [
+      ["node_category_assignments_node_owner_fk", ["node_id", "owner_id"], "nodes", ["id", "owner_id"], "no action", "no action"],
+    ],
+    indexes: [
+      [
+        "node_category_assignments_owner_domain_idx",
+        false,
+        "btree",
+        [
+          ["owner_id", "asc", "last"],
+          ["domain", "asc", "last"],
+          ["assigned_at", "desc", "last"],
+        ],
+      ],
+    ],
+    checks: [
+      ["node_category_assignments_domain_valid", "domain in ('school', 'work', 'personal')"],
+      ["node_category_assignments_provenance_valid", "provenance in ('user', 'system', 'model')"],
+      ["node_category_assignments_state_valid", "domain_state in ('confirmed', 'inferred')"],
+      ["node_category_assignments_version_positive", "version > 0"],
+    ],
+  },
+
   // Migration lines 2-40: create table nodes.
   nodes: {
     columns: [
@@ -302,6 +375,83 @@ export const phaseBSchemaManifest = {
     checks: [
       ["operation_ledger_operation_non_empty", "provider_operation_id <> ''"],
       ["operation_ledger_provider_non_empty", "provider <> ''"],
+    ],
+  },
+
+  // Migration 0008: encrypted, crash-cleanable full-list changes for one rebuild generation.
+  projection_rebuild_changes: {
+    columns: [
+      ["generation_id", "text", true],
+      ["identity_hash", "text", true],
+      ["ordinal", "integer", true],
+      ["planning_json", "jsonb", true],
+      ["protected_payload_envelope", "bytea", false],
+      ["protected_key_version", "integer", false],
+    ],
+    primaryKeys: [["generation_id", "identity_hash"]],
+    uniqueKeys: [["generation_id", "ordinal"]],
+    foreignKeys: [
+      ["projection_rebuild_changes_generation_fk", ["generation_id"], "projection_rebuild_generations", ["id"], "no action", "cascade"],
+    ],
+    indexes: [
+      [
+        "projection_rebuild_changes_generation_ordinal_idx",
+        false,
+        "btree",
+        [
+          ["generation_id", "asc", "last"],
+          ["ordinal", "asc", "last"],
+        ],
+      ],
+    ],
+    checks: [
+      ["projection_rebuild_changes_identity_hash_valid", "identity_hash ~ '^[A-Za-z0-9_-]{43}$'"],
+      ["projection_rebuild_changes_ordinal_non_negative", "ordinal >= 0"],
+      ["projection_rebuild_changes_payload_consistent", "(protected_payload_envelope is null and protected_key_version is null) or (protected_payload_envelope is not null and protected_key_version > 0)"],
+    ],
+  },
+
+  // Migration 0008: queue- and checkpoint-bound rebuild generation lifecycle.
+  projection_rebuild_generations: {
+    columns: [
+      ["id", "text", true],
+      ["owner_id", "text", true],
+      ["provider", "text", true],
+      ["provider_calendar_id", "text", true],
+      ["job_id", "text", true],
+      ["queue_claim_id", "text", false],
+      ["base_checkpoint_version", "integer", true],
+      ["status", "text", true],
+      ["page_count", "integer", false],
+      ["created_at", "timestamptz", true],
+      ["updated_at", "timestamptz", true],
+      ["activated_at", "timestamptz", false],
+    ],
+    primaryKeys: [["id"]],
+    uniqueKeys: [["owner_id", "provider", "provider_calendar_id", "job_id"]],
+    foreignKeys: [],
+    indexes: [
+      [
+        "projection_rebuild_generations_cleanup_idx",
+        false,
+        "btree",
+        [
+          ["status", "asc", "last"],
+          ["updated_at", "asc", "last"],
+        ],
+      ],
+    ],
+    checks: [
+      ["projection_rebuild_generations_activation_consistent", "(status = 'activated') = (activated_at is not null)"],
+      ["projection_rebuild_generations_base_version_positive", "base_checkpoint_version > 0"],
+      ["projection_rebuild_generations_calendar_non_empty", "provider_calendar_id <> ''"],
+      ["projection_rebuild_generations_claim_non_empty", "queue_claim_id is null or queue_claim_id <> ''"],
+      ["projection_rebuild_generations_job_non_empty", "job_id <> ''"],
+      ["projection_rebuild_generations_owner_non_empty", "owner_id <> ''"],
+      ["projection_rebuild_generations_page_count_valid", "page_count is null or page_count > 0"],
+      ["projection_rebuild_generations_provider_valid", "provider = 'google-calendar'"],
+      ["projection_rebuild_generations_status_valid", "status in ('staging', 'ready', 'activated', 'abandoned')"],
+      ["projection_rebuild_generations_timestamps_valid", "updated_at >= created_at and (activated_at is null or activated_at >= created_at)"],
     ],
   },
 

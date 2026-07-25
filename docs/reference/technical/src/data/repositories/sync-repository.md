@@ -13,8 +13,9 @@ Any later SQL error rolls back the checkpoint, events, tombstones, derived inval
 
 In the store, inserts a version-zero row with null token/key fields and then returns one owner/provider/calendar row. In
 the encrypted repository, version zero maps to no checkpoint; positive versions require and decrypt an envelope under
-exact owner/calendar AAD. Queue-backed loads first lock and verify the exact job, owner, calendar, reason, status, and
-claim ID, so an already-superseded worker cannot create even the version-zero row.
+exact owner/calendar AAD. Queue-backed loads first lock and verify the exact job, owner, calendar, original queue-job
+reason, status, and claim ID, so an already-superseded worker cannot create even the version-zero row. A rebuild can
+therefore record its sync run with reason `rebuild` while still proving authority from the job's original reason.
 
 ## `loadProjectionContexts`
 
@@ -28,6 +29,12 @@ checkpoint CAS, applies only newer provider upserts, applies unversioned tombsto
 encrypted deleted rows for 30 days, retracts model-derived edges, and inserts `sync_runs` safe counts. The final select
 returns counts only. Queue commits materialize and lock the exact active job claim before the checkpoint gate; every
 data-changing CTE depends on that gate. The failure transition uses the same job-then-checkpoint lock order.
+
+When `replaceProjection` is bound to a ready rebuild generation, an additional materialized lock verifies its owner,
+calendar, job, base checkpoint version, and Queue claim. Provider identities absent from the complete incoming set
+become recoverable tombstones; deterministic IDs preserve annotations, category assignments, and user edges.
+Equal-version upserts may revive only an already-cancelled/deleted record. Generation activation, stage cleanup,
+checkpoint advancement, projection mutation, and the safe run row remain one atomic statement.
 
 ## `recordFailure`
 

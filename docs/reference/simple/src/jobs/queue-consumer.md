@@ -16,7 +16,8 @@ Validates, claims, passes the internal opaque lease into synchronization, and re
 
 ## `createProductionCalendarSyncConsumerDependencies`
 
-Builds owner-bound database, encryption, token, and Google read dependencies.
+Builds owner-bound database, encryption, token, Google read, incremental repository, and encrypted projection-rebuild
+dependencies.
 
 ## `now`
 

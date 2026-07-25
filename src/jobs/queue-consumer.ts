@@ -4,6 +4,7 @@ import {
   createCalendarJobRepository,
   type CalendarJobRepository,
 } from "../data/repositories/job-repository";
+import { createProjectionRepository } from "../data/repositories/projection-repository";
 import { createSyncRepository } from "../data/repositories/sync-repository";
 import {
   DrizzleTokenStore,
@@ -231,6 +232,11 @@ async function createProductionCalendarSyncConsumerDependencies(
     },
   );
   const syncRepository = createSyncRepository(database, keyProvider, ownerId);
+  const projectionRepository = createProjectionRepository(
+    database,
+    keyProvider,
+    ownerId,
+  );
   return {
     repository: createCalendarJobRepository(database),
     /** Reads a fresh timestamp for each durable queue transition. */
@@ -286,6 +292,7 @@ async function createProductionCalendarSyncConsumerDependencies(
           fetcher: fetch.bind(globalThis),
         }),
         repository: syncRepository,
+        projectionRepository,
         queueLease,
         persistFailure: false,
       });

@@ -24,3 +24,14 @@ Defines renewable provider channel identity and protected verification state.
 ## `recoverableDeletions`
 
 Defines same-owner deleted-node recovery metadata and optional encrypted recovery material.
+
+## `projectionRebuildGenerations`
+
+Defines the owner/calendar/job/base-checkpoint lifecycle for durable full-list staging. The optional Queue claim binds
+activation authority, while status/timestamp checks keep abandoned and activated states distinguishable for cleanup.
+
+## `projectionRebuildChanges`
+
+Defines generation-scoped identity-digest deduplication and page order. Planning JSON contains no provider protected
+content; an optional payload envelope and matching positive key version carry protected upsert fields. The cascading
+generation foreign key permits bounded cleanup without touching authoritative nodes.

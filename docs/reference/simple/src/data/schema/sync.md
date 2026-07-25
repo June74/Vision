@@ -23,3 +23,11 @@ Stores provider channel details and an encrypted verification token.
 ## `recoverableDeletions`
 
 Stores the encrypted recovery window for a deleted node.
+
+## `projectionRebuildGenerations`
+
+Stores the safe lifecycle and checkpoint/Queue authority for one crash-recoverable full-list generation.
+
+## `projectionRebuildChanges`
+
+Stores planning-safe change facts plus an encrypted protected payload until the generation activates.

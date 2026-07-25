@@ -8,8 +8,12 @@ import {
   edges,
   eventSyncPayloads,
   events,
+  nodeAnnotations,
+  nodeCategoryAssignments,
   nodes,
   operationLedger,
+  projectionRebuildChanges,
+  projectionRebuildGenerations,
   recoverableDeletions,
   syncChannels,
   syncCheckpoints,
@@ -26,6 +30,8 @@ const drizzleTables = [
   nodes,
   events,
   eventSyncPayloads,
+  nodeAnnotations,
+  nodeCategoryAssignments,
   edges,
   auditEvents,
   calendarSyncJobs,
@@ -34,11 +40,13 @@ const drizzleTables = [
   syncChannels,
   syncRuns,
   operationLedger,
+  projectionRebuildChanges,
+  projectionRebuildGenerations,
   recoverableDeletions,
 ];
 
 describe("Drizzle schema structure", () => {
-  it("matches the complete migration-derived manifest for all twelve tables", () => {
+  it("matches the complete migration-derived manifest for all sixteen tables", () => {
     const actual = extractDrizzleTablesManifest(drizzleTables);
     assertSchemaMatchesManifest(actual, phaseBSchemaManifest);
   });
@@ -46,7 +54,7 @@ describe("Drizzle schema structure", () => {
   it("keeps the retained generated snapshot consistent with the reviewed manifest", () => {
     const snapshot = JSON.parse(
       readFileSync(
-        resolve(process.cwd(), "migrations/generated/meta/0006_snapshot.json"),
+        resolve(process.cwd(), "migrations/generated/meta/0007_snapshot.json"),
         "utf8",
       ),
     ) as unknown;

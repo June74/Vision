@@ -10,6 +10,9 @@ Queue consumers disable this function's best-effort failure write because their 
 and job disposition together under the active claim. Their internal lease also gates checkpoint loading and the final
 projection commit.
 
+If Google rejects a committed sync token and a projection repository is available, the job switches to the encrypted
+full-list rebuild path instead of leaving the connection permanently stuck at `rebuild_required`.
+
 ## `stageChange`
 
 Keeps one exact change per provider identity and rejects conflicting duplicates.

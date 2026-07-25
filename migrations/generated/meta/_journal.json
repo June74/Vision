@@ -50,6 +50,13 @@
       "when": 1784947172607,
       "tag": "0006_silent_layla_miller",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784999820888,
+      "tag": "0007_glossy_emma_frost",
+      "breakpoints": true
     }
   ]
 }

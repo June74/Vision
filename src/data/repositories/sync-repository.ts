@@ -71,10 +71,13 @@ interface AtomicSyncCommit {
   readonly checkpointKeyVersion: number;
   readonly changes: readonly PreparedDatabaseChange[];
   readonly jobId: string;
-  readonly reason: string;
+  readonly reason: SyncReason;
+  readonly queueJobReason?: SyncReason;
   readonly pageCount: number;
   readonly startedAt: Date;
   readonly queueClaimId?: string;
+  readonly replaceProjection: boolean;
+  readonly rebuildGenerationId?: string;
 }
 
 interface QueueCommitAuthority {
@@ -271,13 +274,76 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
                 and job.owner_id = ${commit.ownerId}
                 and job.provider = ${PROVIDER}
                 and job.provider_calendar_id = ${commit.calendarId}
-                and job.reason = ${commit.reason}
+                and job.reason = ${commit.queueJobReason ?? commit.reason}
                 and job.status = 'in_progress'
                 and job.claim_id = ${commit.queueClaimId}
               for update
             ),
             commit_authorized as materialized (
               select exists (select 1 from active_claim) as valid
+            ),
+          `;
+    const rebuildAuthorization =
+      commit.rebuildGenerationId === undefined
+        ? sql`
+            rebuild_authorized as materialized (
+              select true as valid
+            ),
+          `
+        : sql`
+            rebuild_generation as materialized (
+              select generation.id
+              from projection_rebuild_generations generation
+              where generation.id = ${commit.rebuildGenerationId}
+                and generation.owner_id = ${commit.ownerId}
+                and generation.provider = ${PROVIDER}
+                and generation.provider_calendar_id = ${commit.calendarId}
+                and generation.job_id = ${commit.jobId}
+                and generation.base_checkpoint_version = ${commit.expectedCheckpointVersion}
+                and generation.queue_claim_id is not distinct from ${commit.queueClaimId ?? null}
+                and generation.status = 'ready'
+              for update
+            ),
+            rebuild_authorized as materialized (
+              select exists (select 1 from rebuild_generation) as valid
+            ),
+          `;
+    const generationActivation =
+      commit.rebuildGenerationId === undefined
+        ? sql`
+            generation_activation as materialized (
+              select null::text as id
+              where false
+            ),
+          `
+        : sql`
+            generation_activation as (
+              update projection_rebuild_generations generation
+              set
+                status = 'activated',
+                updated_at = clock_timestamp(),
+                activated_at = clock_timestamp()
+              from checkpoint_write
+              where generation.id = ${commit.rebuildGenerationId}
+                and generation.owner_id = ${commit.ownerId}
+                and generation.status = 'ready'
+              returning generation.id
+            ),
+          `;
+    const rebuildCleanup =
+      commit.rebuildGenerationId === undefined
+        ? sql`
+            cleared_rebuild_changes as materialized (
+              select null::text as generation_id
+              where false
+            ),
+          `
+        : sql`
+            cleared_rebuild_changes as (
+              delete from projection_rebuild_changes change
+              using generation_activation generation
+              where change.generation_id = generation.id
+              returning change.generation_id
             ),
           `;
     const result = await this.database.execute<Record<string, unknown>>(sql`
@@ -339,6 +405,7 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
         ) as valid
       ),
       ${queueAuthorization}
+      ${rebuildAuthorization}
       checkpoint_write as (
         update sync_checkpoints
         set
@@ -355,6 +422,7 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
           and version = ${commit.expectedCheckpointVersion}
           and (select valid from context_valid)
           and (select valid from commit_authorized)
+          and (select valid from rebuild_authorized)
         returning version
       ),
       eligible_upserts as materialized (
@@ -366,10 +434,21 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
           and persisted.provider = change."sourceSystem"
           and persisted.provider_calendar_id = change."calendarId"
           and persisted.provider_event_id = change."eventId"
+        left join nodes persisted_node
+          on persisted_node.id = persisted.node_id
+          and persisted_node.owner_id = persisted.owner_id
         where change.kind = 'upsert'
           and (
             persisted.node_id is null
             or persisted.provider_version < change."providerVersion"
+            or (
+              ${commit.replaceProjection}
+              and persisted.provider_version = change."providerVersion"
+              and (
+                persisted.status = 'cancelled'
+                or persisted_node.lifecycle = 'deleted'
+              )
+            )
           )
       ),
       node_writes as (
@@ -434,7 +513,14 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
           protected_key_version = excluded.protected_key_version
         where persisted.owner_id = excluded.owner_id
           and persisted.node_id = excluded.node_id
-          and persisted.provider_version < excluded.provider_version
+          and (
+            persisted.provider_version < excluded.provider_version
+            or (
+              ${commit.replaceProjection}
+              and persisted.provider_version = excluded.provider_version
+              and persisted.status = 'cancelled'
+            )
+          )
         returning persisted.node_id
       ),
       payload_writes as (
@@ -460,18 +546,42 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
           and persisted.owner_id = ${commit.ownerId}
         returning persisted.node_id
       ),
+      delete_targets as materialized (
+        select persisted.node_id
+        from events persisted
+        cross join checkpoint_write
+        where persisted.owner_id = ${commit.ownerId}
+          and persisted.provider = ${PROVIDER}
+          and persisted.provider_calendar_id = ${commit.calendarId}
+          and (
+            exists (
+              select 1
+              from incoming change
+              where change.kind = 'delete'
+                and change."sourceSystem" = persisted.provider
+                and change."calendarId" = persisted.provider_calendar_id
+                and change."eventId" = persisted.provider_event_id
+            )
+            or (
+              ${commit.replaceProjection}
+              and not exists (
+                select 1
+                from incoming change
+                where change.kind = 'upsert'
+                  and change."sourceSystem" = persisted.provider
+                  and change."calendarId" = persisted.provider_calendar_id
+                  and change."eventId" = persisted.provider_event_id
+              )
+            )
+          )
+      ),
       deleted_events as (
         update events as persisted
         set status = 'cancelled'
-        from incoming change
-        cross join checkpoint_write
-        where change.kind = 'delete'
-          and persisted.owner_id = ${commit.ownerId}
-          and persisted.provider = change."sourceSystem"
-          and persisted.provider_calendar_id = change."calendarId"
-          and persisted.provider_event_id = change."eventId"
+        from delete_targets target
+        where persisted.node_id = target.node_id
           and persisted.status <> 'cancelled'
-        returning persisted.node_id
+        returning persisted.node_id, persisted.provider_event_id
       ),
       deleted_nodes as (
         update nodes as persisted
@@ -512,6 +622,15 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
           )
         returning id
       ),
+      explicit_deleted_count as materialized (
+        select count(*)::integer as count
+        from deleted_events deleted
+        inner join incoming change
+          on change.kind = 'delete'
+          and change."eventId" = deleted.provider_event_id
+          and change."sourceSystem" = ${PROVIDER}
+          and change."calendarId" = ${commit.calendarId}
+      ),
       counts as materialized (
         select
           (select count(*)::integer from event_writes) as upserted,
@@ -519,7 +638,11 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
           (
             (select count(*)::integer from incoming)
             - (select count(*)::integer from event_writes)
-            - (select count(*)::integer from deleted_nodes)
+            - case
+                when ${commit.replaceProjection}
+                  then (select count from explicit_deleted_count)
+                else (select count(*)::integer from deleted_nodes)
+              end
           ) as unchanged
       ),
       run_write as (
@@ -538,6 +661,11 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
         cross join counts
         on conflict (job_id) do nothing
         returning job_id
+      ),
+      ${generationActivation}
+      ${rebuildCleanup}
+      result_marker as materialized (
+        select true as present
       )
       select
         checkpoint_write.version,
@@ -548,9 +676,12 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
         (select count(*) from cleared_recoverable_deletions) as "clearedRecoverableDeletions",
         (select count(*) from retained_deletions) as "retainedDeletions",
         (select count(*) from invalidated_edges) as "invalidatedEdges",
-        (select count(*) from run_write) as "runWrites"
+        (select count(*) from run_write) as "runWrites",
+        (select count(*) from generation_activation) as "generationActivations",
+        (select count(*) from cleared_rebuild_changes) as "clearedRebuildChanges"
       from checkpoint_write
       cross join counts
+      cross join result_marker
     `);
     const row = result.rows[0];
     if (!row) return { outcome: "conflict" };
@@ -636,9 +767,26 @@ class EncryptedSyncRepository implements SyncRepository {
   async applyChanges(request: SyncApplyRequest): Promise<SyncApplyResult> {
     this.assertOwner(request.ownerId);
     const nextCheckpoint = SyncCheckpointSchema.parse(request.nextCheckpoint);
+    const rebuilding =
+      request.replaceProjection === true &&
+      request.reason === "rebuild" &&
+      typeof request.rebuildGenerationId === "string" &&
+      request.rebuildGenerationId.length > 0 &&
+      request.rebuildGenerationId.length <= 128;
+    const queueReasonValid =
+      request.queueJobReason === undefined ||
+      (
+        request.queueClaimId !== undefined &&
+        ["initial", "manual", "push", "rebuild", "repair"].includes(
+          request.queueJobReason,
+        )
+      );
     if (
       nextCheckpoint.calendarId !== request.calendarId ||
       nextCheckpoint.version !== request.expectedCheckpointVersion + 1 ||
+      ((request.replaceProjection ?? false) !== rebuilding) ||
+      ((request.rebuildGenerationId !== undefined) !== rebuilding) ||
+      !queueReasonValid ||
       request.changes.some((change) => {
         const identity = change.type === "upsert" ? change.identity : change.target;
         return (
@@ -689,8 +837,15 @@ class EncryptedSyncRepository implements SyncRepository {
       changes: prepared,
       jobId: request.jobId,
       reason: request.reason,
+      ...(request.queueJobReason === undefined
+        ? {}
+        : { queueJobReason: request.queueJobReason }),
       pageCount: request.pageCount,
       startedAt: new Date(request.startedAt),
+      replaceProjection: rebuilding,
+      ...(request.rebuildGenerationId === undefined
+        ? {}
+        : { rebuildGenerationId: request.rebuildGenerationId }),
       ...(request.queueClaimId === undefined
         ? {}
         : { queueClaimId: request.queueClaimId }),

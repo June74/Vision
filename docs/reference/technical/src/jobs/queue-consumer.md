@@ -18,7 +18,11 @@ permanent errors are persisted before `ack`. Unknown errors become `Action requi
 
 ## `createProductionCalendarSyncConsumerDependencies`
 
-Validates Worker configuration, opens the least-privileged database, restores wrapped keys, decrypts only owner-bound tokens, refreshes a missing or near-expiry access token while preserving the durable refresh token, constructs the read-only Google client, and reuses the atomic sync repository. A rejected grant becomes disconnected; transient refresh or persistence failure is retried without logging token material.
+Validates Worker configuration, opens the least-privileged database, restores wrapped keys, decrypts only owner-bound
+tokens, refreshes a missing or near-expiry access token while preserving the durable refresh token, constructs the
+read-only Google client, and reuses both the atomic sync repository and encrypted projection repository. This makes
+410 recovery available under the same active claim. A rejected grant becomes disconnected; transient refresh or
+persistence failure is retried without logging token material.
 
 ## `now`
 

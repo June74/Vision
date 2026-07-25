@@ -1,6 +1,6 @@
 /** Defines explicit synchronization state without storing provider tokens in JSON. */
 import { sql } from "drizzle-orm";
-import { boolean, check, foreignKey, index, integer, pgTable, primaryKey, text, timestamp, unique, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, check, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, unique, uniqueIndex } from "drizzle-orm/pg-core";
 import { events } from "./events";
 import { ciphertext, nodes } from "./nodes";
 
@@ -247,5 +247,78 @@ export const recoverableDeletions = pgTable(
     primaryKey({ columns: [table.nodeId] }),
     foreignKey({ columns: [table.nodeId, table.ownerId], foreignColumns: [nodes.id, nodes.ownerId], name: "recoverable_deletions_node_owner_fk" }),
     check("recoverable_deletions_purge_after_deleted", sql`${table.purgeAfter} > ${table.deletedAt}`),
+  ],
+);
+
+/** Tracks one crash-recoverable full-list generation without storing provider tokens. */
+export const projectionRebuildGenerations = pgTable(
+  "projection_rebuild_generations",
+  {
+    id: text("id").primaryKey(),
+    ownerId: text("owner_id").notNull(),
+    provider: text("provider").notNull(),
+    providerCalendarId: text("provider_calendar_id").notNull(),
+    jobId: text("job_id").notNull(),
+    queueClaimId: text("queue_claim_id"),
+    baseCheckpointVersion: integer("base_checkpoint_version").notNull(),
+    status: text("status").notNull(),
+    pageCount: integer("page_count"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull(),
+    activatedAt: timestamp("activated_at", { withTimezone: true, mode: "date" }),
+  },
+  (table) => [
+    unique("projection_rebuild_generations_job_unique").on(
+      table.ownerId,
+      table.provider,
+      table.providerCalendarId,
+      table.jobId,
+    ),
+    check("projection_rebuild_generations_owner_non_empty", sql`${table.ownerId} <> ''`),
+    check("projection_rebuild_generations_provider_valid", sql`${table.provider} = 'google-calendar'`),
+    check("projection_rebuild_generations_calendar_non_empty", sql`${table.providerCalendarId} <> ''`),
+    check("projection_rebuild_generations_job_non_empty", sql`${table.jobId} <> ''`),
+    check("projection_rebuild_generations_claim_non_empty", sql`${table.queueClaimId} is null or ${table.queueClaimId} <> ''`),
+    check("projection_rebuild_generations_base_version_positive", sql`${table.baseCheckpointVersion} > 0`),
+    check("projection_rebuild_generations_status_valid", sql`${table.status} in ('staging', 'ready', 'activated', 'abandoned')`),
+    check("projection_rebuild_generations_page_count_valid", sql`${table.pageCount} is null or ${table.pageCount} > 0`),
+    check("projection_rebuild_generations_activation_consistent", sql`(${table.status} = 'activated') = (${table.activatedAt} is not null)`),
+    check("projection_rebuild_generations_timestamps_valid", sql`${table.updatedAt} >= ${table.createdAt} and (${table.activatedAt} is null or ${table.activatedAt} >= ${table.createdAt})`),
+    index("projection_rebuild_generations_cleanup_idx").on(
+      table.status,
+      table.updatedAt,
+    ),
+  ],
+);
+
+/** Stores a full-list rebuild change with planning facts separated from encrypted provider content. */
+export const projectionRebuildChanges = pgTable(
+  "projection_rebuild_changes",
+  {
+    generationId: text("generation_id").notNull(),
+    identityHash: text("identity_hash").notNull(),
+    ordinal: integer("ordinal").notNull(),
+    planningJson: jsonb("planning_json").notNull(),
+    protectedPayloadEnvelope: ciphertext("protected_payload_envelope"),
+    protectedKeyVersion: integer("protected_key_version"),
+  },
+  (table) => [
+    primaryKey({ columns: [table.generationId, table.identityHash] }),
+    foreignKey({
+      columns: [table.generationId],
+      foreignColumns: [projectionRebuildGenerations.id],
+      name: "projection_rebuild_changes_generation_fk",
+    }).onDelete("cascade"),
+    unique("projection_rebuild_changes_generation_ordinal_unique").on(
+      table.generationId,
+      table.ordinal,
+    ),
+    check("projection_rebuild_changes_identity_hash_valid", sql`${table.identityHash} ~ '^[A-Za-z0-9_-]{43}$'`),
+    check("projection_rebuild_changes_ordinal_non_negative", sql`${table.ordinal} >= 0`),
+    check("projection_rebuild_changes_payload_consistent", sql`(${table.protectedPayloadEnvelope} is null and ${table.protectedKeyVersion} is null) or (${table.protectedPayloadEnvelope} is not null and ${table.protectedKeyVersion} > 0)`),
+    index("projection_rebuild_changes_generation_ordinal_idx").on(
+      table.generationId,
+      table.ordinal,
+    ),
   ],
 );

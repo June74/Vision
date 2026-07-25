@@ -1,0 +1,76 @@
+CREATE TABLE "node_annotations" (
+	"id" text PRIMARY KEY NOT NULL,
+	"owner_id" text NOT NULL,
+	"node_id" text NOT NULL,
+	"provenance" text NOT NULL,
+	"annotation_envelope" "bytea" NOT NULL,
+	"key_version" integer NOT NULL,
+	"created_at" timestamp with time zone NOT NULL,
+	"updated_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "node_annotations_owner_non_empty" CHECK ("node_annotations"."owner_id" <> ''),
+	CONSTRAINT "node_annotations_provenance_valid" CHECK ("node_annotations"."provenance" in ('user', 'system', 'model')),
+	CONSTRAINT "node_annotations_key_version_positive" CHECK ("node_annotations"."key_version" > 0),
+	CONSTRAINT "node_annotations_timestamps_valid" CHECK ("node_annotations"."updated_at" >= "node_annotations"."created_at")
+);
+--> statement-breakpoint
+CREATE TABLE "node_category_assignments" (
+	"node_id" text PRIMARY KEY NOT NULL,
+	"owner_id" text NOT NULL,
+	"domain" text NOT NULL,
+	"domain_state" text NOT NULL,
+	"provenance" text NOT NULL,
+	"assigned_at" timestamp with time zone NOT NULL,
+	"version" integer NOT NULL,
+	CONSTRAINT "node_category_assignments_domain_valid" CHECK ("node_category_assignments"."domain" in ('school', 'work', 'personal')),
+	CONSTRAINT "node_category_assignments_state_valid" CHECK ("node_category_assignments"."domain_state" in ('confirmed', 'inferred')),
+	CONSTRAINT "node_category_assignments_provenance_valid" CHECK ("node_category_assignments"."provenance" in ('user', 'system', 'model')),
+	CONSTRAINT "node_category_assignments_version_positive" CHECK ("node_category_assignments"."version" > 0)
+);
+--> statement-breakpoint
+CREATE TABLE "projection_rebuild_changes" (
+	"generation_id" text NOT NULL,
+	"identity_hash" text NOT NULL,
+	"ordinal" integer NOT NULL,
+	"planning_json" jsonb NOT NULL,
+	"protected_payload_envelope" "bytea",
+	"protected_key_version" integer,
+	CONSTRAINT "projection_rebuild_changes_generation_id_identity_hash_pk" PRIMARY KEY("generation_id","identity_hash"),
+	CONSTRAINT "projection_rebuild_changes_generation_ordinal_unique" UNIQUE("generation_id","ordinal"),
+	CONSTRAINT "projection_rebuild_changes_identity_hash_valid" CHECK ("projection_rebuild_changes"."identity_hash" ~ '^[A-Za-z0-9_-]{43}$'),
+	CONSTRAINT "projection_rebuild_changes_ordinal_non_negative" CHECK ("projection_rebuild_changes"."ordinal" >= 0),
+	CONSTRAINT "projection_rebuild_changes_payload_consistent" CHECK (("projection_rebuild_changes"."protected_payload_envelope" is null and "projection_rebuild_changes"."protected_key_version" is null) or ("projection_rebuild_changes"."protected_payload_envelope" is not null and "projection_rebuild_changes"."protected_key_version" > 0))
+);
+--> statement-breakpoint
+CREATE TABLE "projection_rebuild_generations" (
+	"id" text PRIMARY KEY NOT NULL,
+	"owner_id" text NOT NULL,
+	"provider" text NOT NULL,
+	"provider_calendar_id" text NOT NULL,
+	"job_id" text NOT NULL,
+	"queue_claim_id" text,
+	"base_checkpoint_version" integer NOT NULL,
+	"status" text NOT NULL,
+	"page_count" integer,
+	"created_at" timestamp with time zone NOT NULL,
+	"updated_at" timestamp with time zone NOT NULL,
+	"activated_at" timestamp with time zone,
+	CONSTRAINT "projection_rebuild_generations_job_unique" UNIQUE("owner_id","provider","provider_calendar_id","job_id"),
+	CONSTRAINT "projection_rebuild_generations_owner_non_empty" CHECK ("projection_rebuild_generations"."owner_id" <> ''),
+	CONSTRAINT "projection_rebuild_generations_provider_valid" CHECK ("projection_rebuild_generations"."provider" = 'google-calendar'),
+	CONSTRAINT "projection_rebuild_generations_calendar_non_empty" CHECK ("projection_rebuild_generations"."provider_calendar_id" <> ''),
+	CONSTRAINT "projection_rebuild_generations_job_non_empty" CHECK ("projection_rebuild_generations"."job_id" <> ''),
+	CONSTRAINT "projection_rebuild_generations_claim_non_empty" CHECK ("projection_rebuild_generations"."queue_claim_id" is null or "projection_rebuild_generations"."queue_claim_id" <> ''),
+	CONSTRAINT "projection_rebuild_generations_base_version_positive" CHECK ("projection_rebuild_generations"."base_checkpoint_version" > 0),
+	CONSTRAINT "projection_rebuild_generations_status_valid" CHECK ("projection_rebuild_generations"."status" in ('staging', 'ready', 'activated', 'abandoned')),
+	CONSTRAINT "projection_rebuild_generations_page_count_valid" CHECK ("projection_rebuild_generations"."page_count" is null or "projection_rebuild_generations"."page_count" > 0),
+	CONSTRAINT "projection_rebuild_generations_activation_consistent" CHECK (("projection_rebuild_generations"."status" = 'activated') = ("projection_rebuild_generations"."activated_at" is not null)),
+	CONSTRAINT "projection_rebuild_generations_timestamps_valid" CHECK ("projection_rebuild_generations"."updated_at" >= "projection_rebuild_generations"."created_at" and ("projection_rebuild_generations"."activated_at" is null or "projection_rebuild_generations"."activated_at" >= "projection_rebuild_generations"."created_at"))
+);
+--> statement-breakpoint
+ALTER TABLE "node_annotations" ADD CONSTRAINT "node_annotations_node_owner_fk" FOREIGN KEY ("node_id","owner_id") REFERENCES "public"."nodes"("id","owner_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "node_category_assignments" ADD CONSTRAINT "node_category_assignments_node_owner_fk" FOREIGN KEY ("node_id","owner_id") REFERENCES "public"."nodes"("id","owner_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "projection_rebuild_changes" ADD CONSTRAINT "projection_rebuild_changes_generation_fk" FOREIGN KEY ("generation_id") REFERENCES "public"."projection_rebuild_generations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "node_annotations_owner_node_idx" ON "node_annotations" USING btree ("owner_id","node_id","updated_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "node_category_assignments_owner_domain_idx" ON "node_category_assignments" USING btree ("owner_id","domain","assigned_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "projection_rebuild_changes_generation_ordinal_idx" ON "projection_rebuild_changes" USING btree ("generation_id","ordinal");--> statement-breakpoint
+CREATE INDEX "projection_rebuild_generations_cleanup_idx" ON "projection_rebuild_generations" USING btree ("status","updated_at");
