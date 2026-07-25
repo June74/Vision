@@ -61,6 +61,10 @@ class MemoryWebhookRepository implements CalendarJobRepository {
   async failJob(): Promise<boolean> {
     return false;
   }
+
+  async finishClaimedFailure(): Promise<boolean> {
+    return false;
+  }
 }
 
 function headers(overrides: Record<string, string | undefined> = {}): Headers {

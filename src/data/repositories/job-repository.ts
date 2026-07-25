@@ -4,6 +4,7 @@ import type { VisionDatabase } from "../db";
 import type { CalendarSyncMessage } from "../../jobs/queue-message";
 import type {
   SyncCalendarErrorCategory,
+  SyncFailureState,
   SyncResult,
 } from "../../jobs/sync-calendar";
 
@@ -28,6 +29,18 @@ export interface ClaimedCalendarJob {
   readonly message: CalendarSyncMessage;
   readonly claimId: string;
   readonly attempt: number;
+  readonly checkpointVersion: number;
+}
+
+/** One claim-bound job and checkpoint failure transition. */
+export interface ClaimedFailureTransition {
+  readonly jobId: string;
+  readonly claimId: string;
+  readonly expectedCheckpointVersion: number;
+  readonly status: "retry_scheduled" | "failed";
+  readonly category: SyncCalendarErrorCategory;
+  readonly state: SyncFailureState;
+  readonly now: Date;
 }
 
 /** Safe result of attempting to claim an at-least-once queue delivery. */
@@ -72,6 +85,7 @@ export interface CalendarJobRepository {
     actionRequired: boolean,
     now: Date,
   ): Promise<boolean>;
+  finishClaimedFailure(transition: ClaimedFailureTransition): Promise<boolean>;
 }
 
 /** PostgreSQL implementation whose state transitions are guarded by exact claim leases. */
@@ -215,7 +229,17 @@ class DrizzleCalendarJobRepository implements CalendarJobRepository {
           )
         returning job.attempts
       )
-      select attempts from claimed
+      select
+        attempts,
+        coalesce((
+          select checkpoint.version
+          from sync_checkpoints as checkpoint
+          where checkpoint.owner_id = ${message.ownerId}
+            and checkpoint.provider = 'google-calendar'
+            and checkpoint.provider_calendar_id = ${message.calendarId}
+          limit 1
+        ), 0) as "checkpointVersion"
+      from claimed
     `);
     if (result.rows[0]) {
       return {
@@ -224,6 +248,9 @@ class DrizzleCalendarJobRepository implements CalendarJobRepository {
           message,
           claimId,
           attempt: readPositiveInteger(result.rows[0].attempts),
+          checkpointVersion: readNonNegativeInteger(
+            result.rows[0].checkpointVersion,
+          ),
         },
       };
     }
@@ -307,6 +334,68 @@ class DrizzleCalendarJobRepository implements CalendarJobRepository {
       actionRequired,
       now,
     );
+  }
+
+  /** Atomically changes checkpoint health and job disposition only for the current exact lease. */
+  async finishClaimedFailure(
+    transition: ClaimedFailureTransition,
+  ): Promise<boolean> {
+    assertClaimId(transition.claimId);
+    assertDate(transition.now);
+    if (
+      !Number.isSafeInteger(transition.expectedCheckpointVersion) ||
+      transition.expectedCheckpointVersion < 0
+    ) {
+      throw new Error("Invalid checkpoint version.");
+    }
+    const actionRequired = transition.state === "action_required";
+    const updated = await this.database.execute<Record<string, unknown>>(sql`
+      with active_claim as materialized (
+        select owner_id, provider_calendar_id
+        from calendar_sync_jobs
+        where job_id = ${transition.jobId}
+          and status = 'in_progress'
+          and claim_id = ${transition.claimId}
+        for update
+      ),
+      checkpoint_failure as (
+        update sync_checkpoints as checkpoint
+        set
+          status = ${transition.state},
+          last_error_category = ${transition.category},
+          updated_at = ${transition.now}
+        where checkpoint.provider = 'google-calendar'
+          and checkpoint.version = ${transition.expectedCheckpointVersion}
+          and exists (
+            select 1
+            from active_claim
+            where owner_id = checkpoint.owner_id
+              and provider_calendar_id = checkpoint.provider_calendar_id
+          )
+        returning checkpoint.id
+      ),
+      job_failure as (
+        update calendar_sync_jobs as job
+        set
+          status = ${transition.status},
+          last_error_category = ${transition.category},
+          action_required = ${actionRequired},
+          completed_at = case
+            when ${transition.status} = 'failed'
+            then ${transition.now}::timestamptz
+            else null
+          end,
+          claim_id = null,
+          updated_at = ${transition.now}
+        where job.job_id = ${transition.jobId}
+          and job.status = 'in_progress'
+          and job.claim_id = ${transition.claimId}
+          and exists (select 1 from active_claim)
+        returning job.job_id as "jobId"
+      )
+      select "jobId" from job_failure
+    `);
+    return updated.rows.length === 1;
   }
 
   /** Applies a claim-guarded failure transition without retaining exception text. */
@@ -398,6 +487,20 @@ function readPositiveInteger(value: unknown): number {
         ? Number(value)
         : Number.NaN;
   if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new Error("Invalid calendar job row.");
+  }
+  return parsed;
+}
+
+/** Reads a non-negative safe database integer or decimal representation. */
+function readNonNegativeInteger(value: unknown): number {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && /^(?:0|[1-9]\d*)$/u.test(value)
+        ? Number(value)
+        : Number.NaN;
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
     throw new Error("Invalid calendar job row.");
   }
   return parsed;

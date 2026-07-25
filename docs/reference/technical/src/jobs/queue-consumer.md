@@ -26,13 +26,13 @@ Avoids reusing a stale batch timestamp across security and persistence decisions
 
 Creates an unguessable lease so stale deliveries cannot finish another worker's claim.
 
-## `recordFailure`
-
-Loads the authoritative checkpoint, then records only safe category/state metadata guarded by its exact version. Typed retryable failures become `action_required` before this write on delivery attempt six.
-
 ## `sync`
 
 Checks owner scope, resolves the retained access token inside the trusted process, and invokes `syncCalendar`; queue messages never contain credentials.
+
+## `classifyGoogleRefreshError`
+
+Maps temporary OAuth failures to bounded retry, rejected grants to `authorization`/`disconnected`, and malformed or other provider failures to `provider`/`action_required`.
 
 ## `verify`
 

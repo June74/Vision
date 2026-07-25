@@ -26,13 +26,13 @@ Reads fresh time for durable state transitions.
 
 Creates an opaque lease ID.
 
-## `recordFailure`
-
-Updates the matching calendar checkpoint with the same safe failure state before the job is finished.
-
 ## `sync`
 
 Runs the existing read-only transactional sync path.
+
+## `classifyGoogleRefreshError`
+
+Keeps revoked credentials, temporary failures, and provider failures as distinct safe outcomes.
 
 ## `verify`
 

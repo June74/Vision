@@ -50,10 +50,6 @@ export interface CalendarSyncBatch {
 export interface CalendarSyncConsumerDependencies {
   readonly repository: CalendarJobRepository;
   readonly sync: (request: SyncCalendarRequest) => Promise<SyncResult>;
-  readonly recordFailure?: (
-    request: SyncCalendarRequest,
-    error: SyncCalendarError,
-  ) => Promise<void>;
   readonly now?: () => Date;
   readonly createClaimId?: () => string;
 }
@@ -114,6 +110,7 @@ async function consumeOne(
   const request: SyncCalendarRequest = {
     ...claim.job.message,
     deliveryAttempt: claim.job.attempt,
+    expectedCheckpointVersion: claim.job.checkpointVersion,
   };
   try {
     const result = await dependencies.sync(request);
@@ -132,14 +129,17 @@ async function consumeOne(
       const classified = exhausted
         ? new SyncCalendarError(error.category, "action_required", false)
         : error;
-      await dependencies.recordFailure?.(request, classified);
       if (classified.retry) {
-        const scheduled = await dependencies.repository.scheduleRetry(
-          message.jobId,
-          claim.job.claimId,
-          classified.category,
-          now(),
-        );
+        const scheduled =
+          await dependencies.repository.finishClaimedFailure({
+            jobId: message.jobId,
+            claimId: claim.job.claimId,
+            expectedCheckpointVersion: claim.job.checkpointVersion,
+            status: "retry_scheduled",
+            category: classified.category,
+            state: classified.state,
+            now: now(),
+          });
         if (scheduled) {
           delivery.retry({
             delaySeconds:
@@ -150,34 +150,42 @@ async function consumeOne(
         }
         return;
       }
-      await dependencies.repository.failJob(
-        message.jobId,
-        claim.job.claimId,
-        classified.category,
-        classified.state === "action_required",
-        now(),
-      );
+      await dependencies.repository.finishClaimedFailure({
+        jobId: message.jobId,
+        claimId: claim.job.claimId,
+        expectedCheckpointVersion: claim.job.checkpointVersion,
+        status: "failed",
+        category: classified.category,
+        state: classified.state,
+        now: now(),
+      });
       delivery.ack();
       return;
     }
 
     if (claim.job.attempt >= MAX_DELIVERY_ATTEMPTS) {
-      await dependencies.repository.failJob(
-        message.jobId,
-        claim.job.claimId,
-        "transient",
-        true,
-        now(),
-      );
+      await dependencies.repository.finishClaimedFailure({
+        jobId: message.jobId,
+        claimId: claim.job.claimId,
+        expectedCheckpointVersion: claim.job.checkpointVersion,
+        status: "failed",
+        category: "transient",
+        state: "action_required",
+        now: now(),
+      });
       delivery.ack();
       return;
     }
-    const scheduled = await dependencies.repository.scheduleRetry(
-      message.jobId,
-      claim.job.claimId,
-      "transient",
-      now(),
-    );
+    const scheduled =
+      await dependencies.repository.finishClaimedFailure({
+        jobId: message.jobId,
+        claimId: claim.job.claimId,
+        expectedCheckpointVersion: claim.job.checkpointVersion,
+        status: "retry_scheduled",
+        category: "transient",
+        state: "retry_scheduled",
+        now: now(),
+      });
     if (scheduled) {
       delivery.retry({ delaySeconds: retryDelay(claim.job.attempt) });
     } else {
@@ -224,23 +232,6 @@ async function createProductionCalendarSyncConsumerDependencies(
     now: () => new Date(),
     /** Creates a unique opaque lease for one atomic job claim. */
     createClaimId: () => crypto.randomUUID(),
-    /** Mirrors every safe failure onto the exact checkpoint generation before job disposition. */
-    recordFailure: async (request, error) => {
-      if (request.ownerId !== ownerId) return;
-      const checkpoint = await syncRepository.loadCheckpoint(
-        request.ownerId,
-        request.calendarId,
-      );
-      await syncRepository.recordFailure({
-        ownerId: request.ownerId,
-        calendarId: request.calendarId,
-        category: error.category,
-        state: error.state,
-        occurredAt: new Date().toISOString(),
-        jobId: request.jobId,
-        expectedCheckpointVersion: checkpoint?.version ?? 0,
-      });
-    },
     /** Resolves owner-bound tokens and runs the existing transactional sync job. */
     sync: async (request) => {
       if (request.ownerId !== ownerId) {
@@ -260,18 +251,7 @@ async function createProductionCalendarSyncConsumerDependencies(
         try {
           refreshed = await oauthClient.refreshAccessToken(tokens.refreshToken);
         } catch (error) {
-          if (
-            error instanceof GoogleOAuthError &&
-            error.category === "transient"
-          ) {
-            throw new SyncCalendarError(
-              "transient",
-              "retry_scheduled",
-              true,
-              5,
-            );
-          }
-          throw new SyncCalendarError("authorization", "disconnected", false);
+          throw classifyGoogleRefreshError(error);
         }
         const refreshedAt = new Date();
         try {
@@ -286,6 +266,7 @@ async function createProductionCalendarSyncConsumerDependencies(
               updatedAt: refreshedAt,
             },
             tokens.tokenVersion,
+            tokens.updatedAt,
           );
         } catch {
           throw new SyncCalendarError("database", "retry_scheduled", true, 5);
@@ -300,9 +281,23 @@ async function createProductionCalendarSyncConsumerDependencies(
           fetcher: fetch.bind(globalThis),
         }),
         repository: syncRepository,
+        persistFailure: false,
       });
     },
   };
+}
+
+/** Maps the OAuth adapter's safe refresh categories to truthful synchronization disposition. */
+export function classifyGoogleRefreshError(error: unknown): SyncCalendarError {
+  if (error instanceof GoogleOAuthError) {
+    if (error.category === "transient") {
+      return new SyncCalendarError("transient", "retry_scheduled", true, 5);
+    }
+    if (error.category === "authorization") {
+      return new SyncCalendarError("authorization", "disconnected", false);
+    }
+  }
+  return new SyncCalendarError("provider", "action_required", false);
 }
 
 /** Derives the same stable opaque owner key used at the OAuth admission boundary. */

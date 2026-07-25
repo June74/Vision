@@ -187,12 +187,14 @@ class MemoryTokenStore implements TokenStore {
   async updateAccessTokenIfVersion(
     row: GoogleTokenWriteRow,
     expectedTokenVersion: number,
+    expectedUpdatedAt: Date,
   ): Promise<GoogleTokenRow | undefined> {
     const existing = this.rows.find(
       (candidate) =>
         candidate.ownerId === row.ownerId &&
         candidate.googleSubject === row.googleSubject &&
-        candidate.tokenVersion === expectedTokenVersion,
+        candidate.tokenVersion === expectedTokenVersion &&
+        candidate.updatedAt.getTime() === expectedUpdatedAt.getTime(),
     );
     if (!existing) return undefined;
     const persisted = structuredClone({

@@ -30,6 +30,10 @@ Moves the exact active lease to `retry_scheduled`, retaining only an allowlisted
 
 Moves the exact active lease to terminal `failed`; retry exhaustion may set `action_required`.
 
+## `finishClaimedFailure`
+
+Locks the exact in-progress claim, updates safe checkpoint health only at the generation captured when that claim began, and finishes the job in the same PostgreSQL statement. A stolen lease makes both updates no-ops.
+
 ## `finishFailure`
 
 Centralizes the parameterized claim CAS used by retry and terminal failure updates.
@@ -57,6 +61,10 @@ Enforces the 43-character unpadded SHA-256 base64url shape.
 ## `readPositiveInteger`
 
 Accepts only safe positive integers or canonical decimal strings.
+
+## `readNonNegativeInteger`
+
+Accepts safe non-negative integers for checkpoint generations captured with a job claim.
 
 ## `readDate`
 

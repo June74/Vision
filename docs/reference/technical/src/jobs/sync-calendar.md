@@ -14,6 +14,8 @@ an unversioned tombstone cannot be ordered against an upsert, and an ETag is nev
 Loads the committed checkpoint, retrieves all pages, stages changes, constructs version `old + 1`, and calls
 `applyChanges` once. A checkpoint CAS conflict or database failure signals queue redelivery. Authorization becomes
 `disconnected`, malformed data becomes `action_required`, and 410 becomes `rebuild_required` for Task 5.
+The optional `persistFailure` dependency defaults to `true` for direct jobs. The Queue adapter sets it to `false`
+because `CalendarJobRepository.finishClaimedFailure` owns the atomic, lease-bound checkpoint and job transition.
 
 ## `stageChange`
 

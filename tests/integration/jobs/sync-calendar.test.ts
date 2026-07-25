@@ -132,6 +132,27 @@ function run(
 }
 
 describe("transactional incremental calendar synchronization", () => {
+  it("refuses a checkpoint generation newer than the queue claim without recording failure", async () => {
+    const repository = new MemorySyncRepository();
+    repository.checkpoint = {
+      calendarId,
+      syncToken: "sync-newer",
+      committedAt: fixedNow.toISOString(),
+      version: 2,
+    };
+    const client = pageClient([]);
+
+    await expect(
+      run(client, repository, { expectedCheckpointVersion: 1 }),
+    ).rejects.toMatchObject({
+      category: "concurrency",
+      state: "retry_scheduled",
+      retry: true,
+    });
+    expect(client.calls).toHaveLength(0);
+    expect(repository.failures).toEqual([]);
+  });
+
   it("performs an initial full sync and commits only the terminal token", async () => {
     const repository = new MemorySyncRepository();
     const client = pageClient([
@@ -380,6 +401,39 @@ describe("transactional incremental calendar synchronization", () => {
         category,
       });
     }
+  });
+
+  it("defers failure persistence when a claim-bound queue transition owns it", async () => {
+    const repository = new MemorySyncRepository();
+    const client: EventSyncClient = {
+      async listChanges() {
+        throw new SyncCalendarError("authorization", "disconnected", false);
+      },
+    };
+
+    await expect(
+      syncCalendar(
+        {
+          ownerId,
+          calendarId,
+          reason: "repair",
+          jobId: "job-claim-bound",
+          expectedCheckpointVersion: 0,
+        },
+        {
+          client,
+          repository,
+          persistFailure: false,
+          now: () => new Date(fixedNow),
+          random: () => 0,
+        },
+      ),
+    ).rejects.toMatchObject({
+      category: "authorization",
+      state: "disconnected",
+      retry: false,
+    });
+    expect(repository.failures).toEqual([]);
   });
 
   it("turns checkpoint CAS conflicts into queue-redelivery signaling", async () => {

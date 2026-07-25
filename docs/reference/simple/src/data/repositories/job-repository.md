@@ -30,6 +30,10 @@ Releases the claim and records a safe retry category.
 
 Records a terminal failure and whether the user must act.
 
+## `finishClaimedFailure`
+
+Updates calendar health and job disposition together only while the exact lease still owns the job.
+
 ## `finishFailure`
 
 Applies the shared claim-protected failure update.
@@ -57,6 +61,10 @@ Requires a canonical SHA-256 base64url digest.
 ## `readPositiveInteger`
 
 Reads a positive safe integer from a database value.
+
+## `readNonNegativeInteger`
+
+Reads a checkpoint generation, including the initial zero generation.
 
 ## `readDate`
 

@@ -28,7 +28,7 @@ Atomically preserves an existing refresh token when Google omits one, or advance
 
 ## `updateAccessTokenIfVersion`
 
-Updates refresh-derived access details only when the token version has not changed.
+Updates refresh-derived access details only when the full observed credential generation has not changed.
 
 ## `hasRefreshToken`
 
@@ -44,7 +44,7 @@ Encrypts provider tokens before the database call.
 
 ## `saveRefreshedAccessToken`
 
-Encrypts a refreshed access token and keeps a newer sign-in result when the observed version is stale.
+Encrypts a refreshed access token and keeps a newer sign-in result when the observed credential generation is stale.
 
 ## `validateTokenWrite`
 

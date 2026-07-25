@@ -9,11 +9,11 @@ Wrapped per-owner/per-domain data keys are protected by the Worker root key. `da
 ```ts
 find(ownerId: string, googleSubject: string): Promise<GoogleTokenRow | undefined>;
 upsert(row: GoogleTokenWriteRow): Promise<GoogleTokenRow>;
-updateAccessTokenIfVersion(row: GoogleTokenWriteRow, expectedTokenVersion: number): Promise<GoogleTokenRow | undefined>;
+updateAccessTokenIfVersion(row: GoogleTokenWriteRow, expectedTokenVersion: number, expectedUpdatedAt: Date): Promise<GoogleTokenRow | undefined>;
 hasRefreshToken(googleSubject: string): Promise<boolean>;
 getGoogleTokens(googleSubject: string): Promise<RetainedGoogleTokens | undefined>;
 saveGoogleTokens(tokens: NewGoogleTokens): Promise<RetainedGoogleTokens>;
-saveRefreshedAccessToken(tokens: NewGoogleTokens, expectedTokenVersion: number): Promise<RetainedGoogleTokens>;
+saveRefreshedAccessToken(tokens: NewGoogleTokens, expectedTokenVersion: number, expectedUpdatedAt: Date): Promise<RetainedGoogleTokens>;
 ```
 
 ## Dependencies
@@ -66,7 +66,7 @@ Uses an atomic update/insert CTE. Null refresh fields preserve the database winn
 
 ## `updateAccessTokenIfVersion`
 
-Uses an owner/subject/version compare-and-swap update for access-token ciphertext, expiry, scopes, and timestamp. A version mismatch returns no row so the repository can read the newer OAuth winner.
+Uses an owner/subject/token-version/exact-update-time compare-and-swap for access-token ciphertext, expiry, scopes, and timestamp. A credential-generation mismatch returns no row so the repository can read the newer OAuth winner, including callbacks that preserve the refresh token.
 
 ## `hasRefreshToken`
 
@@ -82,7 +82,7 @@ Validates bounded inputs, encrypts supplied provider fields, hashes a supplied r
 
 ## `saveRefreshedAccessToken`
 
-Rejects refresh-token replacement, encrypts only refresh-derived access state, persists it against the version observed before the provider call, and returns either that update or the authoritative newer row.
+Rejects refresh-token replacement, encrypts only refresh-derived access state, persists it against both version and update time observed before the provider call, and returns either that update or the authoritative newer row.
 
 ## `validateTokenWrite`
 

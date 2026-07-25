@@ -331,21 +331,6 @@ describe("calendar queue deduplication", () => {
       await consumeCalendarSyncBatch(batch(message), {
         repository,
         sync,
-        recordFailure: async (request, error) => {
-          await pglite.query(
-            `update sync_checkpoints
-             set status = $1, last_error_category = $2, updated_at = $3
-             where owner_id = $4 and provider = 'google-calendar'
-               and provider_calendar_id = $5 and version = 1`,
-            [
-              error.state,
-              error.category,
-              NOW.toISOString(),
-              request.ownerId,
-              request.calendarId,
-            ],
-          );
-        },
         now: () => NOW,
         createClaimId: () => "claim-auth",
       });
@@ -377,6 +362,166 @@ describe("calendar queue deduplication", () => {
       ]);
     },
   );
+
+  it("does not let a stale failed lease disconnect a newer successful checkpoint", async () => {
+    await pglite.query(
+      `insert into sync_checkpoints (
+         id, owner_id, provider, provider_calendar_id, sync_token_envelope,
+         key_version, committed_at, version, status, updated_at
+       ) values ('checkpoint-race', $1, 'google-calendar', $2, $3, 1, $4, 1, 'connected', $4)`,
+      [
+        MESSAGE.ownerId,
+        MESSAGE.calendarId,
+        new Uint8Array([1]),
+        NOW.toISOString(),
+      ],
+    );
+    const first = await repository.claimJob(
+      MESSAGE,
+      1,
+      "claim-stale",
+      NOW,
+    );
+    expect(first.outcome).toBe("claimed");
+    const second = await repository.claimJob(
+      MESSAGE,
+      2,
+      "claim-winner",
+      new Date(NOW.getTime() + 1_000),
+    );
+    expect(second.outcome).toBe("claimed");
+    await pglite.query(
+      `update sync_checkpoints
+       set version = 2, status = 'connected', last_error_category = null,
+           updated_at = $1
+       where owner_id = $2 and provider_calendar_id = $3`,
+      [
+        new Date(NOW.getTime() + 2_000).toISOString(),
+        MESSAGE.ownerId,
+        MESSAGE.calendarId,
+      ],
+    );
+    await repository.completeJob(
+      MESSAGE.jobId,
+      "claim-winner",
+      { ...result(), checkpointVersion: 2 },
+      new Date(NOW.getTime() + 3_000),
+    );
+
+    const staleFinished = await repository.finishClaimedFailure({
+      jobId: MESSAGE.jobId,
+      claimId: "claim-stale",
+      expectedCheckpointVersion: 1,
+      status: "failed",
+      category: "authorization",
+      state: "disconnected",
+      now: new Date(NOW.getTime() + 4_000),
+    });
+
+    expect(staleFinished).toBe(false);
+    expect(
+      (
+        await pglite.query(
+          `select status, checkpoint_version, last_error_category
+           from calendar_sync_jobs`,
+        )
+      ).rows,
+    ).toEqual([
+      {
+        status: "succeeded",
+        checkpoint_version: 2,
+        last_error_category: null,
+      },
+    ]);
+    expect(
+      (
+        await pglite.query(
+          `select version, status, last_error_category from sync_checkpoints`,
+        )
+      ).rows,
+    ).toEqual([
+      { version: 2, status: "connected", last_error_category: null },
+    ]);
+  });
+
+  it("keeps a newer success connected when an older consumer failure resumes afterward", async () => {
+    await pglite.query(
+      `insert into sync_checkpoints (
+         id, owner_id, provider, provider_calendar_id, sync_token_envelope,
+         key_version, committed_at, version, status, updated_at
+       ) values ('checkpoint-consumer-race', $1, 'google-calendar', $2, $3, 1, $4, 1, 'connected', $4)`,
+      [
+        MESSAGE.ownerId,
+        MESSAGE.calendarId,
+        new Uint8Array([1]),
+        NOW.toISOString(),
+      ],
+    );
+    let signalEntered!: () => void;
+    let releaseFailure!: () => void;
+    const entered = new Promise<void>((resolveEntered) => {
+      signalEntered = resolveEntered;
+    });
+    const released = new Promise<void>((resolveReleased) => {
+      releaseFailure = resolveReleased;
+    });
+    const staleDelivery = queueMessage(1);
+    const staleConsumer = consumeCalendarSyncBatch(batch(staleDelivery), {
+      repository,
+      sync: async () => {
+        signalEntered();
+        await released;
+        throw new SyncCalendarError("authorization", "disconnected", false);
+      },
+      now: () => NOW,
+      createClaimId: () => "claim-stale-consumer",
+    });
+    await entered;
+    const winner = await repository.claimJob(
+      MESSAGE,
+      2,
+      "claim-newer-consumer",
+      new Date(NOW.getTime() + 1_000),
+    );
+    expect(winner.outcome).toBe("claimed");
+    await pglite.query(
+      `update sync_checkpoints
+       set version = 2, status = 'connected', last_error_category = null,
+           updated_at = $1
+       where owner_id = $2 and provider_calendar_id = $3`,
+      [
+        new Date(NOW.getTime() + 2_000).toISOString(),
+        MESSAGE.ownerId,
+        MESSAGE.calendarId,
+      ],
+    );
+    await repository.completeJob(
+      MESSAGE.jobId,
+      "claim-newer-consumer",
+      { ...result(), checkpointVersion: 2 },
+      new Date(NOW.getTime() + 3_000),
+    );
+    releaseFailure();
+    await staleConsumer;
+
+    expect(staleDelivery.ack).toHaveBeenCalledOnce();
+    expect(
+      (
+        await pglite.query(
+          `select status, checkpoint_version from calendar_sync_jobs`,
+        )
+      ).rows,
+    ).toEqual([{ status: "succeeded", checkpoint_version: 2 }]);
+    expect(
+      (
+        await pglite.query(
+          `select version, status, last_error_category from sync_checkpoints`,
+        )
+      ).rows,
+    ).toEqual([
+      { version: 2, status: "connected", last_error_category: null },
+    ]);
+  });
 
   it("turns an unknown retryable failure into Action required at the sixth attempt", async () => {
     const sync = vi.fn(async () => {

@@ -142,30 +142,37 @@ describe("atomic Google refresh-token persistence", () => {
     });
   });
 
-  it("does not let a stale access-token refresh overwrite a newer OAuth callback", async () => {
-    const initial = await repository.saveGoogleTokens(
-      tokenWrite("REFRESH_TOKEN_OLD_SENTINEL", "2026-07-23T12:00:00.000Z"),
-    );
-    const callbackWrite = await repository.saveGoogleTokens(
-      tokenWrite("REFRESH_TOKEN_NEW_SENTINEL", "2026-07-23T12:01:00.000Z"),
-    );
+  it.each([
+    ["omits a refresh token", undefined],
+    ["returns the same refresh token", "REFRESH_TOKEN_OLD_SENTINEL"],
+  ])(
+    "does not let a stale access refresh overwrite a newer callback that %s",
+    async (_name, callbackRefreshToken) => {
+      const initial = await repository.saveGoogleTokens(
+        tokenWrite("REFRESH_TOKEN_OLD_SENTINEL", "2026-07-23T12:00:00.000Z"),
+      );
+      const callbackWrite = await repository.saveGoogleTokens(
+        tokenWrite(callbackRefreshToken, "2026-07-23T12:01:00.000Z"),
+      );
 
-    const refreshWinner = await repository.saveRefreshedAccessToken(
-      tokenWrite(undefined, "2026-07-23T12:02:00.000Z"),
-      initial.tokenVersion,
-    );
+      const refreshWinner = await repository.saveRefreshedAccessToken(
+        tokenWrite(undefined, "2026-07-23T12:02:00.000Z"),
+        initial.tokenVersion,
+        initial.updatedAt,
+      );
 
-    expect(refreshWinner).toMatchObject({
-      refreshToken: "REFRESH_TOKEN_NEW_SENTINEL",
-      accessToken: callbackWrite.accessToken,
-      tokenVersion: callbackWrite.tokenVersion,
-    });
-    await expect(repository.getGoogleTokens(SUBJECT)).resolves.toMatchObject({
-      refreshToken: "REFRESH_TOKEN_NEW_SENTINEL",
-      accessToken: callbackWrite.accessToken,
-      tokenVersion: callbackWrite.tokenVersion,
-    });
-  });
+      expect(refreshWinner).toMatchObject({
+        refreshToken: "REFRESH_TOKEN_OLD_SENTINEL",
+        accessToken: callbackWrite.accessToken,
+        tokenVersion: callbackWrite.tokenVersion,
+        updatedAt: callbackWrite.updatedAt,
+      });
+      await expect(repository.getGoogleTokens(SUBJECT)).resolves.toMatchObject({
+        accessToken: callbackWrite.accessToken,
+        updatedAt: callbackWrite.updatedAt,
+      });
+    },
+  );
 
   it.each([
     {

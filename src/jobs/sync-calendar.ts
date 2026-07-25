@@ -28,6 +28,7 @@ export interface SyncCalendarRequest {
   readonly reason: SyncReason;
   readonly jobId: string;
   readonly deliveryAttempt?: number;
+  readonly expectedCheckpointVersion?: number;
 }
 
 /** Atomic repository request built only after the terminal provider page succeeds. */
@@ -82,6 +83,7 @@ export interface SyncRepository {
 export interface SyncCalendarDependencies {
   readonly client: EventSyncClient;
   readonly repository: SyncRepository;
+  readonly persistFailure?: boolean;
   readonly now?: () => Date;
   readonly random?: () => number;
 }
@@ -145,10 +147,17 @@ export async function syncCalendar(
         input.ownerId,
         input.calendarId,
       );
-      checkpointLoaded = true;
     } catch {
       throw retryError("database", input.deliveryAttempt, random);
     }
+    const loadedCheckpointVersion = checkpoint?.version ?? 0;
+    if (
+      input.expectedCheckpointVersion !== undefined &&
+      input.expectedCheckpointVersion !== loadedCheckpointVersion
+    ) {
+      throw new SyncCalendarError("concurrency", "retry_scheduled", true);
+    }
+    checkpointLoaded = true;
     if (checkpoint?.calendarId !== undefined && checkpoint.calendarId !== input.calendarId) {
       throw new SyncCalendarError("schema", "action_required", false);
     }
@@ -251,20 +260,25 @@ export async function syncCalendar(
     };
   } catch (error) {
     const failure = normalizeFailure(error, input.deliveryAttempt, random);
-    try {
-      await dependencies.repository.recordFailure({
-        ownerId: input.ownerId,
-        calendarId: input.calendarId,
-        category: failure.category,
-        state: failure.state,
-        occurredAt: Date.prototype.toISOString.call(now()),
-        jobId: input.jobId,
-        expectedCheckpointVersion: checkpointLoaded
-          ? checkpoint?.version ?? 0
-          : undefined,
-      });
-    } catch {
-      // Failure bookkeeping is best effort and must never replace the queue disposition.
+    if (
+      (dependencies.persistFailure ?? true) &&
+      !(failure.category === "concurrency" && !checkpointLoaded)
+    ) {
+      try {
+        await dependencies.repository.recordFailure({
+          ownerId: input.ownerId,
+          calendarId: input.calendarId,
+          category: failure.category,
+          state: failure.state,
+          occurredAt: Date.prototype.toISOString.call(now()),
+          jobId: input.jobId,
+          expectedCheckpointVersion: checkpointLoaded
+            ? checkpoint?.version ?? 0
+            : undefined,
+        });
+      } catch {
+        // Failure bookkeeping is best effort and must never replace the queue disposition.
+      }
     }
     throw failure;
   }
@@ -395,7 +409,9 @@ function retryError(
 }
 
 /** Validates bounded opaque job metadata before provider or persistence access. */
-function validateJobRequest(request: SyncCalendarRequest): Required<SyncCalendarRequest> {
+function validateJobRequest(
+  request: SyncCalendarRequest,
+): SyncCalendarRequest & { deliveryAttempt: number } {
   if (
     typeof request !== "object" ||
     request === null ||
@@ -407,7 +423,13 @@ function validateJobRequest(request: SyncCalendarRequest): Required<SyncCalendar
     throw new SyncCalendarError("schema", "action_required", false);
   }
   const deliveryAttempt = request.deliveryAttempt ?? 1;
-  if (!Number.isSafeInteger(deliveryAttempt) || deliveryAttempt <= 0) {
+  if (
+    !Number.isSafeInteger(deliveryAttempt) ||
+    deliveryAttempt <= 0 ||
+    (request.expectedCheckpointVersion !== undefined &&
+      (!Number.isSafeInteger(request.expectedCheckpointVersion) ||
+        request.expectedCheckpointVersion < 0))
+  ) {
     throw new SyncCalendarError("schema", "action_required", false);
   }
   return { ...request, deliveryAttempt };

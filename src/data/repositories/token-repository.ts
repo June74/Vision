@@ -38,6 +38,7 @@ export interface TokenStore {
   updateAccessTokenIfVersion(
     row: GoogleTokenWriteRow,
     expectedTokenVersion: number,
+    expectedUpdatedAt: Date,
   ): Promise<GoogleTokenRow | undefined>;
 }
 
@@ -250,6 +251,7 @@ export class DrizzleTokenStore implements TokenStore {
   async updateAccessTokenIfVersion(
     row: GoogleTokenWriteRow,
     expectedTokenVersion: number,
+    expectedUpdatedAt: Date,
   ): Promise<GoogleTokenRow | undefined> {
     const result = await this.database.execute<Record<string, unknown>>(sql`
       update google_oauth_tokens
@@ -261,6 +263,7 @@ export class DrizzleTokenStore implements TokenStore {
       where owner_id = ${row.ownerId}
         and google_subject = ${row.googleSubject}
         and token_version = ${expectedTokenVersion}
+        and updated_at = ${expectedUpdatedAt}
       returning
         owner_id as "ownerId",
         google_subject as "googleSubject",
@@ -284,6 +287,7 @@ export interface TokenRepositoryPort {
   saveRefreshedAccessToken(
     tokens: NewGoogleTokens,
     expectedTokenVersion: number,
+    expectedUpdatedAt: Date,
   ): Promise<RetainedGoogleTokens>;
 }
 
@@ -294,6 +298,7 @@ export interface RetainedGoogleTokens {
   readonly accessExpiresAt: Date;
   readonly grantedScopes: readonly string[];
   readonly tokenVersion: number;
+  readonly updatedAt: Date;
 }
 
 /** Validated provider-token inputs accepted after identity authorization. */
@@ -368,6 +373,7 @@ export class EncryptedTokenRepository implements TokenRepositoryPort {
       accessExpiresAt: new Date(row.accessExpiresAt),
       grantedScopes: parseScopes(row.grantedScopes),
       tokenVersion: row.tokenVersion,
+      updatedAt: new Date(row.updatedAt),
     };
   }
 
@@ -423,6 +429,7 @@ export class EncryptedTokenRepository implements TokenRepositoryPort {
       accessExpiresAt: new Date(persisted.accessExpiresAt),
       grantedScopes: parseScopes(persisted.grantedScopes),
       tokenVersion: persisted.tokenVersion,
+      updatedAt: new Date(persisted.updatedAt),
     };
   }
 
@@ -430,11 +437,13 @@ export class EncryptedTokenRepository implements TokenRepositoryPort {
   async saveRefreshedAccessToken(
     tokens: NewGoogleTokens,
     expectedTokenVersion: number,
+    expectedUpdatedAt: Date,
   ): Promise<RetainedGoogleTokens> {
     if (
       tokens.refreshToken !== undefined ||
       !Number.isSafeInteger(expectedTokenVersion) ||
-      expectedTokenVersion <= 0
+      expectedTokenVersion <= 0 ||
+      !isValidDate(expectedUpdatedAt)
     ) {
       throw new Error("Invalid refreshed Google token write.");
     }
@@ -461,6 +470,7 @@ export class EncryptedTokenRepository implements TokenRepositoryPort {
       (await this.store.updateAccessTokenIfVersion(
         write,
         expectedTokenVersion,
+        new Date(expectedUpdatedAt),
       )) ?? (await this.store.find(this.ownerId, tokens.googleSubject));
     if (!persisted) {
       throw new Error("Refreshed token conflict winner was unavailable.");
@@ -481,6 +491,7 @@ export class EncryptedTokenRepository implements TokenRepositoryPort {
       accessExpiresAt: new Date(persisted.accessExpiresAt),
       grantedScopes: parseScopes(persisted.grantedScopes),
       tokenVersion: persisted.tokenVersion,
+      updatedAt: new Date(persisted.updatedAt),
     };
   }
 }

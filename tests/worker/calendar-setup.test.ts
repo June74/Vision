@@ -330,6 +330,7 @@ function createHarness(options: {
               accessExpiresAt: new Date(NOW.getTime() + 600_000),
               grantedScopes: [],
               tokenVersion: 1,
+              updatedAt: NOW,
             },
       ),
     },

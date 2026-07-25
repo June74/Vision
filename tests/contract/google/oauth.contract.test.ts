@@ -13,8 +13,10 @@ import {
   GOOGLE_OAUTH_SCOPES,
   GoogleJwksIdTokenVerifier,
   GoogleOAuthClient,
+  GoogleOAuthError,
   type IdTokenVerifier,
 } from "../../../src/integrations/google/oauth-client";
+import { classifyGoogleRefreshError } from "../../../src/jobs/queue-consumer";
 
 const redirectUri = "https://vision.example.test/api/auth/google/callback";
 const verifier: IdTokenVerifier = { verify: vi.fn() };
@@ -29,6 +31,13 @@ function encodeJson(value: unknown): string {
 }
 
 describe("Google OAuth adapter", () => {
+  it("preserves provider refresh failures as provider action-required errors", () => {
+    expect(classifyGoogleRefreshError(new GoogleOAuthError("provider"))).toMatchObject({
+      category: "provider",
+      state: "action_required",
+      retry: false,
+    });
+  });
   it("creates an exact least-privilege offline authorization request with PKCE and first-consent behavior", () => {
     const client = new GoogleOAuthClient(
       {

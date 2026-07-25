@@ -6,6 +6,8 @@ commit the complete event projection and terminal cursor together. A failed page
 ## `syncCalendar`
 
 Runs one synchronization attempt and returns only safe counts, duration, reason, and checkpoint version.
+Queue consumers disable this function's best-effort failure write because their repository records checkpoint health
+and job disposition together under the active claim.
 
 ## `stageChange`
 
