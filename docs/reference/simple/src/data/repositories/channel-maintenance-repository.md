@@ -8,12 +8,18 @@ Creates missing version-zero sync state and one initial job from the connected V
 Finds missing or expiring channels.
 ## `preRegister`
 Stores a pending digest-backed channel.
+## `bindWatchedResource`
+Stores the exact watched resource before activation so a crash can still clean it up.
 ## `activate`
 Activates the watched resource.
 ## `retire`
 Retires an old stopped channel.
 ## `recordFailure`
 Records safe counters and Action required.
+## `recordCredentialFailure`
+Records a safe scheduler credential state only for the current checkpoint.
+## `clearCredentialRetry`
+Reconnects only a retry that the scheduler marked after a credential problem.
 ## `markCleanupRequired`
 Remembers an old channel that Google still needs to stop.
 ## `listSupersededChannels`

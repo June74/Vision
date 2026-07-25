@@ -26,6 +26,7 @@ function dependencies(
     repository: {
       listRenewalCandidates: vi.fn(async () => [CANDIDATE]),
       preRegister: vi.fn(async () => undefined),
+      bindWatchedResource: vi.fn(async () => true),
       activate: vi.fn(async () => true),
       retire: vi.fn(async () => true),
       recordFailure: vi.fn(async () => undefined),
@@ -66,6 +67,10 @@ describe("Google channel renewal", () => {
       order.push("activate");
       return true;
     });
+    vi.mocked(deps.repository.bindWatchedResource).mockImplementation(async () => {
+      order.push("bind-resource");
+      return true;
+    });
     vi.mocked(deps.provider.stop).mockImplementation(async () => {
       order.push("stop");
     });
@@ -79,6 +84,7 @@ describe("Google channel renewal", () => {
     expect(order).toEqual([
       "pre-register",
       "watch",
+      "bind-resource",
       "activate",
       "stop",
       "retire",
@@ -147,6 +153,30 @@ describe("Google channel renewal", () => {
       resourceId: "new-resource",
     });
     expect(deps.repository.retire).not.toHaveBeenCalled();
+  });
+
+  it("durably records exact cleanup identity when activation and immediate stop both fail", async () => {
+    const deps = dependencies({
+      provider: {
+        watch: vi.fn(async () => ({
+          resourceId: "new-resource",
+          expiresAt: new Date(NOW.getTime() + 7 * 24 * 60 * 60_000),
+        })),
+        stop: vi.fn(async () => {
+          throw new Error("safe synthetic stop failure");
+        }),
+      },
+    });
+    vi.mocked(deps.repository.activate).mockResolvedValue(false);
+
+    await renewExpiringChannels(NOW, deps);
+
+    expect(deps.repository.recordFailure).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resourceId: "new-resource",
+        providerStop: "failed",
+      }),
+    );
   });
 
   it("retries durable cleanup for superseded channels", async () => {

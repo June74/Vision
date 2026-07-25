@@ -13,6 +13,7 @@ import type {
   RepairRepository,
 } from "../../jobs/repair-calendar-sync";
 import type { CalendarSyncMessage } from "../../jobs/queue-message";
+import type { SyncCalendarError } from "../../jobs/sync-calendar";
 import {
   createCalendarJobRepository,
   type CalendarJobRepository,
@@ -93,8 +94,9 @@ export class ChannelMaintenanceRepository
           provider_calendar_id, null, null, ${now}, 0,
           'connected', null, ${now}
         from canonical
-        on conflict (owner_id, provider, provider_calendar_id) do nothing
-        returning owner_id, provider_calendar_id, version
+        on conflict (owner_id, provider, provider_calendar_id) do update set
+          id = sync_checkpoints.id
+        returning owner_id, provider_calendar_id, version, status
       ),
       maintenance as (
         insert into calendar_sync_maintenance (
@@ -105,7 +107,7 @@ export class ChannelMaintenanceRepository
         select
           canonical.owner_id, 'google-calendar',
           canonical.provider_calendar_id, canonical.setup_version,
-          existing.version, 0, 0,
+          checkpoint.version, 0, 0,
           (
             select channel.id
             from sync_channels as channel
@@ -118,14 +120,28 @@ export class ChannelMaintenanceRepository
           ),
           ${now}, ${now}
         from canonical
-        inner join sync_checkpoints as existing
-          on existing.owner_id = canonical.owner_id
-         and existing.provider = 'google-calendar'
-         and existing.provider_calendar_id = canonical.provider_calendar_id
-         and existing.status = 'connected'
+        inner join checkpoint
+          on checkpoint.owner_id = canonical.owner_id
+         and checkpoint.provider_calendar_id = canonical.provider_calendar_id
+         and checkpoint.status = 'connected'
         on conflict (owner_id, provider, provider_calendar_id) do update set
           connection_version = excluded.connection_version,
           checkpoint_version = excluded.checkpoint_version,
+          credential_failure_checkpoint_version = case
+            when calendar_sync_maintenance.checkpoint_version = excluded.checkpoint_version
+              then calendar_sync_maintenance.credential_failure_checkpoint_version
+            else null
+          end,
+          credential_failure_category = case
+            when calendar_sync_maintenance.checkpoint_version = excluded.checkpoint_version
+              then calendar_sync_maintenance.credential_failure_category
+            else null
+          end,
+          credential_failure_recorded_at = case
+            when calendar_sync_maintenance.checkpoint_version = excluded.checkpoint_version
+              then calendar_sync_maintenance.credential_failure_recorded_at
+            else null
+          end,
           updated_at = excluded.updated_at
         where calendar_sync_maintenance.renewal_lease_id is null
         returning owner_id
@@ -140,12 +156,11 @@ export class ChannelMaintenanceRepository
           canonical.provider_calendar_id, 'initial',
           'pending_enqueue', 0, false, ${now}, ${now}
         from canonical
-        inner join sync_checkpoints as existing
-          on existing.owner_id = canonical.owner_id
-         and existing.provider = 'google-calendar'
-         and existing.provider_calendar_id = canonical.provider_calendar_id
-         and existing.status = 'connected'
-         and existing.version = 0
+        inner join checkpoint
+          on checkpoint.owner_id = canonical.owner_id
+         and checkpoint.provider_calendar_id = canonical.provider_calendar_id
+         and checkpoint.status = 'connected'
+         and checkpoint.version = 0
         where exists (select 1 from maintenance)
         on conflict (job_id) do nothing
         returning job_id
@@ -162,9 +177,8 @@ export class ChannelMaintenanceRepository
           ), false)
         ) and exists (
           select 1
-          from sync_checkpoints
+          from checkpoint
           where owner_id = ${this.ownerId}
-            and provider = 'google-calendar'
             and provider_calendar_id = ${calendarId}
             and status = 'connected'
         ) as "shouldEnqueue"
@@ -250,7 +264,10 @@ export class ChannelMaintenanceRepository
     const leaseExpiry = new Date(input.createdAt.getTime() + RENEWAL_LEASE_MS);
     const result = await this.database.execute(sql`
       with canonical as materialized (
-        select maintenance.owner_id, maintenance.provider_calendar_id
+        select
+          maintenance.owner_id,
+          maintenance.provider_calendar_id,
+          maintenance.renewal_lease_id as old_lease_id
         from calendar_sync_maintenance as maintenance
         inner join calendar_setup_states as setup
           on setup.owner_id = maintenance.owner_id
@@ -278,6 +295,28 @@ export class ChannelMaintenanceRepository
           )
         for update
       ),
+      stale_pending as (
+        update sync_channels as channel
+        set lifecycle = 'failed',
+            failure_count = channel.failure_count + 1,
+            last_failure_at = ${input.createdAt},
+            cleanup_required = channel.provider_resource_id is not null
+        where channel.owner_id = ${input.ownerId}
+          and channel.provider = 'google-calendar'
+          and channel.provider_calendar_id = ${input.calendarId}
+          and channel.lifecycle = 'pending'
+          and channel.renewal_lease_id = (
+            select old_lease_id from canonical
+          )
+          and (select old_lease_id from canonical) is not null
+        returning channel.id
+      ),
+      takeover_ready as materialized (
+        select canonical.owner_id, canonical.provider_calendar_id
+        from canonical
+        left join stale_pending on true
+        group by canonical.owner_id, canonical.provider_calendar_id
+      ),
       elected as (
         update calendar_sync_maintenance as maintenance
         set renewal_generation = maintenance.renewal_generation + 1,
@@ -288,7 +327,7 @@ export class ChannelMaintenanceRepository
         where maintenance.owner_id = ${input.ownerId}
           and maintenance.provider = 'google-calendar'
           and maintenance.provider_calendar_id = ${input.calendarId}
-          and exists (select 1 from canonical)
+          and exists (select 1 from takeover_ready)
         returning maintenance.renewal_generation
       ),
       pending as (
@@ -309,6 +348,33 @@ export class ChannelMaintenanceRepository
         returning id
       )
       select id from pending
+    `);
+    return result.rows.length === 1;
+  }
+
+  /** Persists the exact watched resource before activation so crash cleanup can recover it. */
+  async bindWatchedResource(input: {
+    rowId: string;
+    ownerId: string;
+    calendarId: string;
+    leaseId: string;
+    resourceId: string;
+  }): Promise<boolean> {
+    this.assertOwner(input.ownerId);
+    const result = await this.database.execute(sql`
+      update sync_channels
+      set provider_resource_id = ${input.resourceId}
+      where id = ${input.rowId}
+        and owner_id = ${input.ownerId}
+        and provider = 'google-calendar'
+        and provider_calendar_id = ${input.calendarId}
+        and lifecycle = 'pending'
+        and renewal_lease_id = ${input.leaseId}
+        and (
+          provider_resource_id is null
+          or provider_resource_id = ${input.resourceId}
+        )
+      returning id
     `);
     return result.rows.length === 1;
   }
@@ -405,6 +471,8 @@ export class ChannelMaintenanceRepository
     rowId: string;
     leaseId: string;
     expectedCheckpointVersion: number;
+    resourceId?: string;
+    providerStop: "not_attempted" | "succeeded" | "failed";
     now: Date;
   }): Promise<void> {
     this.assertOwner(input.ownerId);
@@ -413,7 +481,19 @@ export class ChannelMaintenanceRepository
         update sync_channels
         set failure_count = failure_count + 1,
             last_failure_at = ${input.now},
-            lifecycle = case when lifecycle = 'pending' then 'failed' else lifecycle end
+            lifecycle = case when lifecycle = 'pending' then 'failed' else lifecycle end,
+            provider_resource_id = case
+              when ${input.providerStop} = 'succeeded' then null
+              when ${input.providerStop} = 'failed' then
+                coalesce(${input.resourceId ?? null}, provider_resource_id)
+              else provider_resource_id
+            end,
+            cleanup_required = case
+              when ${input.providerStop} = 'succeeded' then false
+              when ${input.providerStop} = 'failed' then
+                coalesce(${input.resourceId ?? null}, provider_resource_id) is not null
+              else provider_resource_id is not null
+            end
         where id = ${input.rowId}
           and owner_id = ${input.ownerId}
           and provider = 'google-calendar'
@@ -467,6 +547,129 @@ export class ChannelMaintenanceRepository
     `);
   }
 
+  /** Persists one scheduler credential disposition only for the maintained checkpoint generation. */
+  async recordCredentialFailure(
+    failure: SyncCalendarError,
+    now: Date,
+  ): Promise<boolean> {
+    const result = await this.database.execute(sql`
+      with eligible as materialized (
+        select
+          maintenance.owner_id,
+          maintenance.provider_calendar_id,
+          maintenance.checkpoint_version
+        from calendar_sync_maintenance as maintenance
+        inner join calendar_setup_states as setup
+          on setup.owner_id = maintenance.owner_id
+         and setup.setup_version = maintenance.connection_version
+         and setup.status = 'connected'
+        inner join vision_calendar_connections as connection
+          on connection.owner_id = maintenance.owner_id
+         and connection.provider_calendar_id = maintenance.provider_calendar_id
+         and connection.google_subject = setup.google_subject
+         and connection.summary = 'Vision'
+         and connection.ownership_access_role = 'owner'
+        inner join sync_checkpoints as checkpoint
+          on checkpoint.owner_id = maintenance.owner_id
+         and checkpoint.provider = maintenance.provider
+         and checkpoint.provider_calendar_id = maintenance.provider_calendar_id
+         and checkpoint.version = maintenance.checkpoint_version
+         and checkpoint.status in ('connected', 'retry_scheduled')
+        where maintenance.owner_id = ${this.ownerId}
+          and maintenance.provider = 'google-calendar'
+        for update of checkpoint
+      ),
+      disposed as (
+        update sync_checkpoints as checkpoint
+        set status = ${failure.state},
+            last_error_category = ${failure.category},
+            updated_at = ${now}
+        from eligible
+        where checkpoint.owner_id = eligible.owner_id
+          and checkpoint.provider = 'google-calendar'
+          and checkpoint.provider_calendar_id = eligible.provider_calendar_id
+          and checkpoint.version = eligible.checkpoint_version
+        returning
+          checkpoint.owner_id,
+          checkpoint.provider_calendar_id,
+          checkpoint.version
+      ),
+      marked as (
+        update calendar_sync_maintenance as maintenance
+        set credential_failure_checkpoint_version = disposed.version,
+            credential_failure_category = ${failure.category},
+            credential_failure_recorded_at = ${now},
+            updated_at = ${now}
+        from disposed
+        where maintenance.owner_id = disposed.owner_id
+          and maintenance.provider = 'google-calendar'
+          and maintenance.provider_calendar_id = disposed.provider_calendar_id
+          and maintenance.checkpoint_version = disposed.version
+        returning maintenance.owner_id
+      )
+      select owner_id from marked
+    `);
+    return result.rows.length === 1;
+  }
+
+  /** Clears only the exact scheduler-owned retry marker after credentials work again. */
+  async clearCredentialRetry(now: Date): Promise<boolean> {
+    const result = await this.database.execute(sql`
+      with eligible as materialized (
+        select
+          maintenance.owner_id,
+          maintenance.provider_calendar_id,
+          maintenance.checkpoint_version,
+          maintenance.credential_failure_category
+        from calendar_sync_maintenance as maintenance
+        inner join sync_checkpoints as checkpoint
+          on checkpoint.owner_id = maintenance.owner_id
+         and checkpoint.provider = maintenance.provider
+         and checkpoint.provider_calendar_id = maintenance.provider_calendar_id
+         and checkpoint.version = maintenance.checkpoint_version
+         and checkpoint.status = 'retry_scheduled'
+         and checkpoint.last_error_category = maintenance.credential_failure_category
+         and checkpoint.updated_at = maintenance.credential_failure_recorded_at
+        where maintenance.owner_id = ${this.ownerId}
+          and maintenance.provider = 'google-calendar'
+          and maintenance.credential_failure_checkpoint_version =
+              maintenance.checkpoint_version
+          and maintenance.credential_failure_category in ('transient', 'database')
+        for update of checkpoint
+      ),
+      cleared as (
+        update sync_checkpoints as checkpoint
+        set status = 'connected',
+            last_error_category = null,
+            updated_at = ${now}
+        from eligible
+        where checkpoint.owner_id = eligible.owner_id
+          and checkpoint.provider = 'google-calendar'
+          and checkpoint.provider_calendar_id = eligible.provider_calendar_id
+          and checkpoint.version = eligible.checkpoint_version
+        returning
+          checkpoint.owner_id,
+          checkpoint.provider_calendar_id,
+          checkpoint.version
+      ),
+      unmarked as (
+        update calendar_sync_maintenance as maintenance
+        set credential_failure_checkpoint_version = null,
+            credential_failure_category = null,
+            credential_failure_recorded_at = null,
+            updated_at = ${now}
+        from cleared
+        where maintenance.owner_id = cleared.owner_id
+          and maintenance.provider = 'google-calendar'
+          and maintenance.provider_calendar_id = cleared.provider_calendar_id
+          and maintenance.checkpoint_version = cleared.version
+        returning maintenance.owner_id
+      )
+      select owner_id from unmarked
+    `);
+    return result.rows.length === 1;
+  }
+
   /** Marks an old exact channel for later stop retry without changing the new current channel. */
   async markCleanupRequired(rowId: string, now: Date): Promise<void> {
     await this.database.execute(sql`
@@ -496,30 +699,58 @@ export class ChannelMaintenanceRepository
        and maintenance.provider_calendar_id = channel.provider_calendar_id
       where channel.owner_id = ${this.ownerId}
         and channel.provider = 'google-calendar'
-        and channel.lifecycle = 'active'
-        and channel.id <> maintenance.current_channel_row_id
+        and channel.provider_resource_id is not null
+        and (
+          (
+            channel.lifecycle = 'active'
+            and channel.id <> maintenance.current_channel_row_id
+          )
+          or (
+            channel.lifecycle = 'failed'
+            and channel.cleanup_required
+          )
+        )
       order by channel.created_at
     `);
     return Object.freeze(result.rows.map(decodeActiveChannel));
   }
 
-  /** Retires only the exact stopped old row. */
+  /** Completes exact cleanup for a superseded active or failed provisional row. */
   async retire(rowId: string, now: Date): Promise<boolean> {
     const result = await this.database.execute(sql`
       update sync_channels
-      set lifecycle = 'retired',
-          retired_at = ${now},
+      set lifecycle = case
+            when lifecycle = 'active' then 'retired'
+            else lifecycle
+          end,
+          provider_resource_id = case
+            when lifecycle = 'failed' then null
+            else provider_resource_id
+          end,
+          retired_at = case
+            when lifecycle = 'active' then ${now}
+            else retired_at
+          end,
           cleanup_required = false
       where id = ${rowId}
         and owner_id = ${this.ownerId}
         and provider = 'google-calendar'
-        and lifecycle = 'active'
-        and not exists (
-          select 1
-          from calendar_sync_maintenance
-          where owner_id = ${this.ownerId}
-            and provider = 'google-calendar'
-            and current_channel_row_id = ${rowId}
+        and (
+          (
+            lifecycle = 'active'
+            and not exists (
+              select 1
+              from calendar_sync_maintenance
+              where owner_id = ${this.ownerId}
+                and provider = 'google-calendar'
+                and current_channel_row_id = ${rowId}
+            )
+          )
+          or (
+            lifecycle = 'failed'
+            and cleanup_required
+            and provider_resource_id is not null
+          )
         )
       returning id
     `);

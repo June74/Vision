@@ -4,6 +4,8 @@ The scheduled entry point performs lifecycle control and only reserves event syn
 
 ## `runScheduledCalendarMaintenance`
 Runs repair before renewal, isolates their execution, and reports a failure only after both maintenance paths have been attempted.
+## `recordCredentialFailure`
+Routes typed OAuth failure through the generation-safe maintenance checkpoint transition before rethrowing.
 ## `scheduled`
 Uses Cloudflare's scheduled time and awaits maintenance.
 ## `createProductionScheduledCalendarMaintenanceDependencies`
@@ -28,6 +30,10 @@ Encrypts the token with owner and row authenticated metadata; SQL uses only its 
 Invokes deterministic repair reservation.
 ## `resolveScheduledGoogleAccessToken`
 Lazily restores and refreshes OAuth state for provider channel calls while classifying refresh and persistence failures through the Task 3 sync taxonomy.
+## `refreshAccessToken`
+Injects the refresh-only OAuth operation so adversarial tests exercise the production classifier without network calls.
+## `now`
+Provides a single scheduler timestamp for the expiry threshold and compare-and-swap token update.
 ## `randomOpaque`
 Encodes random bytes as canonical base64url.
 ## `sha256Base64Url`

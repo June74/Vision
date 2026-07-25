@@ -11,6 +11,7 @@ import {
   type RepairDependencies,
 } from "../../../src/jobs/repair-calendar-sync";
 import { runScheduledCalendarMaintenance } from "../../../src/jobs/scheduled";
+import { SyncCalendarError } from "../../../src/jobs/sync-calendar";
 
 const NOW = new Date("2026-07-24T16:15:00.000Z");
 const STALE: RepairCalendar = {
@@ -126,6 +127,44 @@ describe("scheduled calendar repair", () => {
     ).rejects.toBe(failure);
 
     expect(renew).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    new SyncCalendarError("authorization", "disconnected", false),
+    new SyncCalendarError("transient", "retry_scheduled", true, 5),
+    new SyncCalendarError("database", "retry_scheduled", true, 5),
+    new SyncCalendarError("provider", "action_required", false),
+  ])(
+    "persists typed renewal credential disposition before reporting %s",
+    async (failure) => {
+      const recordCredentialFailure = vi.fn(async () => true);
+      const schedulerDependencies = {
+        repair: vi.fn(async () => undefined),
+        renew: vi.fn(async () => {
+          throw failure;
+        }),
+        recordCredentialFailure,
+      };
+
+      await expect(
+        runScheduledCalendarMaintenance(NOW, schedulerDependencies),
+      ).rejects.toBe(failure);
+
+      expect(recordCredentialFailure).toHaveBeenCalledWith(failure, NOW);
+    },
+  );
+
+  it("clears only a scheduler-owned credential retry marker after renewal succeeds", async () => {
+    const clearCredentialRetry = vi.fn(async () => true);
+    const schedulerDependencies = {
+      repair: vi.fn(async () => undefined),
+      renew: vi.fn(async () => undefined),
+      clearCredentialRetry,
+    };
+
+    await runScheduledCalendarMaintenance(NOW, schedulerDependencies);
+
+    expect(clearCredentialRetry).toHaveBeenCalledWith(NOW);
   });
 
   it("selects a missed sync and durably deduplicates its scheduled repair", async () => {

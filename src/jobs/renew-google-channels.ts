@@ -32,6 +32,13 @@ export interface ChannelLifecycleRepository {
     expectedCheckpointVersion: number;
     createdAt: Date;
   }): Promise<boolean | void>;
+  bindWatchedResource(input: {
+    rowId: string;
+    ownerId: string;
+    calendarId: string;
+    leaseId: string;
+    resourceId: string;
+  }): Promise<boolean>;
   activate(input: {
     rowId: string;
     ownerId: string;
@@ -50,6 +57,8 @@ export interface ChannelLifecycleRepository {
     rowId: string;
     leaseId: string;
     expectedCheckpointVersion: number;
+    resourceId?: string;
+    providerStop: "not_attempted" | "succeeded" | "failed";
     now: Date;
   }): Promise<void>;
   listSupersededChannels?(): Promise<readonly ActiveGoogleChannel[]>;
@@ -162,6 +171,14 @@ async function renewOne(
     ) {
       throw new Error("Invalid Google watch response.");
     }
+    const bound = await dependencies.repository.bindWatchedResource({
+      rowId,
+      ownerId: candidate.ownerId,
+      calendarId: candidate.calendarId,
+      leaseId,
+      resourceId: watched.resourceId,
+    });
+    if (!bound) throw new Error("Channel resource binding lost its lifecycle race.");
     const activated = await dependencies.repository.activate({
       rowId,
       ownerId: candidate.ownerId,
@@ -175,14 +192,17 @@ async function renewOne(
     });
     if (!activated) throw new Error("Channel activation lost its lifecycle race.");
   } catch {
+    let providerStop: "not_attempted" | "succeeded" | "failed" =
+      "not_attempted";
     if (watched) {
       try {
         await dependencies.provider.stop({
           channelId,
           resourceId: watched.resourceId,
         });
+        providerStop = "succeeded";
       } catch {
-        // The provider cleanup is best effort; durable failure state drives later repair.
+        providerStop = "failed";
       }
     }
     await dependencies.repository.recordFailure({
@@ -191,6 +211,8 @@ async function renewOne(
       rowId,
       leaseId,
       expectedCheckpointVersion: candidate.checkpointVersion,
+      resourceId: watched?.resourceId,
+      providerStop,
       now,
     });
     return;

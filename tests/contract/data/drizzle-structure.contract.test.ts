@@ -46,7 +46,7 @@ describe("Drizzle schema structure", () => {
   it("keeps the retained generated snapshot consistent with the reviewed manifest", () => {
     const snapshot = JSON.parse(
       readFileSync(
-        resolve(process.cwd(), "migrations/generated/meta/0004_snapshot.json"),
+        resolve(process.cwd(), "migrations/generated/meta/0006_snapshot.json"),
         "utf8",
       ),
     ) as unknown;

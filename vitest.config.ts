@@ -13,6 +13,7 @@ export default defineConfig({
           // to keep Windows CI hooks deterministic instead of competing until their 10s timeout.
           maxWorkers: 4,
           name: "unit",
+          sequence: { groupOrder: 1 },
         },
       },
       {
@@ -20,6 +21,7 @@ export default defineConfig({
           environment: "node",
           include: ["tests/contract/**/*.test.ts"],
           name: "contract",
+          sequence: { groupOrder: 2 },
         },
       },
       {
@@ -27,6 +29,7 @@ export default defineConfig({
         test: {
           include: ["tests/worker/**/*.test.ts"],
           name: "worker",
+          sequence: { groupOrder: 3 },
         },
       },
     ],

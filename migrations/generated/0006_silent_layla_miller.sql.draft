@@ -1,0 +1,3 @@
+ALTER TABLE "calendar_sync_maintenance" DROP CONSTRAINT "calendar_sync_maintenance_credential_marker_consistent";--> statement-breakpoint
+ALTER TABLE "calendar_sync_maintenance" ADD COLUMN "credential_failure_recorded_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "calendar_sync_maintenance" ADD CONSTRAINT "calendar_sync_maintenance_credential_marker_consistent" CHECK (("calendar_sync_maintenance"."credential_failure_checkpoint_version" is null) = ("calendar_sync_maintenance"."credential_failure_category" is null) and ("calendar_sync_maintenance"."credential_failure_checkpoint_version" is null) = ("calendar_sync_maintenance"."credential_failure_recorded_at" is null));

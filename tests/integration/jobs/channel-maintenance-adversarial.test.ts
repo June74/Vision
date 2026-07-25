@@ -5,9 +5,19 @@ import { drizzle } from "drizzle-orm/pglite";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { VisionDatabase } from "../../../src/data/db";
 import { createChannelMaintenanceRepository } from "../../../src/data/repositories/channel-maintenance-repository";
+import type {
+  RetainedGoogleTokens,
+  TokenRepositoryPort,
+} from "../../../src/data/repositories/token-repository";
+import { GoogleOAuthError } from "../../../src/integrations/google/oauth-client";
 import { renewExpiringChannels } from "../../../src/jobs/renew-google-channels";
 import type { ChannelLifecycleDependencies } from "../../../src/jobs/renew-google-channels";
 import { repairCalendarSync } from "../../../src/jobs/repair-calendar-sync";
+import {
+  resolveScheduledGoogleAccessToken,
+  runScheduledCalendarMaintenance,
+} from "../../../src/jobs/scheduled";
+import { SyncCalendarError } from "../../../src/jobs/sync-calendar";
 
 const NOW = new Date("2026-07-24T16:15:00.000Z");
 const OWNER = "owner-1";
@@ -394,15 +404,11 @@ describe("adversarial calendar maintenance", () => {
     ]);
   }, 30_000);
 
-  it("bootstraps setup-only connection into one initial job, checkpoint, and channel", async () => {
+  it("bootstraps setup-only connection in one first cron into one initial job, checkpoint, maintenance row, and channel", async () => {
     await seedCanonicalConnection();
     const repository = createChannelMaintenanceRepository(database, OWNER);
     const send = vi.fn(async () => undefined);
 
-    await repairCalendarSync(NOW, {
-      repository,
-      queue: { send },
-    });
     await repairCalendarSync(NOW, {
       repository,
       queue: { send },
@@ -429,6 +435,14 @@ describe("adversarial calendar maintenance", () => {
     expect(
       (
         await postgres.query(
+          `select connection_version, checkpoint_version
+           from calendar_sync_maintenance`,
+        )
+      ).rows,
+    ).toEqual([{ connection_version: 4, checkpoint_version: 0 }]);
+    expect(
+      (
+        await postgres.query(
           `select reason, status, count(*)::integer as count
            from calendar_sync_jobs group by reason, status`,
         )
@@ -443,5 +457,358 @@ describe("adversarial calendar maintenance", () => {
       ).rows,
     ).toEqual([{ lifecycle: "active", count: 1 }]);
     expect(send).toHaveBeenCalledOnce();
+  }, 30_000);
+
+  it("converges overlapping first-cron bootstrap into one usable foundation", async () => {
+    await seedCanonicalConnection();
+    const first = createChannelMaintenanceRepository(database, OWNER);
+    const second = createChannelMaintenanceRepository(database, OWNER);
+
+    const results = await Promise.all([
+      first.bootstrapConnectedCalendars(NOW),
+      second.bootstrapConnectedCalendars(NOW),
+    ]);
+
+    expect(results.flat()).toHaveLength(2);
+    expect(results.flat().some((result) => result.shouldEnqueue)).toBe(true);
+    expect(
+      (
+        await postgres.query(
+          `select
+             (select count(*)::integer from sync_checkpoints) as checkpoints,
+             (select count(*)::integer from calendar_sync_maintenance) as maintenance,
+             (select count(*)::integer from calendar_sync_jobs) as jobs`,
+        )
+      ).rows,
+    ).toEqual([{ checkpoints: 1, maintenance: 1, jobs: 1 }]);
+  }, 30_000);
+
+  it.each([false, true])(
+    "atomically takes over an expired crashed renewal and preserves exact cleanup identity (resource bound: %s)",
+    async (resourceBound) => {
+      await seedCanonicalConnection();
+      await seedCheckpoint();
+      const repository = createChannelMaintenanceRepository(database, OWNER);
+      await repository.bootstrapConnectedCalendars(NOW);
+      expect(
+        await repository.preRegister({
+          rowId: "stale-pending-row",
+          ownerId: OWNER,
+          calendarId: CALENDAR,
+          channelId: "stale-channel-opaque-id",
+          tokenHash: "S".repeat(43),
+          tokenEnvelope: new Uint8Array([1]),
+          leaseId: "stale-lease-opaque-id",
+          expectedConnectionVersion: 4,
+          expectedCheckpointVersion: 1,
+          createdAt: NOW,
+        }),
+      ).toBe(true);
+      if (resourceBound) {
+        expect(
+          await repository.bindWatchedResource({
+            rowId: "stale-pending-row",
+            ownerId: OWNER,
+            calendarId: CALENDAR,
+            leaseId: "stale-lease-opaque-id",
+            resourceId: "stale-resource",
+          }),
+        ).toBe(true);
+      }
+      const takeoverAt = new Date(NOW.getTime() + 3 * 60_000);
+      const first = createChannelMaintenanceRepository(database, OWNER);
+      const second = createChannelMaintenanceRepository(database, OWNER);
+      const takeover = (candidate: typeof first, suffix: string) =>
+        candidate.preRegister({
+          rowId: `replacement-${suffix}`,
+          ownerId: OWNER,
+          calendarId: CALENDAR,
+          channelId: `replacement-${suffix}-channel`,
+          tokenHash: suffix.toUpperCase().padEnd(43, "A").slice(0, 43),
+          tokenEnvelope: new Uint8Array([2]),
+          leaseId: `replacement-${suffix}-lease`,
+          expectedConnectionVersion: 4,
+          expectedCheckpointVersion: 1,
+          createdAt: takeoverAt,
+        });
+
+      const elected = await Promise.all([
+        takeover(first, "one"),
+        takeover(second, "two"),
+      ]);
+
+      expect(elected.filter(Boolean)).toHaveLength(1);
+      expect(
+        (
+          await postgres.query(
+            `select id, lifecycle, provider_resource_id, cleanup_required
+             from sync_channels order by created_at, id`,
+          )
+        ).rows,
+      ).toEqual([
+        {
+          id: "stale-pending-row",
+          lifecycle: "failed",
+          provider_resource_id: resourceBound ? "stale-resource" : null,
+          cleanup_required: resourceBound,
+        },
+        {
+          id: elected[0] ? "replacement-one" : "replacement-two",
+          lifecycle: "pending",
+          provider_resource_id: null,
+          cleanup_required: false,
+        },
+      ]);
+
+      const stop = vi.fn(async () => undefined);
+      const dependencies = renewalDependencies(
+        repository,
+        vi.fn(async () => {
+          throw new Error("watch must not run while the takeover lease is live");
+        }),
+        "takeover-cleanup",
+      );
+      dependencies.provider.stop = stop;
+      await renewExpiringChannels(takeoverAt, dependencies);
+      if (resourceBound) {
+        expect(stop).toHaveBeenCalledWith({
+          channelId: "stale-channel-opaque-id",
+          resourceId: "stale-resource",
+        });
+      } else {
+        expect(stop).not.toHaveBeenCalled();
+      }
+      expect(
+        (
+          await postgres.query(
+            `select lifecycle, provider_resource_id, cleanup_required
+             from sync_channels where id = 'stale-pending-row'`,
+          )
+        ).rows,
+      ).toEqual([
+        {
+          lifecycle: "failed",
+          provider_resource_id: null,
+          cleanup_required: false,
+        },
+      ]);
+    },
+    30_000,
+  );
+
+  it.each([
+    ["missing", "authorization", "disconnected"],
+    ["revoked", "authorization", "disconnected"],
+    ["transient", "transient", "retry_scheduled"],
+    ["persistence", "database", "retry_scheduled"],
+  ] as const)(
+    "runs the production %s credential path and persists its generation-bound disposition",
+    async (scenario, category, state) => {
+      await seedCanonicalConnection();
+      await seedCheckpoint();
+      const repository = createChannelMaintenanceRepository(database, OWNER);
+      await repository.bootstrapConnectedCalendars(NOW);
+      const retained: RetainedGoogleTokens = {
+        refreshToken: "opaque-refresh-token",
+        accessToken: null,
+        accessExpiresAt: new Date(NOW.getTime() - 1),
+        grantedScopes: ["https://www.googleapis.com/auth/calendar"],
+        tokenVersion: 1,
+        updatedAt: new Date(NOW.getTime() - 1_000),
+      };
+      const tokens: Pick<
+        TokenRepositoryPort,
+        "getGoogleTokens" | "saveRefreshedAccessToken"
+      > = {
+        getGoogleTokens: vi.fn(async () =>
+          scenario === "missing" ? undefined : retained,
+        ),
+        saveRefreshedAccessToken: vi.fn(async () => {
+          if (scenario === "persistence") {
+            throw new Error("safe synthetic token persistence failure");
+          }
+          return {
+            ...retained,
+            accessToken: "refreshed-access-token",
+            accessExpiresAt: new Date(NOW.getTime() + 3_600_000),
+          };
+        }),
+      };
+      const refreshAccessToken = vi.fn(async () => {
+        if (scenario === "revoked") {
+          throw new GoogleOAuthError("authorization");
+        }
+        if (scenario === "transient") {
+          throw new GoogleOAuthError("transient");
+        }
+        return {
+          accessToken: "refreshed-access-token",
+          expiresInSeconds: 3_600,
+          scopes: ["https://www.googleapis.com/auth/calendar"],
+        };
+      });
+
+      await expect(
+        runScheduledCalendarMaintenance(NOW, {
+          repair: vi.fn(async () => undefined),
+          renew: () =>
+            resolveScheduledGoogleAccessToken({
+              googleSubject: "subject-1",
+              tokens,
+              refreshAccessToken,
+              now: () => NOW,
+            }).then(() => undefined),
+          recordCredentialFailure: (error, now) =>
+            repository.recordCredentialFailure(error, now),
+        }),
+      ).rejects.toMatchObject({ category, state });
+      expect(
+        (
+          await postgres.query(
+            `select status, last_error_category from sync_checkpoints`,
+          )
+        ).rows,
+      ).toEqual([
+        { status: state, last_error_category: category },
+      ]);
+
+      const cleared = await repository.clearCredentialRetry(
+        new Date(NOW.getTime() + 1_000),
+      );
+      if (state === "retry_scheduled") {
+        expect(cleared).toBe(true);
+        expect(
+          (
+            await postgres.query(
+              `select status, last_error_category from sync_checkpoints`,
+            )
+          ).rows,
+        ).toEqual([{ status: "connected", last_error_category: null }]);
+      } else {
+        expect(cleared).toBe(false);
+      }
+    },
+    30_000,
+  );
+
+  it("retains exact watched identity when activation and immediate provider cleanup fail", async () => {
+    await seedCanonicalConnection();
+    await seedCheckpoint();
+    const repository = createChannelMaintenanceRepository(database, OWNER);
+    await repository.bootstrapConnectedCalendars(NOW);
+    const activationLoser = new Proxy(repository, {
+      get(target, property, receiver) {
+        if (property === "activate") {
+          return async () => false;
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const dependencies = renewalDependencies(
+      activationLoser,
+      vi.fn(async () => ({
+        resourceId: "unreleased-resource",
+        expiresAt: new Date(NOW.getTime() + 7 * 24 * 60 * 60_000),
+      })),
+      "unreleased",
+    );
+    dependencies.provider.stop = vi.fn(async () => {
+      throw new Error("safe synthetic stop failure");
+    });
+
+    await renewExpiringChannels(NOW, dependencies);
+
+    expect(
+      (
+        await postgres.query(
+          `select lifecycle, provider_resource_id, cleanup_required
+           from sync_channels`,
+        )
+      ).rows,
+    ).toEqual([
+      {
+        lifecycle: "failed",
+        provider_resource_id: "unreleased-resource",
+        cleanup_required: true,
+      },
+    ]);
+    expect(await repository.listSupersededChannels()).toEqual([
+      expect.objectContaining({
+        channelId: "channel-unreleased-opaque-id",
+        resourceId: "unreleased-resource",
+      }),
+    ]);
+  }, 30_000);
+
+  it("does not persist a stale credential disposition after checkpoint advancement", async () => {
+    await seedCanonicalConnection();
+    await seedCheckpoint();
+    const repository = createChannelMaintenanceRepository(database, OWNER);
+    await repository.bootstrapConnectedCalendars(NOW);
+    await postgres.query(
+      `update sync_checkpoints
+       set version = 2, updated_at = $1
+       where owner_id = $2 and provider_calendar_id = $3`,
+      [new Date(NOW.getTime() + 1_000).toISOString(), OWNER, CALENDAR],
+    );
+
+    expect(
+      await repository.recordCredentialFailure(
+        new SyncCalendarError("authorization", "disconnected", false),
+        new Date(NOW.getTime() + 2_000),
+      ),
+    ).toBe(false);
+    expect(
+      (
+        await postgres.query(
+          `select version, status, last_error_category from sync_checkpoints`,
+        )
+      ).rows,
+    ).toEqual([
+      { version: 2, status: "connected", last_error_category: null },
+    ]);
+  }, 30_000);
+
+  it("does not clear a later same-category checkpoint failure as scheduler-owned", async () => {
+    await seedCanonicalConnection();
+    await seedCheckpoint();
+    const repository = createChannelMaintenanceRepository(database, OWNER);
+    await repository.bootstrapConnectedCalendars(NOW);
+    const schedulerFailureAt = new Date(NOW.getTime() + 1_000);
+    expect(
+      await repository.recordCredentialFailure(
+        new SyncCalendarError("transient", "retry_scheduled", true, 5),
+        schedulerFailureAt,
+      ),
+    ).toBe(true);
+    const laterConsumerFailureAt = new Date(NOW.getTime() + 2_000);
+    await postgres.query(
+      `update sync_checkpoints
+       set status = 'retry_scheduled',
+           last_error_category = 'transient',
+           updated_at = $1
+       where owner_id = $2 and provider_calendar_id = $3`,
+      [laterConsumerFailureAt.toISOString(), OWNER, CALENDAR],
+    );
+
+    expect(
+      await repository.clearCredentialRetry(
+        new Date(NOW.getTime() + 3_000),
+      ),
+    ).toBe(false);
+    expect(
+      (
+        await postgres.query(
+          `select status, last_error_category, updated_at
+           from sync_checkpoints`,
+        )
+      ).rows,
+    ).toEqual([
+      {
+        status: "retry_scheduled",
+        last_error_category: "transient",
+        updated_at: laterConsumerFailureAt,
+      },
+    ]);
   }, 30_000);
 });

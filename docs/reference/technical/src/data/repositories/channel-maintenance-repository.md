@@ -8,12 +8,18 @@ Atomically derives version-zero checkpoint, maintenance, and deterministic initi
 Selects canonical connected calendars with no current active channel or expiration within 24 hours and excludes an active renewal lease.
 ## `preRegister`
 Inserts the channel ID, digest, encrypted token envelope, and provisional expiry before `events.watch`.
+## `bindWatchedResource`
+Compare-and-sets the provider resource onto the exact pending lease before activation, preserving cleanup identity across a Worker crash.
 ## `activate`
 Compare-and-sets a pending row, accepting only a null or identical early-bound resource.
 ## `retire`
 Changes only the exact active old row after provider stop.
 ## `recordFailure`
 Increments the calendar-level durable failure counter for the exact lease and exposes bounded Action required.
+## `recordCredentialFailure`
+Atomically writes a typed scheduler credential disposition and marker only when maintenance still names the checkpoint generation.
+## `clearCredentialRetry`
+Returns only an exact scheduler-marked transient or database retry to connected after credential resolution succeeds.
 ## `markCleanupRequired`
 Marks an exact superseded active row for later provider-stop retry.
 ## `listSupersededChannels`

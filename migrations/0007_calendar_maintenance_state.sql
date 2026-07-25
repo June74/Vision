@@ -10,6 +10,9 @@ create table calendar_sync_maintenance (
   renewal_lease_expires_at timestamptz,
   renewal_failures integer not null default 0,
   current_channel_row_id text,
+  credential_failure_checkpoint_version integer,
+  credential_failure_category text,
+  credential_failure_recorded_at timestamptz,
   created_at timestamptz not null,
   updated_at timestamptz not null,
   primary key (owner_id, provider, provider_calendar_id),
@@ -20,6 +23,23 @@ create table calendar_sync_maintenance (
   constraint calendar_sync_maintenance_checkpoint_version_non_negative check (checkpoint_version >= 0),
   constraint calendar_sync_maintenance_generation_non_negative check (renewal_generation >= 0),
   constraint calendar_sync_maintenance_failures_non_negative check (renewal_failures >= 0),
+  constraint calendar_sync_maintenance_credential_version_non_negative check (
+    credential_failure_checkpoint_version is null
+    or credential_failure_checkpoint_version >= 0
+  ),
+  constraint calendar_sync_maintenance_credential_category_valid check (
+    credential_failure_category is null
+    or credential_failure_category in (
+      'authorization', 'concurrency', 'database', 'provider',
+      'payload_too_large', 'quota', 'schema', 'sync_token_invalid', 'transient'
+    )
+  ),
+  constraint calendar_sync_maintenance_credential_marker_consistent check (
+    (credential_failure_checkpoint_version is null)
+    = (credential_failure_category is null)
+    and (credential_failure_checkpoint_version is null)
+    = (credential_failure_recorded_at is null)
+  ),
   constraint calendar_sync_maintenance_lease_consistent check (
     (renewal_lease_id is null) = (renewal_lease_expires_at is null)
   ),
