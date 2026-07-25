@@ -1,6 +1,6 @@
 /** Defines explicit synchronization state without storing provider tokens in JSON. */
 import { sql } from "drizzle-orm";
-import { boolean, check, foreignKey, index, integer, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { boolean, check, foreignKey, index, integer, pgTable, primaryKey, text, timestamp, unique, uniqueIndex } from "drizzle-orm/pg-core";
 import { events } from "./events";
 import { ciphertext, nodes } from "./nodes";
 
@@ -110,6 +110,9 @@ export const syncChannels = pgTable(
     retiredAt: timestamp("retired_at", { withTimezone: true, mode: "date" }),
     failureCount: integer("failure_count").notNull().default(0),
     lastFailureAt: timestamp("last_failure_at", { withTimezone: true, mode: "date" }),
+    renewalGeneration: integer("renewal_generation"),
+    renewalLeaseId: text("renewal_lease_id"),
+    cleanupRequired: boolean("cleanup_required").notNull().default(false),
   },
   (table) => [
     unique("sync_channels_provider_channel_unique").on(table.ownerId, table.provider, table.providerChannelId),
@@ -123,6 +126,18 @@ export const syncChannels = pgTable(
     check("sync_channels_resource_lifecycle_consistent", sql`(${table.lifecycle} in ('active', 'retired') and ${table.providerResourceId} is not null) or ${table.lifecycle} in ('pending', 'failed')`),
     check("sync_channels_activation_consistent", sql`(${table.lifecycle} = 'active' and ${table.activatedAt} is not null and ${table.retiredAt} is null) or (${table.lifecycle} = 'retired' and ${table.activatedAt} is not null and ${table.retiredAt} is not null) or ${table.lifecycle} in ('pending', 'failed')`),
     check("sync_channels_failure_count_non_negative", sql`${table.failureCount} >= 0`),
+    check("sync_channels_renewal_generation_positive", sql`${table.renewalGeneration} is null or ${table.renewalGeneration} > 0`),
+    check("sync_channels_renewal_lease_consistent", sql`(${table.lifecycle} in ('pending', 'failed')) = (${table.renewalLeaseId} is not null) or ${table.lifecycle} in ('active', 'retired')`),
+    uniqueIndex("sync_channels_one_pending_renewal_uq")
+      .on(table.ownerId, table.provider, table.providerCalendarId)
+      .where(sql`${table.lifecycle} = 'pending'`),
+    index("sync_channels_cleanup_idx").on(
+      table.ownerId,
+      table.provider,
+      table.providerCalendarId,
+      table.cleanupRequired,
+      table.lifecycle,
+    ),
     index("sync_channels_renewal_idx").on(
       table.ownerId,
       table.provider,
@@ -130,6 +145,37 @@ export const syncChannels = pgTable(
       table.lifecycle,
       table.expiresAt,
     ),
+  ],
+);
+
+/** Stores one durable renewal election and failure counter per connected private calendar. */
+export const calendarSyncMaintenance = pgTable(
+  "calendar_sync_maintenance",
+  {
+    ownerId: text("owner_id").notNull(),
+    provider: text("provider").notNull(),
+    providerCalendarId: text("provider_calendar_id").notNull(),
+    connectionVersion: integer("connection_version").notNull(),
+    checkpointVersion: integer("checkpoint_version").notNull(),
+    renewalGeneration: integer("renewal_generation").notNull().default(0),
+    renewalLeaseId: text("renewal_lease_id"),
+    renewalLeaseExpiresAt: timestamp("renewal_lease_expires_at", { withTimezone: true, mode: "date" }),
+    renewalFailures: integer("renewal_failures").notNull().default(0),
+    currentChannelRowId: text("current_channel_row_id"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.provider, table.providerCalendarId] }),
+    check("calendar_sync_maintenance_owner_non_empty", sql`${table.ownerId} <> ''`),
+    check("calendar_sync_maintenance_provider_non_empty", sql`${table.provider} <> ''`),
+    check("calendar_sync_maintenance_calendar_non_empty", sql`${table.providerCalendarId} <> ''`),
+    check("calendar_sync_maintenance_connection_version_positive", sql`${table.connectionVersion} > 0`),
+    check("calendar_sync_maintenance_checkpoint_version_non_negative", sql`${table.checkpointVersion} >= 0`),
+    check("calendar_sync_maintenance_generation_non_negative", sql`${table.renewalGeneration} >= 0`),
+    check("calendar_sync_maintenance_failures_non_negative", sql`${table.renewalFailures} >= 0`),
+    check("calendar_sync_maintenance_lease_consistent", sql`(${table.renewalLeaseId} is null) = (${table.renewalLeaseExpiresAt} is null)`),
+    check("calendar_sync_maintenance_timestamps_valid", sql`${table.updatedAt} >= ${table.createdAt}`),
   ],
 );
 

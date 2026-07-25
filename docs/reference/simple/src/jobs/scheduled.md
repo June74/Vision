@@ -3,7 +3,7 @@
 Runs Google channel renewal and missed-notification repair every 15 minutes.
 
 ## `runScheduledCalendarMaintenance`
-Runs renewal before repair.
+Queues repair first, still attempts renewal if repair fails, and reports either failure afterward.
 ## `scheduled`
 Connects Cloudflare scheduled events to maintenance.
 ## `createProductionScheduledCalendarMaintenanceDependencies`
@@ -20,10 +20,14 @@ Stops the exact old channel.
 Creates an opaque channel identifier.
 ## `createChannelToken`
 Creates a secret callback token.
+## `createLeaseId`
+Creates an opaque renewal-election identifier.
 ## `encryptToken`
 Encrypts the recovery copy of the token.
 ## `repair`
 Reserves stale-calendar repair work.
+## `resolveScheduledGoogleAccessToken`
+Refreshes the scheduled Google credential only when channel work needs it.
 ## `randomOpaque`
 Creates canonical random base64url text.
 ## `sha256Base64Url`

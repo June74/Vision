@@ -9,6 +9,9 @@ export default defineConfig({
         test: {
           environment: "node",
           include: ["tests/unit/**/*.test.ts", "tests/integration/**/*.test.ts"],
+          // PGlite starts a PostgreSQL WASM runtime per integration file; bound parallel startup
+          // to keep Windows CI hooks deterministic instead of competing until their 10s timeout.
+          maxWorkers: 4,
           name: "unit",
         },
       },

@@ -2,6 +2,8 @@
 
 Stores Google channel lifecycle and selects stale calendars for scheduled repair.
 
+## `bootstrapConnectedCalendars`
+Creates missing version-zero sync state and one initial job from the connected Vision calendar.
 ## `listRenewalCandidates`
 Finds missing or expiring channels.
 ## `preRegister`
@@ -12,6 +14,10 @@ Activates the watched resource.
 Retires an old stopped channel.
 ## `recordFailure`
 Records safe counters and Action required.
+## `markCleanupRequired`
+Remembers an old channel that Google still needs to stop.
+## `listSupersededChannels`
+Finds every old non-current channel whose provider cleanup must be completed.
 ## `listRepairCandidates`
 Finds stale connected calendars.
 ## `reserveRepairJob`
@@ -24,6 +30,10 @@ Rejects work for another owner.
 Creates the repository.
 ## `decodeRenewalCandidate`
 Validates a renewal row.
+## `decodeActiveChannel`
+Validates an exact active channel identity.
+## `stableId`
+Creates a repeatable content-free identifier.
 ## `readText`
 Reads an identifier.
 ## `readDate`
@@ -32,3 +42,5 @@ Reads a timestamp.
 Reads a failure count.
 ## `readPositiveInteger`
 Reads a checkpoint version.
+## `readBoolean`
+Reads a strict database boolean.

@@ -22,6 +22,7 @@ const STALE: RepairCalendar = {
 function dependencies(): RepairDependencies {
   return {
     repository: {
+      bootstrapConnectedCalendars: vi.fn(async () => []),
       listRepairCandidates: vi.fn(async () => [STALE]),
       reserveRepairJob: vi.fn(async (message) => ({
         message,
@@ -79,13 +80,52 @@ describe("scheduled calendar repair", () => {
   });
 
   it("runs renewal and repair without fetching calendar events in the scheduler", async () => {
+    const order: string[] = [];
     const renew = vi.fn(async () => undefined);
     const repair = vi.fn(async () => undefined);
+    renew.mockImplementation(async () => {
+      order.push("renew");
+    });
+    repair.mockImplementation(async () => {
+      order.push("repair");
+    });
 
     await runScheduledCalendarMaintenance(NOW, { renew, repair });
 
     expect(renew).toHaveBeenCalledWith(NOW);
     expect(repair).toHaveBeenCalledWith(NOW);
+    expect(order).toEqual(["repair", "renew"]);
+  });
+
+  it("does not let credential or renewal failure suppress durable repair", async () => {
+    const repair = vi.fn(async () => undefined);
+
+    await expect(
+      runScheduledCalendarMaintenance(NOW, {
+        repair,
+        renew: vi.fn(async () => {
+          throw new Error("safe synthetic credential failure");
+        }),
+      }),
+    ).rejects.toThrow("safe synthetic credential failure");
+
+    expect(repair).toHaveBeenCalledOnce();
+  });
+
+  it("still attempts renewal but preserves a durable repair failure", async () => {
+    const renew = vi.fn(async () => undefined);
+    const failure = new Error("safe synthetic queue failure");
+
+    await expect(
+      runScheduledCalendarMaintenance(NOW, {
+        repair: vi.fn(async () => {
+          throw failure;
+        }),
+        renew,
+      }),
+    ).rejects.toBe(failure);
+
+    expect(renew).toHaveBeenCalledOnce();
   });
 
   it("selects a missed sync and durably deduplicates its scheduled repair", async () => {
@@ -98,11 +138,32 @@ describe("scheduled calendar repair", () => {
         "0004_incremental_event_sync.sql",
         "0005_google_notification_jobs.sql",
         "0006_google_channel_lifecycle.sql",
+        "0007_calendar_maintenance_state.sql",
       ]) {
         await postgres.exec(
           await readFile(resolve(process.cwd(), "migrations", migration), "utf8"),
         );
       }
+      await postgres.query(
+        `insert into calendar_setup_states (
+           owner_id, google_subject, setup_version, status, action_required, updated_at
+         ) values
+           ($1, 'subject-1', 4, 'connected', false, $2),
+           ('owner-other', 'subject-other', 2, 'connected', false, $2)`,
+        [STALE.ownerId, NOW.toISOString()],
+      );
+      await postgres.query(
+        `insert into vision_calendar_connections (
+           owner_id, google_subject, provider_calendar_id, summary,
+           ownership_access_role, time_zone, provider_etag, verified_at,
+           connection_kind
+         ) values
+           ($1, 'subject-1', $2, 'Vision', 'owner', 'America/Chicago',
+            '"etag-1"', $3, 'existing'),
+           ('owner-other', 'subject-other', 'calendar-other', 'Vision', 'owner',
+            'America/Chicago', '"etag-2"', $3, 'existing')`,
+        [STALE.ownerId, STALE.calendarId, NOW.toISOString()],
+      );
       await postgres.query(
         `insert into sync_checkpoints (
            id, owner_id, provider, provider_calendar_id, sync_token_envelope,

@@ -9,13 +9,14 @@ const NOW = new Date("2026-07-24T16:00:00.000Z");
 const CANDIDATE: RenewalCandidate = {
   ownerId: "owner-1",
   calendarId: "calendar-1",
+  connectionVersion: 4,
+  checkpointVersion: 1,
   previous: {
     rowId: "old-row",
     channelId: "old-channel",
     resourceId: "old-resource",
     expiresAt: new Date(NOW.getTime() + 30 * 60_000),
   },
-  consecutiveFailures: 0,
 };
 
 function dependencies(
@@ -28,6 +29,8 @@ function dependencies(
       activate: vi.fn(async () => true),
       retire: vi.fn(async () => true),
       recordFailure: vi.fn(async () => undefined),
+      listSupersededChannels: vi.fn(async () => []),
+      markCleanupRequired: vi.fn(async () => undefined),
     },
     provider: {
       watch: vi.fn(async () => ({
@@ -38,6 +41,7 @@ function dependencies(
     },
     createChannelId: () => "new-channel-opaque-id",
     createChannelToken: () => "new-token-with-at-least-32-random-bytes",
+    createLeaseId: () => "lease-opaque-id",
     hashToken: vi.fn(async () => "A".repeat(43)),
     encryptToken: vi.fn(async () => new Uint8Array([1, 2, 3])),
     ...overrides,
@@ -97,7 +101,14 @@ describe("Google channel renewal", () => {
     expect(deps.provider.stop).not.toHaveBeenCalled();
     expect(deps.repository.retire).not.toHaveBeenCalled();
     expect(deps.repository.recordFailure).toHaveBeenCalledWith(
-      expect.objectContaining({ actionRequired: false }),
+      expect.objectContaining({
+        ownerId: "owner-1",
+        calendarId: "calendar-1",
+        rowId: "channel_new-channel-opaque-id",
+        leaseId: "lease-opaque-id",
+        expectedCheckpointVersion: 1,
+        now: NOW,
+      }),
     );
   });
 
@@ -118,7 +129,11 @@ describe("Google channel renewal", () => {
 
     expect(deps.repository.activate).toHaveBeenCalledOnce();
     expect(deps.repository.retire).not.toHaveBeenCalled();
-    expect(deps.repository.recordFailure).toHaveBeenCalled();
+    expect(deps.repository.recordFailure).not.toHaveBeenCalled();
+    expect(deps.repository.markCleanupRequired).toHaveBeenCalledWith(
+      "old-row",
+      NOW,
+    );
   });
 
   it("stops the newly watched resource when database activation loses its race", async () => {
@@ -134,33 +149,48 @@ describe("Google channel renewal", () => {
     expect(deps.repository.retire).not.toHaveBeenCalled();
   });
 
-  it("surfaces Action required after a prolonged or expired renewal failure", async () => {
+  it("retries durable cleanup for superseded channels", async () => {
     const deps = dependencies({
       repository: {
         ...dependencies().repository,
-        listRenewalCandidates: vi.fn(async () => [
+        listRenewalCandidates: vi.fn(async () => []),
+        listSupersededChannels: vi.fn(async () => [
           {
-            ...CANDIDATE,
-            consecutiveFailures: 5,
-            previous: {
-              ...CANDIDATE.previous!,
-              expiresAt: new Date(NOW.getTime() - 1),
-            },
+            rowId: "superseded-row",
+            channelId: "superseded-channel",
+            resourceId: "superseded-resource",
+            expiresAt: new Date(NOW.getTime() + 1),
           },
         ]),
-      },
-      provider: {
-        watch: vi.fn(async () => {
-          throw new Error("safe synthetic provider failure");
-        }),
-        stop: vi.fn(async () => undefined),
       },
     });
 
     await renewExpiringChannels(NOW, deps);
 
-    expect(deps.repository.recordFailure).toHaveBeenCalledWith(
-      expect.objectContaining({ actionRequired: true }),
+    expect(deps.provider.stop).toHaveBeenCalledWith({
+      channelId: "superseded-channel",
+      resourceId: "superseded-resource",
+    });
+    expect(deps.repository.retire).toHaveBeenCalledWith(
+      "superseded-row",
+      NOW,
     );
+  });
+
+  it("continues remaining calendars before reporting an unexpected candidate failure", async () => {
+    const failure = new Error("safe synthetic database failure");
+    const deps = dependencies();
+    vi.mocked(deps.repository.listRenewalCandidates).mockResolvedValue([
+      CANDIDATE,
+      { ...CANDIDATE, calendarId: "calendar-2" },
+    ]);
+    vi.mocked(deps.repository.preRegister)
+      .mockRejectedValueOnce(failure)
+      .mockResolvedValueOnce(undefined);
+
+    await expect(renewExpiringChannels(NOW, deps)).rejects.toBe(failure);
+
+    expect(deps.repository.preRegister).toHaveBeenCalledTimes(2);
+    expect(deps.provider.watch).toHaveBeenCalledOnce();
   });
 });

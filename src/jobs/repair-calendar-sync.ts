@@ -11,8 +11,15 @@ export interface RepairCalendar {
   readonly checkpointVersion: number;
 }
 
+/** One canonical setup bridge plus its deterministic initial Queue reservation. */
+export interface BootstrapRepairResult {
+  readonly message: CalendarSyncMessage;
+  readonly shouldEnqueue: boolean;
+}
+
 /** Persistence seam for selecting and durably reserving repair work. */
 export interface RepairRepository {
+  bootstrapConnectedCalendars(now: Date): Promise<readonly BootstrapRepairResult[]>;
   listRepairCandidates(now: Date): Promise<readonly RepairCalendar[]>;
   reserveRepairJob(
     message: CalendarSyncMessage,
@@ -38,6 +45,12 @@ export async function repairCalendarSync(
   dependencies: RepairDependencies,
 ): Promise<void> {
   assertDate(now);
+  const bootstrapped = await dependencies.repository.bootstrapConnectedCalendars(now);
+  for (const initial of bootstrapped) {
+    if (!initial.shouldEnqueue) continue;
+    await dependencies.queue.send(initial.message);
+    await dependencies.repository.markEnqueued(initial.message.jobId, now);
+  }
   const candidates = await dependencies.repository.listRepairCandidates(now);
   for (const candidate of candidates) {
     const message: CalendarSyncMessage = Object.freeze({

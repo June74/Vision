@@ -3,7 +3,7 @@
 The scheduled entry point performs lifecycle control and only reserves event synchronization through the normal opaque Queue. Credentials and provider content never enter a job.
 
 ## `runScheduledCalendarMaintenance`
-Runs renewal before repair.
+Runs repair before renewal, isolates their execution, and reports a failure only after both maintenance paths have been attempted.
 ## `scheduled`
 Uses Cloudflare's scheduled time and awaits maintenance.
 ## `createProductionScheduledCalendarMaintenanceDependencies`
@@ -20,10 +20,14 @@ Delegates exact channel cleanup.
 Uses 192 bits of Web Crypto randomness.
 ## `createChannelToken`
 Uses 256 bits of Web Crypto randomness.
+## `createLeaseId`
+Uses independent opaque randomness for one database-elected renewal attempt.
 ## `encryptToken`
 Encrypts the token with owner and row authenticated metadata; SQL uses only its digest.
 ## `repair`
 Invokes deterministic repair reservation.
+## `resolveScheduledGoogleAccessToken`
+Lazily restores and refreshes OAuth state for provider channel calls while classifying refresh and persistence failures through the Task 3 sync taxonomy.
 ## `randomOpaque`
 Encodes random bytes as canonical base64url.
 ## `sha256Base64Url`

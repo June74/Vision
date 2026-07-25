@@ -12,7 +12,6 @@ import { encryptProtectedFields } from "../crypto/protected-fields";
 import { CalendarClient } from "../integrations/google-calendar/calendar-client";
 import {
   GoogleOAuthClient,
-  GoogleOAuthError,
 } from "../integrations/google/oauth-client";
 import {
   parseGoogleAuthEnvironment,
@@ -21,6 +20,10 @@ import {
 } from "../server/env";
 import { renewExpiringChannels } from "./renew-google-channels";
 import { repairCalendarSync } from "./repair-calendar-sync";
+import {
+  classifyGoogleRefreshError,
+} from "./queue-consumer";
+import { SyncCalendarError } from "./sync-calendar";
 
 /** Injected maintenance functions keep the scheduler free of event-fetching capability. */
 export interface ScheduledCalendarMaintenanceDependencies {
@@ -28,13 +31,25 @@ export interface ScheduledCalendarMaintenanceDependencies {
   readonly repair: (now: Date) => Promise<void>;
 }
 
-/** Runs channel maintenance before reserving ordinary repair work. */
+/** Reserves repair first so renewal failure cannot suppress durable recovery work. */
 export async function runScheduledCalendarMaintenance(
   now: Date,
   dependencies: ScheduledCalendarMaintenanceDependencies,
 ): Promise<void> {
-  await dependencies.renew(now);
-  await dependencies.repair(now);
+  let repairFailure: unknown;
+  let renewalFailure: unknown;
+  try {
+    await dependencies.repair(now);
+  } catch (error) {
+    repairFailure = error;
+  }
+  try {
+    await dependencies.renew(now);
+  } catch (error) {
+    renewalFailure = error;
+  }
+  if (repairFailure !== undefined) throw repairFailure;
+  if (renewalFailure !== undefined) throw renewalFailure;
 }
 
 /** Cloudflare scheduled entry point; it reserves Queue work and never reads event content. */
@@ -63,69 +78,24 @@ async function createProductionScheduledCalendarMaintenanceDependencies(
     new DrizzleWrappedDataKeyStore(database),
     1,
   );
-  const tokens = new EncryptedTokenRepository(
-    new DrizzleTokenStore(database),
-    keyProvider,
-    ownerId,
-  );
-  let retained = await tokens.getGoogleTokens(auth.GOOGLE_ALLOWED_SUB);
-  if (!retained) throw new Error("Calendar authorization is unavailable.");
-  if (
-    !retained.accessToken ||
-    retained.accessExpiresAt.getTime() <= Date.now() + 60_000
-  ) {
-    const oauth = new GoogleOAuthClient(
-      {
-        clientId: auth.GOOGLE_CLIENT_ID,
-        clientSecret: auth.GOOGLE_CLIENT_SECRET,
-        redirectUri: auth.GOOGLE_REDIRECT_URI,
-      },
-      fetch.bind(globalThis),
-      {
-        /** Rejects identity verification in this refresh-only background client. */
-        async verify() {
-          throw new Error("ID-token verification is unavailable.");
-        },
-      },
-    );
-    try {
-      const refreshed = await oauth.refreshAccessToken(retained.refreshToken);
-      const refreshedAt = new Date();
-      retained = await tokens.saveRefreshedAccessToken(
-        {
-          googleSubject: auth.GOOGLE_ALLOWED_SUB,
-          accessToken: refreshed.accessToken,
-          accessExpiresAt: new Date(
-            refreshedAt.getTime() + refreshed.expiresInSeconds * 1_000,
-          ),
-          grantedScopes: refreshed.scopes ?? retained.grantedScopes,
-          updatedAt: refreshedAt,
-        },
-        retained.tokenVersion,
-        retained.updatedAt,
-      );
-    } catch (error) {
-      if (error instanceof GoogleOAuthError) {
-        throw new Error("Calendar authorization refresh failed.");
-      }
-      throw new Error("Calendar authorization persistence failed.");
-    }
-  }
-  if (!retained.accessToken) {
-    throw new Error("Calendar authorization is unavailable.");
-  }
-  const client = new CalendarClient(
-    retained.accessToken,
-    auth.GOOGLE_ALLOWED_SUB,
-    fetch.bind(globalThis),
-  );
   const repository = createChannelMaintenanceRepository(database, ownerId);
   const callbackUri = new URL("/webhooks/google/calendar", auth.GOOGLE_REDIRECT_URI)
     .toString();
   return {
     /** Renews eligible provider channels using the lifecycle repository. */
-    renew: (now) =>
-      renewExpiringChannels(now, {
+    renew: async (now) => {
+      const accessToken = await resolveScheduledGoogleAccessToken({
+        auth,
+        database,
+        keyProvider,
+        ownerId,
+      });
+      const client = new CalendarClient(
+        accessToken,
+        auth.GOOGLE_ALLOWED_SUB,
+        fetch.bind(globalThis),
+      );
+      await renewExpiringChannels(now, {
         repository,
         provider: {
           /** Creates one exact Google event-watch channel. */
@@ -143,6 +113,8 @@ async function createProductionScheduledCalendarMaintenanceDependencies(
         createChannelId: () => randomOpaque(24),
         /** Creates a 256-bit secret callback token. */
         createChannelToken: () => randomOpaque(32),
+        /** Creates a distinct durable renewal election lease. */
+        createLeaseId: () => `lease_${randomOpaque(24)}`,
         hashToken: sha256Base64Url,
         /** Encrypts the recovery copy while retaining only a digest for lookup. */
         encryptToken: async (token, context) => {
@@ -159,7 +131,8 @@ async function createProductionScheduledCalendarMaintenanceDependencies(
             serializeCipherEnvelope(encrypted.channelToken!),
           );
         },
-      }),
+      });
+    },
     /** Reserves stale-calendar repair through the normal opaque Queue. */
     repair: (now) =>
       repairCalendarSync(now, {
@@ -167,6 +140,71 @@ async function createProductionScheduledCalendarMaintenanceDependencies(
         queue: environment.CALENDAR_SYNC_QUEUE!,
       }),
   };
+}
+
+/** Resolves a short-lived access token with Task 3's safe refresh classifications. */
+async function resolveScheduledGoogleAccessToken(input: {
+  auth: ReturnType<typeof parseGoogleAuthEnvironment>;
+  database: ReturnType<typeof createDb>;
+  keyProvider: Awaited<ReturnType<typeof createWrappedKeyProvider>>;
+  ownerId: string;
+}): Promise<string> {
+  const tokens = new EncryptedTokenRepository(
+    new DrizzleTokenStore(input.database),
+    input.keyProvider,
+    input.ownerId,
+  );
+  let retained = await tokens.getGoogleTokens(input.auth.GOOGLE_ALLOWED_SUB);
+  if (!retained) {
+    throw new SyncCalendarError("authorization", "disconnected", false);
+  }
+  if (
+    !retained.accessToken ||
+    retained.accessExpiresAt.getTime() <= Date.now() + 60_000
+  ) {
+    const oauth = new GoogleOAuthClient(
+      {
+        clientId: input.auth.GOOGLE_CLIENT_ID,
+        clientSecret: input.auth.GOOGLE_CLIENT_SECRET,
+        redirectUri: input.auth.GOOGLE_REDIRECT_URI,
+      },
+      fetch.bind(globalThis),
+      {
+        /** Rejects identity verification in this refresh-only background client. */
+        async verify() {
+          throw new Error("ID-token verification is unavailable.");
+        },
+      },
+    );
+    let refreshed;
+    try {
+      refreshed = await oauth.refreshAccessToken(retained.refreshToken);
+    } catch (error) {
+      throw classifyGoogleRefreshError(error);
+    }
+    const refreshedAt = new Date();
+    try {
+      retained = await tokens.saveRefreshedAccessToken(
+        {
+          googleSubject: input.auth.GOOGLE_ALLOWED_SUB,
+          accessToken: refreshed.accessToken,
+          accessExpiresAt: new Date(
+            refreshedAt.getTime() + refreshed.expiresInSeconds * 1_000,
+          ),
+          grantedScopes: refreshed.scopes ?? retained.grantedScopes,
+          updatedAt: refreshedAt,
+        },
+        retained.tokenVersion,
+        retained.updatedAt,
+      );
+    } catch {
+      throw new SyncCalendarError("database", "retry_scheduled", true, 5);
+    }
+  }
+  if (!retained.accessToken) {
+    throw new SyncCalendarError("authorization", "disconnected", false);
+  }
+  return retained.accessToken;
 }
 
 /** Creates a canonical high-entropy base64url identifier. */

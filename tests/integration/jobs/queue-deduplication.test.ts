@@ -45,6 +45,7 @@ beforeEach(async () => {
     "0004_incremental_event_sync.sql",
     "0005_google_notification_jobs.sql",
     "0006_google_channel_lifecycle.sql",
+    "0007_calendar_maintenance_state.sql",
   ]) {
     await pglite.exec(
       await readFile(resolve(process.cwd(), "migrations", migration), "utf8"),

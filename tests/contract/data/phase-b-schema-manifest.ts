@@ -1,7 +1,7 @@
 import type { SchemaTablesManifest } from "./schema-manifest";
 
 /**
- * Hand-authored from the eleven authoritative tables in migrations 0001, 0004, and 0005.
+ * Hand-authored from the twelve authoritative tables in migrations 0001 and 0004 through 0007.
  * Never regenerate this fixture from Drizzle metadata or the generated snapshot.
  *
  * Primary and unique keys intentionally record columns rather than generated names because the
@@ -88,6 +88,39 @@ export const phaseBSchemaManifest = {
       ["calendar_sync_jobs_reason_valid", "reason in ('initial', 'manual', 'push', 'rebuild', 'repair')"],
       ["calendar_sync_jobs_status_valid", "status in ('pending_enqueue', 'enqueued', 'in_progress', 'retry_scheduled', 'succeeded', 'failed')"],
       ["calendar_sync_jobs_timestamps_valid", "updated_at >= created_at and (claimed_at is null or claimed_at >= created_at) and (completed_at is null or completed_at >= created_at)"],
+    ],
+  },
+
+  // Migration 0007: one durable election, generation, and failure counter per calendar.
+  calendar_sync_maintenance: {
+    columns: [
+      ["owner_id", "text", true],
+      ["provider", "text", true],
+      ["provider_calendar_id", "text", true],
+      ["connection_version", "integer", true],
+      ["checkpoint_version", "integer", true],
+      ["renewal_generation", "integer", true, "0"],
+      ["renewal_lease_id", "text", false],
+      ["renewal_lease_expires_at", "timestamptz", false],
+      ["renewal_failures", "integer", true, "0"],
+      ["current_channel_row_id", "text", false],
+      ["created_at", "timestamptz", true],
+      ["updated_at", "timestamptz", true],
+    ],
+    primaryKeys: [["owner_id", "provider", "provider_calendar_id"]],
+    uniqueKeys: [],
+    foreignKeys: [],
+    indexes: [],
+    checks: [
+      ["calendar_sync_maintenance_calendar_non_empty", "provider_calendar_id <> ''"],
+      ["calendar_sync_maintenance_checkpoint_version_non_negative", "checkpoint_version >= 0"],
+      ["calendar_sync_maintenance_connection_version_positive", "connection_version > 0"],
+      ["calendar_sync_maintenance_failures_non_negative", "renewal_failures >= 0"],
+      ["calendar_sync_maintenance_generation_non_negative", "renewal_generation >= 0"],
+      ["calendar_sync_maintenance_lease_consistent", "(renewal_lease_id is null) = (renewal_lease_expires_at is null)"],
+      ["calendar_sync_maintenance_owner_non_empty", "owner_id <> ''"],
+      ["calendar_sync_maintenance_provider_non_empty", "provider <> ''"],
+      ["calendar_sync_maintenance_timestamps_valid", "updated_at >= created_at"],
     ],
   },
 
@@ -304,6 +337,9 @@ export const phaseBSchemaManifest = {
       ["retired_at", "timestamptz", false],
       ["failure_count", "integer", true, "0"],
       ["last_failure_at", "timestamptz", false],
+      ["renewal_generation", "integer", false],
+      ["renewal_lease_id", "text", false],
+      ["cleanup_required", "boolean", true, "false"],
     ],
     primaryKeys: [["id"]],
     uniqueKeys: [
@@ -312,6 +348,28 @@ export const phaseBSchemaManifest = {
     ],
     foreignKeys: [],
     indexes: [
+      [
+        "sync_channels_cleanup_idx",
+        false,
+        "btree",
+        [
+          ["owner_id", "asc", "last"],
+          ["provider", "asc", "last"],
+          ["provider_calendar_id", "asc", "last"],
+          ["cleanup_required", "asc", "last"],
+          ["lifecycle", "asc", "last"],
+        ],
+      ],
+      [
+        "sync_channels_one_pending_renewal_uq",
+        true,
+        "btree",
+        [
+          ["owner_id", "asc", "last"],
+          ["provider", "asc", "last"],
+          ["provider_calendar_id", "asc", "last"],
+        ],
+      ],
       [
         "sync_channels_renewal_idx",
         false,
@@ -332,6 +390,8 @@ export const phaseBSchemaManifest = {
       ["sync_channels_failure_count_non_negative", "failure_count >= 0"],
       ["sync_channels_lifecycle_valid", "lifecycle in ('pending', 'active', 'retired', 'failed')"],
       ["sync_channels_provider_non_empty", "provider <> ''"],
+      ["sync_channels_renewal_generation_positive", "renewal_generation is null or renewal_generation > 0"],
+      ["sync_channels_renewal_lease_consistent", "(lifecycle in ('pending', 'failed')) = (renewal_lease_id is not null) or lifecycle in ('active', 'retired')"],
       ["sync_channels_resource_lifecycle_consistent", "(lifecycle in ('active', 'retired') and provider_resource_id is not null) or lifecycle in ('pending', 'failed')"],
       ["sync_channels_resource_non_empty", "provider_resource_id is null or provider_resource_id <> ''"],
       ["sync_channels_token_hash_valid", "verification_token_hash is null or verification_token_hash ~ '^[A-Za-z0-9_-]{43}$'"],

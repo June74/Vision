@@ -1,7 +1,5 @@
 /** Renews Google Calendar notification channels without creating a verification race. */
 
-const ACTION_REQUIRED_FAILURES = 6;
-
 /** Exact active channel needed to stop only the superseded provider resource. */
 export interface ActiveGoogleChannel {
   readonly rowId: string;
@@ -14,8 +12,9 @@ export interface ActiveGoogleChannel {
 export interface RenewalCandidate {
   readonly ownerId: string;
   readonly calendarId: string;
+  readonly connectionVersion: number;
+  readonly checkpointVersion: number;
   readonly previous?: ActiveGoogleChannel;
-  readonly consecutiveFailures: number;
 }
 
 /** Database lifecycle operations used by the renewal coordinator. */
@@ -28,10 +27,18 @@ export interface ChannelLifecycleRepository {
     channelId: string;
     tokenHash: string;
     tokenEnvelope: Uint8Array;
+    leaseId: string;
+    expectedConnectionVersion: number;
+    expectedCheckpointVersion: number;
     createdAt: Date;
-  }): Promise<void>;
+  }): Promise<boolean | void>;
   activate(input: {
     rowId: string;
+    ownerId: string;
+    calendarId: string;
+    leaseId: string;
+    expectedConnectionVersion: number;
+    expectedCheckpointVersion: number;
     resourceId: string;
     expiresAt: Date;
     now: Date;
@@ -41,9 +48,12 @@ export interface ChannelLifecycleRepository {
     ownerId: string;
     calendarId: string;
     rowId: string;
-    actionRequired: boolean;
+    leaseId: string;
+    expectedCheckpointVersion: number;
     now: Date;
   }): Promise<void>;
+  listSupersededChannels?(): Promise<readonly ActiveGoogleChannel[]>;
+  markCleanupRequired?(rowId: string, now: Date): Promise<void>;
 }
 
 /** Narrow provider channel surface; it intentionally contains no event operations. */
@@ -62,6 +72,7 @@ export interface ChannelLifecycleDependencies {
   readonly provider: GoogleChannelProvider;
   readonly createChannelId: () => string;
   readonly createChannelToken: () => string;
+  readonly createLeaseId?: () => string;
   readonly hashToken: (token: string) => Promise<string>;
   readonly encryptToken: (
     token: string,
@@ -76,9 +87,29 @@ export async function renewExpiringChannels(
 ): Promise<void> {
   assertDate(now);
   const candidates = await dependencies.repository.listRenewalCandidates(now);
+  let firstFailure: unknown;
   for (const candidate of candidates) {
-    await renewOne(candidate, now, dependencies);
+    try {
+      await renewOne(candidate, now, dependencies);
+    } catch (error) {
+      // One calendar cannot suppress the remaining owner-scoped maintenance work.
+      firstFailure ??= error;
+    }
   }
+  const superseded =
+    (await dependencies.repository.listSupersededChannels?.()) ?? [];
+  for (const channel of superseded) {
+    try {
+      await dependencies.provider.stop({
+        channelId: channel.channelId,
+        resourceId: channel.resourceId,
+      });
+      await dependencies.repository.retire(channel.rowId, now);
+    } catch {
+      await dependencies.repository.markCleanupRequired?.(channel.rowId, now);
+    }
+  }
+  if (firstFailure !== undefined) throw firstFailure;
 }
 
 /** Executes one pre-register/watch/activate/stop/retire state machine. */
@@ -89,6 +120,8 @@ async function renewOne(
 ): Promise<void> {
   const channelId = dependencies.createChannelId();
   const channelToken = dependencies.createChannelToken();
+  const leaseId =
+    dependencies.createLeaseId?.() ?? `lease_${crypto.randomUUID()}`;
   assertOpaqueSecret(channelId, 16, 256);
   assertOpaqueSecret(channelToken, 32, 256);
   const rowId = `channel_${channelId}`;
@@ -99,15 +132,19 @@ async function renewOne(
       rowId,
     }),
   ]);
-  await dependencies.repository.preRegister({
+  const elected = await dependencies.repository.preRegister({
     rowId,
     ownerId: candidate.ownerId,
     calendarId: candidate.calendarId,
     channelId,
     tokenHash,
     tokenEnvelope,
+    leaseId,
+    expectedConnectionVersion: candidate.connectionVersion,
+    expectedCheckpointVersion: candidate.checkpointVersion,
     createdAt: now,
   });
+  if (elected === false) return;
 
   let watched:
     | { readonly resourceId: string; readonly expiresAt: Date }
@@ -127,6 +164,11 @@ async function renewOne(
     }
     const activated = await dependencies.repository.activate({
       rowId,
+      ownerId: candidate.ownerId,
+      calendarId: candidate.calendarId,
+      leaseId,
+      expectedConnectionVersion: candidate.connectionVersion,
+      expectedCheckpointVersion: candidate.checkpointVersion,
       resourceId: watched.resourceId,
       expiresAt: watched.expiresAt,
       now,
@@ -147,9 +189,8 @@ async function renewOne(
       ownerId: candidate.ownerId,
       calendarId: candidate.calendarId,
       rowId,
-      actionRequired:
-        candidate.consecutiveFailures + 1 >= ACTION_REQUIRED_FAILURES ||
-        (candidate.previous?.expiresAt.getTime() ?? 0) <= now.getTime(),
+      leaseId,
+      expectedCheckpointVersion: candidate.checkpointVersion,
       now,
     });
     return;
@@ -164,13 +205,10 @@ async function renewOne(
     await dependencies.repository.retire(candidate.previous.rowId, now);
   } catch {
     // The replacement remains authoritative; a later repair can retry exact old-channel cleanup.
-    await dependencies.repository.recordFailure({
-      ownerId: candidate.ownerId,
-      calendarId: candidate.calendarId,
-      rowId: candidate.previous.rowId,
-      actionRequired: false,
+    await dependencies.repository.markCleanupRequired?.(
+      candidate.previous.rowId,
       now,
-    });
+    );
   }
 }
 
