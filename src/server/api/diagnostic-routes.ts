@@ -19,6 +19,7 @@ import {
   type AuthenticatedSession,
   type AuthRequestVariables,
 } from "../auth/session";
+import { createAiEventRepositoryAccess } from "../authorization/event-content-authorization";
 import {
   parseVisionKeyEncryptionKey,
   type Env,
@@ -196,11 +197,16 @@ export async function createProductionDiagnosticDependencies(
       if (ownerId !== auth.ownerId) {
         throw new Error("Diagnostic owner scope is unavailable.");
       }
-      return createDiagnosticRepository(database, keyProvider, ownerId, {
-        // Provider usage telemetry is wired during the release monitoring task.
-        databaseUsageWarning: false,
-        r2UsageWarning: false,
-      });
+      return createDiagnosticRepository(
+        database,
+        keyProvider,
+        createAiEventRepositoryAccess(ownerId),
+        {
+          // Provider usage telemetry is wired during the release monitoring task.
+          databaseUsageWarning: false,
+          r2UsageWarning: false,
+        },
+      );
     },
   };
 }

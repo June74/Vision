@@ -4,7 +4,16 @@ import { PGlite } from "@electric-sql/pglite";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { encodeBase64Url } from "../../../src/crypto/envelope";
+import {
+  encodeBase64Url,
+  parseCipherEnvelope,
+  serializeCipherEnvelope,
+} from "../../../src/crypto/envelope";
+import type { KeyProvider } from "../../../src/crypto/key-provider";
+import {
+  decryptProtectedFields,
+  encryptProtectedFields,
+} from "../../../src/crypto/protected-fields";
 import { createTestKeyProvider } from "../../../src/crypto/test-key-provider";
 import type { VisionDatabase } from "../../../src/data/db";
 import {
@@ -14,7 +23,9 @@ import {
   createEventRepository,
   type PlaintextEvent,
 } from "../../../src/data/repositories/event-repository";
+import { createSyncRepository } from "../../../src/data/repositories/sync-repository";
 import { ProviderOrderKeySchema } from "../../../src/domain/events/event";
+import type { ProviderEventChange } from "../../../src/domain/sync/change";
 import { createTestEventRepositoryAccess } from "../../../src/server/authorization/test-event-content-authorization";
 
 const NOW = new Date("2026-07-25T17:00:00.000Z");
@@ -22,6 +33,16 @@ const OWNER_ID = "owner_1";
 const OTHER_OWNER_ID = "owner_2";
 const EVENT_ID = "event_node_1";
 const TITLE = "Encrypted diagnostic title";
+const PROVIDER_PAYLOAD = JSON.stringify({
+  title: TITLE,
+  description: "not returned by diagnostics",
+  attendees: ["not-returned@example.test"],
+  location: "not returned",
+  meetingLinks: ["https://example.invalid/not-returned"],
+  attachmentReferences: [],
+});
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder("utf-8", { fatal: true });
 const dialect = new PgDialect();
 const migrationNames = [
   "0001_phase_b_foundation.sql",
@@ -58,7 +79,14 @@ afterEach(async () => {
   await postgres.close();
 });
 
-async function seedEncryptedEvent(): Promise<{
+async function seedEncryptedEvent(
+  protectedOverrides: Partial<
+    Pick<
+      PlaintextEvent,
+      "title" | "description" | "attendees" | "location" | "meetingLink"
+    >
+  > = {},
+): Promise<{
   keyProvider: Awaited<ReturnType<typeof createTestKeyProvider>>;
   event: PlaintextEvent;
 }> {
@@ -85,6 +113,7 @@ async function seedEncryptedEvent(): Promise<{
     attendees: ["not-returned@example.test"],
     location: "not returned",
     meetingLink: "https://example.invalid/not-returned",
+    ...protectedOverrides,
   };
   await postgres.query(
     `insert into nodes (
@@ -92,10 +121,15 @@ async function seedEncryptedEvent(): Promise<{
       domain, domain_state, privacy, provenance, lifecycle, created_at,
       updated_at, valid_from, version, model_confidence
     ) values (
-      $1, $2, 'provider', 'google-calendar', 'provider_event_1', 'event',
+      $1, $2, 'provider', 'google-calendar', $4, 'event',
       'work', 'inferred', 'private', 'model', 'active', $3, $3, $3, 1, 900000
     )`,
-    [EVENT_ID, OWNER_ID, "2026-07-25T16:00:00.000Z"],
+    [
+      EVENT_ID,
+      OWNER_ID,
+      "2026-07-25T16:00:00.000Z",
+      JSON.stringify(["calendar_1", "provider_event_1"]),
+    ],
   );
   await postgres.query(
     `insert into node_category_assignments (
@@ -113,7 +147,115 @@ async function seedEncryptedEvent(): Promise<{
     keyProvider,
     createTestEventRepositoryAccess(OWNER_ID),
   ).save(event);
+  const encryptedPayload = await encryptProtectedFields(
+    keyProvider,
+    { ownerId: OWNER_ID, nodeId: EVENT_ID, domain: "work" },
+    { providerPayload: PROVIDER_PAYLOAD },
+  );
+  if (encryptedPayload.providerPayload === null) {
+    throw new Error("Test provider payload encryption failed.");
+  }
+  await postgres.query(
+    `insert into event_sync_payloads (
+      node_id, owner_id, protected_payload_envelope, protected_key_version
+    ) values ($1, $2, $3, $4)`,
+    [
+      EVENT_ID,
+      OWNER_ID,
+      textEncoder.encode(serializeCipherEnvelope(encryptedPayload.providerPayload)),
+      encryptedPayload.providerPayload.keyVersion,
+    ],
+  );
   return { keyProvider, event };
+}
+
+function syncUpsert(
+  version: string,
+  title = "newer synchronized title",
+): Extract<ProviderEventChange, { type: "upsert" }> {
+  return {
+    type: "upsert",
+    identity: {
+      sourceSystem: "google-calendar",
+      sourceCalendarId: "calendar_1",
+      sourceEventId: "provider_event_1",
+      sourceVersion: ProviderOrderKeySchema.parse(version),
+    },
+    startsAt: "2026-07-25T18:30:00.000Z",
+    endsAt: "2026-07-25T19:30:00.000Z",
+    timeZone: "America/Chicago",
+    busy: true,
+    status: "confirmed",
+    recurrence: { kind: "single" },
+    protected: {
+      title,
+      description: "newer description",
+      attendees: ["newer@example.test"],
+      location: "newer location",
+      meetingLinks: ["https://example.invalid/newer"],
+      attachmentReferences: [],
+    },
+  };
+}
+
+async function seedInitialCheckpoint(): Promise<void> {
+  await postgres.query(
+    `insert into sync_checkpoints (
+      id, owner_id, provider, provider_calendar_id, committed_at, version,
+      status, updated_at
+    ) values ('checkpoint_1', $1, 'google-calendar', 'calendar_1', $2, 0,
+      'pending', $2)`,
+    [OWNER_ID, "2026-07-25T16:00:00.000Z"],
+  );
+}
+
+async function confirmSeedCategory(): Promise<void> {
+  await postgres.query(
+    `update nodes
+     set domain_state = 'confirmed', provenance = 'user',
+         model_confidence = null
+     where id = $1 and owner_id = $2`,
+    [EVENT_ID, OWNER_ID],
+  );
+  await postgres.query(
+    `update node_category_assignments
+     set domain_state = 'confirmed', provenance = 'user'
+     where node_id = $1 and owner_id = $2`,
+    [EVENT_ID, OWNER_ID],
+  );
+}
+
+function activeKeyBarrier(
+  base: KeyProvider,
+  blockedDomain: "school" | "work" | "personal",
+): {
+  readonly provider: KeyProvider;
+  readonly reached: Promise<void>;
+  release(): void;
+} {
+  let reached!: () => void;
+  let release!: () => void;
+  let blocked = false;
+  const reachedPromise = new Promise<void>((resolve) => {
+    reached = resolve;
+  });
+  const releasePromise = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return {
+    provider: {
+      async getDataKey(ownerId, domain, keyVersion) {
+        if (!blocked && domain === blockedDomain && keyVersion === undefined) {
+          blocked = true;
+          reached();
+          await releasePromise;
+        }
+        return base.getDataKey(ownerId, domain, keyVersion);
+      },
+    },
+    reached: reachedPromise,
+    release,
+  };
 }
 
 describe("diagnostic repository", () => {
@@ -122,13 +264,13 @@ describe("diagnostic repository", () => {
     const repository = createDiagnosticRepository(
       database,
       keyProvider,
-      OWNER_ID,
+      createTestEventRepositoryAccess(OWNER_ID),
       { databaseUsageWarning: false, r2UsageWarning: false },
     );
     const wrongOwner = createDiagnosticRepository(
       database,
       keyProvider,
-      OTHER_OWNER_ID,
+      createTestEventRepositoryAccess(OTHER_OWNER_ID),
       { databaseUsageWarning: false, r2UsageWarning: false },
     );
 
@@ -148,19 +290,41 @@ describe("diagnostic repository", () => {
     await expect(wrongOwner.listEvents()).resolves.toEqual([]);
   });
 
-  it("records explicit category authority and leaves provider event state untouched", async () => {
-    const { keyProvider } = await seedEncryptedEvent();
+  it("rekeys every domain-bound event value while preserving provider and schedule facts", async () => {
+    const { keyProvider, event } = await seedEncryptedEvent();
     const repository = createDiagnosticRepository(
       database,
       keyProvider,
-      OWNER_ID,
+      createTestEventRepositoryAccess(OWNER_ID),
       { databaseUsageWarning: false, r2UsageWarning: false },
     );
     const before = await postgres.query<{
+      provider: string;
+      provider_calendar_id: string;
+      provider_event_id: string;
       provider_version: string;
+      starts_at: Date;
+      ends_at: Date;
+      time_zone: string;
+      busy: boolean;
+      status: string;
       title_envelope: Uint8Array;
+      description_envelope: Uint8Array;
+      attendees_envelope: Uint8Array;
+      location_envelope: Uint8Array;
+      meeting_link_envelope: Uint8Array;
+      protected_payload_envelope: Uint8Array;
     }>(
-      "select provider_version, title_envelope from events where node_id = $1",
+      `select
+         event.provider, event.provider_calendar_id, event.provider_event_id,
+         event.provider_version, event.starts_at, event.ends_at, event.time_zone,
+         event.busy, event.status, event.title_envelope,
+         event.description_envelope, event.attendees_envelope,
+         event.location_envelope, event.meeting_link_envelope,
+         payload.protected_payload_envelope
+       from events event
+       join event_sync_payloads payload on payload.node_id = event.node_id
+       where event.node_id = $1`,
       [EVENT_ID],
     );
 
@@ -186,10 +350,33 @@ describe("diagnostic repository", () => {
       [EVENT_ID],
     );
     const after = await postgres.query<{
+      provider: string;
+      provider_calendar_id: string;
+      provider_event_id: string;
       provider_version: string;
+      starts_at: Date;
+      ends_at: Date;
+      time_zone: string;
+      busy: boolean;
+      status: string;
       title_envelope: Uint8Array;
+      description_envelope: Uint8Array;
+      attendees_envelope: Uint8Array;
+      location_envelope: Uint8Array;
+      meeting_link_envelope: Uint8Array;
+      protected_payload_envelope: Uint8Array;
+      protected_key_version: number;
     }>(
-      "select provider_version, title_envelope from events where node_id = $1",
+      `select
+         event.provider, event.provider_calendar_id, event.provider_event_id,
+         event.provider_version, event.starts_at, event.ends_at, event.time_zone,
+         event.busy, event.status, event.title_envelope,
+         event.description_envelope, event.attendees_envelope,
+         event.location_envelope, event.meeting_link_envelope,
+         payload.protected_payload_envelope, payload.protected_key_version
+       from events event
+       join event_sync_payloads payload on payload.node_id = event.node_id
+       where event.node_id = $1`,
       [EVENT_ID],
     );
 
@@ -206,7 +393,482 @@ describe("diagnostic repository", () => {
       provenance: "user",
       version: 2,
     });
+    expect(after.rows[0]).toMatchObject({
+      provider: before.rows[0]?.provider,
+      provider_calendar_id: before.rows[0]?.provider_calendar_id,
+      provider_event_id: before.rows[0]?.provider_event_id,
+      provider_version: before.rows[0]?.provider_version,
+      starts_at: before.rows[0]?.starts_at,
+      ends_at: before.rows[0]?.ends_at,
+      time_zone: before.rows[0]?.time_zone,
+      busy: before.rows[0]?.busy,
+      status: before.rows[0]?.status,
+    });
+    expect(after.rows[0]?.title_envelope).not.toEqual(
+      before.rows[0]?.title_envelope,
+    );
+    expect(after.rows[0]?.description_envelope).not.toEqual(
+      before.rows[0]?.description_envelope,
+    );
+    expect(after.rows[0]?.attendees_envelope).not.toEqual(
+      before.rows[0]?.attendees_envelope,
+    );
+    expect(after.rows[0]?.location_envelope).not.toEqual(
+      before.rows[0]?.location_envelope,
+    );
+    expect(after.rows[0]?.meeting_link_envelope).not.toEqual(
+      before.rows[0]?.meeting_link_envelope,
+    );
+    expect(after.rows[0]?.protected_payload_envelope).not.toEqual(
+      before.rows[0]?.protected_payload_envelope,
+    );
+
+    await expect(
+      createEventRepository(
+        database,
+        keyProvider,
+        createTestEventRepositoryAccess(OWNER_ID),
+      ).get(EVENT_ID),
+    ).resolves.toEqual({
+      ...event,
+      domain: "school",
+      domainState: "confirmed",
+      version: 2,
+    });
+    await expect(repository.listEvents()).resolves.toEqual([
+      expect.objectContaining({
+        id: EVENT_ID,
+        title: TITLE,
+        domain: "school",
+        domainState: "confirmed",
+        categoryProvenance: "user",
+      }),
+    ]);
+
+    const payloadEnvelope = parseCipherEnvelope(
+      textDecoder.decode(after.rows[0]!.protected_payload_envelope),
+    );
+    expect(payloadEnvelope.keyVersion).toBe(
+      after.rows[0]!.protected_key_version,
+    );
+    await expect(
+      decryptProtectedFields(
+        keyProvider,
+        { ownerId: OWNER_ID, nodeId: EVENT_ID, domain: "school" },
+        { providerPayload: payloadEnvelope },
+      ),
+    ).resolves.toEqual({ providerPayload: PROVIDER_PAYLOAD });
+  });
+
+  it("preserves null protected fields while rekeying the required attendee and provider payload envelopes", async () => {
+    const { keyProvider, event } = await seedEncryptedEvent({
+      title: null,
+      description: null,
+      attendees: [],
+      location: null,
+      meetingLink: null,
+    });
+    const repository = createDiagnosticRepository(
+      database,
+      keyProvider,
+      createTestEventRepositoryAccess(OWNER_ID),
+      { databaseUsageWarning: false, r2UsageWarning: false },
+    );
+
+    await expect(
+      repository.correctCategory(EVENT_ID, "personal", NOW),
+    ).resolves.toMatchObject({
+      domain: "personal",
+      domainState: "confirmed",
+      version: 2,
+    });
+    await expect(
+      createEventRepository(
+        database,
+        keyProvider,
+        createTestEventRepositoryAccess(OWNER_ID),
+      ).get(EVENT_ID),
+    ).resolves.toEqual({
+      ...event,
+      domain: "personal",
+      domainState: "confirmed",
+      version: 2,
+    });
+    await expect(repository.listEvents()).resolves.toEqual([
+      expect.objectContaining({
+        id: EVENT_ID,
+        title: null,
+        domain: "personal",
+      }),
+    ]);
+
+    const raw = await postgres.query<{
+      title_envelope: Uint8Array | null;
+      description_envelope: Uint8Array | null;
+      attendees_envelope: Uint8Array;
+      location_envelope: Uint8Array | null;
+      meeting_link_envelope: Uint8Array | null;
+      protected_payload_envelope: Uint8Array;
+      protected_key_version: number;
+    }>(
+      `select
+         event.title_envelope, event.description_envelope,
+         event.attendees_envelope, event.location_envelope,
+         event.meeting_link_envelope, payload.protected_payload_envelope,
+         payload.protected_key_version
+       from events event
+       join event_sync_payloads payload on payload.node_id = event.node_id
+       where event.node_id = $1`,
+      [EVENT_ID],
+    );
+    expect(raw.rows[0]).toMatchObject({
+      title_envelope: null,
+      description_envelope: null,
+      location_envelope: null,
+      meeting_link_envelope: null,
+    });
+    expect(raw.rows[0]?.attendees_envelope).toBeInstanceOf(Uint8Array);
+    const providerEnvelope = parseCipherEnvelope(
+      textDecoder.decode(raw.rows[0]!.protected_payload_envelope),
+    );
+    expect(providerEnvelope.keyVersion).toBe(
+      raw.rows[0]!.protected_key_version,
+    );
+    await expect(
+      decryptProtectedFields(
+        keyProvider,
+        { ownerId: OWNER_ID, nodeId: EVENT_ID, domain: "personal" },
+        { providerPayload: providerEnvelope },
+      ),
+    ).resolves.toEqual({ providerPayload: PROVIDER_PAYLOAD });
+  });
+
+  it("does not mutate any row when target-domain encryption fails", async () => {
+    const { keyProvider } = await seedEncryptedEvent();
+    const failingProvider: KeyProvider = {
+      async getDataKey(ownerId, domain, keyVersion) {
+        if (domain === "school" && keyVersion === undefined) {
+          throw new Error("injected target encryption failure");
+        }
+        return keyProvider.getDataKey(ownerId, domain, keyVersion);
+      },
+    };
+    const repository = createDiagnosticRepository(
+      database,
+      failingProvider,
+      createTestEventRepositoryAccess(OWNER_ID),
+      { databaseUsageWarning: false, r2UsageWarning: false },
+    );
+    const before = await postgres.query(
+      `select
+         node.domain, node.domain_state, node.provenance, node.version,
+         event.*, payload.protected_payload_envelope,
+         payload.protected_key_version as payload_key_version,
+         assignment.domain as assignment_domain,
+         assignment.domain_state as assignment_domain_state,
+         assignment.provenance as assignment_provenance,
+         assignment.version as assignment_version
+       from nodes node
+       join events event on event.node_id = node.id
+       join event_sync_payloads payload on payload.node_id = node.id
+       left join node_category_assignments assignment on assignment.node_id = node.id
+       where node.id = $1`,
+      [EVENT_ID],
+    );
+
+    await expect(
+      repository.correctCategory(EVENT_ID, "school", NOW),
+    ).rejects.toThrow("injected target encryption failure");
+    const after = await postgres.query(
+      `select
+         node.domain, node.domain_state, node.provenance, node.version,
+         event.*, payload.protected_payload_envelope,
+         payload.protected_key_version as payload_key_version,
+         assignment.domain as assignment_domain,
+         assignment.domain_state as assignment_domain_state,
+         assignment.provenance as assignment_provenance,
+         assignment.version as assignment_version
+       from nodes node
+       join events event on event.node_id = node.id
+       join event_sync_payloads payload on payload.node_id = node.id
+       left join node_category_assignments assignment on assignment.node_id = node.id
+       where node.id = $1`,
+      [EVENT_ID],
+    );
     expect(after.rows).toEqual(before.rows);
+  });
+
+  it("rejects stale sync ciphertext prepared before a category correction", async () => {
+    const { keyProvider } = await seedEncryptedEvent();
+    await confirmSeedCategory();
+    await seedInitialCheckpoint();
+    const syncBarrier = activeKeyBarrier(keyProvider, "work");
+    const syncRepository = createSyncRepository(
+      database,
+      syncBarrier.provider,
+      OWNER_ID,
+    );
+    const syncPromise = syncRepository.applyChanges({
+      ownerId: OWNER_ID,
+      calendarId: "calendar_1",
+      expectedCheckpointVersion: 0,
+      nextCheckpoint: {
+        calendarId: "calendar_1",
+        syncToken: "sync-token-1",
+        committedAt: NOW.toISOString(),
+        version: 1,
+      },
+      changes: [syncUpsert("00000000000000000002")],
+      jobId: "sync_job_1",
+      reason: "repair",
+      pageCount: 1,
+      startedAt: "2026-07-25T16:59:00.000Z",
+    });
+    await syncBarrier.reached;
+
+    const diagnosticRepository = createDiagnosticRepository(
+      database,
+      keyProvider,
+      createTestEventRepositoryAccess(OWNER_ID),
+      { databaseUsageWarning: false, r2UsageWarning: false },
+    );
+    await expect(
+      diagnosticRepository.correctCategory(EVENT_ID, "school", NOW),
+    ).resolves.toMatchObject({ domain: "school", version: 2 });
+    syncBarrier.release();
+
+    await expect(syncPromise).resolves.toEqual({ outcome: "conflict" });
+    await expect(diagnosticRepository.listEvents()).resolves.toEqual([
+      expect.objectContaining({
+        id: EVENT_ID,
+        title: TITLE,
+        domain: "school",
+      }),
+    ]);
+  });
+
+  it("retries from the newer provider snapshot when synchronization commits first", async () => {
+    const { keyProvider } = await seedEncryptedEvent();
+    await confirmSeedCategory();
+    await seedInitialCheckpoint();
+    const correctionBarrier = activeKeyBarrier(keyProvider, "school");
+    const diagnosticRepository = createDiagnosticRepository(
+      database,
+      correctionBarrier.provider,
+      createTestEventRepositoryAccess(OWNER_ID),
+      { databaseUsageWarning: false, r2UsageWarning: false },
+    );
+    const correctionPromise = diagnosticRepository.correctCategory(
+      EVENT_ID,
+      "school",
+      NOW,
+    );
+    await correctionBarrier.reached;
+
+    const syncRepository = createSyncRepository(
+      database,
+      keyProvider,
+      OWNER_ID,
+    );
+    await expect(
+      syncRepository.applyChanges({
+        ownerId: OWNER_ID,
+        calendarId: "calendar_1",
+        expectedCheckpointVersion: 0,
+        nextCheckpoint: {
+          calendarId: "calendar_1",
+          syncToken: "sync-token-1",
+          committedAt: NOW.toISOString(),
+          version: 1,
+        },
+        changes: [syncUpsert("00000000000000000002")],
+        jobId: "sync_job_2",
+        reason: "repair",
+        pageCount: 1,
+        startedAt: "2026-07-25T16:59:00.000Z",
+      }),
+    ).resolves.toMatchObject({ outcome: "committed", upserted: 1 });
+    correctionBarrier.release();
+
+    await expect(correctionPromise).resolves.toMatchObject({
+      domain: "school",
+      version: 2,
+    });
+    await expect(
+      createEventRepository(
+        database,
+        keyProvider,
+        createTestEventRepositoryAccess(OWNER_ID),
+      ).get(EVENT_ID),
+    ).resolves.toMatchObject({
+      identity: {
+        sourceVersion: "00000000000000000002",
+      },
+      startsAt: "2026-07-25T18:30:00.000Z",
+      endsAt: "2026-07-25T19:30:00.000Z",
+      title: "newer synchronized title",
+      description: "newer description",
+      attendees: ["newer@example.test"],
+      location: "newer location",
+      meetingLink: "https://example.invalid/newer",
+      domain: "school",
+      domainState: "confirmed",
+      version: 2,
+    });
+  });
+
+  it("serializes two category corrections and makes a repeated winner idempotent", async () => {
+    const { keyProvider } = await seedEncryptedEvent();
+    const schoolBarrier = activeKeyBarrier(keyProvider, "school");
+    const personalBarrier = activeKeyBarrier(keyProvider, "personal");
+    const schoolRepository = createDiagnosticRepository(
+      database,
+      schoolBarrier.provider,
+      createTestEventRepositoryAccess(OWNER_ID),
+      { databaseUsageWarning: false, r2UsageWarning: false },
+    );
+    const personalRepository = createDiagnosticRepository(
+      database,
+      personalBarrier.provider,
+      createTestEventRepositoryAccess(OWNER_ID),
+      { databaseUsageWarning: false, r2UsageWarning: false },
+    );
+    const schoolPromise = schoolRepository.correctCategory(
+      EVENT_ID,
+      "school",
+      new Date("2026-07-25T17:01:00.000Z"),
+    );
+    const personalPromise = personalRepository.correctCategory(
+      EVENT_ID,
+      "personal",
+      new Date("2026-07-25T17:02:00.000Z"),
+    );
+    await Promise.all([schoolBarrier.reached, personalBarrier.reached]);
+    schoolBarrier.release();
+    personalBarrier.release();
+
+    const corrections = await Promise.all([schoolPromise, personalPromise]);
+    expect(
+      corrections.map((correction) => correction?.version).sort(),
+    ).toEqual([2, 3]);
+    const winner = corrections.find((correction) => correction?.version === 3);
+    expect(winner).toBeDefined();
+    const beforeRepeat = await postgres.query<{
+      version: number;
+      title_envelope: Uint8Array;
+      protected_payload_envelope: Uint8Array;
+    }>(
+      `select
+         node.version, event.title_envelope,
+         payload.protected_payload_envelope
+       from nodes node
+       join events event on event.node_id = node.id
+       join event_sync_payloads payload on payload.node_id = node.id
+       where node.id = $1`,
+      [EVENT_ID],
+    );
+
+    await expect(
+      schoolRepository.correctCategory(
+        EVENT_ID,
+        winner!.domain,
+        new Date("2026-07-25T17:03:00.000Z"),
+      ),
+    ).resolves.toEqual(winner);
+    const afterRepeat = await postgres.query<{
+      version: number;
+      title_envelope: Uint8Array;
+      protected_payload_envelope: Uint8Array;
+    }>(
+      `select
+         node.version, event.title_envelope,
+         payload.protected_payload_envelope
+       from nodes node
+       join events event on event.node_id = node.id
+       join event_sync_payloads payload on payload.node_id = node.id
+       where node.id = $1`,
+      [EVENT_ID],
+    );
+    expect(afterRepeat.rows).toEqual(beforeRepeat.rows);
+    await expect(
+      createEventRepository(
+        database,
+        keyProvider,
+        createTestEventRepositoryAccess(OWNER_ID),
+      ).get(EVENT_ID),
+    ).resolves.toMatchObject({
+      domain: winner!.domain,
+      domainState: "confirmed",
+      version: 3,
+      title: TITLE,
+    });
+  });
+
+  it("cannot correct another owner's event", async () => {
+    const { keyProvider } = await seedEncryptedEvent();
+    const wrongOwner = createDiagnosticRepository(
+      database,
+      keyProvider,
+      createTestEventRepositoryAccess(OTHER_OWNER_ID),
+      { databaseUsageWarning: false, r2UsageWarning: false },
+    );
+
+    await expect(
+      wrongOwner.correctCategory(EVENT_ID, "school", NOW),
+    ).resolves.toBeUndefined();
+    await expect(
+      createEventRepository(
+        database,
+        keyProvider,
+        createTestEventRepositoryAccess(OWNER_ID),
+      ).get(EVENT_ID),
+    ).resolves.toMatchObject({
+      domain: "work",
+      domainState: "inferred",
+      version: 1,
+      title: TITLE,
+    });
+  });
+
+  it("does not select or decrypt protected fields without a verified privacy decision", async () => {
+    const { keyProvider } = await seedEncryptedEvent();
+    await postgres.query(
+      "update nodes set privacy = 'restricted' where id = $1 and owner_id = $2",
+      [EVENT_ID, OWNER_ID],
+    );
+    let keyCalls = 0;
+    const unreachableKeyProvider: KeyProvider = {
+      async getDataKey() {
+        keyCalls += 1;
+        throw new Error("protected key lookup must remain unreachable");
+      },
+    };
+    const repository = createDiagnosticRepository(
+      database,
+      unreachableKeyProvider,
+      createTestEventRepositoryAccess(
+        OWNER_ID,
+        (request) => request.privacy !== "restricted",
+      ),
+      { databaseUsageWarning: false, r2UsageWarning: false },
+    );
+
+    await expect(repository.listEvents()).resolves.toEqual([]);
+    await expect(
+      repository.correctCategory(EVENT_ID, "school", NOW),
+    ).rejects.toThrow("Protected event content access is not authorized.");
+    expect(keyCalls).toBe(0);
+    expect(() =>
+      createDiagnosticRepository(
+        database,
+        keyProvider,
+        {
+          authenticatedOwnerId: OWNER_ID,
+          authorize: () => undefined,
+        } as never,
+        { databaseUsageWarning: false, r2UsageWarning: false },
+      ),
+    ).toThrow("Invalid diagnostic repository scope.");
   });
 
   it("aggregates content-free operational facts for the current Chicago month", async () => {
@@ -324,7 +986,7 @@ describe("diagnostic repository", () => {
     const repository = createDiagnosticRepository(
       database,
       keyProvider,
-      OWNER_ID,
+      createTestEventRepositoryAccess(OWNER_ID),
       { databaseUsageWarning: true, r2UsageWarning: false },
     );
 

@@ -39,4 +39,26 @@ describe("production crypto build boundary", () => {
       "export function createAiEventRepositoryAccess",
     );
   });
+
+  it("keeps production diagnostics behind the event authorization verifier", () => {
+    const routeSource = readFileSync(
+      resolve(import.meta.dirname, "../../../src/server/api/diagnostic-routes.ts"),
+      "utf8",
+    );
+    const repositorySource = readFileSync(
+      resolve(import.meta.dirname, "../../../src/data/repositories/diagnostic-repository.ts"),
+      "utf8",
+    );
+
+    expect(routeSource).toContain(
+      'from "../authorization/event-content-authorization"',
+    );
+    expect(routeSource).toContain("createAiEventRepositoryAccess");
+    expect(routeSource).not.toContain("event-content-capability-internal");
+    expect(repositorySource).toContain("isVerifiedEventRepositoryAccess");
+    expect(repositorySource).toContain(
+      "matchesEventContentAuthorizationDecision",
+    );
+    expect(repositorySource).not.toContain("event-content-capability-internal");
+  });
 });
