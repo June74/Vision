@@ -4,7 +4,7 @@ The Vision Worker answers `GET /api/health` with `{ "status": "ok", "service": "
 
 ## `AppDependencies`
 
-`AppDependencies` lets tests supply their own logger, request-ID maker, or complete authentication boundaries.
+`AppDependencies` lets tests supply their own logger, request-ID maker, authentication, calendar, AI, diagnostic, or webhook boundaries.
 
 ## `consoleLogger`
 
@@ -16,7 +16,7 @@ The Vision Worker answers `GET /api/health` with `{ "status": "ok", "service": "
 
 ## `createApp`
 
-`createApp` creates the Worker app and its privacy-safe error handling.
+`createApp` creates the Worker app, registers the diagnostic routes before the API fallback, and keeps privacy-safe error handling.
 
 ## `fetch`
 

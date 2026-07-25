@@ -1,6 +1,6 @@
 # `src/worker.ts`
 
-This module creates the default Hono Worker application with `Env` bindings and authentication-capable request variables. `GET /api/health` preserves the exact immutable JSON body `{ status: "ok", service: "vision" }`. Authentication routes resolve production bindings lazily; missing bindings return a safe service-unavailable envelope. The `/api/*` fallback throws an expected `VisionError`, browser routes still call `ASSETS.fetch`, and the central error handler submits only a validated category to its logger.
+This module creates the default Hono Worker application with `Env` bindings and authentication-capable request variables. `GET /api/health` preserves the exact immutable JSON body `{ status: "ok", service: "vision" }`. Authentication, calendar setup, AI, diagnostic, and webhook routes resolve production bindings lazily. The `/api/*` fallback throws an expected `VisionError`, browser routes still call `ASSETS.fetch`, and the central error handler submits only a validated category to its logger.
 
 ## Signatures
 
@@ -13,7 +13,7 @@ createApp(dependencies?: AppDependencies): Hono<{
 
 ## Dependencies
 
-Composes Hono, request-context middleware, safe logging/error mapping, OAuth route registration, Worker bindings, and the static-assets fetcher.
+Composes Hono, request-context middleware, safe logging/error mapping, OAuth/calendar/AI/diagnostic/webhook route registration, Worker bindings, and the static-assets fetcher.
 
 ## Inputs and outputs
 
@@ -37,7 +37,7 @@ Only parsed safe log events reach `console.info`. Authentication is delegated to
 
 ## `AppDependencies`
 
-`AppDependencies` optionally injects a `SafeLogger`, `RequestIdFactory`, and static `AuthRouteDependencies`. The default app uses a console logger, `crypto.randomUUID`, and the validated production auth resolver; tests can replace every network, clock, randomness, crypto-key, and persistence boundary.
+`AppDependencies` optionally injects a `SafeLogger`, `RequestIdFactory`, and route dependencies for authentication, setup, AI, diagnostics, and webhooks. The default app uses validated production resolvers; tests can replace every network, clock, randomness, crypto-key, and persistence boundary.
 
 ## `consoleLogger`
 
@@ -55,7 +55,7 @@ The function calls `logEvent` with constant action/outcome and a safe category, 
 
 **Signature:** `createApp(dependencies?: AppDependencies): Hono`
 
-The factory installs request context first, then registers health, authentication, unknown API, and static-asset routes. Its `onError` handler maps expected and unexpected values through `toVisionErrorResponse`, attempts to log `{ requestId, action: "api.request", outcome: "failed", errorCategory }`, and returns the safe body even when the sink throws.
+The factory installs request context first, then registers health, authentication, setup, AI, diagnostics, webhooks, unknown API, and static-asset routes. Its `onError` handler maps expected and unexpected values through `toVisionErrorResponse`, attempts to log `{ requestId, action: "api.request", outcome: "failed", errorCategory }`, and returns the safe body even when the sink throws.
 
 ## `fetch`
 
