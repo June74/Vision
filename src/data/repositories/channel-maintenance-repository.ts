@@ -547,7 +547,7 @@ export class ChannelMaintenanceRepository
     `);
   }
 
-  /** Persists one scheduler credential disposition only for the maintained checkpoint generation. */
+  /** Persists one scheduler credential disposition without adopting consumer-owned retry state. */
   async recordCredentialFailure(
     failure: SyncCalendarError,
     now: Date,
@@ -574,7 +574,18 @@ export class ChannelMaintenanceRepository
          and checkpoint.provider = maintenance.provider
          and checkpoint.provider_calendar_id = maintenance.provider_calendar_id
          and checkpoint.version = maintenance.checkpoint_version
-         and checkpoint.status in ('connected', 'retry_scheduled')
+         and (
+           checkpoint.status = 'connected'
+           or (
+             checkpoint.status = 'retry_scheduled'
+             and maintenance.credential_failure_checkpoint_version =
+                 checkpoint.version
+             and maintenance.credential_failure_category =
+                 checkpoint.last_error_category
+             and maintenance.credential_failure_recorded_at =
+                 checkpoint.updated_at
+           )
+         )
         where maintenance.owner_id = ${this.ownerId}
           and maintenance.provider = 'google-calendar'
         for update of checkpoint

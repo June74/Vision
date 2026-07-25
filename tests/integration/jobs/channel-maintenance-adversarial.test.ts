@@ -811,4 +811,169 @@ describe("adversarial calendar maintenance", () => {
       },
     ]);
   }, 30_000);
+
+  it.each(["transient", "database"] as const)(
+    "does not adopt a pre-existing unmarked %s consumer retry",
+    async (consumerCategory) => {
+      await seedCanonicalConnection();
+      await seedCheckpoint();
+      const repository = createChannelMaintenanceRepository(database, OWNER);
+      await repository.bootstrapConnectedCalendars(NOW);
+      const consumerFailureAt = new Date(NOW.getTime() + 1_000);
+      await postgres.query(
+        `update sync_checkpoints
+         set status = 'retry_scheduled',
+             last_error_category = $1,
+             updated_at = $2
+         where owner_id = $3 and provider_calendar_id = $4`,
+        [consumerCategory, consumerFailureAt.toISOString(), OWNER, CALENDAR],
+      );
+      const before = (
+        await postgres.query(
+          `select version, status, last_error_category, updated_at
+           from sync_checkpoints`,
+        )
+      ).rows;
+
+      expect(
+        await repository.recordCredentialFailure(
+          new SyncCalendarError("transient", "retry_scheduled", true, 5),
+          new Date(NOW.getTime() + 2_000),
+        ),
+      ).toBe(false);
+      expect(
+        (
+          await postgres.query(
+            `select version, status, last_error_category, updated_at
+             from sync_checkpoints`,
+          )
+        ).rows,
+      ).toEqual(before);
+      expect(
+        (
+          await postgres.query(
+            `select
+               credential_failure_checkpoint_version,
+               credential_failure_category,
+               credential_failure_recorded_at
+             from calendar_sync_maintenance`,
+          )
+        ).rows,
+      ).toEqual([
+        {
+          credential_failure_checkpoint_version: null,
+          credential_failure_category: null,
+          credential_failure_recorded_at: null,
+        },
+      ]);
+      expect(
+        await repository.clearCredentialRetry(
+          new Date(NOW.getTime() + 3_000),
+        ),
+      ).toBe(false);
+    },
+    30_000,
+  );
+
+  it("refreshes only its own exact retry marker", async () => {
+    await seedCanonicalConnection();
+    await seedCheckpoint();
+    const repository = createChannelMaintenanceRepository(database, OWNER);
+    await repository.bootstrapConnectedCalendars(NOW);
+    const firstSchedulerFailureAt = new Date(NOW.getTime() + 1_000);
+    expect(
+      await repository.recordCredentialFailure(
+        new SyncCalendarError("transient", "retry_scheduled", true, 5),
+        firstSchedulerFailureAt,
+      ),
+    ).toBe(true);
+    const refreshedSchedulerFailureAt = new Date(NOW.getTime() + 2_000);
+
+    expect(
+      await repository.recordCredentialFailure(
+        new SyncCalendarError("database", "retry_scheduled", true, 5),
+        refreshedSchedulerFailureAt,
+      ),
+    ).toBe(true);
+    expect(
+      (
+        await postgres.query(
+          `select
+             checkpoint.status,
+             checkpoint.last_error_category,
+             checkpoint.updated_at,
+             maintenance.credential_failure_checkpoint_version,
+             maintenance.credential_failure_category,
+             maintenance.credential_failure_recorded_at
+           from sync_checkpoints as checkpoint
+           inner join calendar_sync_maintenance as maintenance
+             on maintenance.owner_id = checkpoint.owner_id
+            and maintenance.provider_calendar_id =
+                checkpoint.provider_calendar_id`,
+        )
+      ).rows,
+    ).toEqual([
+      {
+        status: "retry_scheduled",
+        last_error_category: "database",
+        updated_at: refreshedSchedulerFailureAt,
+        credential_failure_checkpoint_version: 1,
+        credential_failure_category: "database",
+        credential_failure_recorded_at: refreshedSchedulerFailureAt,
+      },
+    ]);
+    expect(
+      await repository.clearCredentialRetry(
+        new Date(NOW.getTime() + 3_000),
+      ),
+    ).toBe(true);
+  }, 30_000);
+
+  it.each(["transient", "database"] as const)(
+    "preserves a concurrently written %s consumer retry",
+    async (consumerCategory) => {
+      await seedCanonicalConnection();
+      await seedCheckpoint();
+      const repository = createChannelMaintenanceRepository(database, OWNER);
+      await repository.bootstrapConnectedCalendars(NOW);
+      const schedulerFailureAt = new Date(NOW.getTime() + 1_000);
+      const consumerFailureAt = new Date(NOW.getTime() + 2_000);
+
+      await Promise.all([
+        repository.recordCredentialFailure(
+          new SyncCalendarError("transient", "retry_scheduled", true, 5),
+          schedulerFailureAt,
+        ),
+        postgres.query(
+          `update sync_checkpoints
+           set status = 'retry_scheduled',
+               last_error_category = $1,
+               updated_at = $2
+           where owner_id = $3 and provider_calendar_id = $4`,
+          [consumerCategory, consumerFailureAt.toISOString(), OWNER, CALENDAR],
+        ),
+      ]);
+
+      expect(
+        (
+          await postgres.query(
+            `select status, last_error_category, updated_at
+             from sync_checkpoints`,
+          )
+        ).rows,
+      ).toEqual([
+        {
+          status: "retry_scheduled",
+          last_error_category: consumerCategory,
+          updated_at: consumerFailureAt,
+        },
+      ]);
+      expect(
+        await repository.clearCredentialRetry(
+          new Date(NOW.getTime() + 3_000),
+        ),
+      ).toBe(false);
+    },
+    30_000,
+  );
 });

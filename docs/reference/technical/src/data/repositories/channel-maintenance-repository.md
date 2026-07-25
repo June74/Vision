@@ -17,7 +17,7 @@ Changes only the exact active old row after provider stop.
 ## `recordFailure`
 Increments the calendar-level durable failure counter for the exact lease and exposes bounded Action required.
 ## `recordCredentialFailure`
-Atomically writes a typed scheduler credential disposition and marker only when maintenance still names the checkpoint generation.
+Atomically writes a typed scheduler credential disposition only from connected state or an exact version/category/timestamp scheduler marker, so Task 3 retry state cannot be adopted.
 ## `clearCredentialRetry`
 Returns only an exact scheduler-marked transient or database retry to connected after credential resolution succeeds.
 ## `markCleanupRequired`

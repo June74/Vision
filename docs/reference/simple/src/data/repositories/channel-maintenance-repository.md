@@ -17,7 +17,7 @@ Retires an old stopped channel.
 ## `recordFailure`
 Records safe counters and Action required.
 ## `recordCredentialFailure`
-Records a safe scheduler credential state only for the current checkpoint.
+Records a safe scheduler credential state only for a connected checkpoint or Vision's exact existing scheduler marker.
 ## `clearCredentialRetry`
 Reconnects only a retry that the scheduler marked after a credential problem.
 ## `markCleanupRequired`
