@@ -12,7 +12,7 @@ Connects Cloudflare Queue delivery to production dependencies.
 
 ## `consumeOne`
 
-Validates, claims, runs, and records one message before ack or retry.
+Validates, claims, passes the internal opaque lease into synchronization, and records one message before ack or retry.
 
 ## `createProductionCalendarSyncConsumerDependencies`
 
@@ -28,7 +28,7 @@ Creates an opaque lease ID.
 
 ## `sync`
 
-Runs the existing read-only transactional sync path.
+Runs the existing read-only transactional sync path with the active database claim.
 
 ## `classifyGoogleRefreshError`
 

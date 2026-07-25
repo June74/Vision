@@ -7,7 +7,8 @@ commit the complete event projection and terminal cursor together. A failed page
 
 Runs one synchronization attempt and returns only safe counts, duration, reason, and checkpoint version.
 Queue consumers disable this function's best-effort failure write because their repository records checkpoint health
-and job disposition together under the active claim.
+and job disposition together under the active claim. Their internal lease also gates checkpoint loading and the final
+projection commit.
 
 ## `stageChange`
 
@@ -36,6 +37,10 @@ Returns bounded exponential queue-redelivery metadata; it does not sleep or retr
 ## `validateJobRequest`
 
 Checks the opaque owner, calendar, reason, job, and delivery-attempt fields.
+
+## `validateQueueLease`
+
+Validates the internal claim ID supplied by the queue consumer.
 
 ## `boundedText`
 

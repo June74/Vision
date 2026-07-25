@@ -16,6 +16,8 @@ Loads the committed checkpoint, retrieves all pages, stages changes, constructs 
 `disconnected`, malformed data becomes `action_required`, and 410 becomes `rebuild_required` for Task 5.
 The optional `persistFailure` dependency defaults to `true` for direct jobs. The Queue adapter sets it to `false`
 because `CalendarJobRepository.finishClaimedFailure` owns the atomic, lease-bound checkpoint and job transition.
+Queue execution also supplies an internal lease outside `SyncCalendarRequest`; the repository requires that lease for
+checkpoint loading and the final projection/checkpoint/run transaction. Direct non-queue callers remain unchanged.
 
 ## `stageChange`
 
@@ -47,6 +49,10 @@ there is no request-local retry loop.
 ## `validateJobRequest`
 
 Validates opaque queue metadata and defaults the first delivery attempt to one.
+
+## `validateQueueLease`
+
+Validates the bounded opaque claim ID supplied only by the trusted queue adapter.
 
 ## `boundedText`
 

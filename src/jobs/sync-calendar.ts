@@ -42,6 +42,7 @@ export interface SyncApplyRequest {
   readonly reason: SyncReason;
   readonly pageCount: number;
   readonly startedAt: string;
+  readonly queueClaimId?: string;
 }
 
 /** Safe atomic repository outcome with no provider or protected content. */
@@ -74,7 +75,15 @@ export interface SyncFailureRecord {
 
 /** Persistence boundary whose success must cover changes, invalidations, and checkpoint atomically. */
 export interface SyncRepository {
-  loadCheckpoint(ownerId: string, calendarId: string): Promise<SyncCheckpoint | undefined>;
+  loadCheckpoint(
+    ownerId: string,
+    calendarId: string,
+    queueAuthority?: {
+      readonly jobId: string;
+      readonly reason: SyncReason;
+      readonly claimId: string;
+    },
+  ): Promise<SyncCheckpoint | undefined>;
   applyChanges(request: SyncApplyRequest): Promise<SyncApplyResult>;
   recordFailure(record: SyncFailureRecord): Promise<void>;
 }
@@ -83,6 +92,7 @@ export interface SyncRepository {
 export interface SyncCalendarDependencies {
   readonly client: EventSyncClient;
   readonly repository: SyncRepository;
+  readonly queueLease?: { readonly claimId: string };
   readonly persistFailure?: boolean;
   readonly now?: () => Date;
   readonly random?: () => number;
@@ -138,6 +148,7 @@ export async function syncCalendar(
   const random = dependencies.random ?? Math.random;
   const started = now();
   const startedAt = Date.prototype.getTime.call(started);
+  const queueClaimId = validateQueueLease(dependencies.queueLease);
   let checkpoint: SyncCheckpoint | undefined;
   let checkpointLoaded = false;
 
@@ -146,8 +157,16 @@ export async function syncCalendar(
       checkpoint = await dependencies.repository.loadCheckpoint(
         input.ownerId,
         input.calendarId,
+        queueClaimId === undefined
+          ? undefined
+          : {
+              jobId: input.jobId,
+              reason: input.reason,
+              claimId: queueClaimId,
+            },
       );
-    } catch {
+    } catch (error) {
+      if (error instanceof SyncCalendarError) throw error;
       throw retryError("database", input.deliveryAttempt, random);
     }
     const loadedCheckpointVersion = checkpoint?.version ?? 0;
@@ -238,6 +257,7 @@ export async function syncCalendar(
         jobId: input.jobId,
         pageCount: pages,
         startedAt: Date.prototype.toISOString.call(started),
+        ...(queueClaimId === undefined ? {} : { queueClaimId }),
       });
     } catch {
       throw retryError("database", input.deliveryAttempt, random);
@@ -433,6 +453,21 @@ function validateJobRequest(
     throw new SyncCalendarError("schema", "action_required", false);
   }
   return { ...request, deliveryAttempt };
+}
+
+/** Accepts only the internal opaque queue lease supplied after a durable claim. */
+function validateQueueLease(
+  queueLease: SyncCalendarDependencies["queueLease"],
+): string | undefined {
+  if (queueLease === undefined) return undefined;
+  if (
+    typeof queueLease !== "object" ||
+    queueLease === null ||
+    !boundedText(queueLease.claimId, 255)
+  ) {
+    throw new SyncCalendarError("schema", "action_required", false);
+  }
+  return queueLease.claimId;
 }
 
 /** Recognizes a bounded non-empty opaque identifier. */

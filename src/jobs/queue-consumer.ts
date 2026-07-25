@@ -49,7 +49,10 @@ export interface CalendarSyncBatch {
 /** Injected boundaries for deterministic claim, retry, and duplicate tests. */
 export interface CalendarSyncConsumerDependencies {
   readonly repository: CalendarJobRepository;
-  readonly sync: (request: SyncCalendarRequest) => Promise<SyncResult>;
+  readonly sync: (
+    request: SyncCalendarRequest,
+    queueLease: { readonly claimId: string },
+  ) => Promise<SyncResult>;
   readonly now?: () => Date;
   readonly createClaimId?: () => string;
 }
@@ -113,7 +116,9 @@ async function consumeOne(
     expectedCheckpointVersion: claim.job.checkpointVersion,
   };
   try {
-    const result = await dependencies.sync(request);
+    const result = await dependencies.sync(request, {
+      claimId: claim.job.claimId,
+    });
     const completed = await dependencies.repository.completeJob(
       message.jobId,
       claim.job.claimId,
@@ -233,7 +238,7 @@ async function createProductionCalendarSyncConsumerDependencies(
     /** Creates a unique opaque lease for one atomic job claim. */
     createClaimId: () => crypto.randomUUID(),
     /** Resolves owner-bound tokens and runs the existing transactional sync job. */
-    sync: async (request) => {
+    sync: async (request, queueLease) => {
       if (request.ownerId !== ownerId) {
         throw new SyncCalendarError("authorization", "disconnected", false);
       }
@@ -281,6 +286,7 @@ async function createProductionCalendarSyncConsumerDependencies(
           fetcher: fetch.bind(globalThis),
         }),
         repository: syncRepository,
+        queueLease,
         persistFailure: false,
       });
     },

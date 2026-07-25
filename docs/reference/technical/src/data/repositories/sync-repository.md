@@ -13,7 +13,8 @@ Any later SQL error rolls back the checkpoint, events, tombstones, derived inval
 
 In the store, inserts a version-zero row with null token/key fields and then returns one owner/provider/calendar row. In
 the encrypted repository, version zero maps to no checkpoint; positive versions require and decrypt an envelope under
-exact owner/calendar AAD.
+exact owner/calendar AAD. Queue-backed loads first lock and verify the exact job, owner, calendar, reason, status, and
+claim ID, so an already-superseded worker cannot create even the version-zero row.
 
 ## `loadProjectionContexts`
 
@@ -25,7 +26,8 @@ encryption preserves Vision-owned metadata.
 Parses ciphertext-only staged JSON with `jsonb_to_recordset`, validates the pre-encryption node snapshots, performs the
 checkpoint CAS, applies only newer provider upserts, applies unversioned tombstones without inventing an order, retains
 encrypted deleted rows for 30 days, retracts model-derived edges, and inserts `sync_runs` safe counts. The final select
-returns counts only.
+returns counts only. Queue commits materialize and lock the exact active job claim before the checkpoint gate; every
+data-changing CTE depends on that gate. The failure transition uses the same job-then-checkpoint lock order.
 
 ## `recordFailure`
 

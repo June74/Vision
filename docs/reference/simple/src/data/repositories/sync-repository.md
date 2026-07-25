@@ -6,6 +6,7 @@ category and privacy facts are retained.
 ## `loadCheckpoint`
 
 Creates or reads a version-zero cursor row, then decrypts a committed token only for the repository owner.
+Queue-backed reads create or return that row only while the exact durable job claim is still active.
 
 ## `loadProjectionContexts`
 
@@ -14,7 +15,7 @@ Reads planning-only node category, privacy, and version facts for one owner and 
 ## `applyAtomic`
 
 Uses one checkpoint compare-and-swap SQL statement to apply events, tombstones, derived invalidations, safe metrics, and
-the terminal encrypted token.
+the terminal encrypted token. Queue commits also require the exact active job claim before any mutation.
 
 ## `recordFailure`
 

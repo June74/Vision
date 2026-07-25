@@ -12,7 +12,9 @@ Creates production dependencies once per batch and delegates to the testable nar
 
 ## `consumeOne`
 
-Strictly parses the opaque body, acquires a durable claim, and calls `syncCalendar` with the repository attempt. Typed retryable errors are persisted before `retry`; permanent errors are persisted before `ack`. Unknown errors become `Action required` on attempt six.
+Strictly parses the opaque body, acquires a durable claim, and calls `syncCalendar` with the repository attempt plus an
+internal claim lease that is never part of the Queue body. Typed retryable errors are persisted before `retry`;
+permanent errors are persisted before `ack`. Unknown errors become `Action required` on attempt six.
 
 ## `createProductionCalendarSyncConsumerDependencies`
 
@@ -28,7 +30,8 @@ Creates an unguessable lease so stale deliveries cannot finish another worker's 
 
 ## `sync`
 
-Checks owner scope, resolves the retained access token inside the trusted process, and invokes `syncCalendar`; queue messages never contain credentials.
+Checks owner scope, resolves the retained access token inside the trusted process, and invokes `syncCalendar` with the
+active claim lease; queue messages never contain credentials or claim authority.
 
 ## `classifyGoogleRefreshError`
 

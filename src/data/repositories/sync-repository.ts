@@ -16,11 +16,13 @@ import {
   SyncCheckpointSchema,
   type SyncCheckpoint,
 } from "../../domain/sync/checkpoint";
-import type {
-  SyncApplyRequest,
-  SyncApplyResult,
-  SyncFailureRecord,
-  SyncRepository,
+import {
+  SyncCalendarError,
+  type SyncReason,
+  type SyncApplyRequest,
+  type SyncApplyResult,
+  type SyncFailureRecord,
+  type SyncRepository,
 } from "../../jobs/sync-calendar";
 import type { VisionDatabase } from "../db";
 import {
@@ -72,6 +74,13 @@ interface AtomicSyncCommit {
   readonly reason: string;
   readonly pageCount: number;
   readonly startedAt: Date;
+  readonly queueClaimId?: string;
+}
+
+interface QueueCommitAuthority {
+  readonly jobId: string;
+  readonly reason: SyncReason;
+  readonly claimId: string;
 }
 
 type PreparedDatabaseChange =
@@ -112,7 +121,11 @@ type PreparedDatabaseChange =
 
 /** Low-level storage seam used by the encrypted owner-scoped repository. */
 export interface AtomicSyncStore {
-  loadCheckpoint(ownerId: string, calendarId: string): Promise<StoredCheckpointRow>;
+  loadCheckpoint(
+    ownerId: string,
+    calendarId: string,
+    queueAuthority?: QueueCommitAuthority,
+  ): Promise<StoredCheckpointRow | undefined>;
   loadProjectionContexts(ownerId: string, calendarId: string): Promise<readonly EventProjectionContext[]>;
   applyAtomic(commit: AtomicSyncCommit): Promise<SyncApplyResult>;
   recordFailure(record: SyncFailureRecord): Promise<void>;
@@ -124,9 +137,70 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
   constructor(private readonly database: VisionDatabase) {}
 
   /** Creates the non-secret version-zero CAS row if needed and returns its strict current state. */
-  async loadCheckpoint(ownerId: string, calendarId: string): Promise<StoredCheckpointRow> {
+  async loadCheckpoint(
+    ownerId: string,
+    calendarId: string,
+    queueAuthority?: QueueCommitAuthority,
+  ): Promise<StoredCheckpointRow | undefined> {
     const id = checkpointId(ownerId, calendarId);
     const now = new Date();
+    if (queueAuthority !== undefined) {
+      const guarded = await this.database.execute<Record<string, unknown>>(sql`
+        with active_claim as materialized (
+          select job.job_id
+          from calendar_sync_jobs as job
+          where job.job_id = ${queueAuthority.jobId}
+            and job.owner_id = ${ownerId}
+            and job.provider = ${PROVIDER}
+            and job.provider_calendar_id = ${calendarId}
+            and job.reason = ${queueAuthority.reason}
+            and job.status = 'in_progress'
+            and job.claim_id = ${queueAuthority.claimId}
+          for update
+        ),
+        existing as materialized (
+          select
+            checkpoint.owner_id as "ownerId",
+            checkpoint.provider_calendar_id as "calendarId",
+            checkpoint.sync_token_envelope as "tokenEnvelope",
+            checkpoint.key_version as "keyVersion",
+            checkpoint.committed_at as "committedAt",
+            checkpoint.version
+          from sync_checkpoints as checkpoint
+          cross join active_claim
+          where checkpoint.owner_id = ${ownerId}
+            and checkpoint.provider = ${PROVIDER}
+            and checkpoint.provider_calendar_id = ${calendarId}
+        ),
+        seeded as (
+          insert into sync_checkpoints (
+            id, owner_id, provider, provider_calendar_id,
+            sync_token_envelope, key_version, committed_at,
+            version, status, updated_at
+          )
+          select
+            ${id}, ${ownerId}, ${PROVIDER}, ${calendarId},
+            null, null, ${now}, 0, 'pending', ${now}
+          from active_claim
+          where not exists (select 1 from existing)
+          on conflict (owner_id, provider, provider_calendar_id) do nothing
+          returning
+            owner_id as "ownerId",
+            provider_calendar_id as "calendarId",
+            sync_token_envelope as "tokenEnvelope",
+            key_version as "keyVersion",
+            committed_at as "committedAt",
+            version
+        )
+        select * from existing
+        union all
+        select * from seeded
+        limit 1
+      `);
+      return guarded.rows[0]
+        ? decodeCheckpointRow(guarded.rows[0])
+        : undefined;
+    }
     await this.database.execute(sql`
       insert into sync_checkpoints (
         id, owner_id, provider, provider_calendar_id,
@@ -182,6 +256,30 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
   /** Executes all staged mutations, derived invalidations, safe metrics, and checkpoint CAS atomically. */
   async applyAtomic(commit: AtomicSyncCommit): Promise<SyncApplyResult> {
     const serializedChanges = JSON.stringify(commit.changes);
+    const queueAuthorization =
+      commit.queueClaimId === undefined
+        ? sql`
+            commit_authorized as materialized (
+              select true as valid
+            ),
+          `
+        : sql`
+            active_claim as materialized (
+              select job.job_id
+              from calendar_sync_jobs as job
+              where job.job_id = ${commit.jobId}
+                and job.owner_id = ${commit.ownerId}
+                and job.provider = ${PROVIDER}
+                and job.provider_calendar_id = ${commit.calendarId}
+                and job.reason = ${commit.reason}
+                and job.status = 'in_progress'
+                and job.claim_id = ${commit.queueClaimId}
+              for update
+            ),
+            commit_authorized as materialized (
+              select exists (select 1 from active_claim) as valid
+            ),
+          `;
     const result = await this.database.execute<Record<string, unknown>>(sql`
       with incoming as materialized (
         select *
@@ -240,6 +338,7 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
             )
         ) as valid
       ),
+      ${queueAuthorization}
       checkpoint_write as (
         update sync_checkpoints
         set
@@ -255,6 +354,7 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
           and provider_calendar_id = ${commit.calendarId}
           and version = ${commit.expectedCheckpointVersion}
           and (select valid from context_valid)
+          and (select valid from commit_authorized)
         returning version
       ),
       eligible_upserts as materialized (
@@ -493,9 +593,23 @@ class EncryptedSyncRepository implements SyncRepository {
   }
 
   /** Loads and decrypts the current cursor only for the repository owner. */
-  async loadCheckpoint(ownerId: string, calendarId: string): Promise<SyncCheckpoint | undefined> {
+  async loadCheckpoint(
+    ownerId: string,
+    calendarId: string,
+    queueAuthority?: QueueCommitAuthority,
+  ): Promise<SyncCheckpoint | undefined> {
     this.assertOwner(ownerId);
-    const row = await this.store.loadCheckpoint(ownerId, calendarId);
+    const row = await this.store.loadCheckpoint(
+      ownerId,
+      calendarId,
+      queueAuthority,
+    );
+    if (!row) {
+      if (queueAuthority !== undefined) {
+        throw new SyncCalendarError("concurrency", "retry_scheduled", true);
+      }
+      throw new Error("Synchronization checkpoint is unavailable.");
+    }
     if (row.version === 0) {
       if (row.tokenEnvelope !== null || row.keyVersion !== null) {
         throw new Error("Initial synchronization checkpoint is invalid.");
@@ -577,6 +691,9 @@ class EncryptedSyncRepository implements SyncRepository {
       reason: request.reason,
       pageCount: request.pageCount,
       startedAt: new Date(request.startedAt),
+      ...(request.queueClaimId === undefined
+        ? {}
+        : { queueClaimId: request.queueClaimId }),
     });
   }
 

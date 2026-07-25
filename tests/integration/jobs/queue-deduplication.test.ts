@@ -3,11 +3,15 @@ import { resolve } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { encodeBase64Url } from "../../../src/crypto/envelope";
+import { createTestKeyProvider } from "../../../src/crypto/test-key-provider";
 import type { VisionDatabase } from "../../../src/data/db";
 import {
   createCalendarJobRepository,
   type CalendarJobRepository,
 } from "../../../src/data/repositories/job-repository";
+import { createSyncRepository } from "../../../src/data/repositories/sync-repository";
+import type { EventSyncClient } from "../../../src/integrations/google-calendar/event-sync-client";
 import {
   consumeCalendarSyncBatch,
   type CalendarSyncBatch,
@@ -16,6 +20,7 @@ import {
 import type { CalendarSyncMessage } from "../../../src/jobs/queue-message";
 import {
   SyncCalendarError,
+  syncCalendar,
   type SyncResult,
 } from "../../../src/jobs/sync-calendar";
 import type { Env } from "../../../src/server/env";
@@ -88,6 +93,67 @@ function batch(...messages: CalendarSyncQueueMessage[]): CalendarSyncBatch {
   return {
     queue: "vision-calendar-sync",
     messages,
+  };
+}
+
+async function productionSyncRepository() {
+  const keyProvider = await createTestKeyProvider({
+    rootKeyBase64Url: encodeBase64Url(
+      crypto.getRandomValues(new Uint8Array(32)),
+    ),
+  });
+  return createSyncRepository(
+    drizzle(pglite) as unknown as VisionDatabase,
+    keyProvider,
+    MESSAGE.ownerId,
+  );
+}
+
+function emptySyncClient(): EventSyncClient {
+  return {
+    async listChanges() {
+      return {
+        changes: [],
+        calendarTimeZone: "America/Chicago",
+        nextSyncToken: "next-sync-token",
+      };
+    },
+  };
+}
+
+function eventSyncClient(): EventSyncClient {
+  return {
+    async listChanges() {
+      return {
+        changes: [
+          {
+            type: "upsert",
+            identity: {
+              sourceSystem: "google-calendar",
+              sourceCalendarId: MESSAGE.calendarId,
+              sourceEventId: "event-stale-success",
+              sourceVersion: "00000000000000000001" as never,
+            },
+            startsAt: "2026-07-24T18:00:00.000Z",
+            endsAt: "2026-07-24T19:00:00.000Z",
+            timeZone: "America/Chicago",
+            busy: true,
+            status: "confirmed",
+            recurrence: { kind: "single" },
+            protected: {
+              title: "must-not-commit",
+              description: null,
+              attendees: [],
+              location: null,
+              meetingLinks: [],
+              attachmentReferences: [],
+            },
+          },
+        ],
+        calendarTimeZone: "America/Chicago",
+        nextSyncToken: "next-sync-token",
+      };
+    },
   };
 }
 
@@ -172,6 +238,13 @@ describe("calendar queue deduplication", () => {
     });
 
     expect(sync).toHaveBeenCalledTimes(1);
+    expect(sync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: MESSAGE.jobId,
+        expectedCheckpointVersion: 0,
+      }),
+      expect.objectContaining({ claimId: expect.any(String) }),
+    );
     expect(first.ack).toHaveBeenCalledOnce();
     expect(duplicate.ack).toHaveBeenCalledOnce();
     expect((await pglite.query(`select status from calendar_sync_jobs`)).rows)
@@ -521,6 +594,140 @@ describe("calendar queue deduplication", () => {
     ).toEqual([
       { version: 2, status: "connected", last_error_category: null },
     ]);
+  });
+
+  it("does not let a superseded success commit after a newer terminal failure", async () => {
+    const first = await repository.claimJob(
+      MESSAGE,
+      1,
+      "claim-stale-success",
+      NOW,
+    );
+    expect(first.outcome).toBe("claimed");
+    const second = await repository.claimJob(
+      MESSAGE,
+      2,
+      "claim-terminal-winner",
+      new Date(NOW.getTime() + 1_000),
+    );
+    expect(second.outcome).toBe("claimed");
+    await repository.finishClaimedFailure({
+      jobId: MESSAGE.jobId,
+      claimId: "claim-terminal-winner",
+      expectedCheckpointVersion: 0,
+      status: "failed",
+      category: "authorization",
+      state: "disconnected",
+      now: new Date(NOW.getTime() + 2_000),
+    });
+    const syncRepository = await productionSyncRepository();
+
+    await expect(
+      syncCalendar(
+        {
+          ...MESSAGE,
+          deliveryAttempt: 1,
+          expectedCheckpointVersion: 0,
+        },
+        {
+          client: eventSyncClient(),
+          repository: syncRepository,
+          queueLease: { claimId: "claim-stale-success" },
+          persistFailure: false,
+          now: () => new Date(NOW.getTime() + 3_000),
+          random: () => 0,
+        },
+      ),
+    ).rejects.toMatchObject({
+      category: "concurrency",
+      state: "retry_scheduled",
+      retry: true,
+    });
+
+    expect(
+      (
+        await pglite.query(
+          `select status, last_error_category from calendar_sync_jobs`,
+        )
+      ).rows,
+    ).toEqual([{ status: "failed", last_error_category: "authorization" }]);
+    for (const table of ["sync_checkpoints", "sync_runs", "events", "nodes"]) {
+      expect(
+        (
+          await pglite.query(
+            `select count(*)::integer as count from ${table}`,
+          )
+        ).rows,
+      ).toEqual([{ count: 0 }]);
+    }
+  });
+
+  it("commits under the active lease and reconciles a crash before job completion", async () => {
+    const claimed = await repository.claimJob(
+      MESSAGE,
+      1,
+      "claim-active-success",
+      NOW,
+    );
+    expect(claimed.outcome).toBe("claimed");
+    const syncRepository = await productionSyncRepository();
+
+    await expect(
+      syncCalendar(
+        {
+          ...MESSAGE,
+          deliveryAttempt: 1,
+          expectedCheckpointVersion: 0,
+        },
+        {
+          client: emptySyncClient(),
+          repository: syncRepository,
+          queueLease: { claimId: "claim-active-success" },
+          persistFailure: false,
+          now: () => new Date(NOW.getTime() + 1_000),
+          random: () => 0,
+        },
+      ),
+    ).resolves.toMatchObject({
+      status: "succeeded",
+      checkpointVersion: 1,
+    });
+
+    const reconciled = await repository.claimJob(
+      MESSAGE,
+      2,
+      "claim-after-crash",
+      new Date(NOW.getTime() + 2_000),
+    );
+    expect(reconciled).toEqual({ outcome: "duplicate" });
+    expect(
+      (
+        await pglite.query(
+          `select status, checkpoint_version, last_error_category
+           from calendar_sync_jobs`,
+        )
+      ).rows,
+    ).toEqual([
+      {
+        status: "succeeded",
+        checkpoint_version: 1,
+        last_error_category: null,
+      },
+    ]);
+    expect(
+      (
+        await pglite.query(
+          `select version, status from sync_checkpoints`,
+        )
+      ).rows,
+    ).toEqual([{ version: 1, status: "connected" }]);
+    expect(
+      (
+        await pglite.query(
+          `select count(*)::integer as count from sync_runs`,
+        )
+      ).rows,
+    ).toEqual([{ count: 1 }]);
   });
 
   it("turns an unknown retryable failure into Action required at the sixth attempt", async () => {
