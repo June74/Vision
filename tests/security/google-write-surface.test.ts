@@ -411,6 +411,163 @@ describe("Phase B Google and route write surface", () => {
     );
   });
 
+  it("rejects a statically resolved variable Google event mutation member", async () => {
+    const root = await createCleanReleaseFixture();
+    roots.push(root);
+    await writeFixtureFile(
+      root,
+      "src/integrations/google-calendar/calendar-client.ts",
+      `
+        const operation = "delete";
+        calendar.events[operation]({
+          calendarId: "primary",
+          eventId: "event",
+        });
+      `,
+    );
+
+    const result = await scanRelease({ projectRoot: root, protectedSentinel: PROTECTED_SENTINEL });
+
+    expect(result.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ category: "google-event-write" }),
+      ]),
+    );
+  });
+
+  it("fails closed for an unresolved Google event collection member", async () => {
+    const root = await createCleanReleaseFixture();
+    roots.push(root);
+    await writeFixtureFile(
+      root,
+      "src/integrations/google-calendar/calendar-client.ts",
+      `
+        declare const operation: string;
+        calendar.events[operation]({
+          calendarId: "primary",
+          eventId: "event",
+        });
+      `,
+    );
+
+    const result = await scanRelease({ projectRoot: root, protectedSentinel: PROTECTED_SENTINEL });
+
+    expect(result.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ category: "google-event-write" }),
+      ]),
+    );
+  });
+
+  it("fails closed for an unresolved endpoint through a typed renamed transport", async () => {
+    const root = await createCleanReleaseFixture();
+    roots.push(root);
+    await writeFixtureFile(
+      root,
+      "src/server/google-write.ts",
+      `
+        const GOOGLE_CALENDAR_ENDPOINT = "https://www.googleapis.com/calendar/v3";
+        declare function buildGoogleUrl(): string;
+        export function remove(transport: typeof fetch) {
+          return transport(buildGoogleUrl(), { method: "DELETE" });
+        }
+      `,
+    );
+
+    const result = await scanRelease({ projectRoot: root, protectedSentinel: PROTECTED_SENTINEL });
+
+    expect(result.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ category: "google-event-write" }),
+      ]),
+    );
+  });
+
+  it("fails closed for an unresolved endpoint through a typed transport property", async () => {
+    const root = await createCleanReleaseFixture();
+    roots.push(root);
+    await writeFixtureFile(
+      root,
+      "src/server/google-write.ts",
+      `
+        const GOOGLE_CALENDAR_ENDPOINT = "https://www.googleapis.com/calendar/v3";
+        declare function buildGoogleUrl(): string;
+        export class GoogleWriter {
+          constructor(private readonly transport: typeof fetch) {}
+
+          remove() {
+            return this.transport(buildGoogleUrl(), { method: "DELETE" });
+          }
+        }
+      `,
+    );
+
+    const result = await scanRelease({ projectRoot: root, protectedSentinel: PROTECTED_SENTINEL });
+
+    expect(result.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ category: "google-event-write" }),
+      ]),
+    );
+  });
+
+  it("fails closed for an unresolved endpoint through an inferred fetch property", async () => {
+    const root = await createCleanReleaseFixture();
+    roots.push(root);
+    await writeFixtureFile(
+      root,
+      "src/server/google-write.ts",
+      `
+        const GOOGLE_CALENDAR_ENDPOINT = "https://www.googleapis.com/calendar/v3";
+        declare function buildGoogleUrl(): string;
+        export class GoogleWriter {
+          private readonly transport = fetch;
+
+          remove() {
+            return this.transport(buildGoogleUrl(), { method: "DELETE" });
+          }
+        }
+      `,
+    );
+
+    const result = await scanRelease({ projectRoot: root, protectedSentinel: PROTECTED_SENTINEL });
+
+    expect(result.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ category: "google-event-write" }),
+      ]),
+    );
+  });
+
+  it.each([
+    `
+      const app = new Hono();
+      app["post"]("/api/calendar/events", writeEvent);
+    `,
+    `
+      const app = new Hono();
+      const verb = "post";
+      app[verb]("/api/calendar/events", writeEvent);
+    `,
+    `
+      const app = new Hono();
+      declare const verb: string;
+      app[verb]("/api/calendar/events", writeEvent);
+    `,
+  ])("rejects computed Hono route registrations", async (source) => {
+    const root = await createCleanReleaseFixture();
+    roots.push(root);
+    await writeFixtureFile(root, "src/server/api/write-routes.ts", source);
+
+    const result = await scanRelease({ projectRoot: root, protectedSentinel: PROTECTED_SENTINEL });
+
+    expect(result.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ category: "event-write-route" }),
+      ]),
+    );
+  });
+
   it("rejects a variable forbidden method on an approved endpoint", async () => {
     const root = await createCleanReleaseFixture();
     roots.push(root);

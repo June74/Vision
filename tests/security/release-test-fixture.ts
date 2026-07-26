@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,32 +7,60 @@ import { PROTECTED_RELEASE_SENTINEL } from "../../scripts/scan-release";
 export const PROTECTED_SENTINEL = PROTECTED_RELEASE_SENTINEL;
 
 const evidenceFiles = [
-  ["application-logs/captured.ndjson", "safe-logger-contract-capture"],
-  ["audit/audit.ndjson", "audit-writer-contract-fixture"],
-  ["queue/queue.ndjson", "queue-message-contract-fixture"],
-  ["database-raw/rows.ndjson", "encrypted-row-export-fixture"],
-  ["r2-unencrypted/object.json", "encrypted-r2-envelope-fixture"],
+  ["application-logs/captured.ndjson", "src/server/logging.ts#logEvent"],
+  ["audit/audit.ndjson", "src/audit/audit-writer.ts#AuditWriter.write"],
+  ["queue/queue.ndjson", "src/jobs/queue-message.ts#parseCalendarSyncMessage"],
+  [
+    "database-raw/rows.ndjson",
+    "src/data/repositories/event-repository.ts#prepareStoredEventRow",
+  ],
+  [
+    "r2-unencrypted/object.json",
+    "src/crypto/backup-envelope.ts#encryptBackupEnvelope",
+  ],
 ] as const;
 
 export async function createCleanReleaseFixture(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "vision-release-scan-"));
+  const clientRelativePath = "assets/app.js";
+  const clientContents = "globalThis.__VISION_RELEASE_BUILD__ = true;";
   await writeFixtureFile(
     root,
-    "dist/client/assets/app.js",
-    "globalThis.__VISION_RELEASE_BUILD__ = true;",
+    `dist/client/${clientRelativePath}`,
+    clientContents,
+  );
+  const buildDigest = createHash("sha256")
+    .update(`${Buffer.byteLength(clientRelativePath, "utf8")}:`)
+    .update(clientRelativePath, "utf8")
+    .update(`${Buffer.byteLength(clientContents, "utf8")}:`)
+    .update(clientContents, "utf8")
+    .digest("hex");
+  const capturedAt = new Date().toISOString();
+  const runId = "00000000-0000-4000-8000-000000000001";
+  await writeFixtureFile(
+    root,
+    "dist/release-evidence/manifest.json",
+    JSON.stringify({
+      evidenceVersion: 1,
+      generator: "scripts/capture-release-evidence.ts",
+      runId,
+      capturedAt,
+      buildDigest,
+    }),
   );
   for (const [relativePath, source] of evidenceFiles) {
     const surface = relativePath.split("/")[0]?.replace("-", "_");
     await writeFixtureFile(
       root,
-      `tests/fixtures/release-evidence/${relativePath}`,
+      `dist/release-evidence/${relativePath}`,
       `${JSON.stringify({
         evidenceVersion: 1,
         surface,
-        capturedAt: "2026-07-25T00:00:00.000Z",
+        capturedAt,
+        buildDigest,
         provenance: {
-          generator: "tests/security/release-evidence",
-          runId: "phase-b-local-contract",
+          generator: "scripts/capture-release-evidence.ts",
+          runId,
           source,
         },
         record: { status: "clean" },

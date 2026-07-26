@@ -15,7 +15,8 @@
     "test:e2e": "tsx scripts/run-e2e.ts",
     "restore:backup": "tsx scripts/restore-backup.ts",
     "deploy:check:preview": "tsx scripts/validate-preview-deploy-config.ts",
-    "security:scan": "tsx scripts/scan-release.ts",
+    "security:evidence": "tsx scripts/capture-release-evidence.ts",
+    "security:scan": "pnpm security:evidence && tsx scripts/scan-release.ts",
     "docs:check": "tsx scripts/validate-doc-coverage.ts",
     "check": "pnpm typecheck && pnpm test:unit && pnpm test:contract && pnpm test:worker && pnpm docs:check && pnpm build && pnpm security:scan",
     "ci": "pnpm check && pnpm test:e2e"

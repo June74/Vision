@@ -137,34 +137,43 @@ const APPROVED_MUTATING_ROUTES = new Map<
 
 const EVIDENCE_TARGETS = [
   {
-    relativePath:
-      "tests/fixtures/release-evidence/application-logs/captured.ndjson",
+    relativePath: "dist/release-evidence/application-logs/captured.ndjson",
     surface: "application_logs",
-    source: "safe-logger-contract-capture",
+    source: "src/server/logging.ts#logEvent",
   },
   {
-    relativePath: "tests/fixtures/release-evidence/audit/audit.ndjson",
+    relativePath: "dist/release-evidence/audit/audit.ndjson",
     surface: "audit",
-    source: "audit-writer-contract-fixture",
+    source: "src/audit/audit-writer.ts#AuditWriter.write",
   },
   {
-    relativePath: "tests/fixtures/release-evidence/queue/queue.ndjson",
+    relativePath: "dist/release-evidence/queue/queue.ndjson",
     surface: "queue",
-    source: "queue-message-contract-fixture",
+    source: "src/jobs/queue-message.ts#parseCalendarSyncMessage",
   },
   {
-    relativePath:
-      "tests/fixtures/release-evidence/database-raw/rows.ndjson",
+    relativePath: "dist/release-evidence/database-raw/rows.ndjson",
     surface: "database_raw",
-    source: "encrypted-row-export-fixture",
+    source: "src/data/repositories/event-repository.ts#prepareStoredEventRow",
   },
   {
-    relativePath:
-      "tests/fixtures/release-evidence/r2-unencrypted/object.json",
+    relativePath: "dist/release-evidence/r2-unencrypted/object.json",
     surface: "r2_unencrypted",
-    source: "encrypted-r2-envelope-fixture",
+    source: "src/crypto/backup-envelope.ts#encryptBackupEnvelope",
   },
 ] as const;
+
+const EVIDENCE_MANIFEST_PATH = "dist/release-evidence/manifest.json";
+const EVIDENCE_GENERATOR = "scripts/capture-release-evidence.ts";
+const MAX_EVIDENCE_AGE_MS = 10 * 60 * 1_000;
+
+interface ReleaseEvidenceManifest {
+  readonly evidenceVersion: 1;
+  readonly generator: typeof EVIDENCE_GENERATOR;
+  readonly runId: string;
+  readonly capturedAt: string;
+  readonly buildDigest: string;
+}
 
 /** Converts an untrusted filesystem path into a bounded, non-reflective CI identifier. */
 function safeFileIdentifier(
@@ -292,18 +301,21 @@ function readHttpMethod(
   return undefined;
 }
 
-/** Returns only a statically named dot or bracket member from one expression. */
-function staticMemberName(expression: ts.Expression): string | undefined {
+/** Returns only a statically named dot or bounded bracket member from one expression. */
+function staticMemberName(
+  expression: ts.Expression,
+  staticValues: ReadonlyMap<string, string>,
+  sourceFile: ts.SourceFile,
+): string | undefined {
   if (ts.isPropertyAccessExpression(expression)) {
     return expression.name.text;
   }
-  if (
-    ts.isElementAccessExpression(expression) &&
-    expression.argumentExpression &&
-    (ts.isStringLiteral(expression.argumentExpression) ||
-      ts.isNoSubstitutionTemplateLiteral(expression.argumentExpression))
-  ) {
-    return expression.argumentExpression.text;
+  if (ts.isElementAccessExpression(expression)) {
+    return canonicalExpression(
+      expression.argumentExpression,
+      staticValues,
+      sourceFile,
+    );
   }
   return undefined;
 }
@@ -312,20 +324,110 @@ function staticMemberName(expression: ts.Expression): string | undefined {
 function isGoogleEventsExpression(
   expression: ts.Expression,
   eventObjectAliases: ReadonlySet<string>,
+  staticValues: ReadonlyMap<string, string>,
+  sourceFile: ts.SourceFile,
 ): boolean {
   return (
-    staticMemberName(expression) === "events" ||
+    staticMemberName(expression, staticValues, sourceFile) === "events" ||
     (ts.isIdentifier(expression) &&
       eventObjectAliases.has(expression.text))
   );
 }
 
-/** Validates a named evidence export's explicit local-contract provenance envelope. */
+/** Hashes the exact regular-file content of the current client build in path order. */
+export async function computeReleaseBuildDigest(
+  projectRoot: string,
+): Promise<string> {
+  const root = resolve(projectRoot, "dist/client");
+  const pending = [root];
+  const files: string[] = [];
+  while (pending.length > 0) {
+    const directory = pending.pop();
+    if (!directory) break;
+    const entries = await readdir(directory, { withFileTypes: true });
+    for (const entry of entries) {
+      const path = resolve(directory, entry.name);
+      if (entry.isSymbolicLink()) {
+        throw new Error("Client build cannot contain symbolic links.");
+      }
+      if (entry.isDirectory()) pending.push(path);
+      else if (entry.isFile()) files.push(path);
+    }
+  }
+  if (files.length === 0) {
+    throw new Error("Client build contains no files.");
+  }
+  const digest = createHash("sha256");
+  for (const file of files.sort()) {
+    const identifier = relative(root, file).replaceAll("\\", "/");
+    const bytes = await readFile(file);
+    digest.update(`${Buffer.byteLength(identifier, "utf8")}:`);
+    digest.update(identifier, "utf8");
+    digest.update(`${bytes.byteLength}:`);
+    digest.update(bytes);
+  }
+  return digest.digest("hex");
+}
+
+/** Accepts only a fresh capture manifest bound to the current built client. */
+function parseEvidenceManifest(
+  text: string,
+  currentBuildDigest: string,
+  nowMs: number,
+): ReleaseEvidenceManifest | undefined {
+  try {
+    const value = JSON.parse(text) as unknown;
+    if (
+      typeof value !== "object" ||
+      value === null ||
+      Array.isArray(value)
+    ) {
+      return undefined;
+    }
+    const record = value as Record<string, unknown>;
+    const keys = Object.keys(record).sort().join(",");
+    const capturedAt =
+      typeof record.capturedAt === "string"
+        ? Date.parse(record.capturedAt)
+        : Number.NaN;
+    if (
+      keys !==
+        "buildDigest,capturedAt,evidenceVersion,generator,runId" ||
+      record.evidenceVersion !== 1 ||
+      record.generator !== EVIDENCE_GENERATOR ||
+      typeof record.runId !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(
+        record.runId,
+      ) ||
+      typeof record.capturedAt !== "string" ||
+      new Date(record.capturedAt).toISOString() !== record.capturedAt ||
+      !Number.isFinite(capturedAt) ||
+      capturedAt > nowMs + 60_000 ||
+      nowMs - capturedAt > MAX_EVIDENCE_AGE_MS ||
+      record.buildDigest !== currentBuildDigest
+    ) {
+      return undefined;
+    }
+    return {
+      evidenceVersion: 1,
+      generator: EVIDENCE_GENERATOR,
+      runId: record.runId,
+      capturedAt: record.capturedAt,
+      buildDigest: currentBuildDigest,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+/** Validates a generated record against the fresh build-bound capture manifest. */
 function hasValidEvidenceProvenance(
   text: string,
   expectedSurface: string,
   expectedSource: string,
+  manifest: ReleaseEvidenceManifest | undefined,
 ): boolean {
+  if (!manifest) return false;
   const lines = text.split(/\r?\n/u).filter((line) => line.trim().length > 0);
   if (lines.length === 0 || lines.length > 1_000) return false;
   return lines.every((line) => {
@@ -350,10 +452,10 @@ function hasValidEvidenceProvenance(
       return (
         record.evidenceVersion === 1 &&
         record.surface === expectedSurface &&
-        typeof capturedAt === "string" &&
-        new Date(capturedAt).toISOString() === capturedAt &&
-        provenanceRecord?.generator === "tests/security/release-evidence" &&
-        provenanceRecord.runId === "phase-b-local-contract" &&
+        capturedAt === manifest.capturedAt &&
+        record.buildDigest === manifest.buildDigest &&
+        provenanceRecord?.generator === manifest.generator &&
+        provenanceRecord.runId === manifest.runId &&
         provenanceRecord.source === expectedSource &&
         typeof record.record === "object" &&
         record.record !== null &&
@@ -383,8 +485,43 @@ function scanGoogleSource(
   const ambiguousValues = new Set<string>();
   const forbiddenAliases = new Set<string>();
   const eventObjectAliases = new Set<string>();
+  const transportAliases = new Set<string>(["fetch"]);
+  const transportProperties = new Set<string>();
 
   sourceFile.forEachChild(function collectStaticValues(node): void {
+    if (
+      ts.isParameter(node) &&
+      ts.isIdentifier(node.name) &&
+      node.type?.getText(sourceFile).replaceAll(/\s+/gu, "") ===
+        "typeoffetch"
+    ) {
+      transportAliases.add(node.name.text);
+      if (
+        ts.isConstructorDeclaration(node.parent) &&
+        node.modifiers !== undefined
+      ) {
+        transportProperties.add(node.name.text);
+      }
+    }
+    if (
+      ts.isPropertyDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      (node.type?.getText(sourceFile).replaceAll(/\s+/gu, "") ===
+        "typeoffetch" ||
+        (node.initializer !== undefined &&
+          ts.isIdentifier(node.initializer) &&
+          transportAliases.has(node.initializer.text)) ||
+        (node.initializer !== undefined &&
+          ts.isCallExpression(node.initializer) &&
+          ts.isPropertyAccessExpression(node.initializer.expression) &&
+          node.initializer.expression.name.text === "bind" &&
+          ts.isIdentifier(node.initializer.expression.expression) &&
+          transportAliases.has(
+            node.initializer.expression.expression.text,
+          )))
+    ) {
+      transportProperties.add(node.name.text);
+    }
     if (
       ts.isVariableDeclaration(node) &&
       ts.isIdentifier(node.name) &&
@@ -408,11 +545,13 @@ function scanGoogleSource(
         (ts.isPropertyAccessExpression(node.initializer) ||
           ts.isElementAccessExpression(node.initializer)) &&
         ["insert", "update", "patch", "move", "delete"].includes(
-          staticMemberName(node.initializer) ?? "",
+          staticMemberName(node.initializer, staticValues, sourceFile) ?? "",
         ) &&
         isGoogleEventsExpression(
           node.initializer.expression,
           eventObjectAliases,
+          staticValues,
+          sourceFile,
         )
       ) {
         forbiddenAliases.add(node.name.text);
@@ -420,16 +559,35 @@ function scanGoogleSource(
       if (
         (ts.isPropertyAccessExpression(node.initializer) ||
           ts.isElementAccessExpression(node.initializer)) &&
-        staticMemberName(node.initializer) === "events"
+        staticMemberName(node.initializer, staticValues, sourceFile) ===
+          "events"
       ) {
         eventObjectAliases.add(node.name.text);
+      }
+      if (
+        (ts.isIdentifier(node.initializer) &&
+          transportAliases.has(node.initializer.text)) ||
+        (ts.isCallExpression(node.initializer) &&
+          ts.isPropertyAccessExpression(node.initializer.expression) &&
+          node.initializer.expression.name.text === "bind" &&
+          ts.isIdentifier(node.initializer.expression.expression) &&
+          transportAliases.has(
+            node.initializer.expression.expression.text,
+          ))
+      ) {
+        transportAliases.add(node.name.text);
       }
     }
     if (
       ts.isVariableDeclaration(node) &&
       ts.isObjectBindingPattern(node.name) &&
       node.initializer &&
-      isGoogleEventsExpression(node.initializer, eventObjectAliases)
+      isGoogleEventsExpression(
+        node.initializer,
+        eventObjectAliases,
+        staticValues,
+        sourceFile,
+      )
     ) {
       for (const element of node.name.elements) {
         const providerName = element.propertyName?.getText(sourceFile) ??
@@ -460,15 +618,31 @@ function scanGoogleSource(
         ts.isPropertyAccessExpression(node.expression) ||
         ts.isElementAccessExpression(node.expression)
       ) {
-        const methodName = staticMemberName(node.expression) ?? "";
-        forbiddenSdkCall =
-          ["insert", "update", "patch", "move", "delete"].includes(
-            methodName,
-          ) &&
+        const methodName = staticMemberName(
+          node.expression,
+          staticValues,
+          sourceFile,
+        );
+        const unresolvedComputedMember =
+          ts.isElementAccessExpression(node.expression) &&
+          methodName === undefined &&
           isGoogleEventsExpression(
             node.expression.expression,
             eventObjectAliases,
+            staticValues,
+            sourceFile,
           );
+        forbiddenSdkCall =
+          unresolvedComputedMember ||
+          (["insert", "update", "patch", "move", "delete"].includes(
+            methodName ?? "",
+          ) &&
+            isGoogleEventsExpression(
+              node.expression.expression,
+              eventObjectAliases,
+              staticValues,
+              sourceFile,
+            ));
       } else if (
         ts.isIdentifier(node.expression) &&
         forbiddenAliases.has(node.expression.text)
@@ -488,6 +662,19 @@ function scanGoogleSource(
         : ts.isPropertyAccessExpression(node.expression)
           ? node.expression.name.text
           : undefined;
+      const isProvenTransport =
+        (ts.isIdentifier(node.expression) &&
+          transportAliases.has(node.expression.text)) ||
+        ((ts.isPropertyAccessExpression(node.expression) ||
+          ts.isElementAccessExpression(node.expression)) &&
+          node.expression.expression.kind === ts.SyntaxKind.ThisKeyword &&
+          transportProperties.has(
+            staticMemberName(
+              node.expression,
+              staticValues,
+              sourceFile,
+            ) ?? "",
+          ));
       const endpoint = canonicalExpression(
         node.arguments[0],
         staticValues,
@@ -496,11 +683,20 @@ function scanGoogleSource(
       const endpointLooksGoogle =
         endpoint?.includes("googleapis.com") === true ||
         endpoint?.includes("GOOGLE_CALENDAR_BASE_URL") === true;
+      const declaredMethod = readHttpMethod(
+        node.arguments[1],
+        staticValues,
+        sourceFile,
+      );
+      const structurallyProviderBoundCall =
+        providerMarkerPresent &&
+        node.arguments.length >= 2 &&
+        declaredMethod !== undefined;
       if (
-        calleeName === "fetch" ||
-        calleeName === "fetcher" ||
+        isProvenTransport ||
         calleeName === "request" ||
-        endpointLooksGoogle
+        endpointLooksGoogle ||
+        structurallyProviderBoundCall
       ) {
         let enclosingName: string | undefined;
         let parent: ts.Node | undefined = node.parent;
@@ -530,11 +726,7 @@ function scanGoogleSource(
               property.expression.text === "init",
           );
         if (!isReviewedTransportForwarder) {
-          const method = readHttpMethod(
-            node.arguments[1],
-            staticValues,
-            sourceFile,
-          );
+          const method = declaredMethod;
           const approved =
             endpoint !== undefined &&
             method !== undefined &&
@@ -689,10 +881,31 @@ function scanRouteSource(
   sourceFile.forEachChild(function inspectRoutes(node): void {
     if (
       ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression)
+      (ts.isPropertyAccessExpression(node.expression) ||
+        ts.isElementAccessExpression(node.expression))
     ) {
-      const registration = node.expression.name.text.toLowerCase();
+      const receiver = node.expression.expression;
+      const resolvedReceiver = resolveHonoReceiver(receiver);
+      const registrationName = staticMemberName(
+        node.expression,
+        staticValues,
+        sourceFile,
+      );
       if (
+        registrationName === undefined &&
+        ts.isElementAccessExpression(node.expression) &&
+        resolvedReceiver.isHono
+      ) {
+        violations.push({
+          category: "event-write-route",
+          file: fileIdentifier,
+          reason:
+            "computed Hono route registration method is not statically resolvable",
+        });
+      }
+      const registration = registrationName?.toLowerCase();
+      if (
+        registration !== undefined &&
         [
           "get",
           "post",
@@ -705,8 +918,6 @@ function scanRouteSource(
           "mount",
         ].includes(registration)
       ) {
-        const receiver = node.expression.expression;
-        const resolvedReceiver = resolveHonoReceiver(receiver);
         const receiverIsHono = resolvedReceiver.isHono;
         const routeArgument =
           registration === "on" ? node.arguments[1] : node.arguments[0];
@@ -820,6 +1031,36 @@ export async function scanRelease(
     ...protectedVariants,
     ...CLIENT_FORBIDDEN_BINDING_NAMES,
   ];
+  const manifestPath = resolve(projectRoot, EVIDENCE_MANIFEST_PATH);
+  let evidenceManifest: ReleaseEvidenceManifest | undefined;
+  try {
+    const manifestStat = await lstat(manifestPath);
+    if (
+      manifestStat.isSymbolicLink() ||
+      !manifestStat.isFile() ||
+      manifestStat.size > 16 * 1024
+    ) {
+      throw new Error("unacceptable-manifest");
+    }
+    const currentBuildDigest = await computeReleaseBuildDigest(projectRoot);
+    evidenceManifest = parseEvidenceManifest(
+      await readFile(manifestPath, "utf8"),
+      currentBuildDigest,
+      Date.now(),
+    );
+    if (!evidenceManifest) throw new Error("invalid-manifest");
+  } catch {
+    violations.push({
+      category: "missing-evidence",
+      file: safeFileIdentifier(
+        projectRoot,
+        manifestPath,
+        forbiddenFileFragments,
+      ),
+      reason:
+        "fresh release evidence manifest is absent, invalid, or not bound to the current build",
+    });
+  }
   const scanTargets = [
     {
       relativePath: "dist/client",
@@ -984,6 +1225,7 @@ export async function scanRelease(
           text,
           target.evidenceSurface,
           target.evidenceSource,
+          evidenceManifest,
         )
       ) {
         violations.push({
