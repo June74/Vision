@@ -1,0 +1,31 @@
+name: Vision preview safe tail
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tail:
+    name: Capture one safe scheduled outcome
+    runs-on: ubuntu-latest
+    environment: preview
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Print only allowlisted scheduled evidence
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
+        run: |
+          timeout 85s pnpm exec wrangler tail vision-preview --format json 2>/dev/null |
+            pnpm exec tsx scripts/print-safe-tail.ts

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:31:42.622047Z
-- **Last observed:** 2026-07-26T19:33:19.4460335Z
+- **Last observed:** 2026-07-26T22:08:06.7712930Z
 - **Phase/task:** Phase B live deployment verification
 - **Environment:** Signed-in Cloudflare browser session
 - **Version/commit:** `066fcbd`
@@ -58,3 +58,6 @@ event, and cron schedule.
 ## Recurrence history
 
 - 2026-07-26T19:31:42.622047Z: First observed.
+- 2026-07-26T22:08:06.7712930Z: Recurred when the saved Cloudflare tab handle
+  timed out before an R2 read-only inspection; no provider action occurred and
+  the tab was reacquired from the current browser session.

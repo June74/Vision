@@ -32,7 +32,7 @@
 | [SB-20260726-191656-callback-url-in-test-diff](incidents/2026-07-26T191656Z-callback-url-in-test-diff.md) | closed | 2026-07-26T19:19:40.5249114Z | Phase B deployment fix tests | Callback URL appeared in test failure diff |
 | [SB-20260726-192405-worker-static-analysis-sandbox-warning](incidents/2026-07-26T192405Z-worker-static-analysis-sandbox-warning.md) | closed | 2026-07-26T19:24:05.647183Z | Phase B deployment fix verification | Worker static analysis hit sandbox boundary |
 | [SB-20260726-192748-neon-dashboard-authentication-required](incidents/2026-07-26T192748Z-neon-dashboard-authentication-required.md) | closed | 2026-07-26T19:45:09.1509946Z | Phase B recovery and cost acceptance | Neon dashboard requires user authentication |
-| [SB-20260726-193142-stale-cloudflare-tab-descriptor](incidents/2026-07-26T193142Z-stale-cloudflare-tab-descriptor.md) | closed | 2026-07-26T19:33:19.4460335Z | Phase B live deployment verification | Stale Cloudflare tab descriptor was reused |
+| [SB-20260726-193142-stale-cloudflare-tab-descriptor](incidents/2026-07-26T193142Z-stale-cloudflare-tab-descriptor.md) | closed | 2026-07-26T22:08:06.7712930Z | Phase B live deployment verification | Stale Cloudflare tab descriptor was reused |
 | [SB-20260726-193431-web-reader-rejected-preview-health](incidents/2026-07-26T193431Z-web-reader-rejected-preview-health.md) | closed | 2026-07-26T20:09:01.5419445Z | Phase B live deployment verification | Browser client rejected direct preview API navigation |
 | [SB-20260726-194134-preview-build-environment-omitted](incidents/2026-07-26T194134Z-preview-build-environment-omitted.md) | closed | 2026-07-26T19:42:26.3754466Z | Phase B temporary backup deployment | Preview build environment was omitted |
 | [SB-20260726-194848-shell-smoke-heading-ambiguous](incidents/2026-07-26T194848Z-shell-smoke-heading-ambiguous.md) | closed | 2026-07-26T19:50:31.6114090Z | Phase B temporary backup deployment | Shell smoke heading locator was ambiguous |
@@ -44,6 +44,11 @@
 | [SB-20260726-201749-incorrect-live-migration-range](incidents/2026-07-26T201749Z-incorrect-live-migration-range.md) | closed | 2026-07-26T20:18:31.4381230Z | Phase B live database recovery | Initial live migration range was incomplete |
 | [SB-20260726-215753-repository-search-entered-dependencies](incidents/2026-07-26T215753Z-repository-search-entered-dependencies.md) | closed | 2026-07-26T21:57:53Z | Phase B live migration verification | Repository search entered dependencies |
 | [SB-20260726-220017-guessed-preview-workflow-filename](incidents/2026-07-26T220017Z-guessed-preview-workflow-filename.md) | closed | 2026-07-26T22:00:17Z | Phase B temporary backup deployment | Guessed preview workflow filename |
+| [SB-20260726-220528-github-status-filter-quoting](incidents/2026-07-26T220528Z-github-status-filter-quoting.md) | closed | 2026-07-26T22:06:00Z | Phase B temporary backup deployment | GitHub status filter quoting failed |
+| [SB-20260726-220707-preview-workflow-abbreviated-ref](incidents/2026-07-26T220707Z-preview-workflow-abbreviated-ref.md) | closed | 2026-07-26T22:07:07Z | Phase B temporary backup deployment | Preview workflow received abbreviated ref |
+| [SB-20260726-220940-browser-locator-bulk-text-unsupported](incidents/2026-07-26T220940Z-browser-locator-bulk-text-unsupported.md) | closed | 2026-07-26T22:09:40Z | Phase B R2 backup acceptance | Browser locator bulk text unsupported |
+| [SB-20260726-221344-post-migration-backup-object-not-visible](incidents/2026-07-26T221344Z-post-migration-backup-object-not-visible.md) | investigating | 2026-07-26T22:13:44Z | Phase B live encrypted backup acceptance | Post-migration backup object not visible |
+| [SB-20260726-222051-tdd-skill-read-late-and-root-misresolved](incidents/2026-07-26T222051Z-tdd-skill-read-late-and-root-misresolved.md) | closed | 2026-07-26T22:20:51Z | Phase B temporary backup acceptance | TDD skill read late and root misresolved |
 
 ## Legacy history
 
