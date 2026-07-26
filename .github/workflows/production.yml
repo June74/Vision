@@ -63,6 +63,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Run application checks
         run: pnpm check
+      - name: Re-run the Phase B release security boundary
+        run: pnpm security:scan
       - name: Install Chromium for browser smoke coverage
         run: pnpm exec playwright install --with-deps chromium
       - name: Run browser smoke coverage
