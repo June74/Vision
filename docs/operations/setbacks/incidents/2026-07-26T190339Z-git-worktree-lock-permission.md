@@ -1,11 +1,11 @@
 # SB-20260726-190339-git-worktree-lock-permission: Git worktree lock creation was denied
 
-- **Status:** open
+- **Status:** closed
 - **First observed:** 2026-07-26T19:03:39.626332Z
 - **Last observed:** 2026-07-26T19:03:39.626332Z
 - **Phase/task:** Phase B release operations
-- **Environment:** To be established
-- **Version/commit:** To be established
+- **Environment:** Local linked worktree under the managed sandbox
+- **Version/commit:** `f7778b8`
 
 ## Symptom
 
@@ -17,33 +17,42 @@ No files were lost or partially committed; the release commit paused pending the
 
 ## Reproduction conditions
 
-To be established.
+Stage files in the linked worktree while the sandbox grants read-only access to
+the shared repository metadata.
 
 ## Safe evidence
 
-To be established. Do not paste private or secret values.
+Git reported that the linked-worktree index lock could not be created. The same
+stage-and-commit operation succeeded after narrowly scoped repository metadata
+permission was granted.
 
 ## Attempts and outcomes
 
-None recorded.
+- Default-permission staging failed before writing the index.
+- The exact Git operation was retried with repository metadata permission.
+- Commit `f7778b8` preserved all listed incident records.
 
 ## Cause classification
 
-- **Confirmed cause:** Unconfirmed.
-- **Hypotheses:** None recorded.
+- **Confirmed cause:** The default sandbox allowed reading but not writing the
+  linked worktree's shared Git metadata directory.
+- **Hypotheses:** None.
 - **Rejected hypotheses:** None recorded.
-- **Known exclusions:** None recorded.
+- **Known exclusions:** The working-tree files and previous commits were
+  unaffected.
 
 ## Correction and prevention
 
-- **Correction:** Pending.
-- **Prevention:** Pending.
+- **Correction:** Retried only the scoped Git stage-and-commit operation with
+  the required permission.
+- **Prevention:** Expect linked-worktree Git mutations to require metadata
+  permission in this workspace; keep file edits separate from Git mutations.
 - **Owner:** Codex and project owner.
-- **Next diagnostic step:** Establish the smallest safe reproduction.
+- **Next diagnostic step:** None while closed.
 
 ## Verification and related work
 
-Pending.
+The retry completed successfully and produced commit `f7778b8`.
 
 ## Recurrence history
 
