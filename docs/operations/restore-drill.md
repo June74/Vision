@@ -17,7 +17,8 @@ emails, protected rows, or provider-controlled URLs.
 | Create separate backup encryption key and store it as a Worker secret | Granted | Complete |
 | Attach private preview R2 bucket and synchronization Queue | Granted | Complete |
 | Deploy temporary backup schedule, create one verified encrypted object, restore the daily schedule | Granted | In progress |
-| Create an empty disposable Neon branch, restore, verify, and permanently delete that branch | Requested | Pending |
+| Apply migrations 0004 through 0009 to preview Neon | Granted | Complete |
+| Create an empty disposable Neon branch, restore, verify, and permanently delete that branch | Granted | Pending |
 
 The first temporary run was contained without an object after a read-only
 schema comparison found the live preview database missing migrations 0004
@@ -37,9 +38,10 @@ against a disposable local PostgreSQL-compatible database:
 - The expected `vision_app` privileges matched across 13 affected tables.
 - The affected tables exposed zero grants to `PUBLIC`.
 
-This proves the reviewed bundle is transactional and privilege-complete in the
-local contract environment. It does not substitute for the still-pending live
-Neon apply and post-apply read-only checks.
+The reviewed bundle was then copied into the signed-in Neon SQL editor,
+verified against the local source by exact character count and SHA-256, and
+executed as one transaction. A post-apply read-only check found zero missing
+required tables and zero missing signature columns.
 
 ## Drill checklist
 

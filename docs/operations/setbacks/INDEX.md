@@ -12,11 +12,12 @@
 | [SB-20260726-205929-preview-ai-secret-policy-conflict](incidents/2026-07-26T205929Z-preview-ai-secret-policy-conflict.md) | closed | 2026-07-26T21:00:52.2014411Z | Phase B AI live acceptance | Preview AI key policy contradicted the acceptance plan |
 | [SB-20260726-210652-cloudflare-ai-config-inspection-inconclusive](incidents/2026-07-26T210652Z-cloudflare-ai-config-inspection-inconclusive.md) | contained | 2026-07-26T21:06:52.7787262Z | Phase B AI live acceptance | Cloudflare AI configuration inspection was inconclusive |
 | [SB-20260726-210852-skill-loaded-after-status-announcement](incidents/2026-07-26T210852Z-skill-loaded-after-status-announcement.md) | closed | 2026-07-26T21:08:52.2324591Z | Phase B blocked audit | Workflow skill was loaded after the status announcement |
+| [SB-20260726-215244-neon-editor-rendered-text-not-full-model](incidents/2026-07-26T215244Z-neon-editor-rendered-text-not-full-model.md) | closed | 2026-07-26T21:58:19.6876526Z | Phase B live database migration | Neon editor rendered text did not prove full migration transfer |
 | [SB-20260726-185307-incorrect-skill-root](incidents/2026-07-26T185307Z-incorrect-skill-root.md) | closed | 2026-07-26T18:53:07.263429Z | Phase B release operations | Incorrect local skill root used |
 | [SB-20260726-185327-setback-index-row-placement](incidents/2026-07-26T185327Z-setback-index-row-placement.md) | closed | 2026-07-26T18:53:27.936691Z | Phase B release operations | Setback index row appended outside table |
 | [SB-20260726-185631-browser-label-pattern-unsupported](incidents/2026-07-26T185631Z-browser-label-pattern-unsupported.md) | closed | 2026-07-26T21:02:48.1034572Z | Phase B Cloudflare configuration | Browser label pattern was unsupported |
 | [SB-20260726-190208-assumed-wrangler-config-path](incidents/2026-07-26T190208Z-assumed-wrangler-config-path.md) | closed | 2026-07-26T19:02:08.702614Z | Phase B release operations | Conventional Wrangler config path was assumed |
-| [SB-20260726-190339-git-worktree-lock-permission](incidents/2026-07-26T190339Z-git-worktree-lock-permission.md) | closed | 2026-07-26T19:03:39.626332Z | Phase B release operations | Git worktree lock creation was denied |
+| [SB-20260726-190339-git-worktree-lock-permission](incidents/2026-07-26T190339Z-git-worktree-lock-permission.md) | closed | 2026-07-26T22:01:39Z | Phase B release operations | Git worktree lock creation was denied |
 | [SB-20260726-190417-setback-row-timestamp-assumption](incidents/2026-07-26T190417Z-setback-row-timestamp-assumption.md) | closed | 2026-07-26T19:49:20.5044351Z | Phase B release operations | Setback row timestamp was assumed |
 | [SB-20260726-203035-git-global-ignore-unreadable](incidents/2026-07-26T203035Z-git-global-ignore-unreadable.md) | closed | 2026-07-26T20:54:22.5223781Z | Phase B release operations | Git global ignore file was unreadable |
 | [SB-20260726-203035-powershell-utc-flag-unsupported](incidents/2026-07-26T203035Z-powershell-utc-flag-unsupported.md) | closed | 2026-07-26T20:30:35.2961897Z | Phase B release operations | PowerShell UTC flag was unsupported |
@@ -39,8 +40,10 @@
 | [SB-20260726-200747-browser-evaluate-fetch-unavailable](incidents/2026-07-26T200747Z-browser-evaluate-fetch-unavailable.md) | closed | 2026-07-26T20:20:58.8180152Z | Phase B live diagnostics acceptance | Browser evaluation did not expose fetch |
 | [SB-20260726-200808-browser-docs-helper-unavailable](incidents/2026-07-26T200808Z-browser-docs-helper-unavailable.md) | closed | 2026-07-26T20:20:58.8180152Z | Phase B live diagnostics acceptance | Browser documentation helper was unavailable |
 | [SB-20260726-201358-neon-sql-editor-textarea-hidden](incidents/2026-07-26T201358Z-neon-sql-editor-textarea-hidden.md) | closed | 2026-07-26T20:20:58.8180152Z | Phase B live database diagnostics | Neon SQL editor textarea was not fillable |
-| [SB-20260726-201636-live-neon-schema-behind-release](incidents/2026-07-26T201636Z-live-neon-schema-behind-release.md) | contained | 2026-07-26T20:16:36.508530Z | Phase B live recovery and diagnostics | Live Neon schema was behind the Phase B release |
+| [SB-20260726-201636-live-neon-schema-behind-release](incidents/2026-07-26T201636Z-live-neon-schema-behind-release.md) | closed | 2026-07-26T21:58:19.6876526Z | Phase B live recovery and diagnostics | Live Neon schema was behind the Phase B release |
 | [SB-20260726-201749-incorrect-live-migration-range](incidents/2026-07-26T201749Z-incorrect-live-migration-range.md) | closed | 2026-07-26T20:18:31.4381230Z | Phase B live database recovery | Initial live migration range was incomplete |
+| [SB-20260726-215753-repository-search-entered-dependencies](incidents/2026-07-26T215753Z-repository-search-entered-dependencies.md) | closed | 2026-07-26T21:57:53Z | Phase B live migration verification | Repository search entered dependencies |
+| [SB-20260726-220017-guessed-preview-workflow-filename](incidents/2026-07-26T220017Z-guessed-preview-workflow-filename.md) | closed | 2026-07-26T22:00:17Z | Phase B temporary backup deployment | Guessed preview workflow filename |
 
 ## Legacy history
 

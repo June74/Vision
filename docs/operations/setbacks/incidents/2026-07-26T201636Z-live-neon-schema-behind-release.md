@@ -1,8 +1,8 @@
 # SB-20260726-201636-live-neon-schema-behind-release: Live Neon schema was behind the Phase B release
 
-- **Status:** contained
+- **Status:** closed
 - **First observed:** 2026-07-26T20:16:36.508530Z
-- **Last observed:** 2026-07-26T20:16:36.508530Z
+- **Last observed:** 2026-07-26T21:58:19.6876526Z
 - **Phase/task:** Phase B live recovery and diagnostics
 - **Environment:** Live preview Neon database
 - **Version/commit:** Worker `3935500`; schema is earlier than migration 9
@@ -13,7 +13,9 @@ A read-only schema check found 11 required Phase B tables absent from the previe
 
 ## Impact
 
-Foundation diagnostics are unavailable and scheduled backup export cannot complete until reviewed migrations 0007 through 0009 and their grants are applied.
+Foundation diagnostics were unavailable and scheduled backup export could not
+complete until reviewed migrations 0004 through 0009 and their grants were
+applied.
 
 ## Reproduction conditions
 
@@ -36,9 +38,8 @@ examined.
 
 ## Cause classification
 
-- **Confirmed cause:** The deployed Worker expects migration 9 while the live
-  preview database is missing tables introduced by migrations 0007 through
-  0009.
+- **Confirmed cause:** The deployed Worker expected migration 9 while the live
+  preview database was missing migrations 0004 through 0009.
 - **Hypotheses:** None recorded.
 - **Rejected hypotheses:** None recorded.
 - **Known exclusions:** Authentication and calendar setup still load; the
@@ -47,18 +48,21 @@ examined.
 
 ## Correction and prevention
 
-- **Correction:** Pending explicit approval to apply the reviewed migrations
-  and privilege grants to preview.
+- **Correction:** Applied reviewed migrations 0004 through 0009 as one
+  transaction after explicit approval.
 - **Prevention:** Add a guarded release-time schema-version assertion before a
   Worker deployment can be accepted.
 - **Owner:** Codex and project owner.
-- **Next diagnostic step:** Apply migrations 0007 through 0009 after approval,
-  then rerun the exact table check, live diagnostics, and backup.
+- **Next diagnostic step:** Rerun live diagnostics and backup.
 
 ## Verification and related work
 
-Pending.
+The post-migration read-only schema check found all eleven required tables and
+all nine required signature columns, returning the exact
+`VISION_SCHEMA_0009_OK` marker and no mismatch marker.
 
 ## Recurrence history
 
 - 2026-07-26T20:16:36.508530Z: First observed.
+- 2026-07-26T21:58:19.6876526Z: Closed after the authorized migration
+  transaction and post-migration schema verification.

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:03:39.626332Z
-- **Last observed:** 2026-07-26T19:03:39.626332Z
+- **Last observed:** 2026-07-26T22:01:39Z
 - **Phase/task:** Phase B release operations
 - **Environment:** Local linked worktree under the managed sandbox
 - **Version/commit:** `f7778b8`
@@ -57,3 +57,6 @@ The retry completed successfully and produced commit `f7778b8`.
 ## Recurrence history
 
 - 2026-07-26T19:03:39.626332Z: First observed.
+- 2026-07-26T22:01:39Z: Recurred while staging live migration evidence;
+  contained before any index write and retried through the approved metadata
+  boundary.
