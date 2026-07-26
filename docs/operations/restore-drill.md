@@ -24,6 +24,23 @@ schema comparison found the live preview database missing migrations 0004
 through 0009. The normal daily cadence was redeployed and verified before the
 migration approval is resolved.
 
+## Local migration preflight
+
+Before any live schema change, the exact numbered migration chain was exercised
+against a disposable local PostgreSQL-compatible database:
+
+- Migrations 0001 through 0003 established the current live starting shape.
+- Migrations 0004 through 0009 applied inside one transaction.
+- All 11 previously missing required tables and all nine migration-signature
+  columns were present afterward.
+- A deliberately failed transaction rolled back both migration-0004 tables.
+- The expected `vision_app` privileges matched across 13 affected tables.
+- The affected tables exposed zero grants to `PUBLIC`.
+
+This proves the reviewed bundle is transactional and privilege-complete in the
+local contract environment. It does not substitute for the still-pending live
+Neon apply and post-apply read-only checks.
+
 ## Drill checklist
 
 - [ ] Guarded temporary schedule deployment succeeds.

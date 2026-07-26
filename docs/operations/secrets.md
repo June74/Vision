@@ -14,7 +14,7 @@ Never expose `GOOGLE_CLIENT_SECRET`, `OPENAI_API_KEY`, `DATABASE_URL`, `KEY_ENCR
 | `CLOUDFLARE_API_TOKEN_PRODUCTION` | Platform owner plus production approver | GitHub `production` only | 90 days, approver change, suspected disclosure, or scope change | No |
 | `GOOGLE_CLIENT_SECRET` | Identity integration owner | Cloudflare Worker runtime, with a separate value per environment | OAuth client rotation, suspected disclosure, or integration-owner change | Yes, with a preview-only value |
 | `GOOGLE_ALLOWED_SUB` and `GOOGLE_ALLOWED_EMAIL` | Identity integration owner | Cloudflare Worker runtime, limited to the approved user for that environment | Approved-user change or suspected disclosure | Yes, with a preview-only identity |
-| `OPENAI_API_KEY` | AI integration owner | Server-side approved environments only when AI is introduced | Provider key rotation, budget/security incident, or owner change | No |
+| `OPENAI_API_KEY` | AI integration owner | Server-side approved environments only after explicit AI acceptance approval | Provider key rotation, budget/security incident, or owner change | Yes, with a preview-only value after explicit approval |
 | `DATABASE_URL` | Data owner | Cloudflare Worker runtime, using a least-privileged role dedicated to the environment | Credential rotation, incident, schema-host move, or owner change | Yes, with a preview-only role and database |
 | `KEY_ENCRYPTION_KEY` and replacement key-encryption secrets | Security owner | Cloudflare Worker runtime, with an independent key per environment | Key ceremony, suspected disclosure, cryptographic policy change, or owner change | Yes, with a preview-only key |
 

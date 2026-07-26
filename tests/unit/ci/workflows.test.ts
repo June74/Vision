@@ -167,3 +167,19 @@ describe("preview OAuth acceptance policy", () => {
     expect(evidenceTemplate).toContain("calendar ID suffix");
   });
 });
+
+describe("preview AI acceptance policy", () => {
+  it("allows only an explicitly approved preview-only provider key", async () => {
+    const secretPolicy = await readOperationsDocument("secrets.md");
+    const openAiRow = secretPolicy
+      .split(/\r?\n/u)
+      .find((line) => line.startsWith("| `OPENAI_API_KEY` |"));
+
+    expect(openAiRow).toBe(
+      "| `OPENAI_API_KEY` | AI integration owner | Server-side approved environments only after explicit AI acceptance approval | Provider key rotation, budget/security incident, or owner change | Yes, with a preview-only value after explicit approval |",
+    );
+    expect(secretPolicy).toContain(
+      "Application secrets remain in the Cloudflare Worker runtime",
+    );
+  });
+});
