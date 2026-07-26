@@ -1,3 +1,3 @@
 # `src/client/styles.css`
 
-This stylesheet defines Vision's responsive ink/navy frame, warm-paper controls, mint focus/action states, setup signal rail, and reduced-motion-aware panel entrance. It is static browser code: it accepts no input, makes no requests, and contains no protected values. It is loaded only by `src/client/main.tsx`.
+This stylesheet defines Vision's responsive midnight frame, parchment setup and desk surfaces, aqua/brass state palette, editorial event chronology, category provenance marginalia, 44-pixel controls, visible focus, color-independent states, bounded long-content wrapping, mobile no-overflow layout, and reduced-motion-aware entrance. It uses `content-visibility` for long ledgers. It is static browser code loaded only by `src/client/main.tsx`; it accepts no input, makes no requests, and contains no protected values.
