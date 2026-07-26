@@ -16,9 +16,17 @@ Resolves only simple source-code values the scanner can prove: strings, template
 
 Reads an HTTP method only when the request options contain a statically known method.
 
+## `staticMemberName`
+
+Reads a member name only from ordinary dot access or a fixed quoted bracket access.
+
+## `isGoogleEventsExpression`
+
+Recognizes direct and safely aliased Google Calendar event collections, including bracket notation.
+
 ## `hasValidEvidenceProvenance`
 
-Requires every named evidence file to carry its version, expected surface, capture time, generator, run identifier, source, and a structured record.
+Requires every named local contract fixture to carry its version, expected surface, canonical capture time, exact reviewed generator/run/source identity, and a structured record.
 
 ## `scanGoogleSource`
 
@@ -26,7 +34,11 @@ Parses Google adapter calls and accepts only the exact reviewed file, endpoint f
 
 ## `scanRouteSource`
 
-Parses Hono route declarations regardless of receiver name, resolves bounded path constants and base paths, covers `.all`, `.on`, and mounted routers, and blocks event writes.
+Parses Hono route declarations regardless of receiver name, resolves bounded path constants and base paths, covers `.all`, `.on`, `.route`, and `.mount`, and permits only the exact reviewed mutating routes already required by Phase B.
+
+## `resolveHonoReceiver`
+
+Recognizes direct, renamed, and chained Hono applications and carries their known base path into route review.
 
 ## `scanRelease`
 

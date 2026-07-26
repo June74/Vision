@@ -35,6 +35,14 @@ describe("protected release evidence", () => {
       ],
       [
         relativePath,
+        "lowercase fully percent encoded",
+        [...Buffer.from(PROTECTED_SENTINEL, "utf8")]
+          .map((byte) =>
+            `%${byte.toString(16).padStart(2, "0").toLowerCase()}`)
+          .join(""),
+      ],
+      [
+        relativePath,
         "base64",
         Buffer.from(PROTECTED_SENTINEL, "utf8").toString("base64"),
       ],
@@ -123,6 +131,34 @@ describe("protected release evidence", () => {
         surface: "queue",
         capturedAt: "2026-07-25T00:00:00.000Z",
         provenance: { generator: "", runId: "", source: "" },
+        record: {},
+      })}\n`,
+    );
+
+    const result = await scanRelease({ projectRoot: root, protectedSentinel: PROTECTED_SENTINEL });
+
+    expect(result.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ category: "missing-evidence" }),
+      ]),
+    );
+  });
+
+  it("rejects self-asserted provenance outside the named fixture contract", async () => {
+    const root = await createCleanReleaseFixture();
+    roots.push(root);
+    await writeFixtureFile(
+      root,
+      "tests/fixtures/release-evidence/queue/queue.ndjson",
+      `${JSON.stringify({
+        evidenceVersion: 1,
+        surface: "queue",
+        capturedAt: "2026-07-25T00:00:00.000Z",
+        provenance: {
+          generator: "unreviewed-generator",
+          runId: "unreviewed-run",
+          source: "unreviewed-source",
+        },
         record: {},
       })}\n`,
     );

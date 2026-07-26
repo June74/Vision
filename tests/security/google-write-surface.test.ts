@@ -289,6 +289,84 @@ describe("Phase B Google and route write surface", () => {
     );
   });
 
+  it("rejects a Google event mutation outside the adapter directories", async () => {
+    const root = await createCleanReleaseFixture();
+    roots.push(root);
+    await writeFixtureFile(
+      root,
+      "src/server/google-write.ts",
+      `
+        export function removeEvent(fetcher: typeof fetch) {
+          return fetcher(
+            "https://www.googleapis.com/calendar/v3/calendars/id/events/event",
+            { method: "DELETE" },
+          );
+        }
+      `,
+    );
+
+    const result = await scanRelease({ projectRoot: root, protectedSentinel: PROTECTED_SENTINEL });
+
+    expect(result.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: "google-event-write",
+          file: "src/server/google-write.ts",
+        }),
+      ]),
+    );
+  });
+
+  it("rejects a renamed Google HTTP transport", async () => {
+    const root = await createCleanReleaseFixture();
+    roots.push(root);
+    await writeFixtureFile(
+      root,
+      "src/integrations/google-calendar/event-sync-client.ts",
+      `
+        export function removeEvent(transport: typeof fetch) {
+          return transport(
+            "https://www.googleapis.com/calendar/v3/calendars/id/events/event",
+            { method: "DELETE" },
+          );
+        }
+      `,
+    );
+
+    const result = await scanRelease({ projectRoot: root, protectedSentinel: PROTECTED_SENTINEL });
+
+    expect(result.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ category: "google-event-write" }),
+      ]),
+    );
+  });
+
+  it("allows the approved Google event-get operation", async () => {
+    const root = await createCleanReleaseFixture();
+    roots.push(root);
+    await writeFixtureFile(
+      root,
+      "src/integrations/google-calendar/event-sync-client.ts",
+      `
+        export function getEvent(transport: typeof fetch) {
+          return transport(
+            "https://www.googleapis.com/calendar/v3/calendars/id/events/event",
+            { method: "GET" },
+          );
+        }
+      `,
+    );
+
+    const result = await scanRelease({ projectRoot: root, protectedSentinel: PROTECTED_SENTINEL });
+
+    expect(
+      result.violations.filter(
+        ({ category }) => category === "google-event-write",
+      ),
+    ).toEqual([]);
+  });
+
   it("rejects a mutation through an aliased events object", async () => {
     const root = await createCleanReleaseFixture();
     roots.push(root);
@@ -298,6 +376,29 @@ describe("Phase B Google and route write surface", () => {
       `
         const eventOperations = calendar.events;
         eventOperations.delete({ calendarId: "primary", eventId: "event" });
+      `,
+    );
+
+    const result = await scanRelease({ projectRoot: root, protectedSentinel: PROTECTED_SENTINEL });
+
+    expect(result.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ category: "google-event-write" }),
+      ]),
+    );
+  });
+
+  it("rejects a computed Google event mutation member", async () => {
+    const root = await createCleanReleaseFixture();
+    roots.push(root);
+    await writeFixtureFile(
+      root,
+      "src/integrations/google-calendar/calendar-client.ts",
+      `
+        calendar.events["delete"]({
+          calendarId: "primary",
+          eventId: "event",
+        });
       `,
     );
 
@@ -332,5 +433,74 @@ describe("Phase B Google and route write surface", () => {
         expect.objectContaining({ category: "google-event-write" }),
       ]),
     );
+  });
+
+  it.each([
+    "/api/calendar/create",
+    "/api/calendar/event/:id",
+  ])("rejects an unapproved mutating route at %s", async (route) => {
+    const root = await createCleanReleaseFixture();
+    roots.push(root);
+    await writeFixtureFile(
+      root,
+      "src/server/api/write-routes.ts",
+      `
+        declare const app: Hono;
+        app.post("${route}", writeEvent);
+      `,
+    );
+
+    const result = await scanRelease({ projectRoot: root, protectedSentinel: PROTECTED_SENTINEL });
+
+    expect(result.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ category: "event-write-route" }),
+      ]),
+    );
+  });
+
+  it.each([
+    `
+      declare const app: Hono;
+      app.mount("/api/calendar/events", writeEvent.fetch);
+    `,
+    `
+      new Hono()
+        .basePath("/api/calendar/events")
+        .post("/", writeEvent);
+    `,
+  ])("rejects mounted and chained event-write registrations", async (source) => {
+    const root = await createCleanReleaseFixture();
+    roots.push(root);
+    await writeFixtureFile(root, "src/server/api/write-routes.ts", source);
+
+    const result = await scanRelease({ projectRoot: root, protectedSentinel: PROTECTED_SENTINEL });
+
+    expect(result.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ category: "event-write-route" }),
+      ]),
+    );
+  });
+
+  it("scans source with an unsafe filename without reflecting that name", async () => {
+    const root = await createCleanReleaseFixture();
+    roots.push(root);
+    await writeFixtureFile(
+      root,
+      "src/server/api/write@routes.ts",
+      `
+        declare const app: Hono;
+        app.delete("/api/calendar/events/:id", writeEvent);
+      `,
+    );
+
+    const result = await scanRelease({ projectRoot: root, protectedSentinel: PROTECTED_SENTINEL });
+    const finding = result.violations.find(
+      ({ category }) => category === "event-write-route",
+    );
+
+    expect(finding?.file).toMatch(/^unsafe-path-[a-f0-9]{16}$/u);
+    expect(finding?.file).not.toContain("write@routes");
   });
 });

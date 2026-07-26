@@ -20,17 +20,29 @@ Uses the TypeScript abstract syntax tree to resolve only string literals, no-sub
 
 Extracts a `method` property or shorthand only from an object literal and resolves it through the same bounded constant map. Spread-only, computed, dynamic, or absent methods remain unresolved.
 
+## `staticMemberName`
+
+Returns member names only for TypeScript property access or element access whose argument is a fixed string/no-substitution template. Dynamic computed members remain unresolved rather than being guessed.
+
+## `isGoogleEventsExpression`
+
+Recognizes `.events`, `["events"]`, and identifiers previously proven to alias that collection. This shared predicate lets direct calls, method aliases, object aliases, and object destructuring use the same SDK mutation boundary.
+
 ## `hasValidEvidenceProvenance`
 
-Parses at most 1,000 nonempty JSON-lines records. Each record must declare evidence version 1, the exact expected surface, a canonical ISO capture time, nonempty provenance fields for generator/run/source, and a structured record object.
+Parses at most 1,000 nonempty JSON-lines records. Each record must declare evidence version 1, the exact expected surface, a canonical ISO capture time, the exact reviewed local-contract generator/run/source identity for that named fixture, and a structured record object. These are deterministic contract fixtures; live release captures and freshness are recorded separately by Recovery Task 4.
 
 ## `scanGoogleSource`
 
-Builds a bounded static-value table, detects direct and aliased Google event SDK mutations, parses provider-call expressions, and checks the exact `(adapter file, endpoint pattern, HTTP method)` allowlist. The one reviewed `CalendarClient.request` transport forwarder is recognized structurally; all other unresolved provider calls fail closed.
+Builds a bounded static-value table across every production source file, detects direct and aliased Google event SDK mutations, recognizes provider calls from their resolved endpoint instead of a transport variable name, and checks the exact `(adapter file, endpoint pattern, HTTP method)` allowlist. The one reviewed `CalendarClient.request` transport forwarder is recognized structurally; all other unresolved calls in approved provider adapters fail closed.
 
 ## `scanRouteSource`
 
-Builds static route-path values and discovers Hono receivers from parameter types, variable types, `new Hono`, reviewed `.basePath()` chains, and simple aliases. It composes base paths, parses direct verbs plus `.all`, `.on` method arrays, and `.route` mounts. Resolved event reads and the exact Vision-only category correction are allowed; other event operations and unresolved mutating Hono routes are rejected.
+Builds static route-path values and discovers Hono receivers from parameter types, variable types, `new Hono`, reviewed `.basePath()` chains, and simple aliases. It composes base paths, parses direct verbs plus `.all`, `.on` method arrays, `.route`, and `.mount`, and permits only an exact file/method/path manifest for current mutating Phase B routes. All other mutating or unresolved Hono registrations are rejected, including routes whose names omit `events`.
+
+## `resolveHonoReceiver`
+
+Recursively resolves identifiers, direct `new Hono()` expressions, `.basePath()` calls, and chained Hono registrations. It returns only a boolean Hono proof plus an optional statically resolved base path; dynamic base paths remain unresolved and fail closed when used for mutation.
 
 ## `scanRelease`
 

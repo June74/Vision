@@ -84,6 +84,53 @@ const APPROVED_GOOGLE_OPERATIONS = new Map<
         endpoint:
           /^https:\/\/www\.googleapis\.com\/calendar\/v3\/calendars\/(?:\$\{[^}]+\}|[^/]+)\/events$/u,
       },
+      {
+        method: "GET",
+        endpoint:
+          /^https:\/\/www\.googleapis\.com\/calendar\/v3\/calendars\/(?:\$\{[^}]+\}|[^/]+)\/events\/(?:\$\{[^}]+\}|[^/]+)$/u,
+      },
+    ],
+  ],
+]);
+
+const APPROVED_MUTATING_ROUTES = new Map<
+  string,
+  readonly { readonly method: string; readonly route: string }[]
+>([
+  [
+    "src/server/api/ai-category-proposal-routes.ts",
+    [{ method: "POST", route: "/api/ai/category-proposals" }],
+  ],
+  [
+    "src/server/api/calendar-setup-routes.ts",
+    [
+      { method: "POST", route: "/api/setup/calendar/discover" },
+      { method: "POST", route: "/api/setup/calendar/select" },
+      { method: "POST", route: "/api/setup/calendar/confirm-create" },
+    ],
+  ],
+  [
+    "src/server/api/diagnostic-routes.ts",
+    [
+      {
+        method: "PATCH",
+        route: "/api/calendar/events/:id/category",
+      },
+    ],
+  ],
+  [
+    "src/server/auth/oauth-routes.ts",
+    [{ method: "POST", route: "/api/auth/logout" }],
+  ],
+  [
+    "src/server/webhooks/google-calendar.ts",
+    [{ method: "POST", route: "/webhooks/google/calendar" }],
+  ],
+  [
+    "src/worker.ts",
+    [
+      { method: "ALL", route: "/api/*" },
+      { method: "ALL", route: "*" },
     ],
   ],
 ]);
@@ -93,24 +140,29 @@ const EVIDENCE_TARGETS = [
     relativePath:
       "tests/fixtures/release-evidence/application-logs/captured.ndjson",
     surface: "application_logs",
+    source: "safe-logger-contract-capture",
   },
   {
     relativePath: "tests/fixtures/release-evidence/audit/audit.ndjson",
     surface: "audit",
+    source: "audit-writer-contract-fixture",
   },
   {
     relativePath: "tests/fixtures/release-evidence/queue/queue.ndjson",
     surface: "queue",
+    source: "queue-message-contract-fixture",
   },
   {
     relativePath:
       "tests/fixtures/release-evidence/database-raw/rows.ndjson",
     surface: "database_raw",
+    source: "encrypted-row-export-fixture",
   },
   {
     relativePath:
       "tests/fixtures/release-evidence/r2-unencrypted/object.json",
     surface: "r2_unencrypted",
+    source: "encrypted-r2-envelope-fixture",
   },
 ] as const;
 
@@ -240,10 +292,39 @@ function readHttpMethod(
   return undefined;
 }
 
+/** Returns only a statically named dot or bracket member from one expression. */
+function staticMemberName(expression: ts.Expression): string | undefined {
+  if (ts.isPropertyAccessExpression(expression)) {
+    return expression.name.text;
+  }
+  if (
+    ts.isElementAccessExpression(expression) &&
+    expression.argumentExpression &&
+    (ts.isStringLiteral(expression.argumentExpression) ||
+      ts.isNoSubstitutionTemplateLiteral(expression.argumentExpression))
+  ) {
+    return expression.argumentExpression.text;
+  }
+  return undefined;
+}
+
+/** Proves that an expression references a Google Calendar events collection. */
+function isGoogleEventsExpression(
+  expression: ts.Expression,
+  eventObjectAliases: ReadonlySet<string>,
+): boolean {
+  return (
+    staticMemberName(expression) === "events" ||
+    (ts.isIdentifier(expression) &&
+      eventObjectAliases.has(expression.text))
+  );
+}
+
 /** Validates a named evidence export's explicit local-contract provenance envelope. */
 function hasValidEvidenceProvenance(
   text: string,
   expectedSurface: string,
+  expectedSource: string,
 ): boolean {
   const lines = text.split(/\r?\n/u).filter((line) => line.trim().length > 0);
   if (lines.length === 0 || lines.length > 1_000) return false;
@@ -266,26 +347,14 @@ function hasValidEvidenceProvenance(
         !Array.isArray(provenance)
           ? (provenance as Record<string, unknown>)
           : undefined;
-      const provenanceValues = provenanceRecord
-        ? [
-            provenanceRecord.generator,
-            provenanceRecord.runId,
-            provenanceRecord.source,
-          ]
-        : [];
       return (
         record.evidenceVersion === 1 &&
         record.surface === expectedSurface &&
         typeof capturedAt === "string" &&
         new Date(capturedAt).toISOString() === capturedAt &&
-        provenanceValues.length === 3 &&
-        provenanceValues.every(
-          (entry) =>
-            typeof entry === "string" &&
-            entry.length > 0 &&
-            entry.length <= 256 &&
-            /^[A-Za-z0-9._/-]+$/u.test(entry),
-        ) &&
+        provenanceRecord?.generator === "tests/security/release-evidence" &&
+        provenanceRecord.runId === "phase-b-local-contract" &&
+        provenanceRecord.source === expectedSource &&
         typeof record.record === "object" &&
         record.record !== null &&
         !Array.isArray(record.record)
@@ -336,20 +405,22 @@ function scanGoogleSource(
         }
       }
       if (
-        ts.isPropertyAccessExpression(node.initializer) &&
+        (ts.isPropertyAccessExpression(node.initializer) ||
+          ts.isElementAccessExpression(node.initializer)) &&
         ["insert", "update", "patch", "move", "delete"].includes(
-          node.initializer.name.text,
+          staticMemberName(node.initializer) ?? "",
         ) &&
-        ((ts.isPropertyAccessExpression(node.initializer.expression) &&
-          node.initializer.expression.name.text === "events") ||
-          (ts.isIdentifier(node.initializer.expression) &&
-            eventObjectAliases.has(node.initializer.expression.text)))
+        isGoogleEventsExpression(
+          node.initializer.expression,
+          eventObjectAliases,
+        )
       ) {
         forbiddenAliases.add(node.name.text);
       }
       if (
-        ts.isPropertyAccessExpression(node.initializer) &&
-        node.initializer.name.text === "events"
+        (ts.isPropertyAccessExpression(node.initializer) ||
+          ts.isElementAccessExpression(node.initializer)) &&
+        staticMemberName(node.initializer) === "events"
       ) {
         eventObjectAliases.add(node.name.text);
       }
@@ -358,10 +429,7 @@ function scanGoogleSource(
       ts.isVariableDeclaration(node) &&
       ts.isObjectBindingPattern(node.name) &&
       node.initializer &&
-      ((ts.isPropertyAccessExpression(node.initializer) &&
-        node.initializer.name.text === "events") ||
-        (ts.isIdentifier(node.initializer) &&
-          eventObjectAliases.has(node.initializer.text)))
+      isGoogleEventsExpression(node.initializer, eventObjectAliases)
     ) {
       for (const element of node.name.elements) {
         const providerName = element.propertyName?.getText(sourceFile) ??
@@ -388,16 +456,19 @@ function scanGoogleSource(
   sourceFile.forEachChild(function inspectCalls(node): void {
     if (ts.isCallExpression(node)) {
       let forbiddenSdkCall = false;
-      if (ts.isPropertyAccessExpression(node.expression)) {
-        const methodName = node.expression.name.text;
+      if (
+        ts.isPropertyAccessExpression(node.expression) ||
+        ts.isElementAccessExpression(node.expression)
+      ) {
+        const methodName = staticMemberName(node.expression) ?? "";
         forbiddenSdkCall =
           ["insert", "update", "patch", "move", "delete"].includes(
             methodName,
           ) &&
-          ((ts.isPropertyAccessExpression(node.expression.expression) &&
-            node.expression.expression.name.text === "events") ||
-            (ts.isIdentifier(node.expression.expression) &&
-              eventObjectAliases.has(node.expression.expression.text)));
+          isGoogleEventsExpression(
+            node.expression.expression,
+            eventObjectAliases,
+          );
       } else if (
         ts.isIdentifier(node.expression) &&
         forbiddenAliases.has(node.expression.text)
@@ -417,10 +488,19 @@ function scanGoogleSource(
         : ts.isPropertyAccessExpression(node.expression)
           ? node.expression.name.text
           : undefined;
+      const endpoint = canonicalExpression(
+        node.arguments[0],
+        staticValues,
+        sourceFile,
+      );
+      const endpointLooksGoogle =
+        endpoint?.includes("googleapis.com") === true ||
+        endpoint?.includes("GOOGLE_CALENDAR_BASE_URL") === true;
       if (
         calleeName === "fetch" ||
         calleeName === "fetcher" ||
-        calleeName === "request"
+        calleeName === "request" ||
+        endpointLooksGoogle
       ) {
         let enclosingName: string | undefined;
         let parent: ts.Node | undefined = node.parent;
@@ -450,11 +530,6 @@ function scanGoogleSource(
               property.expression.text === "init",
           );
         if (!isReviewedTransportForwarder) {
-          const endpoint = canonicalExpression(
-            node.arguments[0],
-            staticValues,
-            sourceFile,
-          );
           const method = readHttpMethod(
             node.arguments[1],
             staticValues,
@@ -488,13 +563,6 @@ function scanGoogleSource(
     node.forEachChild(inspectCalls);
   });
 
-  if (providerMarkerPresent && !allowedOperations) {
-    violations.push({
-      category: "google-event-write",
-      file: fileIdentifier,
-      reason: "Google call exists outside the explicit Phase B adapter allowlist",
-    });
-  }
   return violations;
 }
 
@@ -515,6 +583,42 @@ function scanRouteSource(
   const staticValues = new Map<string, string>();
   const honoReceivers = new Set<string>();
   const honoBasePaths = new Map<string, string>();
+
+  /** Resolves direct, aliased, and chained Hono receiver expressions with their static base path. */
+  const resolveHonoReceiver = (
+    expression: ts.Expression,
+  ): { readonly isHono: boolean; readonly basePath?: string } => {
+    if (ts.isIdentifier(expression)) {
+      return {
+        isHono: honoReceivers.has(expression.text),
+        basePath: honoBasePaths.get(expression.text),
+      };
+    }
+    if (
+      ts.isNewExpression(expression) &&
+      ts.isIdentifier(expression.expression) &&
+      expression.expression.text === "Hono"
+    ) {
+      return { isHono: true };
+    }
+    if (
+      ts.isCallExpression(expression) &&
+      ts.isPropertyAccessExpression(expression.expression)
+    ) {
+      const nested = resolveHonoReceiver(expression.expression.expression);
+      if (!nested.isHono) return nested;
+      if (expression.expression.name.text === "basePath") {
+        const basePath = canonicalExpression(
+          expression.arguments[0],
+          staticValues,
+          sourceFile,
+        );
+        return { isHono: true, basePath };
+      }
+      return nested;
+    }
+    return { isHono: false };
+  };
 
   sourceFile.forEachChild(function collectRouteFacts(node): void {
     if (ts.isParameter(node) && ts.isIdentifier(node.name)) {
@@ -598,11 +702,12 @@ function scanRouteSource(
           "all",
           "on",
           "route",
+          "mount",
         ].includes(registration)
       ) {
         const receiver = node.expression.expression;
-        const receiverIsHono =
-          ts.isIdentifier(receiver) && honoReceivers.has(receiver.text);
+        const resolvedReceiver = resolveHonoReceiver(receiver);
+        const receiverIsHono = resolvedReceiver.isHono;
         const routeArgument =
           registration === "on" ? node.arguments[1] : node.arguments[0];
         const route = canonicalExpression(
@@ -610,8 +715,7 @@ function scanRouteSource(
           staticValues,
           sourceFile,
         );
-        const basePath =
-          ts.isIdentifier(receiver) ? honoBasePaths.get(receiver.text) : undefined;
+        const basePath = resolvedReceiver.basePath;
         const effectiveRoute =
           route !== undefined && basePath !== undefined
             ? `${basePath.replace(/\/$/u, "")}/${route.replace(/^\//u, "")}`
@@ -644,7 +748,7 @@ function scanRouteSource(
               )?.toUpperCase();
               methods = method ? [method] : undefined;
             }
-          } else if (registration === "route") {
+          } else if (registration === "route" || registration === "mount") {
             methods = ["MOUNT"];
           } else if (registration === "all") {
             methods = ["ALL"];
@@ -653,24 +757,36 @@ function scanRouteSource(
           }
 
           if (effectiveRoute === undefined || methods === undefined) {
-            if (receiverIsHono && registration !== "get") {
+            if (
+              receiverIsHono &&
+              (methods === undefined ||
+                !methods.every((method) => method === "GET"))
+            ) {
               violations.push({
                 category: "event-write-route",
                 file: fileIdentifier,
                 reason: "mutating Hono route declaration is not statically resolvable",
               });
             }
-          } else if (effectiveRoute.includes("/events")) {
-            const allowedCategoryCorrection =
-              methods.length === 1 &&
-              methods[0] === "PATCH" &&
-              effectiveRoute === "/api/calendar/events/:id/category";
+          } else {
             const readOnly = methods.every((method) => method === "GET");
-            if (!readOnly && !allowedCategoryCorrection) {
+            const approvedOperations =
+              APPROVED_MUTATING_ROUTES.get(relativePath);
+            const explicitlyApproved =
+              !readOnly &&
+              methods.every((method) =>
+                approvedOperations?.some(
+                  (operation) =>
+                    operation.method === method &&
+                    operation.route === effectiveRoute,
+                ),
+              );
+            if (!readOnly && !explicitlyApproved) {
               violations.push({
                 category: "event-write-route",
                 file: fileIdentifier,
-                reason: "Phase B event-write route is present",
+                reason:
+                  "mutating Hono route is outside the exact Phase B route allowlist",
               });
             }
           }
@@ -694,6 +810,9 @@ export async function scanRelease(
     [...Buffer.from(options.protectedSentinel, "utf8")]
       .map((byte) => `%${byte.toString(16).padStart(2, "0").toUpperCase()}`)
       .join(""),
+    [...Buffer.from(options.protectedSentinel, "utf8")]
+      .map((byte) => `%${byte.toString(16).padStart(2, "0").toLowerCase()}`)
+      .join(""),
     Buffer.from(options.protectedSentinel, "utf8").toString("base64"),
     Buffer.from(options.protectedSentinel, "utf8").toString("base64url"),
   ]);
@@ -709,6 +828,7 @@ export async function scanRelease(
       secretBindings: true,
       sourceKind: undefined,
       evidenceSurface: undefined,
+      evidenceSource: undefined,
     },
     ...EVIDENCE_TARGETS.map((target) => ({
       relativePath: target.relativePath,
@@ -717,22 +837,16 @@ export async function scanRelease(
       secretBindings: false,
       sourceKind: undefined,
       evidenceSurface: target.surface,
+      evidenceSource: target.source,
     })),
     {
-      relativePath: "src/integrations/google",
+      relativePath: "src",
       kind: "directory" as const,
       protectedValues: false,
       secretBindings: false,
       sourceKind: "google" as const,
       evidenceSurface: undefined,
-    },
-    {
-      relativePath: "src/integrations/google-calendar",
-      kind: "directory" as const,
-      protectedValues: false,
-      secretBindings: false,
-      sourceKind: "google" as const,
-      evidenceSurface: undefined,
+      evidenceSource: undefined,
     },
     {
       relativePath: "src",
@@ -741,6 +855,7 @@ export async function scanRelease(
       secretBindings: false,
       sourceKind: "routes" as const,
       evidenceSurface: undefined,
+      evidenceSource: undefined,
     },
   ];
   const sourceFiles = new Map<
@@ -835,6 +950,7 @@ export async function scanRelease(
     }
 
     for (const file of files.sort()) {
+      const relativePath = relative(projectRoot, file).replaceAll("\\", "/");
       const fileIdentifier = safeFileIdentifier(
         projectRoot,
         file,
@@ -863,7 +979,12 @@ export async function scanRelease(
 
       if (
         target.evidenceSurface &&
-        !hasValidEvidenceProvenance(text, target.evidenceSurface)
+        target.evidenceSource &&
+        !hasValidEvidenceProvenance(
+          text,
+          target.evidenceSurface,
+          target.evidenceSource,
+        )
       ) {
         violations.push({
           category: "missing-evidence",
@@ -895,9 +1016,9 @@ export async function scanRelease(
           reason: "server-only binding name is present in a client asset",
         });
       }
-      if (target.sourceKind && /\.tsx?$/u.test(fileIdentifier)) {
-        sourceFiles.set(`${target.sourceKind}:${fileIdentifier}`, {
-          relativePath: relative(projectRoot, file).replaceAll("\\", "/"),
+      if (target.sourceKind && /\.tsx?$/u.test(relativePath)) {
+        sourceFiles.set(`${target.sourceKind}:${relativePath}`, {
+          relativePath,
           sourceKind: target.sourceKind,
           text,
           fileIdentifier,

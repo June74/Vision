@@ -6,11 +6,11 @@ import { PROTECTED_RELEASE_SENTINEL } from "../../scripts/scan-release";
 export const PROTECTED_SENTINEL = PROTECTED_RELEASE_SENTINEL;
 
 const evidenceFiles = [
-  "application-logs/captured.ndjson",
-  "audit/audit.ndjson",
-  "queue/queue.ndjson",
-  "database-raw/rows.ndjson",
-  "r2-unencrypted/object.json",
+  ["application-logs/captured.ndjson", "safe-logger-contract-capture"],
+  ["audit/audit.ndjson", "audit-writer-contract-fixture"],
+  ["queue/queue.ndjson", "queue-message-contract-fixture"],
+  ["database-raw/rows.ndjson", "encrypted-row-export-fixture"],
+  ["r2-unencrypted/object.json", "encrypted-r2-envelope-fixture"],
 ] as const;
 
 export async function createCleanReleaseFixture(): Promise<string> {
@@ -20,7 +20,7 @@ export async function createCleanReleaseFixture(): Promise<string> {
     "dist/client/assets/app.js",
     "globalThis.__VISION_RELEASE_BUILD__ = true;",
   );
-  for (const relativePath of evidenceFiles) {
+  for (const [relativePath, source] of evidenceFiles) {
     const surface = relativePath.split("/")[0]?.replace("-", "_");
     await writeFixtureFile(
       root,
@@ -30,9 +30,9 @@ export async function createCleanReleaseFixture(): Promise<string> {
         surface,
         capturedAt: "2026-07-25T00:00:00.000Z",
         provenance: {
-          generator: "tests/security/release-test-fixture",
-          runId: "local-contract",
-          source: "synthetic-contract-fixture",
+          generator: "tests/security/release-evidence",
+          runId: "phase-b-local-contract",
+          source,
         },
         record: { status: "clean" },
       })}\n`,
@@ -83,7 +83,7 @@ export async function createCleanReleaseFixture(): Promise<string> {
   );
   await writeFixtureFile(
     root,
-    "src/server/api/routes.ts",
+    "src/server/api/diagnostic-routes.ts",
     `
       app.get("/api/calendar/events", handler);
       app.patch("/api/calendar/events/:id/category", categoryHandler);
