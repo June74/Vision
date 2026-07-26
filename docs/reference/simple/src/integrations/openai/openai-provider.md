@@ -2,6 +2,10 @@
 
 This module sends one minimum category packet through the pinned Cloudflare AI Gateway OpenAI endpoint. It disables gateway payload logging and caching, rejects redirects, requests strict JSON, provides no tools, bounds time and response size, and returns only a proposal or safe error category.
 
+## `MAX_OPENAI_PROVIDER_TIMEOUT_MS`
+
+Publishes the provider's accepted 30-second timeout ceiling for dispatch-lease validation.
+
 ## `isApprovedLunaResponseModel`
 
 Accepts only the Luna alias or a canonical, calendar-valid Luna snapshot ID.

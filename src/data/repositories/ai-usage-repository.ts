@@ -59,10 +59,12 @@ export type AiUsageReserveResult =
 /** Defines the transaction-safe accounting boundary used by BudgetedAiProvider. */
 export interface AiUsageRepository {
   reserve(input: AiUsageReservationInput): Promise<AiUsageReserveResult>;
+  /** Requires an unexpired reservation and replaces its expiry in the same dispatch transition. */
   markDispatched(
     reservationId: string,
     ownerId: string,
     now: Date,
+    expiresAt: Date,
   ): Promise<"dispatched" | "duplicate">;
   settle(input: AiUsageSettlementInput): Promise<"settled" | "duplicate">;
   release(
@@ -313,22 +315,34 @@ class DrizzleAiUsageRepository implements AiUsageRepository {
     throw new Error("Invalid AI usage reservation result.");
   }
 
-  /** Marks the exact reservation as provider-dispatched before invoking the network adapter. */
+  /** Dispatches only an unexpired reservation and atomically refreshes its provider-call lease. */
   async markDispatched(
     reservationId: string,
     ownerId: string,
     now: Date,
+    expiresAt: Date,
   ): Promise<"dispatched" | "duplicate"> {
     assertIdentifier(reservationId, "reservation");
     assertIdentifier(ownerId, "owner");
     assertDate(now);
+    assertDate(expiresAt);
+    if (
+      Date.prototype.getTime.call(expiresAt) <=
+      Date.prototype.getTime.call(now)
+    ) {
+      throw new Error("Invalid AI dispatch expiry.");
+    }
     const result = await this.database.execute<Record<string, unknown>>(sql`
       with dispatched as (
         update ai_usage_reservations
-        set status = 'dispatched', dispatched_at = ${now}
+        set
+          status = 'dispatched',
+          dispatched_at = ${now},
+          expires_at = ${expiresAt}
         where id = ${reservationId}
           and owner_id = ${ownerId}
           and status = 'reserved'
+          and expires_at > ${now}
         returning id, budget_month as "budgetMonth",
           estimated_cents as "estimatedCents"
       ),

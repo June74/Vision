@@ -12,11 +12,15 @@ Returns a provider result or a safe budget, concurrency, duplicate, or accountin
 
 ## `proposeCategoryFromFactory`
 
-Reserves budget before building provider context, then dispatches and settles the admitted request.
+Reserves budget before building provider context, rechecks the lease with a fresh clock afterward, then dispatches with at least twice the provider timeout and settles the admitted request.
 
 ## `requestFactory`
 
 Builds or asynchronously loads the provider request only after budget admission.
+
+## `reservationTtlMs`
+
+Bounds context loading and supplies the refreshed provider-call lease.
 
 ## `releaseSafely`
 
@@ -57,3 +61,7 @@ Checks an owner, operation, or reservation ID.
 ## `isValidDate`
 
 Checks a timestamp.
+
+## `freshMonotonicTime`
+
+Uses a fresh valid clock value without allowing time to move backward.

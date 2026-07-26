@@ -16,6 +16,8 @@ const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]*$/u;
 const DEFAULT_MAX_OUTPUT_TOKENS = 256;
 const DEFAULT_MAX_RESPONSE_BYTES = 64 * 1024;
 const DEFAULT_TIMEOUT_MS = 10_000;
+/** Maximum accepted provider timeout; dispatch leases must remain active longer than this. */
+export const MAX_OPENAI_PROVIDER_TIMEOUT_MS = 30_000;
 const MAX_REQUEST_CONTEXT_BYTES = 16 * 1024;
 const RFC3339_WITH_OFFSET_PATTERN =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/u;
@@ -638,7 +640,7 @@ export class OpenAiProvider implements AiProvider {
     if (
       !Number.isSafeInteger(timeoutMs) ||
       timeoutMs < 1 ||
-      timeoutMs > 30_000 ||
+      timeoutMs > MAX_OPENAI_PROVIDER_TIMEOUT_MS ||
       !Number.isSafeInteger(maximumBytes) ||
       maximumBytes < 1_024 ||
       maximumBytes > DEFAULT_MAX_RESPONSE_BYTES ||

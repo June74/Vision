@@ -8,7 +8,7 @@ Creates the month row, serializes owner admission, releases stale pre-dispatch w
 
 ## `markDispatched`
 
-Moves only `reserved` to `dispatched` and appends an immutable dispatch event.
+Atomically moves only an unexpired `reserved` row to `dispatched`, replaces its context-loading expiry with the supplied bounded provider-call expiry, and appends an immutable dispatch event. The exact expiry boundary is rejected.
 
 ## `settle`
 

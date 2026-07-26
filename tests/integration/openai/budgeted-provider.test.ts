@@ -12,9 +12,10 @@ import {
   BudgetedAiProvider,
   type AiPricingConfiguration,
 } from "../../../src/integrations/openai/budgeted-ai-provider";
-import type {
-  OpenAiProviderResult,
-  OpenAiUsageMetadata,
+import {
+  MAX_OPENAI_PROVIDER_TIMEOUT_MS,
+  type OpenAiProviderResult,
+  type OpenAiUsageMetadata,
 } from "../../../src/integrations/openai/openai-provider";
 
 const OWNER_ID = "owner-1";
@@ -231,6 +232,330 @@ describe("BudgetedAiProvider", () => {
     expect(proposeCategoryResult).toHaveBeenCalledWith(REQUEST);
   });
 
+  it("rejects dispatch at the exact reservation-expiry boundary", async () => {
+    const expiresAt = new Date(NOW.getTime() + 60_000);
+    await repository.reserve({
+      reservationId: "reservation-exact-expiry",
+      ownerId: OWNER_ID,
+      idempotencyKey: "operation-exact-expiry",
+      requestClass: "routine",
+      estimatedCents: 10,
+      now: NOW,
+      expiresAt,
+    });
+
+    await expect(
+      repository.markDispatched(
+        "reservation-exact-expiry",
+        OWNER_ID,
+        expiresAt,
+        new Date(expiresAt.getTime() + 60_000),
+      ),
+    ).rejects.toThrow("AI reservation cannot be dispatched.");
+  });
+
+  it("atomically refreshes an unexpired reservation lease at dispatch", async () => {
+    const originalExpiry = new Date(NOW.getTime() + 60_000);
+    const dispatchedAt = new Date(NOW.getTime() + 1_000);
+    const dispatchExpiry = new Date(dispatchedAt.getTime() + 60_000);
+    await repository.reserve({
+      reservationId: "reservation-refresh-dispatch",
+      ownerId: OWNER_ID,
+      idempotencyKey: "operation-refresh-dispatch",
+      requestClass: "routine",
+      estimatedCents: 10,
+      now: NOW,
+      expiresAt: originalExpiry,
+    });
+
+    await repository.markDispatched(
+      "reservation-refresh-dispatch",
+      OWNER_ID,
+      dispatchedAt,
+      dispatchExpiry,
+    );
+
+    expect(
+      (
+        await pglite.query(
+          `select status, dispatched_at, expires_at
+           from ai_usage_reservations
+           where id = 'reservation-refresh-dispatch'`,
+        )
+      ).rows,
+    ).toEqual([
+      {
+        status: "dispatched",
+        dispatched_at: dispatchedAt,
+        expires_at: dispatchExpiry,
+      },
+    ]);
+  });
+
+  it("does not dispatch when protected context loading consumes the reservation lease", async () => {
+    let clock = NOW;
+    let releaseContext!: () => void;
+    const contextBlocked = new Promise<void>((resolve) => {
+      releaseContext = resolve;
+    });
+    let contextEntered!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      contextEntered = resolve;
+    });
+    let releaseExpiredProvider!: () => void;
+    const expiredProviderBlocked = new Promise<void>((resolve) => {
+      releaseExpiredProvider = resolve;
+    });
+    let expiredProviderEntered!: () => void;
+    const expiredProviderEntry = new Promise<void>((resolve) => {
+      expiredProviderEntered = resolve;
+    });
+    let expiredProviderActive = false;
+    const expiredProviderCall = vi.fn(async () => {
+      expiredProviderActive = true;
+      expiredProviderEntered();
+      await expiredProviderBlocked;
+      expiredProviderActive = false;
+      return success();
+    });
+    const expiredRequest = new BudgetedAiProvider({
+      ownerId: OWNER_ID,
+      repository,
+      provider: { proposeCategoryResult: expiredProviderCall },
+      pricing: PRICING,
+      reservationTtlMs: 60_000,
+      now: () => clock,
+      createReservationId: () => "reservation-context-expired",
+    });
+
+    const first = expiredRequest.proposeCategoryFromFactory({
+      requestFactory: async () => {
+        contextEntered();
+        await contextBlocked;
+        return REQUEST;
+      },
+      requestClass: "routine",
+      idempotencyKey: "operation-context-expired",
+    });
+    await entered;
+    clock = new Date(NOW.getTime() + 60_000);
+    releaseContext();
+    await Promise.race([
+      expiredProviderEntry,
+      first,
+    ]);
+
+    let overlapObserved = false;
+    const replacementProviderCall = vi.fn(async () => {
+      overlapObserved = expiredProviderActive;
+      return success();
+    });
+    const replacement = new BudgetedAiProvider({
+      ownerId: OWNER_ID,
+      repository,
+      provider: { proposeCategoryResult: replacementProviderCall },
+      pricing: PRICING,
+      reservationTtlMs: 60_000,
+      now: () => clock,
+      createReservationId: () => "reservation-after-context-expiry",
+    });
+    const replacementResult = await replacement.proposeCategoryResult({
+      request: { ...REQUEST, subjectId: "event-after-context-expiry" },
+      requestClass: "routine",
+      idempotencyKey: "operation-after-context-expiry",
+    });
+    releaseExpiredProvider();
+    const expiredResult = await first;
+
+    expect(expiredResult).toEqual({
+      status: "unavailable",
+      code: "AI_ACCOUNTING_UNAVAILABLE",
+      mode: "normal",
+    });
+    expect(replacementResult).toMatchObject({ status: "success" });
+    expect(expiredProviderCall).not.toHaveBeenCalled();
+    expect(replacementProviderCall).toHaveBeenCalledOnce();
+    expect(overlapObserved).toBe(false);
+    const retryFactory = vi.fn(async () => REQUEST);
+    await expect(
+      expiredRequest.proposeCategoryFromFactory({
+        requestFactory: retryFactory,
+        requestClass: "routine",
+        idempotencyKey: "operation-context-expired",
+      }),
+    ).resolves.toEqual({
+      status: "unavailable",
+      code: "AI_DUPLICATE_REQUEST",
+      mode: "blocked",
+    });
+    expect(retryFactory).not.toHaveBeenCalled();
+    expect(expiredProviderCall).not.toHaveBeenCalled();
+    expect(
+      (
+        await pglite.query(
+          `select id, status
+           from ai_usage_reservations
+           where id in (
+             'reservation-context-expired',
+             'reservation-after-context-expiry'
+           )
+           order by id`,
+        )
+      ).rows,
+    ).toEqual([
+      { id: "reservation-after-context-expiry", status: "settled" },
+      { id: "reservation-context-expired", status: "released" },
+    ]);
+  });
+
+  it("rejects an old context loader after a replacement reservation owns the lease", async () => {
+    let clock = NOW;
+    let releaseContext!: () => void;
+    const contextBlocked = new Promise<void>((resolve) => {
+      releaseContext = resolve;
+    });
+    let contextEntered!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      contextEntered = resolve;
+    });
+    const oldProviderCall = vi.fn(async () => success());
+    const oldRequest = new BudgetedAiProvider({
+      ownerId: OWNER_ID,
+      repository,
+      provider: { proposeCategoryResult: oldProviderCall },
+      pricing: PRICING,
+      reservationTtlMs: 60_000,
+      now: () => clock,
+      createReservationId: () => "reservation-old-loader",
+    });
+    const oldResultPromise = oldRequest.proposeCategoryFromFactory({
+      requestFactory: async () => {
+        contextEntered();
+        await contextBlocked;
+        return REQUEST;
+      },
+      requestClass: "routine",
+      idempotencyKey: "operation-old-loader",
+    });
+    await entered;
+
+    clock = new Date(NOW.getTime() + 60_000);
+    let releaseReplacement!: () => void;
+    const replacementBlocked = new Promise<void>((resolve) => {
+      releaseReplacement = resolve;
+    });
+    let replacementEntered!: () => void;
+    const replacementEntry = new Promise<void>((resolve) => {
+      replacementEntered = resolve;
+    });
+    const replacementProviderCall = vi.fn(async () => {
+      replacementEntered();
+      await replacementBlocked;
+      return success();
+    });
+    const replacement = new BudgetedAiProvider({
+      ownerId: OWNER_ID,
+      repository,
+      provider: { proposeCategoryResult: replacementProviderCall },
+      pricing: PRICING,
+      reservationTtlMs: 60_000,
+      now: () => clock,
+      createReservationId: () => "reservation-new-loader",
+    });
+    const replacementResultPromise = replacement.proposeCategoryResult({
+      request: { ...REQUEST, subjectId: "event-new-loader" },
+      requestClass: "routine",
+      idempotencyKey: "operation-new-loader",
+    });
+    await replacementEntry;
+
+    releaseContext();
+    const oldResult = await oldResultPromise;
+    expect(oldResult).toEqual({
+      status: "unavailable",
+      code: "AI_ACCOUNTING_UNAVAILABLE",
+      mode: "normal",
+    });
+    expect(oldProviderCall).not.toHaveBeenCalled();
+
+    const third = new BudgetedAiProvider({
+      ownerId: OWNER_ID,
+      repository,
+      provider: { proposeCategoryResult: vi.fn(async () => success()) },
+      pricing: PRICING,
+      reservationTtlMs: 60_000,
+      now: () => new Date(clock.getTime() + 1),
+      createReservationId: () => "reservation-third-loader",
+    });
+    await expect(
+      third.proposeCategoryResult({
+        request: { ...REQUEST, subjectId: "event-third-loader" },
+        requestClass: "routine",
+        idempotencyKey: "operation-third-loader",
+      }),
+    ).resolves.toEqual({
+      status: "unavailable",
+      code: "AI_CONCURRENCY_UNAVAILABLE",
+      mode: "normal",
+    });
+
+    releaseReplacement();
+    await expect(replacementResultPromise).resolves.toMatchObject({
+      status: "success",
+    });
+    expect(replacementProviderCall).toHaveBeenCalledOnce();
+  });
+
+  it("fails closed before dispatch when the injected clock moves backward", async () => {
+    const clock = vi
+      .fn<() => Date>()
+      .mockReturnValueOnce(NOW)
+      .mockReturnValueOnce(new Date(NOW.getTime() - 1));
+    const { budgeted, proposeCategoryResult } = createProvider(success(), clock);
+
+    await expect(
+      budgeted.proposeCategoryResult({
+        request: REQUEST,
+        requestClass: "routine",
+        idempotencyKey: "operation-backward-clock",
+      }),
+    ).resolves.toEqual({
+      status: "unavailable",
+      code: "AI_ACCOUNTING_UNAVAILABLE",
+      mode: "normal",
+    });
+    expect(proposeCategoryResult).not.toHaveBeenCalled();
+    expect(await monthlyUsage()).toEqual([
+      { settled_cents: 0, reserved_cents: 0 },
+    ]);
+  });
+
+  it("releases pre-dispatch work when the fresh dispatch clock throws", async () => {
+    const clock = vi
+      .fn<() => Date>()
+      .mockReturnValueOnce(NOW)
+      .mockImplementationOnce(() => {
+        throw new Error("synthetic clock failure");
+      });
+    const { budgeted, proposeCategoryResult } = createProvider(success(), clock);
+
+    await expect(
+      budgeted.proposeCategoryResult({
+        request: REQUEST,
+        requestClass: "routine",
+        idempotencyKey: "operation-throwing-clock",
+      }),
+    ).resolves.toEqual({
+      status: "unavailable",
+      code: "AI_ACCOUNTING_UNAVAILABLE",
+      mode: "normal",
+    });
+    expect(proposeCategoryResult).not.toHaveBeenCalled();
+    expect(await monthlyUsage()).toEqual([
+      { settled_cents: 0, reserved_cents: 0 },
+    ]);
+  });
+
   it("allows exactly one in-flight AI request for the owner", async () => {
     let releaseFirst!: () => void;
     const firstBlocked = new Promise<void>((resolve) => {
@@ -304,6 +629,45 @@ describe("BudgetedAiProvider", () => {
     expect(await monthlyUsage()).toEqual([
       { settled_cents: 0, reserved_cents: 0 },
     ]);
+  });
+
+  it("does not invoke the provider for a duplicate dispatch marker", async () => {
+    const providerCall = vi.fn(async () => success());
+    const release = vi.fn<AiUsageRepository["release"]>(async () => "duplicate");
+    const duplicateDispatchRepository: AiUsageRepository = {
+      reserve: async (input) => ({
+        status: "reserved",
+        reservationId: input.reservationId,
+        budgetMonth: "2026-07",
+        projectedCents: 10,
+      }),
+      markDispatched: async () => "duplicate",
+      settle: async () => "duplicate",
+      release,
+    };
+    const budgeted = new BudgetedAiProvider({
+      ownerId: OWNER_ID,
+      repository: duplicateDispatchRepository,
+      provider: { proposeCategoryResult: providerCall },
+      pricing: PRICING,
+      reservationTtlMs: 60_000,
+      now: () => NOW,
+      createReservationId: () => "reservation-duplicate-dispatch",
+    });
+
+    await expect(
+      budgeted.proposeCategoryResult({
+        request: REQUEST,
+        requestClass: "routine",
+        idempotencyKey: "operation-duplicate-dispatch",
+      }),
+    ).resolves.toEqual({
+      status: "unavailable",
+      code: "AI_DUPLICATE_REQUEST",
+      mode: "normal",
+    });
+    expect(providerCall).not.toHaveBeenCalled();
+    expect(release).not.toHaveBeenCalled();
   });
 
   it("conservatively settles the estimate after a dispatched gateway rejection", async () => {
@@ -420,6 +784,7 @@ describe("BudgetedAiProvider", () => {
       "stale-dispatched",
       OWNER_ID,
       new Date(NOW.getTime() - 119_000),
+      new Date(NOW.getTime() - 60_000),
     );
     const { budgeted } = createProvider();
 
@@ -457,6 +822,7 @@ describe("BudgetedAiProvider", () => {
       "late-actual",
       OWNER_ID,
       new Date(NOW.getTime() - 119_000),
+      new Date(NOW.getTime() - 60_000),
     );
     const takeover = await repository.reserve({
       reservationId: "takeover-for-late-actual",
@@ -505,6 +871,7 @@ describe("BudgetedAiProvider", () => {
       "reservation-idempotent",
       OWNER_ID,
       NOW,
+      new Date(NOW.getTime() + 60_000),
     );
 
     const first = await repository.settle({
@@ -648,6 +1015,21 @@ describe("BudgetedAiProvider", () => {
           reservationTtlMs: 60_000,
           now: () => NOW,
           createReservationId: () => "reservation-invalid-pricing",
+        }),
+    ).toThrow("AI pricing configuration is invalid.");
+  });
+
+  it("requires the dispatch lease to outlive the longest accepted provider timeout", () => {
+    expect(
+      () =>
+        new BudgetedAiProvider({
+          ownerId: OWNER_ID,
+          repository,
+          provider: { proposeCategoryResult: vi.fn() },
+          pricing: PRICING,
+          reservationTtlMs: MAX_OPENAI_PROVIDER_TIMEOUT_MS * 2 - 1,
+          now: () => NOW,
+          createReservationId: () => "reservation-short-dispatch-lease",
         }),
     ).toThrow("AI pricing configuration is invalid.");
   });

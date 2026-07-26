@@ -6,6 +6,10 @@ Requests use `store: false`, `cf-aig-collect-log-payload: false`, `cf-aig-skip-c
 
 Only validated proposal fields, requested and actual Luna model IDs, safe request IDs, policy version, evidence IDs, and numeric token counters survive parsing. Raw model text, refusals, reasoning, output items, HTTP error bodies, and caught exceptions are never returned.
 
+## `MAX_OPENAI_PROVIDER_TIMEOUT_MS`
+
+Exports the adapter's validated 30,000 ms timeout ceiling so the budget wrapper can require every refreshed dispatch lease to outlive the longest accepted provider call.
+
 ## `isApprovedLunaResponseModel`
 
 Accepts the exact Luna alias and canonical `gpt-5.6-luna-YYYY-MM-DD` snapshots whose date is calendar-valid. It rejects other model families, prefixes, suffixes, malformed dates, and lookalike identifiers.

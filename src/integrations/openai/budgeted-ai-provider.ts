@@ -10,10 +10,13 @@ import type {
   AiUsageSettlementMetadata,
 } from "../../data/repositories/ai-usage-repository";
 import type { AiProvider, CategoryProposalRequest } from "./ai-provider";
-import type {
-  OpenAiProviderResult,
-  OpenAiUsageMetadata,
+import {
+  MAX_OPENAI_PROVIDER_TIMEOUT_MS,
+  type OpenAiProviderResult,
+  type OpenAiUsageMetadata,
 } from "./openai-provider";
+
+const MINIMUM_DISPATCH_LEASE_MS = MAX_OPENAI_PROVIDER_TIMEOUT_MS * 2;
 
 /** Supplies injected rates and worst-case reservations without assuming provider prices. */
 export interface AiPricingConfiguration {
@@ -68,6 +71,7 @@ export interface BudgetedAiProviderOptions {
   readonly repository: AiUsageRepository;
   readonly provider: MeteredOpenAiProvider;
   readonly pricing: AiPricingConfiguration;
+  /** Bounds context loading and becomes the refreshed dispatch lease; minimum is twice provider timeout. */
   readonly reservationTtlMs: number;
   readonly now: () => Date;
   readonly createReservationId: () => string;
@@ -102,7 +106,7 @@ export class BudgetedAiProvider implements AiProvider {
       typeof options.now !== "function" ||
       typeof options.createReservationId !== "function" ||
       !Number.isSafeInteger(options.reservationTtlMs) ||
-      options.reservationTtlMs < 1_000 ||
+      options.reservationTtlMs < MINIMUM_DISPATCH_LEASE_MS ||
       options.reservationTtlMs > 15 * 60_000 ||
       !isValidPricing(options.pricing)
     ) {
@@ -151,7 +155,7 @@ export class BudgetedAiProvider implements AiProvider {
     });
   }
 
-  /** Reserves first, then builds bounded context, marks dispatch, invokes once, and settles. */
+  /** Reserves, builds context, rechecks a fresh dispatch lease, invokes once, and settles. */
   async proposeCategoryFromFactory(
     input: BudgetedCategoryProposalFactoryRequest,
   ): Promise<BudgetedOpenAiProviderResult> {
@@ -211,19 +215,50 @@ export class BudgetedAiProvider implements AiProvider {
     try {
       request = await input.requestFactory();
     } catch (error) {
-      await this.releaseSafely(reservationId, now);
+      await this.releaseSafely(
+        reservationId,
+        freshMonotonicTime(this.#now, now),
+      );
       throw error;
     }
 
+    let dispatchNow: Date;
     try {
-      await this.#repository.markDispatched(
-        reservationId,
-        this.#ownerId,
-        now,
-      );
+      dispatchNow = this.#now();
     } catch {
       await this.releaseSafely(reservationId, now);
       return unavailable("AI_ACCOUNTING_UNAVAILABLE", decision.mode);
+    }
+    if (
+      !isValidDate(dispatchNow) ||
+      Date.prototype.getTime.call(dispatchNow) <
+        Date.prototype.getTime.call(now)
+    ) {
+      await this.releaseSafely(reservationId, now);
+      return unavailable("AI_ACCOUNTING_UNAVAILABLE", decision.mode);
+    }
+    const dispatchExpiresAt = new Date(
+      Date.prototype.getTime.call(dispatchNow) + this.#reservationTtlMs,
+    );
+    if (!isValidDate(dispatchExpiresAt)) {
+      await this.releaseSafely(reservationId, dispatchNow);
+      return unavailable("AI_ACCOUNTING_UNAVAILABLE", decision.mode);
+    }
+
+    let dispatchResult: "dispatched" | "duplicate";
+    try {
+      dispatchResult = await this.#repository.markDispatched(
+        reservationId,
+        this.#ownerId,
+        dispatchNow,
+        dispatchExpiresAt,
+      );
+    } catch {
+      await this.releaseSafely(reservationId, dispatchNow);
+      return unavailable("AI_ACCOUNTING_UNAVAILABLE", decision.mode);
+    }
+    if (dispatchResult !== "dispatched") {
+      return unavailable("AI_DUPLICATE_REQUEST", decision.mode);
     }
 
     let providerResult: OpenAiProviderResult;
@@ -234,7 +269,7 @@ export class BudgetedAiProvider implements AiProvider {
         reservationId,
         estimatedCents,
         {},
-        this.#now(),
+        freshMonotonicTime(this.#now, dispatchNow),
       );
       return settled
         ? {
@@ -262,7 +297,7 @@ export class BudgetedAiProvider implements AiProvider {
         reservationId,
         estimatedCents,
         {},
-        this.#now(),
+        freshMonotonicTime(this.#now, dispatchNow),
       );
       return unavailable("AI_ACCOUNTING_UNAVAILABLE", decision.mode);
     }
@@ -270,7 +305,7 @@ export class BudgetedAiProvider implements AiProvider {
       reservationId,
       actualCents,
       settlementMetadata(providerResult),
-      this.#now(),
+      freshMonotonicTime(this.#now, dispatchNow),
     );
     return settled
       ? providerResult
@@ -414,4 +449,18 @@ function isValidDate(value: Date): boolean {
     value instanceof Date &&
     !Number.isNaN(Date.prototype.getTime.call(value))
   );
+}
+
+/** Reads a fresh clock value without allowing an invalid or backward release timestamp. */
+function freshMonotonicTime(now: () => Date, floor: Date): Date {
+  try {
+    const candidate = now();
+    return isValidDate(candidate) &&
+      Date.prototype.getTime.call(candidate) >=
+        Date.prototype.getTime.call(floor)
+      ? candidate
+      : floor;
+  } catch {
+    return floor;
+  }
 }

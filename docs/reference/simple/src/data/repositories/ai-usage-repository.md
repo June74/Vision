@@ -8,7 +8,7 @@ Expires stale work, enforces one active request, and reserves worst-case cents.
 
 ## `markDispatched`
 
-Records that a provider call can no longer be safely released.
+Rejects expired work, records dispatch, and starts a fresh provider-call lease atomically.
 
 ## `settle`
 
