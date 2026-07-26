@@ -10,7 +10,8 @@ Checks that an API value is an object before reading it.
 
 ## `classifyAiGatewayBudgetError`
 
-Maps a failure to one safe stage name without copying Cloudflare's response.
+Maps a failure to one safe stage name, including authorization and not-found
+lookup results, without copying Cloudflare's response.
 
 ## `configureAiGatewayBudget`
 

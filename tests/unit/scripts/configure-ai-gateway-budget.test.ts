@@ -129,11 +129,37 @@ describe("preview AI Gateway budget configuration", () => {
     ).toBe("lookup_failed");
     expect(
       classifyAiGatewayBudgetError(
+        new Error("AI Gateway lookup authorization failed."),
+      ),
+    ).toBe("lookup_unauthorized");
+    expect(
+      classifyAiGatewayBudgetError(
+        new Error("AI Gateway was not found."),
+      ),
+    ).toBe("lookup_not_found");
+    expect(
+      classifyAiGatewayBudgetError(
         new Error("AI Gateway update failed."),
       ),
     ).toBe("update_failed");
     expect(classifyAiGatewayBudgetError(new Error("private response"))).toBe(
       "unknown_failure",
     );
+  });
+
+  it("classifies an authorization rejection before reading provider content", async () => {
+    const fetchImplementation = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      new Response("private provider content", { status: 403 }),
+    );
+
+    await expect(
+      configureAiGatewayBudget(
+        {
+          accountId: "c".repeat(32),
+          apiToken: "private-token-that-is-never-returned",
+        },
+        fetchImplementation,
+      ),
+    ).rejects.toThrow("AI Gateway lookup authorization failed.");
   });
 });

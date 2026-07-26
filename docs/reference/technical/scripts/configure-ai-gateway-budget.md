@@ -15,9 +15,9 @@ Narrows untrusted Cloudflare JSON to a non-null, non-array record.
 
 ## `classifyAiGatewayBudgetError`
 
-Maps only the command's own fixed configuration, lookup, update, and
-verification errors to allowlisted categories. Unknown thrown values remain
-`unknown_failure`.
+Maps only the command's own fixed configuration, authorization, not-found,
+lookup, update, and verification errors to allowlisted categories. Unknown
+thrown values remain `unknown_failure`.
 
 ## `configureAiGatewayBudget`
 

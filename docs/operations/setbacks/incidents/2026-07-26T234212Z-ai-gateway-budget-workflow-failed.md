@@ -2,7 +2,7 @@
 
 - **Status:** investigating
 - **First observed:** 2026-07-26T23:42:12Z
-- **Last observed:** 2026-07-26T23:42:12Z
+- **Last observed:** 2026-07-26T23:46:20Z
 - **Phase/task:** Phase B AI Gateway configuration
 - **Environment:** Guarded GitHub preview operator workflow
 - **Version/commit:** `0cd841a`
@@ -34,6 +34,8 @@ emitted no Cloudflare response body, identifier, credential, or URL.
 - The current CLI maps every failure to one generic message, which is
   insufficient to distinguish lookup, permission/update, and returned-rule
   verification stages.
+- A fresh retry with the closed classifier returned only `lookup_failed`;
+  no update request was attempted.
 
 ## Cause classification
 
@@ -63,3 +65,6 @@ Pending.
 ## Recurrence history
 
 - 2026-07-26T23:42:12Z: First observed.
+- 2026-07-26T23:46:20Z: Recurred with safe category `lookup_failed`; the next
+  retry distinguishes authorization from not-found without reading provider
+  content.

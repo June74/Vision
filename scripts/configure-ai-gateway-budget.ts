@@ -22,6 +22,8 @@ export interface AiGatewayBudgetEvidence {
 export type AiGatewayBudgetErrorCategory =
   | "invalid_configuration"
   | "lookup_failed"
+  | "lookup_not_found"
+  | "lookup_unauthorized"
   | "update_failed"
   | "verification_failed"
   | "unknown_failure";
@@ -40,6 +42,12 @@ export function classifyAiGatewayBudgetError(
     return "invalid_configuration";
   }
   if (error.message === "AI Gateway lookup failed.") return "lookup_failed";
+  if (error.message === "AI Gateway lookup authorization failed.") {
+    return "lookup_unauthorized";
+  }
+  if (error.message === "AI Gateway was not found.") {
+    return "lookup_not_found";
+  }
   if (error.message === "AI Gateway update failed.") return "update_failed";
   if (error.message === "AI Gateway budget verification failed.") {
     return "verification_failed";
@@ -67,6 +75,14 @@ export async function configureAiGatewayBudget(
   });
 
   const currentResponse = await fetchImplementation(endpoint, { headers });
+  if (currentResponse.status === 401 || currentResponse.status === 403) {
+    await currentResponse.body?.cancel();
+    throw new Error("AI Gateway lookup authorization failed.");
+  }
+  if (currentResponse.status === 404) {
+    await currentResponse.body?.cancel();
+    throw new Error("AI Gateway was not found.");
+  }
   const current: unknown = await currentResponse.json();
   if (
     !currentResponse.ok ||
