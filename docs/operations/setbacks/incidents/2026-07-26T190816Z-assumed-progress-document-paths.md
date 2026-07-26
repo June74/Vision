@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:08:16.577518Z
-- **Last observed:** 2026-07-26T20:23:31.7153689Z
+- **Last observed:** 2026-07-26T20:41:44.0266068Z
 - **Phase/task:** Phase B completion audit
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `1dff60e`
@@ -66,3 +66,6 @@ read.
 - 2026-07-26T20:23:31.7153689Z: Recurred when a guessed AI-usage integration
   filename was included and Vitest silently ignored it. The directory was
   listed and `budgeted-provider.test.ts` selected explicitly.
+- 2026-07-26T20:41:44.0266068Z: Recurred when two conventional alternate
+  Vitest configuration paths were read without first listing them. The
+  confirmed root `vitest.config.ts` supplied the needed project definition.

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:58:57.365788Z
-- **Last observed:** 2026-07-26T19:59:04.5419463Z
+- **Last observed:** 2026-07-26T20:53:19.9855914Z
 - **Phase/task:** Phase B clean-room verification
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `3935500`
@@ -57,3 +57,7 @@ The generated file is absent and the setback itself is indexed.
 ## Recurrence history
 
 - 2026-07-26T19:58:57.365788Z: First observed.
+- 2026-07-26T20:53:19.9855914Z: Recurred after local Worker/build
+  verification. The 198-byte file was inspected only through fixed privacy
+  booleans; all five prohibited-shape checks were false before exact-path
+  removal.

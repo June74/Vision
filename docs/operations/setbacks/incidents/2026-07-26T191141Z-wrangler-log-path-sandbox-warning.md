@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-07-26T19:41:17.2340348Z
+- **Last observed:** 2026-07-26T20:51:35.3688189Z
 - **Phase/task:** Phase B deployment diagnostics
 - **Environment:** Local managed sandbox
 - **Version/commit:** `codex/phase-b-foundation`
@@ -57,3 +57,7 @@ warning.
 - 2026-07-26T19:41:17.2340348Z: Recurred during the temporary preview
   artifact build after the known workspace-local diagnostic setting was
   omitted. The next check restores that setting.
+- 2026-07-26T20:51:35.3688189Z: Recurred during split clean-room Worker and
+  build stages after the same local diagnostic setting was omitted. Both
+  stages exited successfully; future final verification must restore the
+  workspace-local setting before invocation.

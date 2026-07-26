@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:30:35.2961897Z
-- **Last observed:** 2026-07-26T20:31:38.8232065Z
+- **Last observed:** 2026-07-26T20:54:22.5223781Z
 - **Phase/task:** Phase B release operations
 - **Environment:** Local Phase B worktree under the managed sandbox
 - **Version/commit:** `3128b5c`
@@ -39,7 +39,8 @@ results, followed by a permission warning for the global ignore file.
   user-level Git ignore file.
 - **Hypotheses:** None.
 - **Rejected hypotheses:** The linked worktree and remote branch were not
-  unavailable.
+  unavailable. Overriding the excludes file with the Windows `NUL` device is
+  not supported by this Git build.
 - **Known exclusions:** No project file, commit, or deployment changed.
 
 ## Correction and prevention
@@ -61,3 +62,8 @@ commit `3128b5c`.
 - 2026-07-26T20:30:35.2961897Z: First observed.
 - 2026-07-26T20:31:38.8232065Z: Recurred during documentation and diff
   verification; the checks still completed successfully.
+- 2026-07-26T20:53:19.9855914Z: Recurred during the pre-commit status and
+  diff check; all requested repository results were still returned.
+- 2026-07-26T20:54:22.5223781Z: An attempted `NUL` excludes-file override
+  failed before the Git diff check. Documentation had already passed; the
+  diff check was rerun normally instead of pursuing another workaround.

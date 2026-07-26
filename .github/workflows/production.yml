@@ -64,7 +64,38 @@ jobs:
       - name: Run application checks
         run: pnpm check
       - name: Re-run the Phase B release security boundary
+        id: release-security
         run: pnpm security:scan
+      - name: Write safe release security summary
+        if: ${{ always() }}
+        shell: bash
+        env:
+          SCAN_OUTCOME: ${{ steps.release-security.outcome }}
+        run: |
+          mkdir -p dist/release-summary
+          if [[ "$SCAN_OUTCOME" == "success" ]]; then
+            STATUS="pass"
+          else
+            STATUS="fail"
+          fi
+          {
+            printf 'status=%s\n' "$STATUS"
+            printf 'safe_file_identifier=%s\n' 'dist/client'
+            printf 'safe_file_identifier=%s\n' 'dist/release-evidence/application-logs/captured.ndjson'
+            printf 'safe_file_identifier=%s\n' 'dist/release-evidence/audit/audit.ndjson'
+            printf 'safe_file_identifier=%s\n' 'dist/release-evidence/queue/queue.ndjson'
+            printf 'safe_file_identifier=%s\n' 'dist/release-evidence/database-raw/rows.ndjson'
+            printf 'safe_file_identifier=%s\n' 'dist/release-evidence/r2-unencrypted/object.json'
+            printf 'safe_file_identifier=%s\n' 'scripts/scan-release.ts'
+          } > dist/release-summary/security-scan.txt
+      - name: Upload safe release security summary
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: vision-phase-b-security-summary
+          path: dist/release-summary/security-scan.txt
+          if-no-files-found: error
+          retention-days: 30
       - name: Install Chromium for browser smoke coverage
         run: pnpm exec playwright install --with-deps chromium
       - name: Run browser smoke coverage

@@ -75,6 +75,36 @@ describe("delivery workflow policy", () => {
     expect(production).toContain("ref: ${{ needs.verify.outputs.verified_sha }}");
     expect(production).toContain("permissions:\n  contents: read");
   });
+
+  it("uploads only a safe Phase B security-scan summary", async () => {
+    const production = await readWorkflow("production.yml");
+    const scanStep = readWorkflowStep(
+      production,
+      "Re-run the Phase B release security boundary",
+    );
+    const summaryStep = readWorkflowStep(
+      production,
+      "Write safe release security summary",
+    );
+    const uploadStep = readWorkflowStep(
+      production,
+      "Upload safe release security summary",
+    );
+
+    expect(scanStep).toContain("id: release-security");
+    expect(summaryStep).toContain(
+      "SCAN_OUTCOME: ${{ steps.release-security.outcome }}",
+    );
+    expect(summaryStep).toContain(
+      "dist/release-summary/security-scan.txt",
+    );
+    expect(uploadStep).toContain("uses: actions/upload-artifact@v4");
+    expect(uploadStep).toContain("if: ${{ always() }}");
+    expect(uploadStep).toContain(
+      "path: dist/release-summary/security-scan.txt",
+    );
+    expect(uploadStep).not.toContain("dist/release-evidence");
+  });
 });
 
 describe("preview OAuth acceptance policy", () => {
