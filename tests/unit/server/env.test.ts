@@ -78,6 +78,35 @@ describe("RuntimeEnvSchema", () => {
       }),
     ).not.toThrow(/secret-root-key-that-must-never-appear-in-errors/u);
   });
+
+  it("requires the backup key and version to be configured together", () => {
+    const runtime = {
+      VISION_ENV: "preview",
+      DATABASE_URL: "postgresql://vision_app:secret@db.example.test/vision",
+      KEY_ENCRYPTION_KEY: encodeBase64Url(new Uint8Array(32)),
+    };
+    const backupKey = encodeBase64Url(new Uint8Array(32).fill(1));
+
+    expect(() =>
+      RuntimeEnvSchema.parse({
+        ...runtime,
+        BACKUP_ENCRYPTION_KEY: backupKey,
+      }),
+    ).toThrow(/configured together/u);
+    expect(() =>
+      RuntimeEnvSchema.parse({
+        ...runtime,
+        BACKUP_KEY_VERSION: "1",
+      }),
+    ).toThrow(/configured together/u);
+    expect(
+      RuntimeEnvSchema.parse({
+        ...runtime,
+        BACKUP_ENCRYPTION_KEY: backupKey,
+        BACKUP_KEY_VERSION: "1",
+      }),
+    ).toMatchObject({ BACKUP_KEY_VERSION: 1 });
+  });
 });
 
 describe("GoogleAuthEnvSchema", () => {

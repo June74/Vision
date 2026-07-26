@@ -78,3 +78,9 @@ Validates the exact server-only OpenAI adapter binding pair. The base URL must b
 ## `parseAiBudgetEnvironment`
 
 Validates the hard limit as exactly 950 cents and requires non-negative integer per-million-token rates plus positive routine, optional, and complex worst-case reservations. Values are injected because provider prices are not assumed by source code.
+
+## `parseBackupEnvironment`
+
+Validates `BACKUP_ENCRYPTION_KEY` as a canonical 32-byte base64url secret, coerces `BACKUP_KEY_VERSION` to a positive
+safe integer, and rejects equality with `KEY_ENCRYPTION_KEY` when the application key is supplied. The returned
+immutable record includes only the backup key and version.

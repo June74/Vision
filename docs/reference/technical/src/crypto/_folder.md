@@ -8,3 +8,6 @@ version.
 Data keys are random 256-bit values partitioned by owner and domain. They are stored only after AES-GCM wrapping under `KEY_ENCRYPTION_KEY`; the root key remains non-extractable. The store persists wrapped records and an atomic monotonic active-version high-water mark. Each active lookup snapshots the store version once; rotation raises it asynchronously, restart rollback is rejected, and historical lookup stays exact.
 
 Binary values become canonical unpadded base64url only at boundaries. A field is limited to 64 KiB of UTF-8 plaintext; encoded IV, ciphertext, wrapped-key, and serialized JSON limits are checked before decoding/parsing. The Vitest provider has no embedded key and is excluded by source and post-build bundle contracts.
+
+The backup envelope imports a distinct non-extractable AES-256-GCM key and carries an explicit key version; it never
+reuses the application data-key wrapping binding.

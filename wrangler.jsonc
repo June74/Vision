@@ -25,10 +25,39 @@
     ]
   },
   "triggers": {
-    "crons": ["*/15 * * * *"]
+    "crons": ["*/15 * * * *", "5 6 * * *"]
   },
   "vars": {
     "VISION_ENV": "local",
-    "AI_MONTHLY_HARD_LIMIT_CENTS": "950"
+    "AI_MONTHLY_HARD_LIMIT_CENTS": "950",
+    "BACKUP_KEY_VERSION": "1"
+  },
+  "env": {
+    "preview": {
+      "r2_buckets": [
+        {
+          "binding": "BACKUP_BUCKET",
+          "bucket_name": "vision-preview-backups"
+        }
+      ],
+      "vars": {
+        "VISION_ENV": "preview",
+        "AI_MONTHLY_HARD_LIMIT_CENTS": "950",
+        "BACKUP_KEY_VERSION": "1"
+      }
+    },
+    "production": {
+      "r2_buckets": [
+        {
+          "binding": "BACKUP_BUCKET",
+          "bucket_name": "vision-production-backups"
+        }
+      ],
+      "vars": {
+        "VISION_ENV": "production",
+        "AI_MONTHLY_HARD_LIMIT_CENTS": "950",
+        "BACKUP_KEY_VERSION": "1"
+      }
+    }
   }
 }

@@ -1,6 +1,20 @@
 # `src/jobs/scheduled.ts`
 
-The scheduled entry point performs lifecycle control and only reserves event synchronization through the normal opaque Queue. Credentials and provider content never enter a job.
+The scheduled entry point routes exact cron expressions to isolated Google-maintenance and encrypted-recovery
+capability sets. The daily branch never constructs Google credentials; the maintenance branch never constructs the
+backup key.
+
+## `runScheduledJob`
+Matches only the two configured cron expressions and rejects any unexpected scheduled event.
+
+## `runScheduledRecovery`
+Awaits verified daily creation before retention, so a failed backup can never be followed by a destructive purge.
+
+## `maintenance`
+Lazily constructs and executes only the existing calendar maintenance dependencies.
+
+## `recovery`
+Lazily constructs and executes only backup and retention dependencies.
 
 ## `runScheduledCalendarMaintenance`
 Runs projection cleanup and repair before renewal, isolates all three operations, and reports a failure only after every maintenance path has been attempted.
@@ -9,7 +23,14 @@ Invokes the owner-scoped database-only projection retention boundary before cred
 ## `recordCredentialFailure`
 Routes typed OAuth failure through the generation-safe maintenance checkpoint transition before rethrowing.
 ## `scheduled`
-Uses Cloudflare's scheduled time and awaits maintenance.
+Uses Cloudflare's scheduled time and exact cron string for capability-separated dispatch.
+## `createProductionScheduledRecoveryDependencies`
+Validates the separate key/version, imports a non-extractable key, and constructs the R2 and repeatable-read Neon
+adapters.
+## `create`
+Runs conditional encrypted backup creation and post-write verification.
+## `purge`
+Runs strict-admission 30-day retention only after creation succeeds.
 ## `createProductionScheduledCalendarMaintenanceDependencies`
 Validates configuration, restores owner-bound keys and OAuth state, refreshes near-expiry access, and constructs the channel-only adapter.
 ## `verify`

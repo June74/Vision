@@ -19,6 +19,21 @@ describe("Cloudflare asset routing", () => {
         }>;
       };
       triggers?: { crons?: string[] };
+      r2_buckets?: Array<{
+        binding?: string;
+        bucket_name?: string;
+      }>;
+      vars?: Record<string, string>;
+      env?: Record<
+        "preview" | "production",
+        {
+          r2_buckets?: Array<{
+            binding?: string;
+            bucket_name?: string;
+          }>;
+          vars?: Record<string, string>;
+        }
+      >;
     };
 
     expect(config.assets?.run_worker_first).toEqual([
@@ -38,6 +53,44 @@ describe("Cloudflare asset routing", () => {
         max_concurrency: 1,
       }),
     ]);
-    expect(config.triggers?.crons).toEqual(["*/15 * * * *"]);
+    expect(config.triggers?.crons).toEqual([
+      "*/15 * * * *",
+      "5 6 * * *",
+    ]);
+    expect(config.r2_buckets).toBeUndefined();
+    expect(config.env?.preview.r2_buckets).toEqual([
+      {
+        binding: "BACKUP_BUCKET",
+        bucket_name: "vision-preview-backups",
+      },
+    ]);
+    expect(config.env?.production.r2_buckets).toEqual([
+      {
+        binding: "BACKUP_BUCKET",
+        bucket_name: "vision-production-backups",
+      },
+    ]);
+    expect(config.env?.preview.r2_buckets?.[0]?.bucket_name).not.toBe(
+      config.env?.production.r2_buckets?.[0]?.bucket_name,
+    );
+    for (const environment of ["preview", "production"] as const) {
+      expect(config.env?.[environment].vars?.BACKUP_KEY_VERSION).toBe("1");
+      expect(config.env?.[environment].vars).not.toHaveProperty(
+        "BACKUP_ENCRYPTION_KEY",
+      );
+    }
+
+    const [previewWorkflow, productionWorkflow] = await Promise.all([
+      readFile(
+        new URL("../../../.github/workflows/preview.yml", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../../../.github/workflows/production.yml", import.meta.url),
+        "utf8",
+      ),
+    ]);
+    expect(previewWorkflow).toContain("--env preview");
+    expect(productionWorkflow).toContain("--env production");
   });
 });

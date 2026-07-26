@@ -81,7 +81,7 @@ jobs:
         run: pnpm build
       - name: Deploy isolated preview Worker
         if: ${{ steps.preview-token.outputs.deploy == 'true' }}
-        run: pnpm exec wrangler deploy --config dist/vision/wrangler.json --name vision-preview --var VISION_ENV:preview --var GOOGLE_REDIRECT_URI:https://vision-preview.june74.workers.dev/api/auth/google/callback
+        run: pnpm exec wrangler deploy --config dist/vision/wrangler.json --env preview --name vision-preview --var GOOGLE_REDIRECT_URI:https://vision-preview.june74.workers.dev/api/auth/google/callback
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}

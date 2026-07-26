@@ -4,4 +4,7 @@ This folder is Vision's protected-data boundary. It encrypts private field value
 
 The root key is a Worker secret. It is never stored with encrypted records. Active key versions live in an authoritative monotonic store so restarts cannot roll encryption backward.
 
+Logical backups use a separate backup-only key so compromise or rotation of one key purpose does not silently grant
+the other.
+
 `test-key-provider.ts` contains no known key, accepts test-generated material only inside Vitest, is forbidden from other production imports, and is checked for absence after every production build.

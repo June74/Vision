@@ -8,24 +8,73 @@ import {
   EncryptedTokenRepository,
   type TokenRepositoryPort,
 } from "../data/repositories/token-repository";
+import { importBackupEncryptionKey } from "../crypto/backup-key";
 import { encodeBase64Url, serializeCipherEnvelope } from "../crypto/envelope";
 import { createWrappedKeyProvider } from "../crypto/key-provider";
 import { encryptProtectedFields } from "../crypto/protected-fields";
+import { createNeonBackupSnapshotSource } from "../data/backup/neon-adapter";
+import { createR2BackupObjectStore } from "../data/backup/r2-object-store";
 import { CalendarClient } from "../integrations/google-calendar/calendar-client";
 import {
   GoogleOAuthClient,
 } from "../integrations/google/oauth-client";
 import {
   parseGoogleAuthEnvironment,
+  parseBackupEnvironment,
   parseVisionKeyEncryptionKey,
   type Env,
 } from "../server/env";
+import { createDailyBackup } from "./create-daily-backup";
+import { purgeExpiredBackups } from "./purge-expired-backups";
 import { renewExpiringChannels } from "./renew-google-channels";
 import { repairCalendarSync } from "./repair-calendar-sync";
 import {
   classifyGoogleRefreshError,
 } from "./queue-consumer";
 import { SyncCalendarError } from "./sync-calendar";
+
+/** Existing near-real-time repair/renewal cadence. */
+export const CALENDAR_MAINTENANCE_CRON = "*/15 * * * *";
+/** Daily UTC recovery cadence kept separate from provider maintenance. */
+export const DAILY_BACKUP_CRON = "5 6 * * *";
+
+/** Replaceable dispatch boundaries proving each cron owns only its intended job. */
+export interface ScheduledJobDependencies {
+  readonly maintenance: (now: Date) => Promise<void>;
+  readonly recovery: (now: Date) => Promise<void>;
+}
+
+/** Recovery operations kept separate so retention can run only after verified creation. */
+export interface ScheduledRecoveryDependencies {
+  readonly create: (now: Date) => Promise<void>;
+  readonly purge: (now: Date) => Promise<void>;
+}
+
+/** Routes exact configured cron expressions without coupling recovery to Google credentials. */
+export async function runScheduledJob(
+  cron: string,
+  now: Date,
+  dependencies: ScheduledJobDependencies,
+): Promise<void> {
+  if (cron === CALENDAR_MAINTENANCE_CRON) {
+    await dependencies.maintenance(now);
+    return;
+  }
+  if (cron === DAILY_BACKUP_CRON) {
+    await dependencies.recovery(now);
+    return;
+  }
+  throw new Error("Scheduled cron is unsupported.");
+}
+
+/** Creates and verifies today's backup before applying the fixed retention window. */
+export async function runScheduledRecovery(
+  now: Date,
+  dependencies: ScheduledRecoveryDependencies,
+): Promise<void> {
+  await dependencies.create(now);
+  await dependencies.purge(now);
+}
 
 /** Injected maintenance functions keep the scheduler free of event-fetching capability. */
 export interface ScheduledCalendarMaintenanceDependencies {
@@ -100,15 +149,57 @@ export async function runScheduledCalendarMaintenance(
   if (renewalFailure !== undefined) throw renewalFailure;
 }
 
-/** Cloudflare scheduled entry point; it reserves Queue work and never reads event content. */
+/** Cloudflare scheduled entry point routing maintenance and recovery by exact cron expression. */
 export async function scheduled(
   controller: ScheduledController,
   environment: Env,
   _context: ExecutionContext,
 ): Promise<void> {
-  const dependencies =
-    await createProductionScheduledCalendarMaintenanceDependencies(environment);
-  await runScheduledCalendarMaintenance(new Date(controller.scheduledTime), dependencies);
+  const now = new Date(controller.scheduledTime);
+  await runScheduledJob(controller.cron, now, {
+    /** Builds Google maintenance capability only for the maintenance cron. */
+    maintenance: async (scheduledAt) => {
+      const dependencies =
+        await createProductionScheduledCalendarMaintenanceDependencies(
+          environment,
+        );
+      await runScheduledCalendarMaintenance(scheduledAt, dependencies);
+    },
+    /** Builds backup capability only for the daily recovery cron. */
+    recovery: async (scheduledAt) => {
+      const dependencies =
+        await createProductionScheduledRecoveryDependencies(environment);
+      await runScheduledRecovery(scheduledAt, dependencies);
+    },
+  });
+}
+
+/** Creates backup-only production functions without opening Google credential paths. */
+async function createProductionScheduledRecoveryDependencies(
+  environment: Env,
+): Promise<ScheduledRecoveryDependencies> {
+  if (!environment.BACKUP_BUCKET) {
+    throw new Error("Backup object storage is unavailable.");
+  }
+  const backupEnvironment = parseBackupEnvironment(environment);
+  const backupKey = await importBackupEncryptionKey(
+    backupEnvironment.BACKUP_ENCRYPTION_KEY,
+    backupEnvironment.BACKUP_KEY_VERSION,
+  );
+  const store = createR2BackupObjectStore(environment.BACKUP_BUCKET);
+  const snapshotSource = createNeonBackupSnapshotSource(
+    environment.DATABASE_URL,
+  );
+  return {
+    /** Captures, encrypts, conditionally stores, and verifies today's backup. */
+    create: async (now) => {
+      await createDailyBackup(now, { store, snapshotSource, backupKey });
+    },
+    /** Purges only validated objects outside the fixed recovery window. */
+    purge: async (now) => {
+      await purgeExpiredBackups(now, { store });
+    },
+  };
 }
 
 /** Creates owner-scoped renewal and repair functions from server-only runtime bindings. */

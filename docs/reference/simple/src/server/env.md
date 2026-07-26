@@ -34,3 +34,8 @@ Checks the server-only AI Gateway base URL and OpenAI provider key without expos
 ## `parseAiBudgetEnvironment`
 
 Checks the exact 950-cent Gateway barrier and the complete injected provider pricing and reservation estimates.
+
+## `parseBackupEnvironment`
+
+Checks the separate canonical backup encryption key and its positive version. If the application wrapping key is
+present, the backup key must be different.

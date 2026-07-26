@@ -1,6 +1,19 @@
 # `src/jobs/scheduled.ts`
 
-Runs Google channel renewal and missed-notification repair every 15 minutes.
+Routes the 15-minute Google maintenance schedule and daily encrypted recovery schedule without mixing their
+credentials.
+
+## `runScheduledJob`
+Calls only the function belonging to the exact configured cron expression.
+
+## `runScheduledRecovery`
+Creates and verifies today's backup before starting retention.
+
+## `maintenance`
+Builds Google maintenance capability only for the 15-minute cron.
+
+## `recovery`
+Builds backup capability only for the daily recovery cron.
 
 ## `runScheduledCalendarMaintenance`
 Runs expired rebuild cleanup, queues repair, still attempts renewal if either fails, and reports a failure afterward.
@@ -9,7 +22,13 @@ Removes expired encrypted rebuild staging before Google credentials are needed.
 ## `recordCredentialFailure`
 Stores a safe credential failure before the scheduler reports it.
 ## `scheduled`
-Connects Cloudflare scheduled events to maintenance.
+Connects Cloudflare scheduled events to exact cron routing.
+## `createProductionScheduledRecoveryDependencies`
+Builds the separate backup key, R2 store, and consistent Neon snapshot source.
+## `create`
+Creates and verifies today's encrypted object.
+## `purge`
+Applies the fixed 30-day retention rule after successful creation.
 ## `createProductionScheduledCalendarMaintenanceDependencies`
 Builds owner-bound database, encryption, Google, and Queue dependencies.
 ## `verify`

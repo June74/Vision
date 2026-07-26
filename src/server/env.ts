@@ -28,6 +28,32 @@ const keyEncryptionKeySchema = z.string().superRefine((keyEncryptionKey, context
   }
 });
 
+const backupEncryptionKeySchema = z.string().superRefine((backupKey, context) => {
+  let decoded: Uint8Array | undefined;
+  try {
+    if (backupKey.length !== 43) throw new Error("Incorrect encoded length.");
+    decoded = decodeBase64Url(backupKey, "Backup key", 43);
+    if (decoded.byteLength !== 32) throw new Error("Incorrect decoded length.");
+  } catch {
+    context.addIssue({
+      code: "custom",
+      message:
+        "BACKUP_ENCRYPTION_KEY must be a canonical 256-bit base64url secret.",
+    });
+  } finally {
+    decoded?.fill(0);
+  }
+});
+const backupKeyVersionSchema = z
+  .union([
+    z.number().int().positive().safe(),
+    z
+      .string()
+      .regex(/^[1-9]\d*$/u)
+      .transform(Number)
+      .refine(Number.isSafeInteger),
+  ]);
+
 const visionEnvironmentSchema = z.enum(["local", "preview", "production"]);
 const googleClientIdSchema = z
   .string()
@@ -98,6 +124,26 @@ export const AiBudgetEnvSchema = z
   })
   .strict();
 
+/** Validates the separate backup-only key binding and its positive key version. */
+export const BackupEnvSchema = z
+  .object({
+    BACKUP_ENCRYPTION_KEY: backupEncryptionKeySchema,
+    BACKUP_KEY_VERSION: backupKeyVersionSchema,
+    KEY_ENCRYPTION_KEY: keyEncryptionKeySchema.optional(),
+  })
+  .superRefine((environment, context) => {
+    if (
+      environment.KEY_ENCRYPTION_KEY !== undefined &&
+      environment.KEY_ENCRYPTION_KEY === environment.BACKUP_ENCRYPTION_KEY
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "BACKUP_ENCRYPTION_KEY must be distinct from KEY_ENCRYPTION_KEY.",
+      });
+    }
+  });
+
 /** Validates the server-only Google OAuth and private-pilot allowlist bindings as one exact unit. */
 export const GoogleAuthEnvSchema = z
   .object({
@@ -144,6 +190,8 @@ export const RuntimeEnvSchema = z
       }
     }),
     KEY_ENCRYPTION_KEY: keyEncryptionKeySchema,
+    BACKUP_ENCRYPTION_KEY: backupEncryptionKeySchema.optional(),
+    BACKUP_KEY_VERSION: backupKeyVersionSchema.optional(),
     GOOGLE_CLIENT_ID: googleClientIdSchema.optional(),
     GOOGLE_CLIENT_SECRET: googleClientSecretSchema.optional(),
     GOOGLE_REDIRECT_URI: googleRedirectSchema.optional(),
@@ -162,6 +210,16 @@ export const RuntimeEnvSchema = z
     AI_COMPLEX_WORST_CASE_CENTS: injectedPositiveCentsSchema.optional(),
   })
   .superRefine((environment, context) => {
+    if (
+      (environment.BACKUP_ENCRYPTION_KEY === undefined) !==
+      (environment.BACKUP_KEY_VERSION === undefined)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "BACKUP_ENCRYPTION_KEY and BACKUP_KEY_VERSION must be configured together.",
+      });
+    }
     if (
       (environment.OPENAI_GATEWAY_BASE_URL === undefined) !==
       (environment.OPENAI_API_KEY === undefined)
@@ -232,6 +290,18 @@ export function parseAiBudgetEnvironment(
   return AiBudgetEnvSchema.parse(environment);
 }
 
+/** Validates and owns only the backup-specific secret and version fields. */
+export function parseBackupEnvironment(environment: unknown): {
+  readonly BACKUP_ENCRYPTION_KEY: string;
+  readonly BACKUP_KEY_VERSION: number;
+} {
+  const parsed = BackupEnvSchema.parse(environment);
+  return Object.freeze({
+    BACKUP_ENCRYPTION_KEY: parsed.BACKUP_ENCRYPTION_KEY,
+    BACKUP_KEY_VERSION: parsed.BACKUP_KEY_VERSION,
+  });
+}
+
 /** Represents the validated server-only, secret-bearing Vision runtime environment. */
 export type RuntimeEnv = z.infer<typeof RuntimeEnvSchema>;
 
@@ -239,4 +309,5 @@ export type RuntimeEnv = z.infer<typeof RuntimeEnvSchema>;
 export interface Env extends RuntimeEnv {
   ASSETS: Fetcher;
   CALENDAR_SYNC_QUEUE?: Queue<import("../jobs/queue-message").CalendarSyncMessage>;
+  BACKUP_BUCKET?: R2Bucket;
 }
