@@ -118,5 +118,6 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
         run: |
+          set +o pipefail
           timeout 85s pnpm exec wrangler tail vision-preview --format json 2>/dev/null |
             pnpm exec tsx scripts/print-safe-tail.ts

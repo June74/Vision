@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-07-26T22:03:47.5841722Z
+- **Last observed:** 2026-07-26T22:58:14Z
 - **Phase/task:** Phase B deployment diagnostics
 - **Environment:** Local managed sandbox
 - **Version/commit:** `codex/phase-b-foundation`
@@ -65,3 +65,6 @@ warning.
   acceptance build after the diagnostic setting was omitted. Build and preview
   configuration validation both exited successfully; the follow-up uses a
   task-specific temporary diagnostic directory.
+- 2026-07-26T22:58:14Z: Recurred while rebuilding the normal backup schedule
+  after the diagnostic setting was omitted. The focused tests, build, and
+  preview artifact validation all exited successfully.

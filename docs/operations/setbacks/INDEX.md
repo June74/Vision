@@ -20,14 +20,14 @@
 | [SB-20260726-190339-git-worktree-lock-permission](incidents/2026-07-26T190339Z-git-worktree-lock-permission.md) | closed | 2026-07-26T22:01:39Z | Phase B release operations | Git worktree lock creation was denied |
 | [SB-20260726-190417-setback-row-timestamp-assumption](incidents/2026-07-26T190417Z-setback-row-timestamp-assumption.md) | closed | 2026-07-26T19:49:20.5044351Z | Phase B release operations | Setback row timestamp was assumed |
 | [SB-20260726-203035-git-global-ignore-unreadable](incidents/2026-07-26T203035Z-git-global-ignore-unreadable.md) | closed | 2026-07-26T20:54:22.5223781Z | Phase B release operations | Git global ignore file was unreadable |
-| [SB-20260726-203035-powershell-utc-flag-unsupported](incidents/2026-07-26T203035Z-powershell-utc-flag-unsupported.md) | closed | 2026-07-26T20:30:35.2961897Z | Phase B release operations | PowerShell UTC flag was unsupported |
+| [SB-20260726-203035-powershell-utc-flag-unsupported](incidents/2026-07-26T203035Z-powershell-utc-flag-unsupported.md) | closed | 2026-07-26T22:51:41Z | Phase B release operations | PowerShell UTC flag was unsupported |
 | [SB-20260726-190637-unbounded-backup-code-inspection](incidents/2026-07-26T190637Z-unbounded-backup-code-inspection.md) | closed | 2026-07-26T19:08:56.5870529Z | Phase B recovery acceptance | Backup source inspection was too broad |
 | [SB-20260726-190816-assumed-progress-document-paths](incidents/2026-07-26T190816Z-assumed-progress-document-paths.md) | closed | 2026-07-26T20:41:44.0266068Z | Phase B completion audit | Repository paths were assumed |
 | [SB-20260726-191035-preview-deploy-missing-nonsecret-vars](incidents/2026-07-26T191035Z-preview-deploy-missing-nonsecret-vars.md) | closed | 2026-07-26T19:33:19.4460335Z | Phase B recovery acceptance | Preview deployment omitted required non-secret variables |
-| [SB-20260726-191141-wrangler-log-path-sandbox-warning](incidents/2026-07-26T191141Z-wrangler-log-path-sandbox-warning.md) | closed | 2026-07-26T22:03:47.5841722Z | Phase B deployment diagnostics | Wrangler log path was blocked by sandbox |
+| [SB-20260726-191141-wrangler-log-path-sandbox-warning](incidents/2026-07-26T191141Z-wrangler-log-path-sandbox-warning.md) | closed | 2026-07-26T22:58:14Z | Phase B deployment diagnostics | Wrangler log path was blocked by sandbox |
 | [SB-20260726-191141-generated-config-nesting-assumption](incidents/2026-07-26T191141Z-generated-config-nesting-assumption.md) | closed | 2026-07-26T19:19:40.5249114Z | Phase B deployment diagnostics | Generated Wrangler config nesting was assumed |
 | [SB-20260726-191224-wrangler-dry-run-probe-failed](incidents/2026-07-26T191224Z-wrangler-dry-run-probe-failed.md) | closed | 2026-07-26T19:19:40.5249114Z | Phase B deployment diagnostics | Wrangler dry-run diagnostic failed |
-| [SB-20260726-191644-pnpm-exec-local-binary-resolution](incidents/2026-07-26T191644Z-pnpm-exec-local-binary-resolution.md) | closed | 2026-07-26T20:34:39.6525898Z | Phase B deployment fix tests | pnpm exec did not resolve local binary |
+| [SB-20260726-191644-pnpm-exec-local-binary-resolution](incidents/2026-07-26T191644Z-pnpm-exec-local-binary-resolution.md) | closed | 2026-07-26T22:57:22Z | Phase B deployment fix tests | pnpm exec did not resolve local binary |
 | [SB-20260726-191644-powershell-local-command-call-operator](incidents/2026-07-26T191644Z-powershell-local-command-call-operator.md) | closed | 2026-07-26T19:19:40.5249114Z | Phase B deployment fix tests | PowerShell call operator was omitted |
 | [SB-20260726-191656-callback-url-in-test-diff](incidents/2026-07-26T191656Z-callback-url-in-test-diff.md) | closed | 2026-07-26T19:19:40.5249114Z | Phase B deployment fix tests | Callback URL appeared in test failure diff |
 | [SB-20260726-192405-worker-static-analysis-sandbox-warning](incidents/2026-07-26T192405Z-worker-static-analysis-sandbox-warning.md) | closed | 2026-07-26T19:24:05.647183Z | Phase B deployment fix verification | Worker static analysis hit sandbox boundary |
@@ -52,6 +52,10 @@
 | [SB-20260726-222601-tail-job-inserted-inside-deploy-step](incidents/2026-07-26T222601Z-tail-job-inserted-inside-deploy-step.md) | closed | 2026-07-26T22:26:01Z | Phase B privacy-safe live diagnostics | Tail job inserted inside deploy step |
 | [SB-20260726-223545-cloudflare-account-id-in-selector-diagnostic](incidents/2026-07-26T223545Z-cloudflare-account-id-in-selector-diagnostic.md) | closed | 2026-07-26T22:44:57Z | Phase B AI Gateway acceptance | Cloudflare account ID in selector diagnostic |
 | [SB-20260726-224457-safe-tail-treated-pretty-json-as-lines](incidents/2026-07-26T224457Z-safe-tail-treated-pretty-json-as-lines.md) | closed | 2026-07-26T22:44:57Z | Phase B privacy-safe live diagnostics | Safe tail treated pretty JSON as lines |
+| [SB-20260726-225141-browser-page-title-helper-unsupported](incidents/2026-07-26T225141Z-browser-page-title-helper-unsupported.md) | closed | 2026-07-26T22:51:41Z | Phase B R2 backup acceptance | Browser page title helper unsupported |
+| [SB-20260726-225438-cloudflare-nested-selector-deadline](incidents/2026-07-26T225438Z-cloudflare-nested-selector-deadline.md) | closed | 2026-07-26T22:54:38Z | Phase B R2 backup acceptance | Cloudflare nested selector exceeded deadline |
+| [SB-20260726-225515-cloudflare-r2-route-redirect-assumption](incidents/2026-07-26T225515Z-cloudflare-r2-route-redirect-assumption.md) | closed | 2026-07-26T22:55:15Z | Phase B R2 backup acceptance | Cloudflare R2 route redirect was not handled |
+| [SB-20260726-225722-preview-validator-read-stale-artifact](incidents/2026-07-26T225722Z-preview-validator-read-stale-artifact.md) | closed | 2026-07-26T22:57:22Z | Phase B normal schedule restoration | Preview validator read stale artifact |
 
 ## Legacy history
 

@@ -63,7 +63,7 @@ describe("Cloudflare asset routing", () => {
     ]);
     expect(config.triggers?.crons).toEqual([
       "*/15 * * * *",
-      "* * * * *",
+      "5 6 * * *",
     ]);
     expect(config.r2_buckets).toBeUndefined();
     expect(config.env?.preview.r2_buckets).toEqual([
@@ -105,6 +105,9 @@ describe("Cloudflare asset routing", () => {
     ]);
     expect(previewWorkflow.includes("--env preview")).toBe(false);
     expect(previewWorkflow.includes("--var ")).toBe(false);
+    expect(previewWorkflow).toMatch(
+      /Print only allowlisted scheduled evidence[\s\S]*?set \+o pipefail[\s\S]*?timeout 85s/u,
+    );
     expect(previewWorkflow).toMatch(
       /Build deployable preview artifact[\s\S]*?env:\s*\n\s+CLOUDFLARE_ENV: preview/u,
     );
@@ -150,7 +153,7 @@ describe("Cloudflare asset routing", () => {
             },
           ],
         },
-        triggers: { crons: ["*/15 * * * *", "* * * * *"] },
+        triggers: { crons: ["*/15 * * * *", "5 6 * * *"] },
         r2_buckets: [
           {
             binding: "BACKUP_BUCKET",
@@ -186,7 +189,7 @@ describe("Cloudflare asset routing", () => {
             },
           ],
         },
-        triggers: { crons: ["*/15 * * * *", "* * * * *"] },
+        triggers: { crons: ["*/15 * * * *", "5 6 * * *"] },
         r2_buckets: [],
       }),
     ).toThrow(/preview deployment configuration/i);
@@ -201,7 +204,7 @@ describe("Cloudflare asset routing", () => {
             "https://vision-preview.june74.workers.dev/api/auth/google/callback",
         },
         queues: { producers: [], consumers: [] },
-        triggers: { crons: ["*/15 * * * *", "* * * * *"] },
+        triggers: { crons: ["*/15 * * * *", "5 6 * * *"] },
         r2_buckets: [
           {
             binding: "BACKUP_BUCKET",

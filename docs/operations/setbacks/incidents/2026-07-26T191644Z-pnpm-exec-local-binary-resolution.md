@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:16:44.091309Z
-- **Last observed:** 2026-07-26T20:34:39.6525898Z
+- **Last observed:** 2026-07-26T22:57:22Z
 - **Phase/task:** Phase B deployment fix tests
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** `codex/phase-b-foundation`
@@ -54,3 +54,5 @@ The focused test suite subsequently ran and passed 4/4.
 - 2026-07-26T20:34:39.6525898Z: Recurred during focused local migration
   validation; no test started and the repository-local Windows wrapper was
   used for the retry.
+- 2026-07-26T22:57:22Z: Recurred during normal backup-schedule restoration.
+  No test started; the retry uses `node_modules/.bin/vitest.cmd` directly.
