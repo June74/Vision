@@ -232,6 +232,7 @@ describe("daily encrypted backup job", () => {
     const maintenance = vi.fn(async () => undefined);
     const recovery = vi.fn(async () => undefined);
 
+    expect(DAILY_BACKUP_CRON).toBe("* * * * *");
     await runScheduledJob(CALENDAR_MAINTENANCE_CRON, NOW, {
       maintenance,
       recovery,
