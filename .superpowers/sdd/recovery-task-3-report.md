@@ -7,7 +7,8 @@
 - Initial implementation commit: `8ebe4b0`
 - First review-remediation commit: `4628c59`
 - Final operation-manifest remediation commit: `b27da3a`
-- No live account, secret, deployment, database, queue, R2 bucket, or provider resource was read or changed.
+- Authoritative evidence and structural fail-closed remediation commit: `270c3a0`
+- Task 3 itself performed no provider mutation; the approved Task 4 continuation subsequently created the preview Queue and private R2 bucket.
 
 ## Scope
 
@@ -15,6 +16,7 @@
 - Authoritative client-forbidden runtime-binding inventory.
 - TypeScript-AST inspection of Google provider operations and Hono route registrations.
 - Safe, non-reflective CI diagnostics.
+- Fresh evidence generated through the production logger, audit writer, queue validator, event encryption, and backup encryption boundaries and bound to the exact client build.
 - `pnpm security:scan` integration in `pnpm check` and the protected production workflow.
 
 ## TDD evidence
@@ -38,14 +40,20 @@ The reviewer findings were converted into regression tests before remediation:
   alternative route naming, source-directory and transport aliases, lowercase
   percent encoding, and provenance authority; two more expected failures covered
   computed SDK members and unsafe source filenames.
+- the authoritative-evidence review then produced RED regressions for computed
+  Hono methods, computed and unresolved SDK members, renamed transports,
+  typed and inferred transport properties, stale captures, and build-digest
+  mismatches.
 
 ### Final GREEN
 
-- Focused security suite: 3 files, 95 tests passed, 0 failed.
-- Focused Google/route suite: 1 file, 36 tests passed, 0 failed.
+- Focused final remediation suite: 3 files, 88 tests passed, 0 failed.
+- Complete security suite: 106 tests passed, 0 failed.
+- Focused Google/route suite: 1 file, 44 tests passed, 0 failed.
 - `pnpm typecheck`: passed.
 - `pnpm docs:check`: passed.
 - Clean `pnpm security:scan`: passed.
+- Final independent review: zero Critical, Important, or Minor findings; `READY`.
 
 ## Command-level acceptance
 
@@ -74,7 +82,7 @@ Neither contaminated run printed protected content, OAuth material, provider ide
 Serialized `pnpm check` passed after the final code state:
 
 - TypeScript checks: passed.
-- Unit/integration: 599 passed, 1 skipped.
+- Unit/integration: 610 passed, 1 skipped.
 - Contract: 179 passed.
 - Worker: 75 passed.
 - Documentation coverage: passed.
@@ -105,18 +113,28 @@ The review remediation added or changed:
 - mirrored simple and technical scanner documentation
 - this implementation report
 
+The final authoritative-evidence remediation added or changed:
+
+- `scripts/capture-release-evidence.ts`
+- generated `dist/release-evidence` inputs ignored by Git
+- fresh manifest and client-build digest enforcement
+- typed, inferred, bound, and structurally provider-bound transport handling
+- computed Hono and Google member fail-closed handling
+- new producer, freshness, build-binding, and transport regressions
+- mirrored simple and technical producer/scanner documentation
+
 ## Self-review
 
 - The exact established canary is centralized and exercised as plain, percent-encoded, base64, base64url, and byte-equivalent data across every required inspection surface.
-- Evidence targets are exact named local contract fixtures, not merely nonempty directories, and each record requires bounded versioned provenance with the exact reviewed generator, run, and per-surface source identity. Fresh live evidence remains Task 4.
+- Evidence targets are generated immediately before every scan by the real production privacy boundaries. Every record must match one fresh random run, capture time, exact per-surface source identity, and the SHA-256 digest of the client build under review; the manifest is written only after all five producers succeed.
 - Client binding checks derive from one source-owned inventory that is compared against every current runtime schema binding, including the AI provider key.
-- Google operations are inspected across all production source and allowlisted by exact adapter file, endpoint family, and HTTP method. Unresolved provider calls in approved adapters fail closed.
-- Event mutations are detected through direct calls, dot/bracket computed members, method aliases, event-object aliases, renamed HTTP transports, and direct HTTP operations.
-- Hono route inspection covers renamed receivers, static constants, Worker-entrypoint routes, `.all`, `.on`, `.route`, `.mount`, and direct or chained `.basePath()` composition. Every mutating route must match the exact reviewed file/method/path manifest.
+- Google operations are inspected across all production source and allowlisted by exact adapter file, endpoint family, and HTTP method. Unresolved provider calls fail closed through explicit, aliased, typed, inferred, bound, class-property, and structurally provider-marked HTTP transports.
+- Event mutations are detected through direct calls, dot/bracket computed members, unresolved collection members, method aliases, event-object aliases, renamed HTTP transports, and direct HTTP operations.
+- Hono route inspection covers renamed receivers, static constants, computed method names, unresolved computed methods, Worker-entrypoint routes, `.all`, `.on`, `.route`, `.mount`, and direct or chained `.basePath()` composition. Every mutating route must match the exact reviewed file/method/path manifest.
 - Diagnostics contain only categories and safe file identifiers; unsafe names become truncated one-way hashes without disabling AST inspection.
 - Scanner execution is local and deterministic and performs no network call or external write.
 - `git diff --check` reported no whitespace errors.
 
 ## Deferred evidence
 
-Real application logs, audit rows, queue payloads, raw database exports, and unencrypted R2 listings can only be captured after the Task 4 preview recovery resources exist. Task 3 supplies and tests the local evidence contract; it does not fabricate live acceptance.
+Task 3 now produces authoritative local application-log, audit, queue, encrypted-database-row, and encrypted-R2 evidence through production code. Live deployed Queue, Neon, and R2 acceptance remains Task 4 and must be recorded separately without fabricating provider evidence.
