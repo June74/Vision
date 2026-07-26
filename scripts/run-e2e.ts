@@ -11,6 +11,7 @@ const E2E_PORT = 5_173;
 const E2E_BASE_URL = `http://${E2E_HOST}:${E2E_PORT}`;
 const PROJECT_ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const CHILD_EXIT_GRACE_MS = 3_000;
+const INTERRUPT_CLEANUP_DEADLINE_MS = CHILD_EXIT_GRACE_MS * 3 + 1_000;
 const PORT_RELEASE_TIMEOUT_MS = 5_000;
 const SIGNAL_NUMBERS: Readonly<Record<ManagedSignal, number>> = {
   SIGINT: 2,
@@ -32,10 +33,28 @@ export interface E2eLifecycleDependencies {
   readonly verifyPortReleased: () => Promise<void>;
 }
 
+/** Injectable signal and termination boundaries for exact-child lifecycle tests. */
+export interface PlaywrightExitDependencies {
+  readonly signalSource: {
+    once(signal: ManagedSignal, listener: () => void): unknown;
+    off(signal: ManagedSignal, listener: () => void): unknown;
+  };
+  readonly terminateOwnedProcess: (child: ChildProcess) => Promise<void>;
+  readonly detachFailedChild: (child: ChildProcess) => void;
+  readonly terminationTimeoutMs: number;
+}
+
 const productionDependencies: E2eLifecycleDependencies = {
   startServer: startViteServer,
   runPlaywright: runPlaywrightCli,
   verifyPortReleased,
+};
+const productionExitDependencies: PlaywrightExitDependencies = {
+  signalSource: process,
+  terminateOwnedProcess,
+  /** Lets the runner exit nonzero if the operating system refuses termination. */
+  detachFailedChild: (child) => child.unref(),
+  terminationTimeoutMs: INTERRUPT_CLEANUP_DEADLINE_MS,
 };
 
 /** Removes pnpm's explicit separator while preserving every Playwright argument. */
@@ -119,36 +138,129 @@ async function runPlaywrightCli(
 }
 
 /** Converts child exit, launch failure, or parent interruption into one result. */
-async function waitForPlaywrightExit(child: ChildProcess): Promise<number> {
+export async function waitForPlaywrightExit(
+  child: ChildProcess,
+  dependencies: PlaywrightExitDependencies = productionExitDependencies,
+): Promise<number> {
   let requestedSignal: ManagedSignal | undefined;
-  let terminationFailure: unknown;
-  /** Records the first parent signal and starts bounded owned-child cleanup. */
+  let terminationPromise: Promise<void> | undefined;
+  let resolveTerminationOutcome!: (
+    value:
+      | { readonly kind: "termination-succeeded" }
+      | PromiseLike<{ readonly kind: "termination-succeeded" }>,
+  ) => void;
+  const terminationOutcomePromise = new Promise<{
+    readonly kind: "termination-succeeded";
+  }>((resolvePromise) => {
+    resolveTerminationOutcome = resolvePromise;
+  });
+  /** Records the first signal and exposes its one bounded cleanup promise. */
   const requestStop = (signal: ManagedSignal): void => {
-    requestedSignal ??= signal;
-    void terminateOwnedProcess(child).catch((error: unknown) => {
-      terminationFailure = error;
-    });
+    if (terminationPromise) return;
+    requestedSignal = signal;
+    terminationPromise = withDeadline(
+      dependencies.terminateOwnedProcess(child),
+      dependencies.terminationTimeoutMs,
+      "Playwright interrupt cleanup deadline exceeded.",
+    );
+    resolveTerminationOutcome(
+      terminationPromise.then(() => ({ kind: "termination-succeeded" })),
+    );
   };
   /** Converts Ctrl+C into an owned-child stop request. */
   const interrupt = (): void => requestStop("SIGINT");
   /** Converts an external termination into an owned-child stop request. */
   const terminate = (): void => requestStop("SIGTERM");
-  process.once("SIGINT", interrupt);
-  process.once("SIGTERM", terminate);
+  /** Resolves child launch errors as data so signal cleanup remains awaited. */
+  const onChildError = (error: Error): void => {
+    resolveChildOutcome({ kind: "child-error", error });
+  };
+  /** Resolves the exact child exit code or terminating signal. */
+  const onChildExit = (
+    code: number | null,
+    signal: NodeJS.Signals | null,
+  ): void => {
+    resolveChildOutcome({ kind: "child-exit", code, signal });
+  };
+  let resolveChildOutcome!: (
+    outcome:
+      | {
+          readonly kind: "child-error";
+          readonly error: Error;
+        }
+      | {
+          readonly kind: "child-exit";
+          readonly code: number | null;
+          readonly signal: NodeJS.Signals | null;
+        },
+  ) => void;
+  const childOutcomePromise = new Promise<
+    | {
+        readonly kind: "child-error";
+        readonly error: Error;
+      }
+    | {
+        readonly kind: "child-exit";
+        readonly code: number | null;
+        readonly signal: NodeJS.Signals | null;
+      }
+  >((resolvePromise) => {
+    resolveChildOutcome = resolvePromise;
+  });
+  child.once("error", onChildError);
+  child.once("exit", onChildExit);
+  dependencies.signalSource.once("SIGINT", interrupt);
+  dependencies.signalSource.once("SIGTERM", terminate);
   try {
-    const outcome = await new Promise<
-      { readonly code: number | null; readonly signal: NodeJS.Signals | null }
-    >((resolvePromise, rejectPromise) => {
-      child.once("error", rejectPromise);
-      child.once("exit", (code, signal) => resolvePromise({ code, signal }));
-    });
-    if (terminationFailure) throw terminationFailure;
-    if (requestedSignal) return signalExitCode(requestedSignal);
+    let outcome:
+      | Awaited<typeof childOutcomePromise>
+      | Awaited<typeof terminationOutcomePromise>;
+    try {
+      outcome = await Promise.race([
+        childOutcomePromise,
+        terminationOutcomePromise,
+      ]);
+    } catch (error) {
+      dependencies.detachFailedChild(child);
+      throw error;
+    }
+    if (requestedSignal && terminationPromise) {
+      try {
+        await terminationPromise;
+      } catch (error) {
+        dependencies.detachFailedChild(child);
+        throw error;
+      }
+      return signalExitCode(requestedSignal);
+    }
+    if (outcome.kind === "termination-succeeded") return 1;
+    if (outcome.kind === "child-error") throw outcome.error;
     if (outcome.code !== null) return outcome.code;
     return 1;
   } finally {
-    process.off("SIGINT", interrupt);
-    process.off("SIGTERM", terminate);
+    dependencies.signalSource.off("SIGINT", interrupt);
+    dependencies.signalSource.off("SIGTERM", terminate);
+    child.off("error", onChildError);
+    child.off("exit", onChildExit);
+  }
+}
+
+/** Adds one absolute deadline while consuming any later source rejection. */
+async function withDeadline<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_resolvePromise, rejectPromise) => {
+        timer = setTimeout(() => rejectPromise(new Error(message)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

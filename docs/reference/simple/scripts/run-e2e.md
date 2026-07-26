@@ -28,11 +28,11 @@ Starts Playwright directly with Node, without a command shell.
 
 ## `waitForPlaywrightExit`
 
-Waits for Playwright's result and handles an interruption without changing a normal exit code.
+Waits for Playwright's result and handles an interruption without changing a normal exit code. The first interruption owns one cleanup attempt; later signals reuse it. Cleanup failure or timeout ends with a nonzero result instead of waiting forever.
 
 ## `requestStop`
 
-Records an interruption and begins cleanup of the owned Playwright process.
+Records only the first interruption and publishes its single bounded cleanup promise to the main wait.
 
 ## `interrupt`
 
@@ -41,6 +41,22 @@ Handles a keyboard interruption.
 ## `terminate`
 
 Handles an external stop request.
+
+## `onChildError`
+
+Reports a Playwright launch error through the same awaited lifecycle as interruption cleanup.
+
+## `onChildExit`
+
+Reports the exact Playwright child exit without bypassing an already-started cleanup.
+
+## `withDeadline`
+
+Places one absolute time limit around interruption cleanup and safely consumes any later result.
+
+## `detachFailedChild`
+
+Stops an unkillable child handle from keeping the test runner open after cleanup has already failed.
 
 ## `terminateOwnedProcess`
 

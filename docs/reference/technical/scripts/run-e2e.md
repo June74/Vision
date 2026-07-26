@@ -32,11 +32,13 @@ Resolves `@playwright/test/cli`, launches it with the current Node executable, `
 
 ## `waitForPlaywrightExit`
 
-Registers temporary SIGINT/SIGTERM handlers, waits for child error or exit, removes handlers in `finally`, returns the exact numeric normal exit, and converts a handled interruption to a conventional nonzero code.
+**Signature:** `waitForPlaywrightExit(child, dependencies?): Promise<number>`
+
+Registers temporary SIGINT/SIGTERM and exact-child listeners, then races the child outcome with one memoized bounded termination promise. A child exit that overlaps a signal still awaits that same cleanup. Cleanup rejection or its absolute deadline rejects independently of a child that never exits, unreferences the failed child handle, and lets `main` return nonzero. Every listener is removed in `finally`.
 
 ## `requestStop`
 
-Records only the first signal and invokes bounded cleanup for the exact owned Playwright child.
+Records only the first signal, creates exactly one deadline-wrapped termination promise, and exposes its settlement to the main awaited race. Later SIGINT/SIGTERM events cannot launch another cleanup.
 
 ## `interrupt`
 
@@ -45,6 +47,24 @@ Maps the parent SIGINT handler to `requestStop`.
 ## `terminate`
 
 Maps the parent SIGTERM handler to `requestStop`.
+
+## `onChildError`
+
+Resolves a tagged launch-error outcome instead of rejecting a detached branch, allowing an already-started termination to finish before the error path returns.
+
+## `onChildExit`
+
+Resolves a tagged exact-child exit outcome. If a signal already owns cleanup, the runner awaits the memoized termination before returning `130` or `143`.
+
+## `withDeadline`
+
+**Signature:** `withDeadline(promise, timeoutMs, message): Promise<T>`
+
+Races one source promise against an absolute timer, clears the timer in `finally`, and keeps a rejection observer attached to the source even if the deadline wins. Production interruption cleanup has a ten-second outer ceiling in addition to its internal graceful and forced waits.
+
+## `detachFailedChild`
+
+Calls `unref()` only after the memoized termination rejects or exceeds its deadline, preventing the surviving child handle from recreating an unbounded parent wait. It does not claim that an operating-system-level termination refusal removed that process.
 
 ## `terminateOwnedProcess`
 
