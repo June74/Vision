@@ -38,6 +38,9 @@ No object names or contents were captured.
 - The R2 inventory was refreshed and remained at zero matching objects.
 - After a second interval, return navigation reached the R2 area but the exact
   bucket-link click timed out before any object or setting action.
+- The tested safe-tail workflow ran with deploy and verify disabled but its
+  allowlisted capture step failed after the 85-second window; raw Wrangler
+  stderr was suppressed by policy.
 
 ## Cause classification
 

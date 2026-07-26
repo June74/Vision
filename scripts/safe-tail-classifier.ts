@@ -32,6 +32,33 @@ const FAILURE_MARKERS = Object.freeze([
   ["Backup key binding is invalid.", "backup_key_invalid"],
   ["Scheduled cron is unsupported.", "scheduled_cron_unsupported"],
 ] as const);
+const MAX_TAIL_EVENT_BYTES = 1_048_576;
+
+/** Incrementally assembles Wrangler's pretty-printed JSON without emitting it. */
+export function createSafeTailAccumulator(): {
+  push(line: string): SafeTailEvidence | null;
+} {
+  let buffer = "";
+  return Object.freeze({
+    push(line: string): SafeTailEvidence | null {
+      const trimmed = line.trimStart();
+      if (buffer.length === 0 && !trimmed.startsWith("{")) return null;
+      buffer += `${line}\n`;
+      if (buffer.length > MAX_TAIL_EVENT_BYTES) {
+        buffer = "";
+        return null;
+      }
+      try {
+        JSON.parse(buffer);
+      } catch {
+        return null;
+      }
+      const evidence = classifySafeTailLine(buffer);
+      buffer = "";
+      return evidence;
+    },
+  });
+}
 
 /** Parses one raw tail line while copying no provider-controlled content. */
 export function classifySafeTailLine(line: string): SafeTailEvidence | null {

@@ -50,6 +50,8 @@
 | [SB-20260726-221344-post-migration-backup-object-not-visible](incidents/2026-07-26T221344Z-post-migration-backup-object-not-visible.md) | investigating | 2026-07-26T22:13:44Z | Phase B live encrypted backup acceptance | Post-migration backup object not visible |
 | [SB-20260726-222051-tdd-skill-read-late-and-root-misresolved](incidents/2026-07-26T222051Z-tdd-skill-read-late-and-root-misresolved.md) | closed | 2026-07-26T22:20:51Z | Phase B temporary backup acceptance | TDD skill read late and root misresolved |
 | [SB-20260726-222601-tail-job-inserted-inside-deploy-step](incidents/2026-07-26T222601Z-tail-job-inserted-inside-deploy-step.md) | closed | 2026-07-26T22:26:01Z | Phase B privacy-safe live diagnostics | Tail job inserted inside deploy step |
+| [SB-20260726-223545-cloudflare-account-id-in-selector-diagnostic](incidents/2026-07-26T223545Z-cloudflare-account-id-in-selector-diagnostic.md) | closed | 2026-07-26T22:44:57Z | Phase B AI Gateway acceptance | Cloudflare account ID in selector diagnostic |
+| [SB-20260726-224457-safe-tail-treated-pretty-json-as-lines](incidents/2026-07-26T224457Z-safe-tail-treated-pretty-json-as-lines.md) | closed | 2026-07-26T22:44:57Z | Phase B privacy-safe live diagnostics | Safe tail treated pretty JSON as lines |
 
 ## Legacy history
 
