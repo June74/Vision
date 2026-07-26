@@ -660,6 +660,35 @@ function postgresInvalidBackupValues(): readonly PostgreSqlInvalidBackupValue[] 
       invalidValue: "event\u0000action",
       validSnapshot: () => auditSnapshot(["safe-action"]),
     },
+    ...[
+      ["high", "\uD800"],
+      ["low", "\uDC00"],
+    ].flatMap(([kind, surrogate]) => [
+      {
+        label: `lone ${kind} surrogate in PostgreSQL text`,
+        table: "audit_events" as const,
+        rowIndex: 0,
+        column: "action",
+        invalidValue: `event-${surrogate}-action`,
+        validSnapshot: () => auditSnapshot(["safe-action"]),
+      },
+      {
+        label: `lone ${kind} surrogate in nested JSONB string`,
+        table: "projection_rebuild_changes" as const,
+        rowIndex: 0,
+        column: "planning_json",
+        invalidValue: ["safe", { nested: `bad-${surrogate}-value` }],
+        validSnapshot: () => projectionSnapshot({ safe: true }),
+      },
+      {
+        label: `lone ${kind} surrogate in JSONB object key`,
+        table: "projection_rebuild_changes" as const,
+        rowIndex: 0,
+        column: "planning_json",
+        invalidValue: { [`bad-${surrogate}-key`]: "value" },
+        validSnapshot: () => projectionSnapshot({ safe: true }),
+      },
+    ]),
     {
       label: "NUL in nested JSONB string",
       table: "projection_rebuild_changes",
@@ -1184,6 +1213,84 @@ describe("encrypted backup round trip", () => {
     }
   });
 
+  it("enforces PostgreSQL microsecond ordering before hashing, decode, or staging", async () => {
+    const createdMutation: PostgreSqlInvalidBackupValue = {
+      label: "later microsecond creation instant",
+      table: "ai_usage_months",
+      rowIndex: 0,
+      column: "created_at",
+      invalidValue: "2026-07-25T18:00:00.000999Z",
+      validSnapshot: () => usageMonthSnapshot(),
+    };
+    const updatedMutation: PostgreSqlInvalidBackupValue = {
+      label: "earlier microsecond update instant",
+      table: "ai_usage_months",
+      rowIndex: 0,
+      column: "updated_at",
+      invalidValue: "2026-07-25T18:00:00.000001Z",
+      validSnapshot: () => usageMonthSnapshot(),
+    };
+    const invalidSource = usageMonthSnapshot();
+    invalidSource.tables.ai_usage_months[0] = {
+      ...invalidSource.tables.ai_usage_months[0]!,
+      created_at: createdMutation.invalidValue,
+      updated_at: updatedMutation.invalidValue,
+    };
+    const key = await backupKey();
+    const digest = vi.spyOn(crypto.subtle, "digest");
+    const encrypt = vi.spyOn(crypto.subtle, "encrypt");
+    try {
+      await expect(
+        exportBackup(invalidSource, key, { createdAt: CREATED_AT }),
+      ).rejects.toThrow(/backup/i);
+      expect(digest).not.toHaveBeenCalled();
+      expect(encrypt).not.toHaveBeenCalled();
+    } finally {
+      digest.mockRestore();
+      encrypt.mockRestore();
+    }
+
+    const validSource = usageMonthSnapshot();
+    const invalidArchive = replaceArchiveColumn(
+      replaceArchiveColumn(
+        encodeCanonicalBackupArchive(validSource),
+        createdMutation,
+      ),
+      updatedMutation,
+    );
+    expect(() => decodeCanonicalBackupArchive(invalidArchive)).toThrow(
+      /backup/i,
+    );
+
+    const validEncrypted = await exportBackup(validSource, key, {
+      createdAt: CREATED_AT,
+    });
+    const invalidEncrypted = await reencryptPayload(
+      validEncrypted,
+      key,
+      (payload) => {
+        const archive = decodeBase64Url(
+          payload.archive,
+          "Test backup archive",
+          BACKUP_ARCHIVE_LIMITS.maximumArchiveBytes * 2,
+        );
+        payload.archive = encodeBase64Url(
+          replaceArchiveColumn(
+            replaceArchiveColumn(archive, createdMutation),
+            updatedMutation,
+          ),
+        );
+      },
+      { rehashArchive: true },
+    );
+    const target = new MemoryRestoreTarget();
+    await expect(importBackup(invalidEncrypted, key, target)).rejects.toThrow(
+      /backup/i,
+    );
+    expect(target.stageCalls).toBe(0);
+    expect(target.promoteCalls).toBe(0);
+  });
+
   it("preserves valid PostgreSQL boundary values across export and import", async () => {
     const source = projectionSnapshot({
       scalar: "Vision \u{1F4C5}",
@@ -1232,6 +1339,12 @@ describe("encrypted backup round trip", () => {
     });
     expect(target.stageCalls).toBe(1);
     expect(target.promoteCalls).toBe(1);
+    expect(
+      target.snapshot.tables.projection_rebuild_changes[0]!.planning_json,
+    ).toEqual(source.tables.projection_rebuild_changes[0]!.planning_json);
+    expect(target.snapshot.tables.audit_events[0]!.owner_id).toBe(
+      source.tables.audit_events[0]!.owner_id,
+    );
   });
 
   it("rejects semantically equivalent but noncanonical NDJSON bytes", async () => {

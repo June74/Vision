@@ -879,7 +879,7 @@ function validateColumnValue(
   let valid = false;
   switch (definition.kind) {
     case "text":
-      valid = typeof value === "string" && !value.includes("\u0000");
+      valid = typeof value === "string" && isPostgresText(value);
       break;
     case "smallint":
       valid = isDatabaseInteger(value, -32_768, 32_767);
@@ -1493,19 +1493,26 @@ function isDatabaseInteger(
 
 /** Admits strict Gregorian timestamps and PostgreSQL offsets without normalization. */
 function isDatabaseTimestamp(value: unknown): boolean {
+  return parseDatabaseTimestamp(value) !== undefined;
+}
+
+/** Converts one validated timestamp representation to exact Unix microseconds. */
+function parseDatabaseTimestamp(value: unknown): bigint | undefined {
   if (value instanceof Date) {
     const time = Date.prototype.getTime.call(value);
     const year = Date.prototype.getUTCFullYear.call(value);
-    return Number.isFinite(time) && year >= 1 && year <= 9_999;
+    return Number.isFinite(time) && year >= 1 && year <= 9_999
+      ? BigInt(time) * 1_000n
+      : undefined;
   }
   if (typeof value !== "string") {
-    return false;
+    return undefined;
   }
   const match =
     /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(Z|([+-])(\d{2})(?::?(\d{2}))?)$/.exec(
       value,
     );
-  if (!match) return false;
+  if (!match) return undefined;
   const year = Number(match[1]);
   const month = Number(match[2]);
   const day = Number(match[3]);
@@ -1531,34 +1538,80 @@ function isDatabaseTimestamp(value: unknown): boolean {
     30,
     31,
   ];
-  return (
-    year >= 1 &&
-    year <= 9_999 &&
-    month >= 1 &&
-    month <= 12 &&
-    day >= 1 &&
-    day <= daysInMonth[month - 1]! &&
-    hour >= 0 &&
-    hour <= 23 &&
-    minute >= 0 &&
-    minute <= 59 &&
-    second >= 0 &&
-    second <= 59 &&
-    offsetHour >= 0 &&
-    offsetHour <= 15 &&
-    offsetMinute >= 0 &&
-    offsetMinute <= 59 &&
-    Number.isFinite(Date.parse(value))
-  );
+  if (
+    year < 1 ||
+    year > 9_999 ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > daysInMonth[month - 1]! ||
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59 ||
+    second < 0 ||
+    second > 59 ||
+    offsetHour < 0 ||
+    offsetHour > 15 ||
+    offsetMinute < 0 ||
+    offsetMinute > 59
+  ) {
+    return undefined;
+  }
+
+  const adjustedYear = BigInt(year - (month <= 2 ? 1 : 0));
+  const era = adjustedYear / 400n;
+  const yearOfEra = adjustedYear - era * 400n;
+  const adjustedMonth = BigInt(month + (month > 2 ? -3 : 9));
+  const dayOfYear =
+    (153n * adjustedMonth + 2n) / 5n + BigInt(day) - 1n;
+  const dayOfEra =
+    yearOfEra * 365n +
+    yearOfEra / 4n -
+    yearOfEra / 100n +
+    dayOfYear;
+  const daysSinceUnixEpoch = era * 146_097n + dayOfEra - 719_468n;
+  const fractionMicroseconds = BigInt((match[7] ?? "").padEnd(6, "0") || "0");
+  const localMicroseconds =
+    (((daysSinceUnixEpoch * 24n + BigInt(hour)) * 60n +
+      BigInt(minute)) *
+      60n +
+      BigInt(second)) *
+      1_000_000n +
+    fractionMicroseconds;
+  const offsetDirection =
+    match[8] === "Z" ? 0n : match[9] === "-" ? -1n : 1n;
+  const offsetMicroseconds =
+    offsetDirection *
+    BigInt(offsetHour * 60 + offsetMinute) *
+    60n *
+    1_000_000n;
+  return localMicroseconds - offsetMicroseconds;
 }
 
-/** Recursively admits PostgreSQL JSONB values without forbidden NUL text. */
+/** Rejects PostgreSQL NUL and unpaired UTF-16 surrogate code units. */
+function isPostgresText(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const codeUnit = value.charCodeAt(index);
+    if (codeUnit === 0) return false;
+    if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
+      index += 1;
+    } else if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Recursively admits PostgreSQL JSONB values with lossless text encoding. */
 function isJsonValue(value: unknown, depth: number): boolean {
   if (depth > 64) return false;
   if (value === null || typeof value === "boolean") {
     return true;
   }
-  if (typeof value === "string") return !value.includes("\u0000");
+  if (typeof value === "string") return isPostgresText(value);
   if (typeof value === "number") return Number.isFinite(value);
   if (Array.isArray(value)) {
     return value.every((entry) => isJsonValue(entry, depth + 1));
@@ -1576,7 +1629,7 @@ function isJsonValue(value: unknown, depth: number): boolean {
   return Reflect.ownKeys(value).every(
     (key) =>
       typeof key === "string" &&
-      !key.includes("\u0000") &&
+      isPostgresText(key) &&
       descriptors[key]?.enumerable === true &&
       "value" in descriptors[key]! &&
       isJsonValue(descriptors[key]!.value, depth + 1),
@@ -1600,13 +1653,16 @@ function text(
   return row[column] as string;
 }
 
-/** Converts one already validated timestamp column to epoch milliseconds. */
+/** Converts one already validated timestamp column to exact epoch microseconds. */
 function timestamp(
   row: Readonly<Record<string, unknown>>,
   column: string,
-): number {
-  const value = row[column];
-  return value instanceof Date ? value.getTime() : Date.parse(value as string);
+): bigint {
+  const value = parseDatabaseTimestamp(row[column]);
+  if (value === undefined) {
+    throw new Error(`Backup timestamp ${column} is invalid.`);
+  }
+  return value;
 }
 
 /** Checks an optional canonical unpadded SHA-256 base64url digest. */

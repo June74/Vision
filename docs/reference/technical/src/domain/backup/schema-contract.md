@@ -29,8 +29,8 @@ Builds typed target-key sets and verifies every required or optional migration f
 
 ## `validateColumnValue`
 
-Admits exact bounded SQL integer forms, booleans, NUL-free strings, strict explicit-offset Gregorian timestamps,
-`Uint8Array` or canonical bytea hex, and recursively plain NUL-free JSONB values.
+Admits exact bounded SQL integer forms, booleans, lossless PostgreSQL strings, strict explicit-offset Gregorian
+timestamps, `Uint8Array` or canonical bytea hex, and recursively plain lossless JSONB values.
 
 ## `validateTableChecks`
 
@@ -109,14 +109,25 @@ leading-zero, decimal, exponent, and overflow alternatives before any JavaScript
 
 ## `isDatabaseTimestamp`
 
-Admits finite `Date` values in years 0001 through 9999 or strict Gregorian timestamp strings with `Z` or PostgreSQL's
-numeric offsets through 15:59. Calendar components are validated directly, so `Date.parse` cannot silently normalize
-an impossible date, 24:00, or leap-second representation.
+Delegates to the exact parser, admitting finite `Date` values in years 0001 through 9999 or strict Gregorian timestamp
+strings with `Z` or PostgreSQL numeric offsets through 15:59.
+
+## `parseDatabaseTimestamp`
+
+Validates every calendar/time/offset component, converts the proleptic Gregorian civil day to a signed Unix-day
+offset, right-pads one through six fractional digits to microseconds, subtracts the signed numeric offset, and returns
+one `BigInt`. `Date` values become their exact integer milliseconds multiplied by 1,000. No `Date.parse` or floating
+comparison can collapse distinct PostgreSQL microseconds.
+
+## `isPostgresText`
+
+Walks UTF-16 code units, rejecting NUL, a high surrogate without an immediate low surrogate, or a standalone low
+surrogate. Valid pairs are retained byte-for-byte through archive encoding and PostgreSQL insertion.
 
 ## `isJsonValue`
 
-Recursively rejects NUL in string values or object keys, non-finite numbers, dates, byte arrays, non-plain objects,
-accessors, symbols, and excessive depth.
+Recursively applies lossless PostgreSQL text validation to string values and object keys, and rejects non-finite
+numbers, dates, byte arrays, non-plain objects, accessors, symbols, and excessive depth.
 
 ## `integer`
 
@@ -128,7 +139,7 @@ Reads an already validated text representation for migration predicates.
 
 ## `timestamp`
 
-Normalizes an already validated timestamp representation to epoch milliseconds.
+Returns the exact epoch-microsecond `BigInt` used by every mirrored inclusive or strict timestamp ordering check.
 
 ## `optionalHash`
 

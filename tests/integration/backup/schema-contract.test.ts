@@ -461,4 +461,216 @@ describe("migration-9 backup schema contract", () => {
       await database.close();
     }
   }, 15_000);
+
+  it("matches PostgreSQL microsecond ordering and lossless Unicode", async () => {
+    const database = new PGlite();
+    const usageMonthRow = (
+      createdAt: BackupValue,
+      updatedAt: BackupValue,
+    ): BackupRow => ({
+      owner_id: "owner-1",
+      budget_month: "2026-07",
+      settled_cents: 0,
+      reserved_cents: 0,
+      created_at: createdAt,
+      updated_at: updatedAt,
+    });
+    const deletionRow = (
+      deletedAt: BackupValue,
+      purgeAfter: BackupValue,
+    ): BackupRow => ({
+      node_id: "node-1",
+      owner_id: "owner-1",
+      deleted_at: deletedAt,
+      purge_after: purgeAfter,
+      recovery_envelope: new Uint8Array([1]),
+    });
+    const textRow = (action: string): BackupRow => ({
+      id: "audit-1",
+      owner_id: "owner-1",
+      node_id: null,
+      actor_type: "system",
+      action,
+      outcome: "success",
+      provider: null,
+      error_category: null,
+      occurred_at: "2026-07-25T18:00:00Z",
+    });
+    const jsonRow = (planningJson: BackupValue): BackupRow => ({
+      generation_id: "generation-1",
+      identity_hash: "A".repeat(43),
+      ordinal: 0,
+      planning_json: planningJson,
+      protected_payload_envelope: null,
+      protected_key_version: null,
+    });
+
+    try {
+      await database.exec(`
+        create table backup_timestamp_at_least_probe (
+          created_at timestamptz not null,
+          updated_at timestamptz not null,
+          check (updated_at >= created_at)
+        );
+        create table backup_timestamp_after_probe (
+          deleted_at timestamptz not null,
+          purge_after timestamptz not null,
+          check (purge_after > deleted_at)
+        );
+        create table backup_unicode_probe (
+          text_value text,
+          json_value jsonb
+        )
+      `);
+
+      const reverseWithinMillisecond = [
+        "2026-07-25T18:00:00.000999Z",
+        "2026-07-25T18:00:00.000001Z",
+      ] as const;
+      await expect(
+        database.query(
+          `insert into backup_timestamp_at_least_probe
+             (created_at, updated_at) values ($1, $2)`,
+          [...reverseWithinMillisecond],
+        ),
+      ).rejects.toThrow();
+      expect(() =>
+        validateBackupRow(
+          "ai_usage_months",
+          usageMonthRow(...reverseWithinMillisecond),
+        ),
+      ).toThrow(/migration check/i);
+
+      const validAtLeastPairs = [
+        [
+          "2026-07-25T18:00:00.000001Z",
+          "2026-07-25T18:00:00.000999Z",
+        ],
+        [
+          "2026-07-25T18:00:00.123456Z",
+          "2026-07-25T18:00:00.123456Z",
+        ],
+        [
+          "2026-07-25T18:00:00.654321Z",
+          "2026-07-25T19:00:00.654321+01:00",
+        ],
+        [
+          "1969-12-31T23:59:59.999999Z",
+          "1970-01-01T00:00:00.000001Z",
+        ],
+      ] as const;
+      for (const pair of validAtLeastPairs) {
+        await expect(
+          database.query(
+            `insert into backup_timestamp_at_least_probe
+               (created_at, updated_at) values ($1, $2)`,
+            [...pair],
+          ),
+        ).resolves.toBeDefined();
+        expect(() =>
+          validateBackupRow(
+            "ai_usage_months",
+            usageMonthRow(pair[0], pair[1]),
+          ),
+        ).not.toThrow();
+      }
+
+      const equalInstant = [
+        "2026-07-25T18:00:00.123456Z",
+        "2026-07-25T19:00:00.123456+01:00",
+      ] as const;
+      await expect(
+        database.query(
+          `insert into backup_timestamp_after_probe
+             (deleted_at, purge_after) values ($1, $2)`,
+          [...equalInstant],
+        ),
+      ).rejects.toThrow();
+      expect(() =>
+        validateBackupRow(
+          "recoverable_deletions",
+          deletionRow(...equalInstant),
+        ),
+      ).toThrow(/migration check/i);
+
+      for (const digits of ["1", "12", "123", "1234", "12345", "123456"]) {
+        const value = `2026-07-25T18:00:00.${digits}Z`;
+        await expect(
+          database.query(
+            `insert into backup_timestamp_at_least_probe
+               (created_at, updated_at) values ($1, $1)`,
+            [value],
+          ),
+          value,
+        ).resolves.toBeDefined();
+        expect(
+          () =>
+            validateBackupRow(
+              "ai_usage_months",
+              usageMonthRow(value, value),
+            ),
+          value,
+        ).not.toThrow();
+      }
+
+      const pairedAstral = "Vision \uD83D\uDCC5";
+      const pairedJson: BackupValue = {
+        "\uD83D\uDCC5-key": ["\uD83C\uDF0E", { nested: "\uD83D\uDE80" }],
+      };
+      const storedText = await database.query<{ text_value: string }>(
+        `insert into backup_unicode_probe (text_value)
+         values ($1) returning text_value`,
+        [pairedAstral],
+      );
+      const storedJson = await database.query<{ json_value: BackupValue }>(
+        `insert into backup_unicode_probe (json_value)
+         values ($1::jsonb) returning json_value`,
+        [JSON.stringify(pairedJson)],
+      );
+      expect(storedText.rows[0]!.text_value).toBe(pairedAstral);
+      expect(storedJson.rows[0]!.json_value).toEqual(pairedJson);
+      expect(() =>
+        validateBackupRow("audit_events", textRow(pairedAstral)),
+      ).not.toThrow();
+      expect(() =>
+        validateBackupRow(
+          "projection_rebuild_changes",
+          jsonRow(pairedJson),
+        ),
+      ).not.toThrow();
+
+      for (const surrogate of ["\uD800", "\uDC00"]) {
+        const normalizedText = await database.query<{ text_value: string }>(
+          `insert into backup_unicode_probe (text_value)
+           values ($1) returning text_value`,
+          [surrogate],
+        );
+        expect(normalizedText.rows[0]!.text_value).not.toBe(surrogate);
+        expect(() =>
+          validateBackupRow("audit_events", textRow(surrogate)),
+        ).toThrow(/text/i);
+
+        for (const invalidJson of [
+          { nested: surrogate },
+          { [surrogate]: "value" },
+        ]) {
+          await expect(
+            database.query(
+              `insert into backup_unicode_probe (json_value)
+               values ($1::jsonb)`,
+              [JSON.stringify(invalidJson)],
+            ),
+          ).rejects.toThrow();
+          expect(() =>
+            validateBackupRow(
+              "projection_rebuild_changes",
+              jsonRow(invalidJson),
+            ),
+          ).toThrow(/jsonb/i);
+        }
+      }
+    } finally {
+      await database.close();
+    }
+  }, 15_000);
 });

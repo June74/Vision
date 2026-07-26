@@ -25,7 +25,8 @@ Rejects rows whose required relationship target is missing.
 
 ## `validateColumnValue`
 
-Checks one value against its declared database type and nullability, including PostgreSQL's text and range rules.
+Checks one value against its declared database type and nullability, including PostgreSQL's lossless text and range
+rules.
 
 ## `validateTableChecks`
 
@@ -105,9 +106,19 @@ whitespace, exponents, decimal points, or coercion.
 Checks a real date or a strict Gregorian timestamp with a supported explicit PostgreSQL time-zone offset. Impossible
 dates, normalized 24-hour/leap-second forms, year zero, and offsets beyond 15:59 are rejected.
 
+## `parseDatabaseTimestamp`
+
+Converts a valid date, fraction, and numeric offset into one exact microsecond count without losing sub-millisecond
+ordering.
+
+## `isPostgresText`
+
+Rejects NUL and lone UTF-16 surrogate code units while allowing correctly paired astral Unicode characters.
+
 ## `isJsonValue`
 
-Accepts only data that PostgreSQL JSONB can represent, rejecting NUL in every nested string and object key.
+Accepts only data that PostgreSQL JSONB can represent losslessly, rejecting NUL or lone surrogates in every nested
+string and object key.
 
 ## `integer`
 
@@ -119,7 +130,7 @@ Reads text after its database representation has been validated.
 
 ## `timestamp`
 
-Converts a validated timestamp to milliseconds for comparisons.
+Converts a validated timestamp to exact epoch microseconds for migration-check comparisons.
 
 ## `optionalHash`
 
