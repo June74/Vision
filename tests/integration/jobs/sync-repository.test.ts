@@ -1,9 +1,13 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { KeyProvider } from "../../../src/crypto/key-provider";
 import { createTestKeyProvider } from "../../../src/crypto/test-key-provider";
+import { createEventRepository } from "../../../src/data/repositories/event-repository";
 import { createSyncRepository } from "../../../src/data/repositories/sync-repository";
 import type { VisionDatabase } from "../../../src/data/db";
 import type { ProviderEventChange } from "../../../src/domain/sync/change";
@@ -13,12 +17,16 @@ import type {
 } from "../../../src/integrations/google-calendar/event-sync-client";
 import { syncCalendar } from "../../../src/jobs/sync-calendar";
 import { encodeBase64Url } from "../../../src/crypto/envelope";
+import { createTestEventRepositoryAccess } from "../../../src/server/authorization/test-event-content-authorization";
 
 const ownerId = "owner-1";
 const calendarId = "calendar-1";
 const sentinel = "SYNC-PROTECTED-SENTINEL";
 let pglite: PGlite;
 let database: VisionDatabase;
+let keyProvider: KeyProvider;
+let executedSql: string[];
+const dialect = new PgDialect();
 
 beforeEach(async () => {
   pglite = new PGlite();
@@ -27,12 +35,31 @@ beforeEach(async () => {
     "0002_google_auth_sessions.sql",
     "0003_calendar_setup.sql",
     "0004_incremental_event_sync.sql",
+    "0005_google_notification_jobs.sql",
+    "0006_google_channel_lifecycle.sql",
+    "0007_calendar_maintenance_state.sql",
+    "0008_google_projection_rebuild.sql",
+    "0009_ai_usage_budget.sql",
   ]) {
     await pglite.exec(
       await readFile(resolve(process.cwd(), "migrations", migration), "utf8"),
     );
   }
-  database = drizzle(pglite) as unknown as VisionDatabase;
+  const drizzleDatabase = drizzle(pglite);
+  executedSql = [];
+  database = {
+    execute: async (statement: SQL) => {
+      const query = dialect.sqlToQuery(statement);
+      executedSql.push(query.sql);
+      const result = await drizzleDatabase.execute(statement);
+      return { rows: result.rows };
+    },
+  } as unknown as VisionDatabase;
+  keyProvider = await createTestKeyProvider({
+    rootKeyBase64Url: encodeBase64Url(
+      crypto.getRandomValues(new Uint8Array(32)),
+    ),
+  });
 });
 
 afterEach(async () => {
@@ -41,13 +68,14 @@ afterEach(async () => {
 
 function upsert(
   version = "00000000000000000001",
+  eventId = "event-1",
 ): Extract<ProviderEventChange, { type: "upsert" }> {
   return {
     type: "upsert",
     identity: {
       sourceSystem: "google-calendar",
       sourceCalendarId: calendarId,
-      sourceEventId: "event-1",
+      sourceEventId: eventId,
       sourceVersion: version as never,
     },
     startsAt: "2026-07-24T15:00:00.000Z",
@@ -98,11 +126,7 @@ function client(...pages: EventSyncPage[]): EventSyncClient {
 async function repository() {
   return createSyncRepository(
     database,
-    await createTestKeyProvider({
-      rootKeyBase64Url: encodeBase64Url(
-        crypto.getRandomValues(new Uint8Array(32)),
-      ),
-    }),
+    keyProvider,
     ownerId,
   );
 }
@@ -183,6 +207,66 @@ describe("encrypted atomic synchronization repository", () => {
       },
     ]);
     expect(JSON.stringify(runRows.rows)).not.toContain(sentinel);
+  });
+
+  it("locks existing nodes and events deterministically before admitting the checkpoint", async () => {
+    const syncRepository = await repository();
+    await run(
+      client({
+        changes: [
+          upsert("00000000000000000001", "event-z"),
+          upsert("00000000000000000001", "event-a"),
+        ],
+        calendarTimeZone: "America/Chicago",
+        nextSyncToken: "sync-token-1",
+      }),
+      syncRepository,
+      "job-lock-order-1",
+    );
+    await run(
+      client({
+        changes: [
+          upsert("00000000000000000002", "event-a"),
+          upsert("00000000000000000002", "event-z"),
+        ],
+        calendarTimeZone: "America/Chicago",
+        nextSyncToken: "sync-token-2",
+      }),
+      syncRepository,
+      "job-lock-order-2",
+    );
+
+    const atomicSql = executedSql.findLast((statement) =>
+      statement.includes("jsonb_to_recordset"),
+    );
+    expect(atomicSql).toBeDefined();
+    expect(atomicSql).toMatch(
+      /locked_nodes as materialized[\s\S]*order by node\.id[\s\S]*for update of node/iu,
+    );
+    expect(atomicSql).toMatch(
+      /locked_events as materialized[\s\S]*inner join locked_nodes[\s\S]*order by event\.node_id[\s\S]*for update of event/iu,
+    );
+    expect(atomicSql!.indexOf("locked_nodes as materialized")).toBeLessThan(
+      atomicSql!.indexOf("locked_events as materialized"),
+    );
+    expect(atomicSql!.indexOf("locked_events as materialized")).toBeLessThan(
+      atomicSql!.indexOf("checkpoint_guard as materialized"),
+    );
+    expect(atomicSql).toMatch(
+      /checkpoint_guard as materialized[\s\S]*cross join context_valid[\s\S]*for update of checkpoint/iu,
+    );
+    expect(atomicSql).toMatch(
+      /eligible_upserts as materialized[\s\S]*cross join checkpoint_guard/iu,
+    );
+    expect(atomicSql!.indexOf("write_completion as materialized")).toBeLessThan(
+      atomicSql!.indexOf("checkpoint_write as"),
+    );
+    expect(atomicSql).toMatch(
+      /checkpoint_write as[\s\S]*cross join write_completion completion[\s\S]*completion\.upserted = completion\."eligibleUpserts"[\s\S]*completion\."payloadWrites" = completion\.upserted/iu,
+    );
+    expect(atomicSql).toMatch(
+      /run_write as[\s\S]*from checkpoint_write[\s\S]*cross join write_completion completion/iu,
+    );
   });
 
   it("rolls back event and checkpoint mutations when the final run record fails, then reruns safely", async () => {
@@ -321,6 +405,246 @@ describe("encrypted atomic synchronization repository", () => {
       node_id: deleted.rows[0]!.node_id,
     });
     expect((await pglite.query(`select * from recoverable_deletions`)).rows).toHaveLength(0);
+  });
+
+  it("preserves unresolved, confirmed, inferred, and explicit authority across sparse updates", async () => {
+    const syncRepository = await repository();
+    await run(
+      client({
+        changes: [upsert()],
+        calendarTimeZone: "America/Chicago",
+        nextSyncToken: "sync-token-1",
+      }),
+      syncRepository,
+      "job-authority-1",
+    );
+    const nodeId = (
+      await pglite.query<{ node_id: string }>(
+        `select node_id from events where provider_event_id = 'event-1'`,
+      )
+    ).rows[0]!.node_id;
+    const eventRepository = createEventRepository(
+      database,
+      keyProvider,
+      createTestEventRepositoryAccess(ownerId),
+    );
+    const cases = [
+      {
+        domain: "unresolved",
+        domainState: "unresolved",
+        provenance: "provider",
+        modelConfidence: null,
+        nodeVersion: 1,
+        assignment: null,
+      },
+      {
+        domain: "personal",
+        domainState: "confirmed",
+        provenance: "provider",
+        modelConfidence: null,
+        nodeVersion: 2,
+        assignment: null,
+      },
+      {
+        domain: "work",
+        domainState: "inferred",
+        provenance: "model",
+        modelConfidence: 900000,
+        nodeVersion: 3,
+        assignment: { provenance: "model" },
+      },
+      {
+        domain: "school",
+        domainState: "confirmed",
+        provenance: "user",
+        modelConfidence: null,
+        nodeVersion: 4,
+        assignment: { provenance: "user" },
+      },
+    ] as const;
+
+    for (const [index, authority] of cases.entries()) {
+      await pglite.query(
+        `update nodes
+         set domain = $1, domain_state = $2, provenance = $3,
+             model_confidence = $4, version = $5
+         where id = $6`,
+        [
+          authority.domain,
+          authority.domainState,
+          authority.provenance,
+          authority.modelConfidence,
+          authority.nodeVersion,
+          nodeId,
+        ],
+      );
+      await pglite.query(
+        `delete from node_category_assignments where node_id = $1`,
+        [nodeId],
+      );
+      if (authority.assignment !== null) {
+        await pglite.query(
+          `insert into node_category_assignments (
+             node_id, owner_id, domain, domain_state, provenance, assigned_at, version
+           ) values ($1, $2, $3, $4, $5, now(), $6)`,
+          [
+            nodeId,
+            ownerId,
+            authority.domain,
+            authority.domainState,
+            authority.assignment.provenance,
+            authority.nodeVersion,
+          ],
+        );
+      }
+      const providerVersion = String(index + 2).padStart(20, "0");
+      const sparse = {
+        ...upsert(providerVersion),
+        protected: {
+          title: null,
+          description: null,
+          attendees: [],
+          location: null,
+          meetingLinks: [],
+          attachmentReferences: [],
+        },
+      };
+
+      await expect(
+        run(
+          client({
+            changes: [sparse],
+            calendarTimeZone: "America/Chicago",
+            nextSyncToken: `sync-token-${index + 2}`,
+          }),
+          syncRepository,
+          `job-authority-${index + 2}`,
+        ),
+      ).resolves.toMatchObject({
+        checkpointVersion: index + 2,
+        upserted: 1,
+        unchanged: 0,
+      });
+
+      await expect(eventRepository.get(nodeId)).resolves.toMatchObject({
+        domain: authority.domain,
+        domainState: authority.domainState,
+        version: authority.nodeVersion,
+        title: null,
+        description: null,
+        attendees: [],
+        location: null,
+        meetingLink: null,
+      });
+      expect(
+        (
+          await pglite.query<{
+            domain: string;
+            domain_state: string;
+            provenance: string;
+            model_confidence: number | null;
+            provider_version: string;
+          }>(
+            `select node.domain, node.domain_state, node.provenance,
+                    node.model_confidence, event.provider_version
+             from nodes node
+             inner join events event on event.node_id = node.id
+             where node.id = $1`,
+            [nodeId],
+          )
+        ).rows,
+      ).toEqual([
+        {
+          domain: authority.domain,
+          domain_state: authority.domainState,
+          provenance: authority.provenance,
+          model_confidence: authority.modelConfidence,
+          provider_version: providerVersion,
+        },
+      ]);
+      expect(
+        (
+          await pglite.query(
+            `select domain, domain_state, provenance, version
+             from node_category_assignments where node_id = $1`,
+            [nodeId],
+          )
+        ).rows,
+      ).toEqual(
+        authority.assignment === null
+          ? []
+          : [
+              {
+                domain: authority.domain,
+                domain_state: authority.domainState,
+                provenance: authority.assignment.provenance,
+                version: authority.nodeVersion,
+              },
+            ],
+      );
+    }
+    expect(
+      (
+        await pglite.query<{ version: number }>(
+          `select version from sync_checkpoints`,
+        )
+      ).rows,
+    ).toEqual([{ version: 5 }]);
+  });
+
+  it("rejects a stale checkpoint before provider or run writes consume its revision", async () => {
+    const syncRepository = await repository();
+    await run(
+      client({
+        changes: [upsert()],
+        calendarTimeZone: "America/Chicago",
+        nextSyncToken: "sync-token-1",
+      }),
+      syncRepository,
+      "job-current",
+    );
+
+    await expect(
+      syncRepository.applyChanges({
+        ownerId,
+        calendarId,
+        expectedCheckpointVersion: 0,
+        nextCheckpoint: {
+          calendarId,
+          syncToken: "stale-sync-token",
+          committedAt: "2026-07-24T16:00:00.000Z",
+          version: 1,
+        },
+        changes: [upsert("00000000000000000002")],
+        jobId: "job-stale",
+        reason: "repair",
+        pageCount: 1,
+        startedAt: "2026-07-24T15:59:00.000Z",
+      }),
+    ).resolves.toEqual({ outcome: "conflict" });
+    expect(
+      (
+        await pglite.query<{
+          checkpoint_version: number;
+          provider_version: string;
+        }>(
+          `select checkpoint.version as checkpoint_version, event.provider_version
+           from sync_checkpoints checkpoint cross join events event`,
+        )
+      ).rows,
+    ).toEqual([
+      {
+        checkpoint_version: 1,
+        provider_version: "00000000000000000001",
+      },
+    ]);
+    expect(
+      (
+        await pglite.query<{ job_id: string }>(
+          `select job_id from sync_runs order by job_id`,
+        )
+      ).rows,
+    ).toEqual([{ job_id: "job-current" }]);
   });
 
   it("does not let a stale failure generation overwrite a newer connected checkpoint", async () => {

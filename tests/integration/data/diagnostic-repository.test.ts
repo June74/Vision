@@ -209,22 +209,6 @@ async function seedInitialCheckpoint(): Promise<void> {
   );
 }
 
-async function confirmSeedCategory(): Promise<void> {
-  await postgres.query(
-    `update nodes
-     set domain_state = 'confirmed', provenance = 'user',
-         model_confidence = null
-     where id = $1 and owner_id = $2`,
-    [EVENT_ID, OWNER_ID],
-  );
-  await postgres.query(
-    `update node_category_assignments
-     set domain_state = 'confirmed', provenance = 'user'
-     where node_id = $1 and owner_id = $2`,
-    [EVENT_ID, OWNER_ID],
-  );
-}
-
 function activeKeyBarrier(
   base: KeyProvider,
   blockedDomain: "school" | "work" | "personal",
@@ -600,7 +584,6 @@ describe("diagnostic repository", () => {
 
   it("rejects stale sync ciphertext prepared before a category correction", async () => {
     const { keyProvider } = await seedEncryptedEvent();
-    await confirmSeedCategory();
     await seedInitialCheckpoint();
     const syncBarrier = activeKeyBarrier(keyProvider, "work");
     const syncRepository = createSyncRepository(
@@ -638,6 +621,28 @@ describe("diagnostic repository", () => {
     syncBarrier.release();
 
     await expect(syncPromise).resolves.toEqual({ outcome: "conflict" });
+    expect(
+      (
+        await postgres.query<{
+          checkpoint_version: number;
+          provider_version: string;
+          run_count: number;
+        }>(
+          `select
+             checkpoint.version as checkpoint_version,
+             event.provider_version,
+             (select count(*)::integer from sync_runs) as run_count
+           from sync_checkpoints checkpoint
+           cross join events event`,
+        )
+      ).rows,
+    ).toEqual([
+      {
+        checkpoint_version: 0,
+        provider_version: "00000000000000000001",
+        run_count: 0,
+      },
+    ]);
     await expect(diagnosticRepository.listEvents()).resolves.toEqual([
       expect.objectContaining({
         id: EVENT_ID,
@@ -649,7 +654,6 @@ describe("diagnostic repository", () => {
 
   it("retries from the newer provider snapshot when synchronization commits first", async () => {
     const { keyProvider } = await seedEncryptedEvent();
-    await confirmSeedCategory();
     await seedInitialCheckpoint();
     const correctionBarrier = activeKeyBarrier(keyProvider, "school");
     const diagnosticRepository = createDiagnosticRepository(
@@ -694,6 +698,28 @@ describe("diagnostic repository", () => {
       domain: "school",
       version: 2,
     });
+    expect(
+      (
+        await postgres.query<{
+          checkpoint_version: number;
+          provider_version: string;
+          run_count: number;
+        }>(
+          `select
+             checkpoint.version as checkpoint_version,
+             event.provider_version,
+             (select count(*)::integer from sync_runs) as run_count
+           from sync_checkpoints checkpoint
+           cross join events event`,
+        )
+      ).rows,
+    ).toEqual([
+      {
+        checkpoint_version: 1,
+        provider_version: "00000000000000000002",
+        run_count: 1,
+      },
+    ]);
     await expect(
       createEventRepository(
         database,

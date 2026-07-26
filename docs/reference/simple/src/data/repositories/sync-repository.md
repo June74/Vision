@@ -10,12 +10,15 @@ Queue-backed reads create or return that row only while the exact durable job cl
 
 ## `loadProjectionContexts`
 
-Reads planning-only node category, privacy, and version facts for one owner and calendar.
+Reads planning-only node category, privacy, provenance, model confidence, and version facts for one owner and calendar.
+Those facts are carried without weakening model or explicit user authority.
 
 ## `applyAtomic`
 
 Uses one checkpoint compare-and-swap SQL statement to apply events, tombstones, derived invalidations, safe metrics, and
-the terminal encrypted token. Queue commits also require the exact active job claim before any mutation.
+the terminal encrypted token. Existing event nodes and event rows are locked in stable node order before the checkpoint
+is admitted. If a category correction wins first, synchronization returns a conflict without advancing the cursor or
+recording a successful run. Queue commits also require the exact active job claim before any mutation.
 
 For a full rebuild, the same statement also verifies the ready generation, tombstones provider identities absent from
 the full listing, revives recoverable equal-version events, activates the generation, and clears its stage rows.
@@ -30,7 +33,8 @@ Encrypts staged event fields and the terminal token before calling atomic storag
 
 ## `prepareUpsert`
 
-Preserves existing Vision metadata or creates unresolved private defaults for a new provider event.
+Preserves existing Vision metadata, including provenance and model confidence, or creates unresolved private defaults
+for a new provider event.
 
 ## `assertOwner`
 
@@ -82,7 +86,7 @@ Strictly parses one raw checkpoint row.
 
 ## `decodeProjectionContext`
 
-Strictly parses planning-only event node context.
+Strictly parses category authority and rejects an inferred state without a valid model confidence.
 
 ## `readText`
 

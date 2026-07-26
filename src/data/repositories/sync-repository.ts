@@ -50,6 +50,8 @@ interface EventProjectionContext {
   readonly domain: PlaintextEvent["domain"];
   readonly domainState: PlaintextEvent["domainState"];
   readonly privacy: PlaintextEvent["privacy"];
+  readonly provenance: "provider" | "user" | "system" | "model";
+  readonly modelConfidence: number | null;
   readonly nodeVersion: number;
 }
 
@@ -60,6 +62,8 @@ interface PreparedUpsert {
   readonly providerPayloadKeyVersion: number;
   readonly providerNodeId: string;
   readonly expectedExisting: boolean;
+  readonly provenance: EventProjectionContext["provenance"];
+  readonly modelConfidence: number | null;
 }
 
 interface AtomicSyncCommit {
@@ -110,6 +114,8 @@ type PreparedDatabaseChange =
       readonly domain: PlaintextEvent["domain"];
       readonly domainState: PlaintextEvent["domainState"];
       readonly privacy: PlaintextEvent["privacy"];
+      readonly provenance: EventProjectionContext["provenance"];
+      readonly modelConfidence: number | null;
       readonly nodeVersion: number;
       readonly expectedExisting: boolean;
       readonly titleEnvelope: string | null;
@@ -233,7 +239,7 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
     return decodeCheckpointRow(result.rows[0]);
   }
 
-  /** Reads planning-only node context needed to preserve category, privacy, and encryption partition. */
+  /** Reads the exact node authority snapshot needed to preserve category, privacy, and encryption partition. */
   async loadProjectionContexts(
     ownerId: string,
     calendarId: string,
@@ -245,6 +251,8 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
         node.domain,
         node.domain_state as "domainState",
         node.privacy,
+        node.provenance,
+        node.model_confidence as "modelConfidence",
         node.version as "nodeVersion"
       from events event
       inner join nodes node
@@ -366,6 +374,8 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
           domain text,
           "domainState" text,
           privacy text,
+          provenance text,
+          "modelConfidence" integer,
           "nodeVersion" integer,
           "expectedExisting" boolean,
           "titleEnvelope" text,
@@ -378,57 +388,96 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
           "providerPayloadKeyVersion" integer
         )
       ),
+      locked_nodes as materialized (
+        select node.id, node.owner_id
+        from nodes node
+        inner join incoming change
+          on change.kind = 'upsert'
+          and change."expectedExisting"
+          and change."nodeId" = node.id
+        where node.owner_id = ${commit.ownerId}
+          and node.domain = change.domain
+          and node.domain_state = change."domainState"
+          and node.privacy = change.privacy
+          and node.provenance = change.provenance
+          and node.model_confidence is not distinct from change."modelConfidence"
+          and node.version = change."nodeVersion"
+        order by node.id
+        for update of node
+      ),
+      locked_events as materialized (
+        select
+          event.node_id,
+          event.provider,
+          event.provider_calendar_id,
+          event.provider_event_id
+        from events event
+        inner join incoming change
+          on change.kind = 'upsert'
+          and change."expectedExisting"
+          and event.owner_id = ${commit.ownerId}
+          and event.node_id = change."nodeId"
+          and event.provider = change."sourceSystem"
+          and event.provider_calendar_id = change."calendarId"
+          and event.provider_event_id = change."eventId"
+        inner join locked_nodes node
+          on node.id = event.node_id and node.owner_id = event.owner_id
+        order by event.node_id
+        for update of event
+      ),
       context_valid as materialized (
         select not exists (
           select 1
           from incoming change
-          left join events event
-            on event.owner_id = ${commit.ownerId}
-            and event.provider = change."sourceSystem"
-            and event.provider_calendar_id = change."calendarId"
-            and event.provider_event_id = change."eventId"
-          left join nodes node
-            on node.id = event.node_id and node.owner_id = event.owner_id
           where change.kind = 'upsert'
             and (
-              (change."expectedExisting" and (
-                event.node_id is null
-                or event.node_id <> change."nodeId"
-                or node.domain <> change.domain
-                or node.domain_state <> change."domainState"
-                or node.privacy <> change.privacy
-                or node.version <> change."nodeVersion"
-              ))
+              (
+                change."expectedExisting"
+                and not exists (
+                  select 1
+                  from locked_events event
+                  where event.node_id = change."nodeId"
+                    and event.provider = change."sourceSystem"
+                    and event.provider_calendar_id = change."calendarId"
+                    and event.provider_event_id = change."eventId"
+                )
+              )
               or
-              (not change."expectedExisting" and event.node_id is not null)
+              (
+                not change."expectedExisting"
+                and exists (
+                  select 1
+                  from events event
+                  where event.owner_id = ${commit.ownerId}
+                    and event.provider = change."sourceSystem"
+                    and event.provider_calendar_id = change."calendarId"
+                    and event.provider_event_id = change."eventId"
+                )
+              )
             )
         ) as valid
       ),
       ${queueAuthorization}
       ${rebuildAuthorization}
-      checkpoint_write as (
-        update sync_checkpoints
-        set
-          sync_token_envelope = ${commit.checkpointEnvelope}::bytea,
-          key_version = ${commit.checkpointKeyVersion},
-          committed_at = ${new Date(commit.nextCheckpoint.committedAt)},
-          version = ${commit.nextCheckpoint.version},
-          status = 'connected',
-          last_error_category = null,
-          updated_at = clock_timestamp()
-        where owner_id = ${commit.ownerId}
-          and provider = ${PROVIDER}
-          and provider_calendar_id = ${commit.calendarId}
-          and version = ${commit.expectedCheckpointVersion}
-          and (select valid from context_valid)
-          and (select valid from commit_authorized)
-          and (select valid from rebuild_authorized)
-        returning version
+      checkpoint_guard as materialized (
+        select checkpoint.version
+        from sync_checkpoints checkpoint
+        cross join context_valid context
+        cross join commit_authorized commit_authority
+        cross join rebuild_authorized rebuild_authority
+        where checkpoint.owner_id = ${commit.ownerId}
+          and checkpoint.provider = ${PROVIDER}
+          and checkpoint.provider_calendar_id = ${commit.calendarId}
+          and checkpoint.version = ${commit.expectedCheckpointVersion}
+          and context.valid
+          and commit_authority.valid
+          and rebuild_authority.valid
+        for update of checkpoint
       ),
       eligible_upserts as materialized (
         select change.*
         from incoming change
-        cross join checkpoint_write
+        cross join checkpoint_guard
         left join events persisted
           on persisted.owner_id = ${commit.ownerId}
           and persisted.provider = change."sourceSystem"
@@ -461,9 +510,9 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
           change."nodeId", ${commit.ownerId}, 'provider',
           change."sourceSystem", change."providerNodeId", 'event',
           change.domain, change."domainState", change.privacy,
-          'provider', 'active',
+          change.provenance, 'active',
           clock_timestamp(), clock_timestamp(), clock_timestamp(), null,
-          change."nodeVersion", null
+          change."nodeVersion", change."modelConfidence"
         from eligible_upserts change
         on conflict (owner_id, provider, provider_node_id) do update set
           lifecycle = 'active',
@@ -473,6 +522,8 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
           and persisted.domain = excluded.domain
           and persisted.domain_state = excluded.domain_state
           and persisted.privacy = excluded.privacy
+          and persisted.provenance = excluded.provenance
+          and persisted.model_confidence is not distinct from excluded.model_confidence
           and persisted.version = excluded.version
         returning persisted.id
       ),
@@ -549,7 +600,7 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
       delete_targets as materialized (
         select persisted.node_id
         from events persisted
-        cross join checkpoint_write
+        cross join checkpoint_guard
         where persisted.owner_id = ${commit.ownerId}
           and persisted.provider = ${PROVIDER}
           and persisted.provider_calendar_id = ${commit.calendarId}
@@ -652,6 +703,37 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
               end
           ) as unchanged
       ),
+      write_completion as materialized (
+        select
+          counts.*,
+          (select count(*)::integer from eligible_upserts) as "eligibleUpserts",
+          (select count(*)::integer from payload_writes) as "payloadWrites",
+          (select count(*)::integer from retired_provider_payloads) as "retiredProviderPayloads",
+          (select count(*)::integer from cleared_recoverable_deletions) as "clearedRecoverableDeletions",
+          (select count(*)::integer from retained_deletions) as "retainedDeletions",
+          (select count(*)::integer from invalidated_edges) as "invalidatedEdges"
+        from counts
+      ),
+      checkpoint_write as (
+        update sync_checkpoints checkpoint
+        set
+          sync_token_envelope = ${commit.checkpointEnvelope}::bytea,
+          key_version = ${commit.checkpointKeyVersion},
+          committed_at = ${new Date(commit.nextCheckpoint.committedAt)},
+          version = ${commit.nextCheckpoint.version},
+          status = 'connected',
+          last_error_category = null,
+          updated_at = clock_timestamp()
+        from checkpoint_guard guard
+        cross join write_completion completion
+        where checkpoint.owner_id = ${commit.ownerId}
+          and checkpoint.provider = ${PROVIDER}
+          and checkpoint.provider_calendar_id = ${commit.calendarId}
+          and checkpoint.version = guard.version
+          and completion.upserted = completion."eligibleUpserts"
+          and completion."payloadWrites" = completion.upserted
+        returning checkpoint.version
+      ),
       run_write as (
         insert into sync_runs (
           job_id, owner_id, provider, provider_calendar_id, reason,
@@ -662,10 +744,10 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
           ${commit.jobId}, ${commit.ownerId}, ${PROVIDER}, ${commit.calendarId},
           ${commit.reason}, ${commit.pageCount},
           (select count(*)::integer from incoming),
-          counts.upserted, counts.deleted, counts.unchanged,
+          completion.upserted, completion.deleted, completion.unchanged,
           ${commit.startedAt}, clock_timestamp(), checkpoint_write.version
         from checkpoint_write
-        cross join counts
+        cross join write_completion completion
         on conflict (job_id) do nothing
         returning job_id
       ),
@@ -676,19 +758,19 @@ export class DrizzleAtomicSyncStore implements AtomicSyncStore {
       )
       select
         checkpoint_write.version,
-        counts.upserted,
-        counts.deleted,
-        counts.unchanged,
-        (select count(*) from payload_writes) as "payloadWrites",
-        (select count(*) from retired_provider_payloads) as "retiredProviderPayloads",
-        (select count(*) from cleared_recoverable_deletions) as "clearedRecoverableDeletions",
-        (select count(*) from retained_deletions) as "retainedDeletions",
-        (select count(*) from invalidated_edges) as "invalidatedEdges",
+        completion.upserted,
+        completion.deleted,
+        completion.unchanged,
+        completion."payloadWrites",
+        completion."retiredProviderPayloads",
+        completion."clearedRecoverableDeletions",
+        completion."retainedDeletions",
+        completion."invalidatedEdges",
         (select count(*) from run_write) as "runWrites",
         (select count(*) from generation_activation) as "generationActivations",
         (select count(*) from cleared_rebuild_changes) as "clearedRebuildChanges"
       from checkpoint_write
-      cross join counts
+      cross join write_completion completion
       cross join result_marker
     `);
     const row = result.rows[0];
@@ -914,6 +996,8 @@ class EncryptedSyncRepository implements SyncRepository {
       providerPayloadKeyVersion: encryptedPayload.providerPayload.keyVersion,
       providerNodeId: providerNodeIdentity(change.identity.sourceCalendarId, change.identity.sourceEventId),
       expectedExisting: existing !== undefined,
+      provenance: existing?.provenance ?? "provider",
+      modelConfidence: existing?.modelConfidence ?? null,
     };
   }
 
@@ -966,6 +1050,8 @@ function preparedUpsertToDatabase(prepared: PreparedUpsert): PreparedDatabaseCha
     domain: prepared.event.domain,
     domainState: prepared.event.domainState,
     privacy: prepared.event.privacy,
+    provenance: prepared.provenance,
+    modelConfidence: prepared.modelConfidence,
     nodeVersion: prepared.event.version,
     expectedExisting: prepared.expectedExisting,
     titleEnvelope: bytesToHex(prepared.event.titleEnvelope),
@@ -1042,15 +1128,21 @@ function decodeCheckpointRow(row: Record<string, unknown>): StoredCheckpointRow 
   };
 }
 
-/** Strictly decodes planning-only metadata used for event encryption. */
+/** Strictly decodes the exact category-authority snapshot used for event encryption and CAS. */
 function decodeProjectionContext(row: Record<string, unknown>): EventProjectionContext {
   const domain = readText(row.domain);
   const domainState = readText(row.domainState);
   const privacy = readText(row.privacy);
+  const provenance = readText(row.provenance);
+  const modelConfidence =
+    row.modelConfidence === null ? null : readNonNegativeInteger(row.modelConfidence);
   if (
     !["school", "work", "personal", "unresolved"].includes(domain) ||
     !["confirmed", "inferred", "unresolved"].includes(domainState) ||
-    !["planning", "private", "restricted"].includes(privacy)
+    !["planning", "private", "restricted"].includes(privacy) ||
+    !["provider", "user", "system", "model"].includes(provenance) ||
+    ((domainState === "inferred") !== (modelConfidence !== null)) ||
+    (modelConfidence !== null && modelConfidence > 1_000_000)
   ) {
     throw new Error("Invalid synchronization projection context.");
   }
@@ -1060,6 +1152,8 @@ function decodeProjectionContext(row: Record<string, unknown>): EventProjectionC
     domain: domain as EventProjectionContext["domain"],
     domainState: domainState as EventProjectionContext["domainState"],
     privacy: privacy as EventProjectionContext["privacy"],
+    provenance: provenance as EventProjectionContext["provenance"],
+    modelConfidence,
     nodeVersion: readPositiveInteger(row.nodeVersion),
   };
 }
