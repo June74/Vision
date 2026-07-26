@@ -109,15 +109,17 @@ leading-zero, decimal, exponent, and overflow alternatives before any JavaScript
 
 ## `isDatabaseTimestamp`
 
-Delegates to the exact parser, admitting finite `Date` values in years 0001 through 9999 or strict Gregorian timestamp
-strings with `Z` or PostgreSQL numeric offsets through 15:59.
+Delegates to the exact parser, admitting finite `Date` values or strict Gregorian timestamp strings with `Z` or
+PostgreSQL numeric offsets through 15:59 only when the resulting UTC instant remains in years 0001 through 9999.
 
 ## `parseDatabaseTimestamp`
 
 Validates every calendar/time/offset component, converts the proleptic Gregorian civil day to a signed Unix-day
 offset, right-pads one through six fractional digits to microseconds, subtracts the signed numeric offset, and returns
 one `BigInt`. `Date` values become their exact integer milliseconds multiplied by 1,000. No `Date.parse` or floating
-comparison can collapse distinct PostgreSQL microseconds.
+comparison can collapse distinct PostgreSQL microseconds. Both representations are checked against inclusive exact
+`BigInt` bounds from `0001-01-01T00:00:00.000000Z` through `9999-12-31T23:59:59.999999Z` after offset application, so
+local boundary strings cannot cross into BC or year 10000.
 
 ## `isPostgresText`
 

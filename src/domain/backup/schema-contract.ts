@@ -1491,18 +1491,26 @@ function isDatabaseInteger(
   }
 }
 
-/** Admits strict Gregorian timestamps and PostgreSQL offsets without normalization. */
+const MICROSECONDS_PER_DAY = 86_400_000_000n;
+const MINIMUM_SUPPORTED_TIMESTAMP_MICROSECONDS =
+  -719_162n * MICROSECONDS_PER_DAY;
+const MAXIMUM_SUPPORTED_TIMESTAMP_MICROSECONDS =
+  2_932_897n * MICROSECONDS_PER_DAY - 1n;
+
+/** Admits strict timestamps whose offset-adjusted UTC instant stays in years 0001-9999. */
 function isDatabaseTimestamp(value: unknown): boolean {
   return parseDatabaseTimestamp(value) !== undefined;
 }
 
-/** Converts one validated timestamp representation to exact Unix microseconds. */
+/** Converts one validated timestamp to bounded exact UTC Unix microseconds. */
 function parseDatabaseTimestamp(value: unknown): bigint | undefined {
   if (value instanceof Date) {
     const time = Date.prototype.getTime.call(value);
-    const year = Date.prototype.getUTCFullYear.call(value);
-    return Number.isFinite(time) && year >= 1 && year <= 9_999
-      ? BigInt(time) * 1_000n
+    if (!Number.isFinite(time)) return undefined;
+    const instantMicroseconds = BigInt(time) * 1_000n;
+    return instantMicroseconds >= MINIMUM_SUPPORTED_TIMESTAMP_MICROSECONDS &&
+      instantMicroseconds <= MAXIMUM_SUPPORTED_TIMESTAMP_MICROSECONDS
+      ? instantMicroseconds
       : undefined;
   }
   if (typeof value !== "string") {
@@ -1586,7 +1594,11 @@ function parseDatabaseTimestamp(value: unknown): bigint | undefined {
     BigInt(offsetHour * 60 + offsetMinute) *
     60n *
     1_000_000n;
-  return localMicroseconds - offsetMicroseconds;
+  const instantMicroseconds = localMicroseconds - offsetMicroseconds;
+  return instantMicroseconds >= MINIMUM_SUPPORTED_TIMESTAMP_MICROSECONDS &&
+    instantMicroseconds <= MAXIMUM_SUPPORTED_TIMESTAMP_MICROSECONDS
+    ? instantMicroseconds
+    : undefined;
 }
 
 /** Rejects PostgreSQL NUL and unpaired UTF-16 surrogate code units. */

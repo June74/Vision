@@ -653,6 +653,22 @@ function postgresInvalidBackupValues(): readonly PostgreSqlInvalidBackupValue[] 
       validSnapshot: () => auditSnapshot(["timestamp"]),
     },
     {
+      label: "lower offset-adjusted instant before supported year range",
+      table: "audit_events",
+      rowIndex: 0,
+      column: "occurred_at",
+      invalidValue: "0001-01-01T00:00:00+15:59",
+      validSnapshot: () => auditSnapshot(["timestamp"]),
+    },
+    {
+      label: "upper offset-adjusted instant after supported year range",
+      table: "audit_events",
+      rowIndex: 0,
+      column: "occurred_at",
+      invalidValue: "9999-12-31T23:59:59.999999-15:59",
+      validSnapshot: () => auditSnapshot(["timestamp"]),
+    },
+    {
       label: "NUL in PostgreSQL text",
       table: "audit_events",
       rowIndex: 0,
@@ -1299,7 +1315,11 @@ describe("encrypted backup round trip", () => {
     });
     const validTimestamps = [
       "0001-01-01T00:00:00.000Z",
+      "0001-01-01T15:59:00+15:59",
+      "0001-01-01T15:59:00.000001+15:59",
       "9999-12-31T23:59:59.999999Z",
+      "9999-12-31T08:00:59.999998-15:59",
+      "9999-12-31T08:00:59.999999-15:59",
       "2024-02-29T23:59:59Z",
       "2026-01-01T00:00:00+15:59",
       "2026-01-01 00:00:00-15:59",

@@ -104,12 +104,14 @@ whitespace, exponents, decimal points, or coercion.
 ## `isDatabaseTimestamp`
 
 Checks a real date or a strict Gregorian timestamp with a supported explicit PostgreSQL time-zone offset. Impossible
-dates, normalized 24-hour/leap-second forms, year zero, and offsets beyond 15:59 are rejected.
+dates, normalized 24-hour/leap-second forms, year zero, offsets beyond 15:59, and offsets that move the resulting UTC
+instant outside years 0001 through 9999 are rejected.
 
 ## `parseDatabaseTimestamp`
 
-Converts a valid date, fraction, and numeric offset into one exact microsecond count without losing sub-millisecond
-ordering.
+Converts a valid date, fraction, and numeric offset into one exact UTC microsecond count without losing
+sub-millisecond ordering. The resulting instant must be between the first microsecond of year 0001 and the last
+microsecond of year 9999, inclusive.
 
 ## `isPostgresText`
 

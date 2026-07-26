@@ -517,6 +517,9 @@ describe("migration-9 backup schema contract", () => {
           purge_after timestamptz not null,
           check (purge_after > deleted_at)
         );
+        create table backup_timestamp_instant_probe (
+          value timestamptz not null
+        );
         create table backup_unicode_probe (
           text_value text,
           json_value jsonb
@@ -610,6 +613,103 @@ describe("migration-9 backup schema contract", () => {
               usageMonthRow(value, value),
             ),
           value,
+        ).not.toThrow();
+      }
+
+      const unsupportedOffsetInstants = [
+        {
+          value: "0001-01-01T00:00:00+15:59",
+          outsideSql:
+            "value < timestamptz '0001-01-01T00:00:00.000000Z'",
+        },
+        {
+          value: "9999-12-31T23:59:59.999999-15:59",
+          outsideSql:
+            "value > timestamptz '9999-12-31T23:59:59.999999Z'",
+        },
+      ] as const;
+      for (const boundary of unsupportedOffsetInstants) {
+        const stored = await database.query<{ outside_range: boolean }>(
+          `insert into backup_timestamp_instant_probe (value)
+           values ($1)
+           returning ${boundary.outsideSql} as outside_range`,
+          [boundary.value],
+        );
+        expect(stored.rows[0]!.outside_range, boundary.value).toBe(true);
+        expect(
+          () =>
+            validateBackupRow("audit_events", {
+              ...textRow("timestamp-boundary"),
+              occurred_at: boundary.value,
+            }),
+          boundary.value,
+        ).toThrow(/timestamptz/i);
+      }
+
+      const supportedBoundaryRepresentations = [
+        [
+          "0001-01-01T00:00:00.000000Z",
+          "0001-01-01T15:59:00+15:59",
+        ],
+        [
+          "9999-12-31T23:59:59.999999Z",
+          "9999-12-31T08:00:59.999999-15:59",
+        ],
+      ] as const;
+      for (const [utcValue, offsetValue] of supportedBoundaryRepresentations) {
+        const stored = await database.query<{
+          equivalent: boolean;
+          inside_range: boolean;
+        }>(
+          `insert into backup_timestamp_instant_probe (value)
+           values ($1)
+           returning value = $2::timestamptz as equivalent,
+             value >= timestamptz '0001-01-01T00:00:00.000000Z'
+               and value <= timestamptz '9999-12-31T23:59:59.999999Z'
+               as inside_range`,
+          [offsetValue, utcValue],
+        );
+        expect(stored.rows[0], offsetValue).toEqual({
+          equivalent: true,
+          inside_range: true,
+        });
+        expect(() =>
+          validateBackupRow(
+            "ai_usage_months",
+            usageMonthRow(utcValue, offsetValue),
+          ),
+        ).not.toThrow();
+        expect(() =>
+          validateBackupRow(
+            "recoverable_deletions",
+            deletionRow(utcValue, offsetValue),
+          ),
+        ).toThrow(/migration check/i);
+      }
+
+      const supportedAdjacentPairs = [
+        [
+          "0001-01-01T15:59:00+15:59",
+          "0001-01-01T15:59:00.000001+15:59",
+        ],
+        [
+          "9999-12-31T08:00:59.999998-15:59",
+          "9999-12-31T08:00:59.999999-15:59",
+        ],
+      ] as const;
+      for (const pair of supportedAdjacentPairs) {
+        await expect(
+          database.query(
+            `insert into backup_timestamp_at_least_probe
+               (created_at, updated_at) values ($1, $2)`,
+            [...pair],
+          ),
+        ).resolves.toBeDefined();
+        expect(() =>
+          validateBackupRow(
+            "ai_usage_months",
+            usageMonthRow(pair[0], pair[1]),
+          ),
         ).not.toThrow();
       }
 
