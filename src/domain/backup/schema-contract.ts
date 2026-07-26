@@ -879,7 +879,7 @@ function validateColumnValue(
   let valid = false;
   switch (definition.kind) {
     case "text":
-      valid = typeof value === "string";
+      valid = typeof value === "string" && !value.includes("\u0000");
       break;
     case "smallint":
       valid = isDatabaseInteger(value, -32_768, 32_767);
@@ -1459,51 +1459,106 @@ function requirePlainRow(row: Readonly<Record<string, unknown>>): void {
   }
 }
 
-/** Admits canonical PostgreSQL integer representations within a SQL range. */
+/** Admits exact PostgreSQL integers without coercion or alternate decimal forms. */
 function isDatabaseInteger(
   value: unknown,
   minimum: number,
   maximum: number,
 ): boolean {
-  const parsed =
-    typeof value === "number"
-      ? value
-      : typeof value === "string" && /^-?(0|[1-9]\d*)$/.test(value)
-        ? Number(value)
-        : Number.NaN;
-  return (
-    Number.isSafeInteger(parsed) &&
-    parsed >= minimum &&
-    parsed <= maximum
-  );
-}
-
-/** Admits valid Date objects and PostgreSQL timestamps with explicit offsets. */
-function isDatabaseTimestamp(value: unknown): boolean {
-  if (value instanceof Date) {
-    return Number.isFinite(Date.prototype.getTime.call(value));
+  if (typeof value === "number") {
+    return (
+      Number.isSafeInteger(value) &&
+      !Object.is(value, -0) &&
+      value >= minimum &&
+      value <= maximum
+    );
   }
   if (
     typeof value !== "string" ||
-    !/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}(?::?\d{2})?)$/.test(
-      value,
-    )
+    !/^-?(0|[1-9]\d*)$/.test(value)
   ) {
     return false;
   }
-  return Number.isFinite(Date.parse(value));
+  try {
+    const parsed = BigInt(value);
+    return (
+      parsed.toString() === value &&
+      parsed >= BigInt(minimum) &&
+      parsed <= BigInt(maximum)
+    );
+  } catch {
+    return false;
+  }
 }
 
-/** Recursively admits only values representable by PostgreSQL JSONB. */
+/** Admits strict Gregorian timestamps and PostgreSQL offsets without normalization. */
+function isDatabaseTimestamp(value: unknown): boolean {
+  if (value instanceof Date) {
+    const time = Date.prototype.getTime.call(value);
+    const year = Date.prototype.getUTCFullYear.call(value);
+    return Number.isFinite(time) && year >= 1 && year <= 9_999;
+  }
+  if (typeof value !== "string") {
+    return false;
+  }
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(Z|([+-])(\d{2})(?::?(\d{2}))?)$/.exec(
+      value,
+    );
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  const offsetHour = match[8] === "Z" ? 0 : Number(match[10]);
+  const offsetMinute =
+    match[8] === "Z" || match[11] === undefined ? 0 : Number(match[11]);
+  const leapYear =
+    year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [
+    31,
+    leapYear ? 29 : 28,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
+  ];
+  return (
+    year >= 1 &&
+    year <= 9_999 &&
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    day <= daysInMonth[month - 1]! &&
+    hour >= 0 &&
+    hour <= 23 &&
+    minute >= 0 &&
+    minute <= 59 &&
+    second >= 0 &&
+    second <= 59 &&
+    offsetHour >= 0 &&
+    offsetHour <= 15 &&
+    offsetMinute >= 0 &&
+    offsetMinute <= 59 &&
+    Number.isFinite(Date.parse(value))
+  );
+}
+
+/** Recursively admits PostgreSQL JSONB values without forbidden NUL text. */
 function isJsonValue(value: unknown, depth: number): boolean {
   if (depth > 64) return false;
-  if (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "boolean"
-  ) {
+  if (value === null || typeof value === "boolean") {
     return true;
   }
+  if (typeof value === "string") return !value.includes("\u0000");
   if (typeof value === "number") return Number.isFinite(value);
   if (Array.isArray(value)) {
     return value.every((entry) => isJsonValue(entry, depth + 1));
@@ -1521,6 +1576,7 @@ function isJsonValue(value: unknown, depth: number): boolean {
   return Reflect.ownKeys(value).every(
     (key) =>
       typeof key === "string" &&
+      !key.includes("\u0000") &&
       descriptors[key]?.enumerable === true &&
       "value" in descriptors[key]! &&
       isJsonValue(descriptors[key]!.value, depth + 1),

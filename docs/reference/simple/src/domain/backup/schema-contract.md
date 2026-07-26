@@ -1,6 +1,7 @@
 # `src/domain/backup/schema-contract.ts`
 
-Defines the exact migration-9 database shape that every exported or restored backup row must satisfy.
+Defines the exact migration-9 database shape and PostgreSQL-safe value forms that every exported or restored backup
+row must satisfy.
 
 ## `defineColumns`
 
@@ -24,7 +25,7 @@ Rejects rows whose required relationship target is missing.
 
 ## `validateColumnValue`
 
-Checks one value against its declared database type and nullability.
+Checks one value against its declared database type and nullability, including PostgreSQL's text and range rules.
 
 ## `validateTableChecks`
 
@@ -96,15 +97,17 @@ Rejects rows containing prototypes, getters, symbols, or hidden fields.
 
 ## `isDatabaseInteger`
 
-Checks a number or canonical decimal string against a PostgreSQL integer range.
+Checks an exact integer number or decimal string against a PostgreSQL range without accepting `-0`, leading zeros,
+whitespace, exponents, decimal points, or coercion.
 
 ## `isDatabaseTimestamp`
 
-Checks a real date or PostgreSQL timestamp carrying an explicit time-zone offset.
+Checks a real date or a strict Gregorian timestamp with a supported explicit PostgreSQL time-zone offset. Impossible
+dates, normalized 24-hour/leap-second forms, year zero, and offsets beyond 15:59 are rejected.
 
 ## `isJsonValue`
 
-Accepts only data that PostgreSQL JSONB can represent.
+Accepts only data that PostgreSQL JSONB can represent, rejecting NUL in every nested string and object key.
 
 ## `integer`
 

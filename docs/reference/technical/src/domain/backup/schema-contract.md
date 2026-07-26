@@ -1,9 +1,10 @@
 # `src/domain/backup/schema-contract.ts`
 
 This is the sole reviewed migration-9 source for the backup table order, columns, PostgreSQL types, nullability,
-primary keys, full and partial unique indexes, foreign keys, and check constraints. Export validates the captured
-snapshot before hashing; import validates decoded rows before any target write. The pinned SHA-256 of migrations
-0001 through 0009 lets the database-backed contract test detect drift.
+primary keys, full and partial unique indexes, foreign keys, check constraints, and PostgreSQL-safe value admission.
+Export validates the captured snapshot before hashing; import validates decoded rows before any target write. The
+pinned SHA-256 of migrations 0001 through 0009 lets the database-backed contract test detect structural drift, while
+PGlite differential probes keep runtime value admission aligned with PostgreSQL.
 
 ## `defineColumns`
 
@@ -28,8 +29,8 @@ Builds typed target-key sets and verifies every required or optional migration f
 
 ## `validateColumnValue`
 
-Admits bounded SQL integer ranges, booleans, strings, explicit-offset timestamps, `Uint8Array` or canonical bytea
-hex, and recursively plain JSONB values.
+Admits exact bounded SQL integer forms, booleans, NUL-free strings, strict explicit-offset Gregorian timestamps,
+`Uint8Array` or canonical bytea hex, and recursively plain NUL-free JSONB values.
 
 ## `validateTableChecks`
 
@@ -102,15 +103,20 @@ Rejects nonstandard prototypes, symbol keys, accessors, and non-enumerable prope
 
 ## `isDatabaseInteger`
 
-Admits safe integer numbers or canonical decimal strings within the declared `smallint` or `integer` range.
+Admits non-negative-zero safe integer numbers or decimal strings whose `BigInt` round trip is byte-identical and
+within the declared `smallint` or `integer` range. This rejects leading plus signs, negative zero, whitespace,
+leading-zero, decimal, exponent, and overflow alternatives before any JavaScript number coercion.
 
 ## `isDatabaseTimestamp`
 
-Admits finite `Date` values or parseable PostgreSQL timestamp strings with `Z` or an explicit numeric offset.
+Admits finite `Date` values in years 0001 through 9999 or strict Gregorian timestamp strings with `Z` or PostgreSQL's
+numeric offsets through 15:59. Calendar components are validated directly, so `Date.parse` cannot silently normalize
+an impossible date, 24:00, or leap-second representation.
 
 ## `isJsonValue`
 
-Recursively rejects non-finite numbers, dates, byte arrays, non-plain objects, accessors, symbols, and excessive depth.
+Recursively rejects NUL in string values or object keys, non-finite numbers, dates, byte arrays, non-plain objects,
+accessors, symbols, and excessive depth.
 
 ## `integer`
 

@@ -6,12 +6,14 @@ import { describe, expect, it } from "vitest";
 import {
   BACKUP_SCHEMA_CONTRACT,
   BACKUP_SCHEMA_MIGRATION_SHA256,
+  validateBackupRow,
   validateBackupTableIdentities,
 } from "../../../src/domain/backup/schema-contract";
 import {
   BACKUP_TABLES,
   type BackupRow,
   type BackupTableName,
+  type BackupValue,
 } from "../../../src/domain/backup/manifest";
 
 const MIGRATIONS = [
@@ -228,4 +230,235 @@ describe("migration-9 backup schema contract", () => {
       }
     }
   });
+
+  it("matches PostgreSQL value admission while rejecting normalized alternate forms", async () => {
+    const database = new PGlite();
+    const timestampRow = (occurredAt: BackupValue): BackupRow => ({
+      id: "audit-1",
+      owner_id: "owner-1",
+      node_id: null,
+      actor_type: "system",
+      action: "value-probe",
+      outcome: "success",
+      provider: null,
+      error_category: null,
+      occurred_at: occurredAt,
+    });
+    const textRow = (action: BackupValue): BackupRow => ({
+      ...timestampRow("2026-07-25T18:00:00Z"),
+      action,
+    });
+    const jsonRow = (planningJson: BackupValue): BackupRow => ({
+      generation_id: "generation-1",
+      identity_hash: "A".repeat(43),
+      ordinal: 0,
+      planning_json: planningJson,
+      protected_payload_envelope: null,
+      protected_key_version: null,
+    });
+    const integerRow = (reservedCents: BackupValue): BackupRow => ({
+      owner_id: "owner-1",
+      budget_month: "2026-07",
+      settled_cents: 0,
+      reserved_cents: reservedCents,
+      created_at: "2026-07-25T18:00:00Z",
+      updated_at: "2026-07-25T18:00:00Z",
+    });
+
+    try {
+      await database.exec(`
+        create table backup_value_probe (
+          text_value text,
+          json_value jsonb,
+          integer_value integer,
+          timestamp_value timestamptz
+        )
+      `);
+
+      for (const value of [
+        "0001-01-01T00:00:00.000Z",
+        "9999-12-31T23:59:59.999999Z",
+        "2024-02-29T23:59:59Z",
+        "2026-01-01T00:00:00+15:59",
+        "2026-01-01 00:00:00-15:59",
+      ]) {
+        await expect(
+          database.query(
+            "insert into backup_value_probe (timestamp_value) values ($1)",
+            [value],
+          ),
+          value,
+        ).resolves.toBeDefined();
+        expect(
+          () => validateBackupRow("audit_events", timestampRow(value)),
+          value,
+        ).not.toThrow();
+      }
+      for (const value of [
+        new Date("0001-01-01T00:00:00.000Z"),
+        new Date("9999-12-31T23:59:59.999Z"),
+      ]) {
+        expect(
+          () => validateBackupRow("audit_events", timestampRow(value)),
+          value.toISOString(),
+        ).not.toThrow();
+      }
+      for (const value of [
+        new Date("0000-01-01T00:00:00.000Z"),
+        new Date("+010000-01-01T00:00:00.000Z"),
+      ]) {
+        expect(
+          () => validateBackupRow("audit_events", timestampRow(value)),
+          value.toISOString(),
+        ).toThrow(/timestamptz/i);
+      }
+
+      for (const value of [
+        "0000-01-01T00:00:00Z",
+        "2025-02-29T00:00:00Z",
+        "2026-02-30T00:00:00Z",
+        "2026-04-31T00:00:00Z",
+        "2026-01-01T23:60:00Z",
+        "2026-01-01T00:00:00+16:00",
+        "2026-01-01T00:00:00+12:60",
+      ]) {
+        await expect(
+          database.query(
+            "insert into backup_value_probe (timestamp_value) values ($1)",
+            [value],
+          ),
+          value,
+        ).rejects.toThrow();
+        expect(
+          () => validateBackupRow("audit_events", timestampRow(value)),
+          value,
+        ).toThrow(/timestamptz/i);
+      }
+
+      for (const value of [
+        "2026-01-01T24:00:00Z",
+        "2026-01-01T23:59:60Z",
+      ]) {
+        await expect(
+          database.query(
+            "insert into backup_value_probe (timestamp_value) values ($1)",
+            [value],
+          ),
+          value,
+        ).resolves.toBeDefined();
+        expect(
+          () => validateBackupRow("audit_events", timestampRow(value)),
+          value,
+        ).toThrow(/timestamptz/i);
+      }
+
+      for (const value of ["Vision", "café", "仕事", "calendar \u{1F4C5}"]) {
+        await expect(
+          database.query(
+            "insert into backup_value_probe (text_value) values ($1)",
+            [value],
+          ),
+          value,
+        ).resolves.toBeDefined();
+        expect(
+          () => validateBackupRow("audit_events", textRow(value)),
+          value,
+        ).not.toThrow();
+      }
+      await expect(
+        database.query(
+          "insert into backup_value_probe (text_value) values ($1)",
+          ["bad\u0000text"],
+        ),
+      ).rejects.toThrow();
+      expect(() =>
+        validateBackupRow("audit_events", textRow("bad\u0000text")),
+      ).toThrow(/text/i);
+
+      for (const value of [
+        "scalar",
+        { nested: { unicode: "école" } },
+        [null, true, 42, "仕事"],
+      ]) {
+        await expect(
+          database.query(
+            "insert into backup_value_probe (json_value) values ($1::jsonb)",
+            [JSON.stringify(value)],
+          ),
+        ).resolves.toBeDefined();
+        expect(
+          () => validateBackupRow("projection_rebuild_changes", jsonRow(value)),
+        ).not.toThrow();
+      }
+      const invalidJsonValues: readonly BackupValue[] = [
+        { nested: "bad\u0000value" },
+        { ["bad\u0000key"]: "value" },
+      ];
+      for (const value of invalidJsonValues) {
+        await expect(
+          database.query(
+            "insert into backup_value_probe (json_value) values ($1::jsonb)",
+            [JSON.stringify(value)],
+          ),
+        ).rejects.toThrow();
+        expect(() =>
+          validateBackupRow("projection_rebuild_changes", jsonRow(value)),
+        ).toThrow(/jsonb/i);
+      }
+
+      for (const value of ["0", "1", "2147483647"]) {
+        await expect(
+          database.query(
+            "insert into backup_value_probe (integer_value) values ($1)",
+            [value],
+          ),
+          value,
+        ).resolves.toBeDefined();
+        expect(
+          () => validateBackupRow("ai_usage_months", integerRow(value)),
+          value,
+        ).not.toThrow();
+      }
+      await expect(
+        database.query(
+          "insert into backup_value_probe (integer_value) values ($1), ($2)",
+          ["-2147483648", "2147483647"],
+        ),
+      ).resolves.toBeDefined();
+      for (const value of ["-0", "01", "+1", " 1", "1 ", "000", "-00"]) {
+        await expect(
+          database.query(
+            "insert into backup_value_probe (integer_value) values ($1)",
+            [value],
+          ),
+          value,
+        ).resolves.toBeDefined();
+        expect(
+          () => validateBackupRow("ai_usage_months", integerRow(value)),
+          value,
+        ).toThrow(/integer/i);
+      }
+      for (const value of [
+        "1.0",
+        "1e0",
+        "-2147483649",
+        "2147483648",
+        "999999999999999999999999999999999999999",
+      ]) {
+        await expect(
+          database.query(
+            "insert into backup_value_probe (integer_value) values ($1)",
+            [value],
+          ),
+          value,
+        ).rejects.toThrow();
+        expect(
+          () => validateBackupRow("ai_usage_months", integerRow(value)),
+          value,
+        ).toThrow(/integer/i);
+      }
+    } finally {
+      await database.close();
+    }
+  }, 15_000);
 });

@@ -100,6 +100,19 @@ function projectionSnapshot(planningJson: BackupValue): MutableBackupSnapshot {
   return { schemaVersion: BACKUP_SCHEMA_VERSION, tables };
 }
 
+function usageMonthSnapshot(reservedCents: BackupValue = 0): MutableBackupSnapshot {
+  const tables = emptyTables();
+  tables.ai_usage_months.push({
+    owner_id: "owner-1",
+    budget_month: "2026-07",
+    settled_cents: 0,
+    reserved_cents: reservedCents,
+    created_at: new Date("2026-07-25T16:00:00.000Z"),
+    updated_at: new Date("2026-07-25T16:00:00.000Z"),
+  });
+  return { schemaVersion: BACKUP_SCHEMA_VERSION, tables };
+}
+
 function calendarCandidateSnapshot(
   googleSubject: string,
   providerEtag: string,
@@ -564,6 +577,178 @@ async function reencryptPayload(
   return encryptBackupEnvelope(new TextEncoder().encode(JSON.stringify(payload)), key);
 }
 
+interface PostgreSqlInvalidBackupValue {
+  readonly label: string;
+  readonly table: BackupTableName;
+  readonly rowIndex: number;
+  readonly column: string;
+  readonly invalidValue: BackupValue;
+  readonly validSnapshot: () => MutableBackupSnapshot;
+}
+
+function postgresInvalidBackupValues(): readonly PostgreSqlInvalidBackupValue[] {
+  return [
+    {
+      label: "impossible Gregorian day",
+      table: "audit_events",
+      rowIndex: 0,
+      column: "occurred_at",
+      invalidValue: "2026-02-30T00:00:00.000Z",
+      validSnapshot: () => auditSnapshot(["timestamp"]),
+    },
+    {
+      label: "non-leap February 29",
+      table: "audit_events",
+      rowIndex: 0,
+      column: "occurred_at",
+      invalidValue: "2025-02-29T00:00:00Z",
+      validSnapshot: () => auditSnapshot(["timestamp"]),
+    },
+    {
+      label: "Date before the supported PostgreSQL year range",
+      table: "audit_events",
+      rowIndex: 0,
+      column: "occurred_at",
+      invalidValue: new Date("0000-01-01T00:00:00.000Z"),
+      validSnapshot: () => auditSnapshot(["timestamp"]),
+    },
+    {
+      label: "Date after the supported PostgreSQL year range",
+      table: "audit_events",
+      rowIndex: 0,
+      column: "occurred_at",
+      invalidValue: new Date("+010000-01-01T00:00:00.000Z"),
+      validSnapshot: () => auditSnapshot(["timestamp"]),
+    },
+    {
+      label: "normalized 24-hour clock",
+      table: "audit_events",
+      rowIndex: 0,
+      column: "occurred_at",
+      invalidValue: "2026-01-01T24:00:00Z",
+      validSnapshot: () => auditSnapshot(["timestamp"]),
+    },
+    {
+      label: "normalized leap second",
+      table: "audit_events",
+      rowIndex: 0,
+      column: "occurred_at",
+      invalidValue: "2026-01-01T23:59:60Z",
+      validSnapshot: () => auditSnapshot(["timestamp"]),
+    },
+    {
+      label: "oversized time-zone offset",
+      table: "audit_events",
+      rowIndex: 0,
+      column: "occurred_at",
+      invalidValue: "2026-01-01T00:00:00+16:00",
+      validSnapshot: () => auditSnapshot(["timestamp"]),
+    },
+    {
+      label: "invalid time-zone offset minute",
+      table: "audit_events",
+      rowIndex: 0,
+      column: "occurred_at",
+      invalidValue: "2026-01-01T00:00:00+12:60",
+      validSnapshot: () => auditSnapshot(["timestamp"]),
+    },
+    {
+      label: "NUL in PostgreSQL text",
+      table: "audit_events",
+      rowIndex: 0,
+      column: "action",
+      invalidValue: "event\u0000action",
+      validSnapshot: () => auditSnapshot(["safe-action"]),
+    },
+    {
+      label: "NUL in nested JSONB string",
+      table: "projection_rebuild_changes",
+      rowIndex: 0,
+      column: "planning_json",
+      invalidValue: ["safe", { nested: "bad\u0000value" }],
+      validSnapshot: () => projectionSnapshot({ safe: true }),
+    },
+    {
+      label: "NUL in JSONB object key",
+      table: "projection_rebuild_changes",
+      rowIndex: 0,
+      column: "planning_json",
+      invalidValue: { ["bad\u0000key"]: "value" },
+      validSnapshot: () => projectionSnapshot({ safe: true }),
+    },
+    ...[
+      "-0",
+      "01",
+      "+1",
+      "1.0",
+      "1e0",
+      " 1",
+      "1 ",
+      "000",
+      "-00",
+      "2147483648",
+    ].map(
+      (invalidValue) => ({
+        label: `noncanonical or out-of-range integer ${JSON.stringify(invalidValue)}`,
+        table: "ai_usage_months" as const,
+        rowIndex: 0,
+        column: "reserved_cents",
+        invalidValue,
+        validSnapshot: () => usageMonthSnapshot(),
+      }),
+    ),
+  ];
+}
+
+function withInvalidBackupValue(
+  testCase: PostgreSqlInvalidBackupValue,
+): MutableBackupSnapshot {
+  const snapshot = testCase.validSnapshot();
+  snapshot.tables[testCase.table][testCase.rowIndex] = {
+    ...snapshot.tables[testCase.table][testCase.rowIndex]!,
+    [testCase.column]: testCase.invalidValue,
+  };
+  return snapshot;
+}
+
+function encodeTestBackupValue(value: BackupValue): unknown {
+  if (value === null) return ["null"];
+  if (typeof value === "boolean") return ["boolean", value];
+  if (typeof value === "number") return ["number", value];
+  if (typeof value === "string") return ["string", value];
+  if (typeof value === "bigint") return ["bigint", value.toString()];
+  if (value instanceof Date) return ["date", value.toISOString()];
+  if (value instanceof Uint8Array) return ["bytes", encodeBase64Url(value)];
+  if (Array.isArray(value)) {
+    return ["array", value.map((entry) => encodeTestBackupValue(entry))];
+  }
+  const record = value as Readonly<Record<string, BackupValue>>;
+  return [
+    "object",
+    Object.keys(record)
+      .sort()
+      .map((key) => [key, encodeTestBackupValue(record[key]!)]),
+  ];
+}
+
+function replaceArchiveColumn(
+  archive: Uint8Array,
+  testCase: PostgreSqlInvalidBackupValue,
+): Uint8Array {
+  const lines = new TextDecoder().decode(archive).split("\n").filter(Boolean);
+  const lineIndex = lines.findIndex((line) =>
+    line.includes(`"table":"${testCase.table}"`),
+  );
+  const record = JSON.parse(lines[lineIndex]!) as {
+    row: [string, Array<[string, unknown]>];
+  };
+  const field = record.row[1].find(([name]) => name === testCase.column);
+  if (!field) throw new Error(`Missing test field ${testCase.column}.`);
+  field[1] = encodeTestBackupValue(testCase.invalidValue);
+  lines[lineIndex] = JSON.stringify(record);
+  return new TextEncoder().encode(`${lines.join("\n")}\n`);
+}
+
 describe("encrypted backup round trip", () => {
   it("matches every table and column produced by migrations 0001 through 0009", async () => {
     const database = new PGlite();
@@ -931,6 +1116,122 @@ describe("encrypted backup round trip", () => {
       expect(digest).not.toHaveBeenCalled();
       digest.mockRestore();
     }
+  });
+
+  it("rejects PostgreSQL-invalid and normalization-ambiguous values before hashing or encryption", async () => {
+    const key = await backupKey();
+
+    for (const testCase of postgresInvalidBackupValues()) {
+      const digest = vi.spyOn(crypto.subtle, "digest");
+      const encrypt = vi.spyOn(crypto.subtle, "encrypt");
+      try {
+        await expect(
+          exportBackup(withInvalidBackupValue(testCase), key, {
+            createdAt: CREATED_AT,
+          }),
+          testCase.label,
+        ).rejects.toThrow(/backup/i);
+        expect(digest, testCase.label).not.toHaveBeenCalled();
+        expect(encrypt, testCase.label).not.toHaveBeenCalled();
+      } finally {
+        digest.mockRestore();
+        encrypt.mockRestore();
+      }
+    }
+  });
+
+  it("rejects PostgreSQL-invalid canonical records on decode and before import staging", async () => {
+    const key = await backupKey();
+
+    for (const testCase of postgresInvalidBackupValues()) {
+      const validSnapshot = testCase.validSnapshot();
+      const archive = replaceArchiveColumn(
+        encodeCanonicalBackupArchive(validSnapshot),
+        testCase,
+      );
+      expect(
+        () => decodeCanonicalBackupArchive(archive),
+        testCase.label,
+      ).toThrow(/backup/i);
+
+      const validEncrypted = await exportBackup(validSnapshot, key, {
+        createdAt: CREATED_AT,
+      });
+      const invalidEncrypted = await reencryptPayload(
+        validEncrypted,
+        key,
+        (payload) => {
+          payload.archive = encodeBase64Url(
+            replaceArchiveColumn(
+              decodeBase64Url(
+                payload.archive,
+                "Test backup archive",
+                BACKUP_ARCHIVE_LIMITS.maximumArchiveBytes * 2,
+              ),
+              testCase,
+            ),
+          );
+        },
+        { rehashArchive: true },
+      );
+      const target = new MemoryRestoreTarget();
+      await expect(
+        importBackup(invalidEncrypted, key, target),
+        testCase.label,
+      ).rejects.toThrow(/backup/i);
+      expect(target.stageCalls, testCase.label).toBe(0);
+      expect(target.promoteCalls, testCase.label).toBe(0);
+    }
+  });
+
+  it("preserves valid PostgreSQL boundary values across export and import", async () => {
+    const source = projectionSnapshot({
+      scalar: "Vision \u{1F4C5}",
+      object: { "école": true },
+      array: [null, false, 42, "仕事"],
+    });
+    const validTimestamps = [
+      "0001-01-01T00:00:00.000Z",
+      "9999-12-31T23:59:59.999999Z",
+      "2024-02-29T23:59:59Z",
+      "2026-01-01T00:00:00+15:59",
+      "2026-01-01 00:00:00-15:59",
+    ] as const;
+    const validDateObjects = [
+      new Date("0001-01-01T00:00:00.000Z"),
+      new Date("9999-12-31T23:59:59.999Z"),
+    ] as const;
+    [...validTimestamps, ...validDateObjects].forEach((occurredAt, index) => {
+      source.tables.audit_events.push({
+        id: `boundary-${index}`,
+        owner_id: "owner-\u{1F30E}",
+        node_id: null,
+        actor_type: "system",
+        action: `Unicode café ${index}`,
+        outcome: "success",
+        provider: null,
+        error_category: null,
+        occurred_at: occurredAt,
+      });
+    });
+    source.tables.ai_usage_months.push(
+      ...usageMonthSnapshot("2147483647").tables.ai_usage_months,
+    );
+    const key = await backupKey();
+    const encrypted = await exportBackup(source, key, {
+      createdAt: CREATED_AT,
+    });
+    const target = new MemoryRestoreTarget();
+
+    await expect(importBackup(encrypted, key, target)).resolves.toMatchObject({
+      rowCounts: {
+        audit_events: validTimestamps.length + validDateObjects.length,
+        projection_rebuild_changes: 1,
+        ai_usage_months: 1,
+      },
+    });
+    expect(target.stageCalls).toBe(1);
+    expect(target.promoteCalls).toBe(1);
   });
 
   it("rejects semantically equivalent but noncanonical NDJSON bytes", async () => {
