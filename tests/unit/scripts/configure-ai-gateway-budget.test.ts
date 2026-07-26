@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   AI_GATEWAY_LIMIT_DOLLARS,
   AI_GATEWAY_WINDOW_SECONDS,
+  classifyAiGatewayBudgetError,
   configureAiGatewayBudget,
 } from "../../../scripts/configure-ai-gateway-budget";
 
@@ -118,5 +119,21 @@ describe("preview AI Gateway budget configuration", () => {
         fetchImplementation,
       ),
     ).rejects.toThrow("AI Gateway budget verification failed.");
+  });
+
+  it("maps provider failures to a closed privacy-safe category", () => {
+    expect(
+      classifyAiGatewayBudgetError(
+        new Error("AI Gateway lookup failed."),
+      ),
+    ).toBe("lookup_failed");
+    expect(
+      classifyAiGatewayBudgetError(
+        new Error("AI Gateway update failed."),
+      ),
+    ).toBe("update_failed");
+    expect(classifyAiGatewayBudgetError(new Error("private response"))).toBe(
+      "unknown_failure",
+    );
   });
 });

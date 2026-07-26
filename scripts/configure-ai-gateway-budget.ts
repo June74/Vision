@@ -19,9 +19,32 @@ export interface AiGatewayBudgetEvidence {
   readonly windowSeconds: typeof AI_GATEWAY_WINDOW_SECONDS;
 }
 
+export type AiGatewayBudgetErrorCategory =
+  | "invalid_configuration"
+  | "lookup_failed"
+  | "update_failed"
+  | "verification_failed"
+  | "unknown_failure";
+
 /** Narrows an unknown API value to a non-array record. */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/** Maps internal failures to a fixed category without copying provider content. */
+export function classifyAiGatewayBudgetError(
+  error: unknown,
+): AiGatewayBudgetErrorCategory {
+  if (!(error instanceof Error)) return "unknown_failure";
+  if (error.message === "AI Gateway budget configuration is invalid.") {
+    return "invalid_configuration";
+  }
+  if (error.message === "AI Gateway lookup failed.") return "lookup_failed";
+  if (error.message === "AI Gateway update failed.") return "update_failed";
+  if (error.message === "AI Gateway budget verification failed.") {
+    return "verification_failed";
+  }
+  return "unknown_failure";
 }
 
 /** Applies the exact budget and accepts only the matching returned configuration. */
@@ -73,8 +96,14 @@ export async function configureAiGatewayBudget(
     body: JSON.stringify({ spend_limits: spendLimits }),
   });
   const updated: unknown = await updateResponse.json();
+  if (
+    !updateResponse.ok ||
+    !isRecord(updated) ||
+    updated.success !== true
+  ) {
+    throw new Error("AI Gateway update failed.");
+  }
   const returnedSpendLimits =
-    isRecord(updated) &&
     isRecord(updated.result) &&
     isRecord(updated.result.spend_limits)
       ? updated.result.spend_limits
@@ -84,9 +113,6 @@ export async function configureAiGatewayBudget(
     : [];
   const rule = rules.length === 1 && isRecord(rules[0]) ? rules[0] : {};
   if (
-    !updateResponse.ok ||
-    !isRecord(updated) ||
-    updated.success !== true ||
     returnedSpendLimits.enabled !== true ||
     rule.enabled !== true ||
     rule.limit !== AI_GATEWAY_LIMIT_DOLLARS ||
@@ -117,8 +143,11 @@ async function main(): Promise<void> {
       apiToken: process.env.CLOUDFLARE_API_TOKEN ?? "",
     });
     process.stdout.write(`${JSON.stringify(evidence)}\n`);
-  } catch {
-    process.stderr.write("AI Gateway budget configuration failed.\n");
+  } catch (error) {
+    const category = classifyAiGatewayBudgetError(error);
+    process.stderr.write(
+      `${JSON.stringify({ configured: false, errorCategory: category })}\n`,
+    );
     process.exitCode = 1;
   }
 }

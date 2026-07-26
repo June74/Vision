@@ -8,6 +8,10 @@ command prints only whether that exact rule was returned.
 
 Checks that an API value is an object before reading it.
 
+## `classifyAiGatewayBudgetError`
+
+Maps a failure to one safe stage name without copying Cloudflare's response.
+
 ## `configureAiGatewayBudget`
 
 Finds the existing preview gateway, applies the exact cost rule, and fails
