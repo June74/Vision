@@ -4,7 +4,13 @@
 
 **Signature:** `FoundationStatus({ status }): JSX.Element`
 
-Renders the server's deterministic health precedence and only allowlisted operational facts. Action copy is fixed per state. Database and R2 warning booleans produce generic messages without metric, identifier, or storage internals.
+Renders the server's deterministic health precedence and only allowlisted operational facts. Every nonhealthy state includes an explicit recovery instruction. Database and R2 warning booleans produce generic messages without metric, identifier, or storage internals.
+
+## `describeFoundationStatus`
+
+**Signature:** `describeFoundationStatus(status): { summary; action? }`
+
+Maps only finite state, authorization state, safe error category, failed-job count, and database/R2 warning booleans to fixed copy. Authorization directs reconnection, capacity warnings direct managed-service review, database failure directs a database-service check, failed jobs direct a later refresh after repair, and unknown cases use a safe refresh/reconnect fallback. It never interpolates raw error or provider text.
 
 ## `formatAge`
 

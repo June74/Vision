@@ -421,7 +421,7 @@ input {
   width: 100%;
 }
 
-.category-control select:disabled {
+.category-control select[aria-disabled="true"] {
   cursor: wait;
   opacity: 0.6;
 }
@@ -506,12 +506,19 @@ input {
 }
 
 .foundation-status__copy,
+.foundation-status__action,
 .cost-status__copy,
 .resource-warning {
   color: #b9cbd1;
   font-size: 0.78rem;
   line-height: 1.5;
   margin-top: 0.65rem;
+}
+
+.foundation-status__action {
+  color: #e5efef;
+  border-left: 0.15rem solid var(--aqua);
+  padding-left: 0.55rem;
 }
 
 .foundation-status__facts {

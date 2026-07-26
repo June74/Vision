@@ -4,11 +4,11 @@
 
 **Signature:** `CategoryControl({ event, onChange }): JSX.Element`
 
-Renders a labeled native select with a 44-pixel target, visible provenance, a Vision-only boundary statement, and polite success or alert failure announcements. It does not optimistically change the authoritative event.
+Renders a labeled native select with a 44-pixel target, visible provenance, a Vision-only boundary statement, and saving/success/error announcements. During a request, the select remains focused and keyboard-reachable while `aria-disabled` and `aria-busy` communicate its guarded state. It does not optimistically change the authoritative event.
 
 ## `selectCategory`
 
-Validates the finite select value, disables duplicate submission while pending, awaits server confirmation, and leaves the prior event state intact on failure.
+Validates the finite select value, synchronously locks duplicate submission through a ref, restores the displayed authoritative value for duplicate change events, awaits server confirmation, and leaves the prior event state intact on failure. The native control is not disabled, so focus survives both success and error.
 
 ## `formatCategoryMark`
 

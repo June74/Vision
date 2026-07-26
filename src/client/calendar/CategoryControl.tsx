@@ -1,5 +1,5 @@
 /** Renders one explicit, Vision-only category correction control. */
-import { useState, type ChangeEvent, type JSX } from "react";
+import { useRef, useState, type ChangeEvent, type JSX } from "react";
 import type { FoundationEvent } from "../status/api";
 
 type ConcreteDomain = "school" | "work" | "personal";
@@ -13,26 +13,33 @@ export function CategoryControl({
   readonly onChange: (domain: ConcreteDomain) => Promise<void>;
 }): JSX.Element {
   const [pending, setPending] = useState(false);
-  const [announcement, setAnnouncement] = useState<"saved" | "failed" | undefined>();
+  const [announcement, setAnnouncement] = useState<"saving" | "saved" | "failed" | undefined>();
+  const pendingRef = useRef(false);
+  const selected = event.domain === "unresolved" ? "" : event.domain;
 
-  /** Applies the selected category once and restores the authoritative state on failure. */
+  /** Applies one selection while retaining focus and ignoring duplicate pending changes. */
   async function selectCategory(change: ChangeEvent<HTMLSelectElement>): Promise<void> {
     const domain = change.target.value as ConcreteDomain;
     if (domain !== "school" && domain !== "work" && domain !== "personal") return;
+    if (pendingRef.current) {
+      change.currentTarget.value = selected;
+      return;
+    }
+    pendingRef.current = true;
     setPending(true);
-    setAnnouncement(undefined);
+    setAnnouncement("saving");
     try {
       await onChange(domain);
       setAnnouncement("saved");
     } catch {
       setAnnouncement("failed");
     } finally {
+      pendingRef.current = false;
       setPending(false);
     }
   }
 
   const label = event.title?.trim() || "Untitled event";
-  const selected = event.domain === "unresolved" ? "" : event.domain;
   return (
     <div className="category-control">
       <p className={`category-mark category-mark--${event.domainState}`}>
@@ -40,8 +47,9 @@ export function CategoryControl({
       </p>
       <label htmlFor={`category-${event.id}`}>Category for {label}</label>
       <select
+        aria-busy={pending}
+        aria-disabled={pending}
         id={`category-${event.id}`}
-        disabled={pending}
         onChange={(change) => void selectCategory(change)}
         value={selected}
       >
@@ -51,6 +59,9 @@ export function CategoryControl({
         <option value="school">School</option>
       </select>
       <p className="category-control__boundary">This changes Vision only, not Google Calendar.</p>
+      {announcement === "saving"
+        ? <p className="category-control__announcement" role="status">Saving category in Vision…</p>
+        : null}
       {announcement === "saved"
         ? <p className="category-control__announcement" role="status">Category saved in Vision.</p>
         : null}

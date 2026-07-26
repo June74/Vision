@@ -2,7 +2,11 @@
 
 ## `FoundationStatus`
 
-Shows whether synchronization is healthy, delayed, needs action, or is disconnected. It includes safe sync age, retry count, and storage warnings.
+Shows whether synchronization is healthy, delayed, needs action, or is disconnected. Every unhealthy state includes a concrete next step based only on safe status facts. It also includes safe sync age, retry count, and storage warnings.
+
+## `describeFoundationStatus`
+
+Chooses a plain-language summary and next step for the current safe health facts.
 
 ## `formatAge`
 

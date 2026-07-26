@@ -2,19 +2,13 @@
 import type { JSX } from "react";
 import type { FoundationStatusSnapshot } from "./api";
 
-const STATE_COPY: Readonly<Record<FoundationStatusSnapshot["state"], string>> = {
-  Healthy: "Vision is synchronized and ready.",
-  Delayed: "Vision is catching up. Your calendar remains available.",
-  "Action required": "Vision needs your attention before synchronization can recover.",
-  Disconnected: "Reconnect Google Calendar to resume synchronization.",
-};
-
 /** Renders health precedence, sync age, and safe storage warnings in the signal rail. */
 export function FoundationStatus({
   status,
 }: {
   readonly status: FoundationStatusSnapshot;
 }): JSX.Element {
+  const presentation = describeFoundationStatus(status);
   return (
     <section className="foundation-status" aria-label="Foundation signal">
       <p className="signal-label">Foundation signal</p>
@@ -22,7 +16,10 @@ export function FoundationStatus({
         <span aria-hidden="true" className="signal-glyph">{stateGlyph(status.state)}</span>
         <span>{status.state}</span>
       </p>
-      <p className="foundation-status__copy">{STATE_COPY[status.state]}</p>
+      <p className="foundation-status__copy">{presentation.summary}</p>
+      {presentation.action
+        ? <p className="foundation-status__action">{presentation.action}</p>
+        : null}
       <dl className="foundation-status__facts">
         <div>
           <dt>Last synchronized</dt>
@@ -41,6 +38,63 @@ export function FoundationStatus({
         : null}
     </section>
   );
+}
+
+/** Chooses a concrete next step using only allowlisted health facts. */
+function describeFoundationStatus(
+  status: FoundationStatusSnapshot,
+): { readonly summary: string; readonly action?: string } {
+  if (status.state === "Healthy") {
+    return { summary: "Vision is synchronized and ready." };
+  }
+  if (status.state === "Delayed") {
+    return {
+      summary: "Vision is catching up. Your calendar remains available.",
+      action: "Refresh in a few minutes to check the latest synchronization.",
+    };
+  }
+  if (status.state === "Disconnected") {
+    return {
+      summary: "Google Calendar is not connected to Vision.",
+      action: "Reconnect Google Calendar, then refresh Vision.",
+    };
+  }
+  const summary = "Vision needs your attention before synchronization can recover.";
+  if (
+    status.authorizationState !== "connected" ||
+    status.safeErrorCode === "authorization"
+  ) {
+    return {
+      summary,
+      action: "Reconnect Google Calendar, then refresh Vision.",
+    };
+  }
+  if (
+    status.databaseUsageWarning ||
+    status.r2UsageWarning ||
+    status.safeErrorCode === "quota"
+  ) {
+    return {
+      summary,
+      action: "Review Vision's managed-service usage, then refresh Vision.",
+    };
+  }
+  if (status.safeErrorCode === "database") {
+    return {
+      summary,
+      action: "Try again in a few minutes. If this continues, check Vision's database service.",
+    };
+  }
+  if (status.failedJobCount > 0) {
+    return {
+      summary,
+      action: "Refresh after the next repair run. If this remains, reconnect Google Calendar.",
+    };
+  }
+  return {
+    summary,
+    action: "Refresh Vision in a few minutes. If this remains, reconnect Google Calendar.",
+  };
 }
 
 /** Converts a server-derived synchronization delay into a short relative age. */

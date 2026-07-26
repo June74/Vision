@@ -168,15 +168,18 @@ test("applies a Vision-only explicit correction and preserves it after reload", 
 for (const scenario of [
   {
     state: "Delayed",
-    copy: "Vision is catching up. Your calendar remains available.",
+    summary: "Vision is catching up. Your calendar remains available.",
+    action: "Refresh in a few minutes to check the latest synchronization.",
   },
   {
     state: "Action required",
-    copy: "Vision needs your attention before synchronization can recover.",
+    summary: "Vision needs your attention before synchronization can recover.",
+    action: "Refresh after the next repair run. If this remains, reconnect Google Calendar.",
   },
   {
     state: "Disconnected",
-    copy: "Reconnect Google Calendar to resume synchronization.",
+    summary: "Google Calendar is not connected to Vision.",
+    action: "Reconnect Google Calendar, then refresh Vision.",
   },
 ]) {
   test(`shows actionable ${scenario.state} foundation status`, async ({ page }) => {
@@ -192,33 +195,120 @@ for (const scenario of [
       },
     });
 
+    if (scenario.state === "Action required") {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+    }
     await page.goto("/");
 
     await expect(page.getByText(scenario.state, { exact: true })).toBeVisible();
-    await expect(page.getByText(scenario.copy)).toBeVisible();
+    await expect(page.getByText(scenario.summary)).toBeVisible();
+    await expect(page.getByText(scenario.action)).toBeVisible();
     await expect(page.getByText(/Last synchronized/)).toBeVisible();
+    if (scenario.state === "Action required") {
+      await expect(page.locator(".desk-surface")).toHaveCSS("animation-name", "none");
+    }
   });
 }
 
-test("keeps event viewing available when AI is near its limit or stopped", async ({ page }) => {
-  await mockFoundation(page, {
-    status: {
+for (const scenario of [
+  {
+    name: "authorization failure",
+    safeErrorCode: "authorization",
+    databaseUsageWarning: false,
+    r2UsageWarning: false,
+    action: "Reconnect Google Calendar, then refresh Vision.",
+  },
+  {
+    name: "database failure",
+    safeErrorCode: "database",
+    databaseUsageWarning: false,
+    r2UsageWarning: false,
+    action: "Try again in a few minutes. If this continues, check Vision's database service.",
+  },
+  {
+    name: "managed-service usage warning",
+    safeErrorCode: "quota",
+    databaseUsageWarning: true,
+    r2UsageWarning: true,
+    action: "Review Vision's managed-service usage, then refresh Vision.",
+  },
+  {
+    name: "safe fallback",
+    safeErrorCode: null,
+    databaseUsageWarning: false,
+    r2UsageWarning: false,
+    action: "Refresh Vision in a few minutes. If this remains, reconnect Google Calendar.",
+  },
+]) {
+  test(`chooses a concrete safe next action for ${scenario.name}`, async ({ page }) => {
+    await mockFoundation(page, {
       status: {
-        ...HEALTHY_STATUS.status,
-        aiSpendTier: "stopped",
-        aiMonthlyCents: 950,
-        warningCodes: ["AI_BUDGET_STOPPED"],
+        status: {
+          ...HEALTHY_STATUS.status,
+          state: "Action required",
+          failedJobCount: 0,
+          safeErrorCode: scenario.safeErrorCode,
+          databaseUsageWarning: scenario.databaseUsageWarning,
+          r2UsageWarning: scenario.r2UsageWarning,
+        },
       },
-    },
+    });
+
+    await page.goto("/");
+
+    const signal = page.getByRole("region", { name: "Foundation signal" });
+    await expect(signal.getByText(scenario.action)).toBeVisible();
+    await expect(signal).not.toContainText(/stack|token|cipher|database_url/i);
   });
+}
 
-  await page.goto("/");
+for (const scenario of [
+  {
+    tier: "warning",
+    cents: 800,
+    warning: "AI_BUDGET_WARNING",
+    title: "AI budget watch",
+    copy: "Vision is using its lower-cost model for eligible work.",
+    amount: "$8.00 of $9.50",
+  },
+  {
+    tier: "optional_stopped",
+    cents: 900,
+    warning: "AI_OPTIONAL_STOPPED",
+    title: "AI limited",
+    copy: "Optional AI work is paused. Core calendar tools still work.",
+    amount: "$9.00 of $9.50",
+  },
+  {
+    tier: "stopped",
+    cents: 950,
+    warning: "AI_BUDGET_STOPPED",
+    title: "AI paused",
+    copy: "Calendar viewing and category changes still work.",
+    amount: "$9.50 of $9.50",
+  },
+] as const) {
+  test(`keeps event viewing available at the ${scenario.cents}-cent AI tier`, async ({ page }) => {
+    await mockFoundation(page, {
+      status: {
+        status: {
+          ...HEALTHY_STATUS.status,
+          aiSpendTier: scenario.tier,
+          aiMonthlyCents: scenario.cents,
+          warningCodes: [scenario.warning],
+        },
+      },
+    });
 
-  await expect(page.getByText("Advanced data systems", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("AI cost status")).toContainText("AI paused");
-  await expect(page.getByLabel("AI cost status")).toContainText("Calendar viewing and category changes still work.");
-  await expect(page.getByLabel("AI cost status")).toContainText("$9.50 of $9.50");
-});
+    await page.goto("/");
+
+    await expect(page.getByText("Advanced data systems", { exact: true })).toBeVisible();
+    const cost = page.getByLabel("AI cost status");
+    await expect(cost).toContainText(scenario.title);
+    await expect(cost).toContainText(scenario.copy);
+    await expect(cost).toContainText(scenario.amount);
+  });
+}
 
 test("reflects safe database and backup warnings without leaking internals", async ({ page }) => {
   await mockFoundation(page, {
@@ -284,11 +374,18 @@ test("handles expired sessions and forbidden corrections safely", async ({ page 
   await expect(item.getByText("Needs category")).toBeVisible();
 });
 
-test("supports keyboard correction with 44px controls and no narrow-screen horizontal trap", async ({ page }) => {
+test("keeps keyboard focus through a delayed successful correction", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 700 });
   await mockFoundation(page, { events: [EVENTS[1]] });
-  await page.route("**/api/calendar/events/event-unresolved/category", (route) =>
-    fulfillJson(route, {
+  let correctionCalls = 0;
+  let releaseCorrection!: () => void;
+  const correctionReleased = new Promise<void>((resolve) => {
+    releaseCorrection = resolve;
+  });
+  await page.route("**/api/calendar/events/event-unresolved/category", async (route) => {
+    correctionCalls += 1;
+    await correctionReleased;
+    await fulfillJson(route, {
       category: {
         id: "event-unresolved",
         domain: "personal",
@@ -297,17 +394,54 @@ test("supports keyboard correction with 44px controls and no narrow-screen horiz
         assignedAt: "2026-07-25T15:00:00.000Z",
         version: 4,
       },
-    }));
+    });
+  });
 
   await page.goto("/");
   const select = page.getByRole("combobox", { name: "Category for Planning session" });
   await select.focus();
   await select.selectOption("personal");
+  await expect(page.getByRole("status")).toContainText("Saving category");
+  await expect(select).toBeFocused();
+  await expect(select).toHaveAttribute("aria-busy", "true");
+  await select.evaluate((element) => {
+    if (!(element instanceof HTMLSelectElement)) throw new Error("Expected a category select.");
+    element.value = "work";
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  expect(correctionCalls).toBe(1);
+  await expect(select).toBeFocused();
+  releaseCorrection();
   await expect(page.getByRole("status")).toContainText("Category saved");
+  await expect(select).toBeFocused();
+  await expect(select).toHaveAttribute("aria-busy", "false");
   await expect(select).toHaveCSS("min-height", "44px");
   const dimensions = await page.evaluate(() => ({
     clientWidth: document.documentElement.clientWidth,
     scrollWidth: document.documentElement.scrollWidth,
   }));
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
+});
+
+test("keeps keyboard focus through a delayed failed correction", async ({ page }) => {
+  await mockFoundation(page, { events: [EVENTS[1]] });
+  let releaseCorrection!: () => void;
+  const correctionReleased = new Promise<void>((resolve) => {
+    releaseCorrection = resolve;
+  });
+  await page.route("**/api/calendar/events/event-unresolved/category", async (route) => {
+    await correctionReleased;
+    await fulfillJson(route, { error: { code: "CSRF_INVALID" } }, 403);
+  });
+
+  await page.goto("/");
+  const select = page.getByRole("combobox", { name: "Category for Planning session" });
+  await select.focus();
+  await select.selectOption("school");
+  await expect(page.getByRole("status")).toContainText("Saving category");
+  await expect(select).toBeFocused();
+  releaseCorrection();
+  await expect(page.getByRole("alert")).toContainText("Category was not saved");
+  await expect(select).toBeFocused();
+  await expect(select).toHaveAttribute("aria-busy", "false");
 });
