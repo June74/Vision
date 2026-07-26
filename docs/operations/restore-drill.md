@@ -16,7 +16,7 @@ emails, protected rows, or provider-controlled URLs.
 |---|---|---|
 | Create separate backup encryption key and store it as a Worker secret | Granted | Complete |
 | Attach private preview R2 bucket and synchronization Queue | Granted | Complete |
-| Deploy temporary backup schedule, create one verified encrypted object, restore the daily schedule | Granted | Backup verified; daily redeploy in progress |
+| Deploy temporary backup schedule, create one verified encrypted object, restore the daily schedule | Granted | Complete |
 | Apply migrations 0004 through 0009 to preview Neon | Granted | Complete |
 | Create an empty disposable Neon branch, restore, verify, and permanently delete that branch | Granted | Pending |
 
@@ -52,13 +52,13 @@ required tables and zero missing signature columns.
 - [ ] Authenticated decryption validates the manifest before any database write.
 - [ ] Backup schema version and migration checksum are supported.
 - [ ] Raw encrypted object contains no protected sentinel.
-- [ ] Empty disposable Neon branch is created.
+- [x] Empty disposable Neon branch is created.
 - [ ] All 29 migration-9 tables restore.
 - [ ] Row counts and plaintext checksum match the backup manifest.
 - [ ] Foreign-key and graph-reference checks pass.
 - [ ] Event listing works against restored state.
 - [ ] Disposable branch is permanently deleted.
-- [ ] Normal daily schedule `5 6 * * *` is redeployed and verified.
+- [x] Normal daily schedule `5 6 * * *` is redeployed and verified.
 
 ## Result
 

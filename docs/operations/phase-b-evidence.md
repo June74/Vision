@@ -40,6 +40,8 @@ identifiers, or provider-controlled URLs.
 | 2026-07-26 | `9620e06` | Local | Updated application and release gates | Pass: 611 unit/integration/security tests with one intentional skip; 179 contract; 75 Worker; 29 browser; TypeScript, docs, production build, release security scan, and diff checks passed |
 | 2026-07-26 | `6a14659` plus authorized live operation | Preview Neon | Apply reviewed migrations 0004-0009 as one transaction and verify post-0009 signature | Pass: staged transaction matched the reviewed source by exact character count and SHA-256; all eleven required tables and all nine required columns were present afterward |
 | 2026-07-26 | `ffb3c0a` plus authenticated provider inspection | Preview Worker and private R2 | Run post-migration scheduled backup and verify safe stored-object facts | Pass: safe tail returned no failure, exactly one current-date encrypted object was present, and format, key version, date, and ciphertext-digest shape matched the contract |
+| 2026-07-26 | `d7da15d` | Guarded preview workflow and live trigger settings | Restore normal daily recovery cadence after backup acceptance | Pass: complete checks and browser smoke passed; `5 6 * * *` and maintenance cadence are deployed; the temporary every-minute trigger is absent |
+| 2026-07-26 | Authorized live operation | Disposable schema-only Neon branch | Create isolated restore target and provision database-owned migration-9 attestation | Pass: one additional branch is listed, and an independent assertion query completed successfully without exposing the branch identifier |
 
 The live preview schema is current through migration 0009. The normal daily
 schedule remains deployed while a fresh encrypted backup and disposable

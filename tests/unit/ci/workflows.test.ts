@@ -193,8 +193,16 @@ describe("preview live diagnostics policy", () => {
     );
 
     expect(preview).toContain("safe_tail:");
-    expect(preview).toContain("if: ${{ inputs.safe_tail == false }}");
-    expect(preview).toContain("if: ${{ inputs.safe_tail == true }}");
+    expect(preview).toContain("configure_ai_budget:");
+    expect(preview).toContain(
+      "if: ${{ inputs.safe_tail == false && inputs.configure_ai_budget == false }}",
+    );
+    expect(preview).toContain(
+      "if: ${{ inputs.safe_tail == true && inputs.configure_ai_budget == false }}",
+    );
+    expect(preview).toContain(
+      "if: ${{ inputs.configure_ai_budget == true && inputs.safe_tail == false }}",
+    );
     expect(tailStep).toContain(
       "pnpm exec tsx scripts/print-safe-tail.ts",
     );

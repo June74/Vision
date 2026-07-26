@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:24:05.647183Z
-- **Last observed:** 2026-07-26T23:14:06Z
+- **Last observed:** 2026-07-26T23:40:19Z
 - **Phase/task:** Phase B deployment fix verification
 - **Environment:** Local managed sandbox Worker test pool
 - **Version/commit:** `codex/phase-b-foundation`
@@ -60,3 +60,5 @@ passed, 75 Worker passed, and the overall command exited zero.
 - 2026-07-26T19:24:05.647183Z: First observed.
 - 2026-07-26T23:14:06Z: Recurred during the normal-schedule release-gate
   retry. All 75 Worker tests and the complete repository gate passed.
+- 2026-07-26T23:40:19Z: Recurred during the AI Gateway operator-path gate.
+  All 75 Worker tests and the complete repository gate passed.

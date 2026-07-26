@@ -30,7 +30,7 @@
 | [SB-20260726-191644-pnpm-exec-local-binary-resolution](incidents/2026-07-26T191644Z-pnpm-exec-local-binary-resolution.md) | closed | 2026-07-26T22:57:22Z | Phase B deployment fix tests | pnpm exec did not resolve local binary |
 | [SB-20260726-191644-powershell-local-command-call-operator](incidents/2026-07-26T191644Z-powershell-local-command-call-operator.md) | closed | 2026-07-26T19:19:40.5249114Z | Phase B deployment fix tests | PowerShell call operator was omitted |
 | [SB-20260726-191656-callback-url-in-test-diff](incidents/2026-07-26T191656Z-callback-url-in-test-diff.md) | closed | 2026-07-26T19:19:40.5249114Z | Phase B deployment fix tests | Callback URL appeared in test failure diff |
-| [SB-20260726-192405-worker-static-analysis-sandbox-warning](incidents/2026-07-26T192405Z-worker-static-analysis-sandbox-warning.md) | closed | 2026-07-26T23:14:06Z | Phase B deployment fix verification | Worker static analysis hit sandbox boundary |
+| [SB-20260726-192405-worker-static-analysis-sandbox-warning](incidents/2026-07-26T192405Z-worker-static-analysis-sandbox-warning.md) | closed | 2026-07-26T23:40:19Z | Phase B deployment fix verification | Worker static analysis hit sandbox boundary |
 | [SB-20260726-192748-neon-dashboard-authentication-required](incidents/2026-07-26T192748Z-neon-dashboard-authentication-required.md) | closed | 2026-07-26T19:45:09.1509946Z | Phase B recovery and cost acceptance | Neon dashboard requires user authentication |
 | [SB-20260726-193142-stale-cloudflare-tab-descriptor](incidents/2026-07-26T193142Z-stale-cloudflare-tab-descriptor.md) | closed | 2026-07-26T22:08:06.7712930Z | Phase B live deployment verification | Stale Cloudflare tab descriptor was reused |
 | [SB-20260726-193431-web-reader-rejected-preview-health](incidents/2026-07-26T193431Z-web-reader-rejected-preview-health.md) | closed | 2026-07-26T20:09:01.5419445Z | Phase B live deployment verification | Browser client rejected direct preview API navigation |
@@ -57,6 +57,10 @@
 | [SB-20260726-225515-cloudflare-r2-route-redirect-assumption](incidents/2026-07-26T225515Z-cloudflare-r2-route-redirect-assumption.md) | closed | 2026-07-26T22:55:15Z | Phase B R2 backup acceptance | Cloudflare R2 route redirect was not handled |
 | [SB-20260726-225722-preview-validator-read-stale-artifact](incidents/2026-07-26T225722Z-preview-validator-read-stale-artifact.md) | closed | 2026-07-26T22:57:22Z | Phase B normal schedule restoration | Preview validator read stale artifact |
 | [SB-20260726-230634-normal-schedule-release-check-failed](incidents/2026-07-26T230634Z-normal-schedule-release-check-failed.md) | closed | 2026-07-26T23:14:06Z | Phase B normal schedule restoration | Normal schedule release check failed |
+| [SB-20260726-231910-browser-ischecked-helper-unsupported](incidents/2026-07-26T231910Z-browser-ischecked-helper-unsupported.md) | closed | 2026-07-26T23:19:10Z | Phase B disposable Neon restore | Browser isChecked helper unsupported |
+| [SB-20260726-232248-neon-attestation-editor-not-replaced](incidents/2026-07-26T232248Z-neon-attestation-editor-not-replaced.md) | closed | 2026-07-26T23:40:19Z | Phase B disposable Neon restore | Neon attestation editor was not replaced |
+| [SB-20260726-232735-r2-object-key-in-route-diagnostic](incidents/2026-07-26T232735Z-r2-object-key-in-route-diagnostic.md) | contained | 2026-07-26T23:27:35Z | Phase B AI Gateway navigation | R2 object key in route diagnostic |
+| [SB-20260726-233656-gateway-workflow-policy-test-missed](incidents/2026-07-26T233656Z-gateway-workflow-policy-test-missed.md) | closed | 2026-07-26T23:36:56Z | Phase B AI Gateway configuration | Gateway workflow policy test was missed |
 
 ## Legacy history
 

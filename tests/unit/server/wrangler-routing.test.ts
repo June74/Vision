@@ -105,6 +105,10 @@ describe("Cloudflare asset routing", () => {
     ]);
     expect(previewWorkflow.includes("--env preview")).toBe(false);
     expect(previewWorkflow.includes("--var ")).toBe(false);
+    expect(previewWorkflow).toContain("configure_ai_budget:");
+    expect(previewWorkflow).toContain(
+      "pnpm gateway:configure:preview",
+    );
     expect(previewWorkflow).toMatch(
       /Print only allowlisted scheduled evidence[\s\S]*?set \+o pipefail[\s\S]*?timeout 85s/u,
     );
