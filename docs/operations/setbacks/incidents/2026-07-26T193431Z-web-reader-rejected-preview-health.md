@@ -1,8 +1,8 @@
-# SB-20260726-193431-web-reader-rejected-preview-health: Web reader rejected preview health URL
+# SB-20260726-193431-web-reader-rejected-preview-health: Browser client rejected direct preview API navigation
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:34:31.380828Z
-- **Last observed:** 2026-07-26T19:43:40.0442904Z
+- **Last observed:** 2026-07-26T20:09:01.5419445Z
 - **Phase/task:** Phase B live deployment verification
 - **Environment:** Live preview Worker and local read-only client
 - **Version/commit:** `066fcbd`
@@ -53,3 +53,7 @@ The direct check returned HTTP 200 with the expected health response.
 ## Recurrence history
 
 - 2026-07-26T19:34:31.380828Z: First observed.
+- 2026-07-26T20:09:01.5419445Z: Recurred when Chrome control blocked direct
+  navigation to the authenticated diagnostics JSON route before the request
+  reached Vision. No provider or application state changed. Continued through
+  safe rendered UI and provider logs instead.

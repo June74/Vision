@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:08:16.577518Z
-- **Last observed:** 2026-07-26T19:51:33.9920088Z
+- **Last observed:** 2026-07-26T20:23:31.7153689Z
 - **Phase/task:** Phase B completion audit
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `1dff60e`
@@ -60,3 +60,9 @@ read.
 - 2026-07-26T19:51:33.9920088Z: Recurred after `health.ts` was listed but a
   guessed longer filename was requested. The failed read made no change; the
   exact listed filename is used next.
+- 2026-07-26T20:15:53.4340700Z: Recurred when a conventional `drizzle/`
+  directory was assumed. The repository root was then listed and the actual
+  `migrations/` directory selected.
+- 2026-07-26T20:23:31.7153689Z: Recurred when a guessed AI-usage integration
+  filename was included and Vitest silently ignored it. The directory was
+  listed and `budgeted-provider.test.ts` selected explicitly.

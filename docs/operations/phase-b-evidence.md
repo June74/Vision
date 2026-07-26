@@ -34,14 +34,16 @@ identifiers, or provider-controlled URLs.
 | 2026-07-26 | `066fcbd` | Guarded preview workflow | Application checks, browser smoke, generated configuration validation, deploy | Pass |
 | 2026-07-26 | `066fcbd` | Live preview | Health endpoint and unauthenticated application shell | HTTP 200 and expected safe UI |
 | 2026-07-26 | `3935500` | Local | `pnpm test:e2e` | Pass: 29 browser tests |
+| 2026-07-26 | `3935500` | Live preview | Temporary every-minute recovery trigger | Failed closed: no object; read-only schema check confirmed 11 required tables and nine migration signature columns absent |
+| 2026-07-26 | `67af8e8` | Guarded preview workflow and live trigger settings | Restore normal daily recovery cadence | Pass: guarded workflow succeeded; `5 6 * * *` and maintenance cadence present; temporary every-minute trigger absent |
 
-The current temporary schedule deployment and all later live exercises will be
-added only after they complete.
+The normal daily schedule is restored while approval to apply the reviewed
+migrations 0004 through 0009 is pending.
 
 ## Release decision
 
 **Not complete yet.** The implementation is substantially verified, but the
+live database must first receive migrations 0004 through 0009. The
 backup/restore, synchronization timing and repair, live failure states,
-wrong-account/revocation privacy checks, and OpenAI cost-path acceptance still
-need fresh evidence.
-
+wrong-account/revocation privacy checks, and OpenAI cost-path acceptance then
+still need fresh evidence.

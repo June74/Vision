@@ -19,6 +19,11 @@ emails, protected rows, or provider-controlled URLs.
 | Deploy temporary backup schedule, create one verified encrypted object, restore the daily schedule | Granted | In progress |
 | Create an empty disposable Neon branch, restore, verify, and permanently delete that branch | Requested | Pending |
 
+The first temporary run was contained without an object after a read-only
+schema comparison found the live preview database missing migrations 0004
+through 0009. The normal daily cadence was redeployed and verified before the
+migration approval is resolved.
+
 ## Drill checklist
 
 - [ ] Guarded temporary schedule deployment succeeds.
@@ -38,6 +43,7 @@ emails, protected rows, or provider-controlled URLs.
 
 ## Result
 
-Pending. Phase B cannot be declared complete until every checklist item has
+Pending. The first live attempt correctly failed closed because the database
+did not match the authenticated migration-9 backup contract. Phase B cannot be
+declared complete until the schema is current and every checklist item has
 fresh live evidence.
-
