@@ -63,7 +63,7 @@ describe("Cloudflare asset routing", () => {
     ]);
     expect(config.triggers?.crons).toEqual([
       "*/15 * * * *",
-      "* * * * *",
+      "5 6 * * *",
     ]);
     expect(config.r2_buckets).toBeUndefined();
     expect(config.env?.preview.r2_buckets).toEqual([
@@ -150,7 +150,7 @@ describe("Cloudflare asset routing", () => {
             },
           ],
         },
-        triggers: { crons: ["*/15 * * * *", "* * * * *"] },
+        triggers: { crons: ["*/15 * * * *", "5 6 * * *"] },
         r2_buckets: [
           {
             binding: "BACKUP_BUCKET",

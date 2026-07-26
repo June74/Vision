@@ -66,7 +66,7 @@ export function validatePreviewDeployConfig(candidate: unknown): void {
   const validCrons =
     crons.length === 2 &&
     crons[0] === "*/15 * * * *" &&
-    crons[1] === "* * * * *";
+    crons[1] === "5 6 * * *";
   if (
     config.targetEnvironment !== "preview" ||
     vars.VISION_ENV !== "preview" ||
