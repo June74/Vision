@@ -34,6 +34,23 @@
   },
   "env": {
     "preview": {
+      "queues": {
+        "producers": [
+          {
+            "binding": "CALENDAR_SYNC_QUEUE",
+            "queue": "vision-calendar-sync"
+          }
+        ],
+        "consumers": [
+          {
+            "queue": "vision-calendar-sync",
+            "max_batch_size": 10,
+            "max_batch_timeout": 5,
+            "max_retries": 5,
+            "max_concurrency": 1
+          }
+        ]
+      },
       "r2_buckets": [
         {
           "binding": "BACKUP_BUCKET",
@@ -43,10 +60,28 @@
       "vars": {
         "VISION_ENV": "preview",
         "AI_MONTHLY_HARD_LIMIT_CENTS": "950",
-        "BACKUP_KEY_VERSION": "1"
+        "BACKUP_KEY_VERSION": "1",
+        "GOOGLE_REDIRECT_URI": "https://vision-preview.june74.workers.dev/api/auth/google/callback"
       }
     },
     "production": {
+      "queues": {
+        "producers": [
+          {
+            "binding": "CALENDAR_SYNC_QUEUE",
+            "queue": "vision-calendar-sync"
+          }
+        ],
+        "consumers": [
+          {
+            "queue": "vision-calendar-sync",
+            "max_batch_size": 10,
+            "max_batch_timeout": 5,
+            "max_retries": 5,
+            "max_concurrency": 1
+          }
+        ]
+      },
       "r2_buckets": [
         {
           "binding": "BACKUP_BUCKET",

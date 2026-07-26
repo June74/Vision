@@ -20,8 +20,10 @@ Create two private R2 buckets before the corresponding deployments:
 - `vision-production-backups` is bound only by Wrangler environment `production`.
 
 Never bind preview and production to the same bucket. Their deterministic same-date object paths are intentionally
-safe only inside an environment-isolated store. The deployment workflows require `--env preview` or
-`--env production` so neither can inherit a generic backup binding.
+safe only inside an environment-isolated store. The preview workflow selects
+its Cloudflare environment during the Vite build with `CLOUDFLARE_ENV`; the
+production workflow selects its environment during Wrangler deployment.
+Neither environment may inherit a generic backup binding.
 
 Configure these values through the normal Cloudflare secret and deployment-variable workflow:
 

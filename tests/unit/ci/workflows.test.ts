@@ -108,6 +108,8 @@ describe("preview OAuth acceptance policy", () => {
     expect(deploymentStep).toContain(tokenMapping);
     expect(deploymentStep).toContain(accountMapping);
     expect(deploymentStep).toContain("--config dist/vision/wrangler.json");
+    expect(deploymentStep.includes("--env preview")).toBe(false);
+    expect(deploymentStep.includes("--var ")).toBe(false);
 
     for (const runtimeSecret of [
       "DATABASE_URL",

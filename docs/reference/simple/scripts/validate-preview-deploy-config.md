@@ -1,13 +1,16 @@
 # validate-preview-deploy-config
 
 Checks the generated Cloudflare deployment file before preview deployment.
-It stops deployment unless the file selects the preview environment and binds
-`BACKUP_BUCKET` only to `vision-preview-backups`. It also rejects a backup key
-that was accidentally written into ordinary deployment variables.
+It stops deployment unless the file selects the preview environment, contains
+the required non-secret limits and redirect setting, binds `BACKUP_BUCKET` only
+to `vision-preview-backups`, connects the calendar Queue as both producer and
+consumer, and contains both maintenance schedules. It also rejects a backup
+key that was accidentally written into ordinary deployment variables.
 
 ## `validatePreviewDeployConfig`
 
-Checks the parsed generated file for the exact preview environment, key version, and private preview bucket.
+Checks the parsed generated file for the exact preview environment, variables,
+private bucket, Queue behavior, and schedules.
 
 ## `main`
 
