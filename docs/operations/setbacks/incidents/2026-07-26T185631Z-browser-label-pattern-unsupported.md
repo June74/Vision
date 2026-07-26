@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T18:56:31.205139Z
-- **Last observed:** 2026-07-26T18:56:31.205139Z
+- **Last observed:** 2026-07-26T21:02:48.1034572Z
 - **Phase/task:** Phase B Cloudflare configuration
 - **Environment:** Cloudflare preview dashboard through browser control
 - **Version/commit:** `codex/phase-b-foundation`
@@ -57,3 +57,7 @@ were safely verified as present.
 ## Recurrence history
 
 - 2026-07-26T18:56:31.205139Z: First observed.
+- 2026-07-26T21:02:48.1034572Z: Recurred during a read-only Cloudflare
+  navigation probe that used a regular-expression text locator. The control
+  layer rejected it before returning page content; exact strings were used
+  next.
