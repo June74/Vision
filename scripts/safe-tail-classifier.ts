@@ -40,6 +40,7 @@ export function createSafeTailAccumulator(): {
 } {
   let buffer = "";
   return Object.freeze({
+    /** Accepts one raw line and emits only a completed allowlisted event. */
     push(line: string): SafeTailEvidence | null {
       const trimmed = line.trimStart();
       if (buffer.length === 0 && !trimmed.startsWith("{")) return null;
@@ -91,6 +92,7 @@ export function classifySafeTailLine(line: string): SafeTailEvidence | null {
   });
 }
 
+/** Maps Cloudflare outcomes to the closed evidence vocabulary. */
 function normalizeOutcome(value: unknown): SafeTailEvidence["outcome"] {
   if (value === "ok" || value === "exception" || value === "canceled") {
     return value;
@@ -99,6 +101,7 @@ function normalizeOutcome(value: unknown): SafeTailEvidence["outcome"] {
   return "unknown";
 }
 
+/** Narrows an unknown JSON value to a non-array record. */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }

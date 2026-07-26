@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:42:29.7633250Z
-- **Last observed:** 2026-07-26T20:46:22.9385791Z
+- **Last observed:** 2026-07-26T23:07:19Z
 - **Phase/task:** Phase B clean-room verification
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** `9f5a0d5`
@@ -62,3 +62,6 @@ background quality gate ran to completion.
   process started, disproving the proposed workaround.
 - 2026-07-26T20:46:22.9385791Z: Closed after the lower-level process API
   bypassed the PowerShell launcher and returned a complete command result.
+- 2026-07-26T23:07:19Z: Recurred when `Start-Process` was mistakenly reused
+  for the complete release-gate reproduction. No child process started; the
+  retry uses the documented lower-level Windows process API.

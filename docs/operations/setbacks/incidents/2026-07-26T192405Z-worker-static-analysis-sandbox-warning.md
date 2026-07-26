@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:24:05.647183Z
-- **Last observed:** 2026-07-26T19:24:05.647183Z
+- **Last observed:** 2026-07-26T23:14:06Z
 - **Phase/task:** Phase B deployment fix verification
 - **Environment:** Local managed sandbox Worker test pool
 - **Version/commit:** `codex/phase-b-foundation`
@@ -52,9 +52,11 @@ process continued and returned a successful exit.
 
 ## Verification and related work
 
-Full gate result: 610 unit/integration passed with one skip, 179 contract
+Latest full gate result: 617 unit/integration passed with one skip, 179 contract
 passed, 75 Worker passed, and the overall command exited zero.
 
 ## Recurrence history
 
 - 2026-07-26T19:24:05.647183Z: First observed.
+- 2026-07-26T23:14:06Z: Recurred during the normal-schedule release-gate
+  retry. All 75 Worker tests and the complete repository gate passed.

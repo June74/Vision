@@ -16,7 +16,7 @@ emails, protected rows, or provider-controlled URLs.
 |---|---|---|
 | Create separate backup encryption key and store it as a Worker secret | Granted | Complete |
 | Attach private preview R2 bucket and synchronization Queue | Granted | Complete |
-| Deploy temporary backup schedule, create one verified encrypted object, restore the daily schedule | Granted | In progress |
+| Deploy temporary backup schedule, create one verified encrypted object, restore the daily schedule | Granted | Backup verified; daily redeploy in progress |
 | Apply migrations 0004 through 0009 to preview Neon | Granted | Complete |
 | Create an empty disposable Neon branch, restore, verify, and permanently delete that branch | Granted | Pending |
 
@@ -45,9 +45,9 @@ required tables and zero missing signature columns.
 
 ## Drill checklist
 
-- [ ] Guarded temporary schedule deployment succeeds.
-- [ ] One backup for the current UTC date is present.
-- [ ] Stored object metadata uses format `vision-backup/v1` and key version 1.
+- [x] Guarded temporary schedule deployment succeeds.
+- [x] One backup for the current UTC date is present.
+- [x] Stored object metadata uses format `vision-backup/v1` and key version 1.
 - [ ] Stored ciphertext checksum matches the retrieved bytes.
 - [ ] Authenticated decryption validates the manifest before any database write.
 - [ ] Backup schema version and migration checksum are supported.

@@ -39,6 +39,7 @@ identifiers, or provider-controlled URLs.
 | 2026-07-26 | `9f5a0d5` plus local preflight | Disposable local PostgreSQL-compatible database | Apply migrations 0004-0009 atomically, force a rollback, and verify direct privileges | Pass: zero missing required tables, zero missing signature columns, forced rollback removed migration-0004 tables, expected `vision_app` grants matched on 13 tables, and `PUBLIC` had zero affected-table grants |
 | 2026-07-26 | `9620e06` | Local | Updated application and release gates | Pass: 611 unit/integration/security tests with one intentional skip; 179 contract; 75 Worker; 29 browser; TypeScript, docs, production build, release security scan, and diff checks passed |
 | 2026-07-26 | `6a14659` plus authorized live operation | Preview Neon | Apply reviewed migrations 0004-0009 as one transaction and verify post-0009 signature | Pass: staged transaction matched the reviewed source by exact character count and SHA-256; all eleven required tables and all nine required columns were present afterward |
+| 2026-07-26 | `ffb3c0a` plus authenticated provider inspection | Preview Worker and private R2 | Run post-migration scheduled backup and verify safe stored-object facts | Pass: safe tail returned no failure, exactly one current-date encrypted object was present, and format, key version, date, and ciphertext-digest shape matched the contract |
 
 The live preview schema is current through migration 0009. The normal daily
 schedule remains deployed while a fresh encrypted backup and disposable
