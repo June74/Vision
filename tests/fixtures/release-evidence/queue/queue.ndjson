@@ -1,1 +1,1 @@
-{"classification":"synthetic_release_evidence","surface":"queue","status":"clean"}
+{"evidenceVersion":1,"surface":"queue","capturedAt":"2026-07-25T00:00:00.000Z","provenance":{"generator":"tests/security/release-evidence","runId":"phase-b-local-contract","source":"queue-message-contract-fixture"},"record":{"kind":"google_calendar_signal","generation":1}}

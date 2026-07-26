@@ -1,1 +1,1 @@
-{"classification":"synthetic_release_evidence","surface":"audit","status":"clean"}
+{"evidenceVersion":1,"surface":"audit","capturedAt":"2026-07-25T00:00:00.000Z","provenance":{"generator":"tests/security/release-evidence","runId":"phase-b-local-contract","source":"audit-writer-contract-fixture"},"record":{"action":"release_fixture","result":"succeeded"}}

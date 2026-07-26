@@ -1,9 +1,9 @@
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { PROTECTED_RELEASE_SENTINEL } from "../../scripts/scan-release";
 
-export const PROTECTED_SENTINEL =
-  "VISION_PROTECTED_SENTINEL_31C2:calendar value";
+export const PROTECTED_SENTINEL = PROTECTED_RELEASE_SENTINEL;
 
 const evidenceFiles = [
   "application-logs/captured.ndjson",
@@ -21,10 +21,21 @@ export async function createCleanReleaseFixture(): Promise<string> {
     "globalThis.__VISION_RELEASE_BUILD__ = true;",
   );
   for (const relativePath of evidenceFiles) {
+    const surface = relativePath.split("/")[0]?.replace("-", "_");
     await writeFixtureFile(
       root,
       `tests/fixtures/release-evidence/${relativePath}`,
-      '{"classification":"synthetic_release_evidence","status":"clean"}\n',
+      `${JSON.stringify({
+        evidenceVersion: 1,
+        surface,
+        capturedAt: "2026-07-25T00:00:00.000Z",
+        provenance: {
+          generator: "tests/security/release-test-fixture",
+          runId: "local-contract",
+          source: "synthetic-contract-fixture",
+        },
+        record: { status: "clean" },
+      })}\n`,
     );
   }
   await writeFixtureFile(

@@ -1,1 +1,1 @@
-{"classification":"synthetic_release_evidence","surface":"r2_unencrypted","status":"clean"}
+{"evidenceVersion":1,"surface":"r2_unencrypted","capturedAt":"2026-07-25T00:00:00.000Z","provenance":{"generator":"tests/security/release-evidence","runId":"phase-b-local-contract","source":"encrypted-r2-envelope-fixture"},"record":{"format":"vision-backup","ciphertext":"base64:ciphertext-fixture"}}

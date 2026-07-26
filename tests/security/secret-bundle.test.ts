@@ -2,6 +2,12 @@ import { rm } from "node:fs/promises";
 import { afterEach, describe, expect, it } from "vitest";
 import { scanRelease } from "../../scripts/scan-release";
 import {
+  CLIENT_FORBIDDEN_BINDING_NAMES,
+  CLIENT_SAFE_RUNTIME_BINDING_NAMES,
+  RUNTIME_CLIENT_FORBIDDEN_BINDING_NAMES,
+} from "../../src/server/client-binding-boundary";
+import { RuntimeEnvSchema } from "../../src/server/env";
+import {
   createCleanReleaseFixture,
   PROTECTED_SENTINEL,
   writeFixtureFile,
@@ -14,14 +20,9 @@ afterEach(async () => {
 });
 
 describe("client secret-bundle boundary", () => {
-  it.each([
-    "BACKUP_ENCRYPTION_KEY",
-    "CLOUDFLARE_API_TOKEN",
-    "DATABASE_URL",
-    "GOOGLE_ALLOWED_EMAIL",
-    "GOOGLE_CLIENT_SECRET",
-    "KEY_ENCRYPTION_KEY",
-  ])("rejects server-only binding %s in a built client asset", async (binding) => {
+  it.each(CLIENT_FORBIDDEN_BINDING_NAMES)(
+    "rejects server-only binding %s in a built client asset",
+    async (binding) => {
     const root = await createCleanReleaseFixture();
     roots.push(root);
     await writeFixtureFile(
@@ -40,6 +41,18 @@ describe("client secret-bundle boundary", () => {
         }),
       ]),
     );
+  });
+
+  it("classifies every runtime binding when the environment schema changes", () => {
+    const classified = new Set([
+      ...RUNTIME_CLIENT_FORBIDDEN_BINDING_NAMES,
+      ...CLIENT_SAFE_RUNTIME_BINDING_NAMES,
+    ]);
+
+    expect([...classified].sort()).toEqual(
+      Object.keys(RuntimeEnvSchema.shape).sort(),
+    );
+    expect(CLIENT_FORBIDDEN_BINDING_NAMES).toContain("OPENAI_API_KEY");
   });
 
   it("fails closed when the built client assets are missing", async () => {
