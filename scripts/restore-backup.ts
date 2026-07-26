@@ -1,13 +1,7 @@
 /** Runs the preview-only operator restore command without printing protected inputs. */
-import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { promisify } from "node:util";
-import {
-  parseEncryptedBackup,
-} from "../src/crypto/backup-envelope";
+import { encodeBase64Url } from "../src/crypto/envelope";
 import { importBackupEncryptionKey } from "../src/crypto/backup-key";
 import {
   createNeonBackupRestoreTarget,
@@ -16,6 +10,9 @@ import {
 import { importBackup } from "../src/data/backup/import-backup";
 import {
   BACKUP_OBJECT_PREFIX,
+  readVerifiedStoredBackup,
+  type BackupObjectHead,
+  type BackupObjectReader,
 } from "../src/jobs/create-daily-backup";
 import {
   parseBackupEnvironment,
@@ -26,9 +23,12 @@ import {
 export const RESTORE_DISPOSABLE_CONFIRMATION =
   "RESTORE PREVIEW DISPOSABLE TARGET" as const;
 
+/** Fixed isolated bucket read by the preview-only recovery command. */
+export const PREVIEW_BACKUP_BUCKET = "vision-preview-backups" as const;
+
 /** Replaceable process boundaries used by tests and the production operator entry. */
 export interface RestoreBackupCommandDependencies {
-  readonly readBackupObject: (objectKey: string) => Promise<string>;
+  readonly backupStore: BackupObjectReader;
   readonly createTarget: (input: {
     readonly databaseUrl: string;
     readonly targetId: string;
@@ -38,6 +38,7 @@ export interface RestoreBackupCommandDependencies {
 
 interface RestoreArguments {
   readonly objectKey: string;
+  readonly createdDate: string;
   readonly replaceDisposableTarget: boolean;
   readonly assertedTargetId?: string;
 }
@@ -68,24 +69,33 @@ export async function runRestoreBackupCommand(
     throw new Error("Backup restore configuration is invalid.");
   }
 
-  let serialized: string;
-  try {
-    serialized = await dependencies.readBackupObject(argumentsValue.objectKey);
-  } catch {
-    throw new Error("Backup object retrieval failed.");
-  }
-  const encrypted = parseEncryptedBackup(serialized);
   const backupKey = await importBackupEncryptionKey(
     backupConfiguration.BACKUP_ENCRYPTION_KEY,
     backupConfiguration.BACKUP_KEY_VERSION,
   );
+  let verified: Awaited<ReturnType<typeof readVerifiedStoredBackup>>;
+  try {
+    verified = await readVerifiedStoredBackup(
+      dependencies.backupStore,
+      argumentsValue.objectKey,
+      argumentsValue.createdDate,
+      backupKey,
+    );
+  } catch {
+    throw new Error("Backup object verification failed.");
+  }
   const managed = await dependencies.createTarget({ databaseUrl, targetId });
   try {
-    const report = await importBackup(encrypted, backupKey, managed.target, {
+    const report = await importBackup(
+      verified.encrypted,
+      backupKey,
+      managed.target,
+      {
       replaceDisposableTarget: argumentsValue.replaceDisposableTarget,
       assertedEnvironment: "preview",
       assertedTargetId: argumentsValue.assertedTargetId,
-    });
+      },
+    );
     dependencies.writeOutput(
       JSON.stringify({
         plaintextSha256: report.plaintextSha256,
@@ -150,45 +160,156 @@ function parseArguments(arguments_: readonly string[]): RestoreArguments {
   }
   return Object.freeze({
     objectKey,
+    createdDate: objectKey.slice(
+      BACKUP_OBJECT_PREFIX.length,
+      BACKUP_OBJECT_PREFIX.length + 10,
+    ).replaceAll("/", "-"),
     replaceDisposableTarget: values.has("--replace-disposable-target"),
     ...(typeof assertedTargetId === "string" ? { assertedTargetId } : {}),
   });
 }
 
-/** Downloads one encrypted object through Wrangler into an owned temporary directory. */
-async function readBackupObjectWithWrangler(objectKey: string): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "vision-restore-"));
-  const file = join(directory, "backup.vision-backup");
-  const executable =
-    process.platform === "win32"
-      ? resolve("node_modules/.bin/wrangler.cmd")
-      : resolve("node_modules/.bin/wrangler");
-  try {
-    await promisify(execFile)(
-      executable,
-      [
-        "r2",
-        "object",
-        "get",
-        `vision-preview-backups/${objectKey}`,
-        "--remote",
-        "--file",
-        file,
-      ],
-      { windowsHide: true, maxBuffer: 1024 * 1024 },
-    );
-    return await readFile(file, "utf8");
-  } finally {
-    if (directory.startsWith(`${tmpdir()}${process.platform === "win32" ? "\\" : "/"}`)) {
-      await rm(directory, { recursive: true, force: true });
-    }
+interface CloudflareR2ReaderInput {
+  readonly accountId: string;
+  readonly apiToken: string;
+  readonly bucketName: string;
+}
+
+const MAX_BACKUP_OBJECT_BYTES = 128 * 1024 * 1024;
+const METADATA_HEADER_NAMES = Object.freeze({
+  format: "format",
+  createddate: "createdDate",
+  ciphertextsha256: "ciphertextSha256",
+  keyversion: "keyVersion",
+} satisfies Readonly<Record<string, string>>);
+
+/** Reads body and metadata through Cloudflare's authenticated object API. */
+export function createCloudflareR2BackupObjectReader(
+  input: CloudflareR2ReaderInput,
+  fetchImplementation: typeof fetch = fetch,
+): BackupObjectReader {
+  if (
+    !/^[a-f0-9]{32}$/iu.test(input.accountId) ||
+    !/^[\x21-\x7e]{20,512}$/u.test(input.apiToken) ||
+    input.bucketName !== PREVIEW_BACKUP_BUCKET
+  ) {
+    throw new Error("Cloudflare backup reader configuration is invalid.");
   }
+  const baseUrl =
+    `https://api.cloudflare.com/client/v4/accounts/${input.accountId}` +
+    `/r2/buckets/${input.bucketName}/objects/`;
+
+  /** Performs one authenticated object read and owns the optional body bytes. */
+  async function read(
+    key: string,
+    includeBody: boolean,
+  ): Promise<
+    | BackupObjectHead
+    | (BackupObjectHead & { readonly body: Uint8Array })
+    | null
+  > {
+    const encodedKey = key.split("/").map(encodeURIComponent).join("/");
+    const response = await fetchImplementation(`${baseUrl}${encodedKey}`, {
+      method: "GET",
+      headers: { authorization: `Bearer ${input.apiToken}` },
+    });
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error("Cloudflare backup object read failed.");
+    const head = parseCloudflareObjectHeaders(key, response.headers);
+    if (!includeBody) {
+      await response.body?.cancel();
+      return head;
+    }
+    const declaredLength = Number(response.headers.get("content-length"));
+    if (
+      Number.isFinite(declaredLength) &&
+      declaredLength > MAX_BACKUP_OBJECT_BYTES
+    ) {
+      throw new Error("Cloudflare backup object is too large.");
+    }
+    const body = new Uint8Array(await response.arrayBuffer());
+    if (body.byteLength > MAX_BACKUP_OBJECT_BYTES) {
+      body.fill(0);
+      throw new Error("Cloudflare backup object is too large.");
+    }
+    return Object.freeze({ ...head, body });
+  }
+
+  return Object.freeze({
+    /** Reads an independent identity and metadata view without retaining the body. */
+    async head(key: string) {
+      return (await read(key, false)) as BackupObjectHead | null;
+    },
+    /** Reads the object body together with the same identity and metadata fields. */
+    async get(key: string) {
+      return (await read(key, true)) as
+        | (BackupObjectHead & { readonly body: Uint8Array })
+        | null;
+    },
+  });
+}
+
+/** Maps the object API's closed metadata/header contract to the shared verifier. */
+function parseCloudflareObjectHeaders(
+  key: string,
+  headers: Headers,
+): BackupObjectHead {
+  const quotedEtag = headers.get("etag");
+  if (!quotedEtag || !/^"[^"\r\n]{1,256}"$/u.test(quotedEtag)) {
+    throw new Error("Cloudflare backup object ETag is invalid.");
+  }
+  const customMetadata: Record<string, string> = {};
+  for (const [name, value] of headers.entries()) {
+    if (!name.startsWith("x-amz-meta-")) continue;
+    const suffix = name.slice("x-amz-meta-".length).toLowerCase();
+    customMetadata[
+      METADATA_HEADER_NAMES[
+        suffix as keyof typeof METADATA_HEADER_NAMES
+      ] ?? suffix
+    ] = value;
+  }
+  const checksumHeaders = [
+    headers.get("x-amz-checksum-sha256"),
+    headers.get("cf-r2-checksum-sha256"),
+  ].filter((value): value is string => value !== null);
+  const checksums = checksumHeaders.map(parseNativeSha256);
+  if (
+    checksums.length === 0 ||
+    checksums.some((value) => value !== checksums[0])
+  ) {
+    throw new Error("Cloudflare backup object checksum is invalid.");
+  }
+  return Object.freeze({
+    key,
+    etag: quotedEtag.slice(1, -1),
+    customMetadata: Object.freeze(customMetadata),
+    bodySha256: checksums[0],
+  });
+}
+
+/** Converts one strict standard-base64 native checksum to Vision base64url. */
+function parseNativeSha256(value: string): string {
+  if (!/^[A-Za-z0-9+/]{43}=$/u.test(value)) {
+    throw new Error("Cloudflare backup object checksum is invalid.");
+  }
+  const decoded = Buffer.from(value, "base64");
+  if (
+    decoded.byteLength !== 32 ||
+    decoded.toString("base64") !== value
+  ) {
+    throw new Error("Cloudflare backup object checksum is invalid.");
+  }
+  return encodeBase64Url(decoded);
 }
 
 /** Constructs the production command dependencies without exposing database or key values. */
 function productionDependencies(): RestoreBackupCommandDependencies {
   return {
-    readBackupObject: readBackupObjectWithWrangler,
+    backupStore: createCloudflareR2BackupObjectReader({
+      accountId: process.env.CLOUDFLARE_ACCOUNT_ID ?? "",
+      apiToken: process.env.CLOUDFLARE_API_TOKEN ?? "",
+      bucketName: PREVIEW_BACKUP_BUCKET,
+    }),
     /** Opens only the explicitly identified disposable preview target. */
     async createTarget({ databaseUrl, targetId }) {
       return createNeonBackupRestoreTarget(databaseUrl, {

@@ -16,6 +16,12 @@ key version, and matching ciphertext digest. It also authenticates AES-GCM with 
 encrypted manifest and UTC date, verifies the plaintext archive digest, parses the complete canonical archive, and
 compares all 29 row counts before success. Mutable plaintext/archive buffers are cleared afterward.
 
+## `readVerifiedStoredBackup`
+
+Owns the shared head/get identity, native checksum, calculated checksum, envelope, decryption, manifest, archive,
+and row-count acceptance path. It returns both the safe result and the verified encrypted envelope so restore imports
+the exact body that passed verification instead of performing a third mutable read.
+
 ## `dailyObjectKey`
 
 Hashes a domain-separated UTC date and places the opaque digest under the fixed versioned date prefix.

@@ -3,14 +3,22 @@ import {
   createBackupEncryptionKey,
   serializeEncryptedBackup,
 } from "../../../src/crypto/backup-envelope";
-import { encodeBase64Url } from "../../../src/crypto/envelope";
-import { exportBackup, countSnapshotRows } from "../../../src/data/backup/export-backup";
+import {
+  decodeBase64Url,
+  encodeBase64Url,
+} from "../../../src/crypto/envelope";
+import {
+  exportBackup,
+  countSnapshotRows,
+  sha256Base64Url,
+} from "../../../src/data/backup/export-backup";
 import type {
   BackupRestoreTarget,
   BackupRestoreTransaction,
   RestoreTargetDescription,
 } from "../../../src/data/backup/import-backup";
 import {
+  BACKUP_FORMAT_V1,
   BACKUP_SCHEMA_VERSION,
   BACKUP_TABLES,
   type BackupRowCounts,
@@ -20,10 +28,11 @@ import {
   RESTORE_DISPOSABLE_CONFIRMATION,
   runRestoreBackupCommand,
 } from "../../../scripts/restore-backup";
+import { MemoryBackupObjectStore } from "../jobs/backup-test-helpers";
 
 const NOW = "2026-07-25T06:05:00.000Z";
 const OBJECT_KEY =
-  "backups/v1/2026/07/25/" + "A".repeat(43) + ".vision-backup";
+  "backups/v1/2026/07/25/CZt2zZSul9fwzdSOylRVWv2b-GMfNnuttAZjsZn4CRw.vision-backup";
 
 function emptySnapshot(): BackupSnapshotV1 {
   return {
@@ -92,6 +101,26 @@ async function fixture(nonempty = false) {
   const encrypted = await exportBackup(emptySnapshot(), key, {
     createdAt: NOW,
   });
+  const serialized = serializeEncryptedBackup(encrypted);
+  const body = new TextEncoder().encode(serialized);
+  const backupStore = new MemoryBackupObjectStore();
+  backupStore.seed(
+    OBJECT_KEY,
+    {
+      format: BACKUP_FORMAT_V1,
+      createdDate: "2026-07-25",
+      ciphertextSha256: await sha256Base64Url(
+        decodeBase64Url(
+          encrypted.ciphertext,
+          "Backup ciphertext",
+          encrypted.ciphertext.length,
+        ),
+      ),
+      keyVersion: "7",
+    },
+    body,
+    await sha256Base64Url(body),
+  );
   const databaseUrl =
     "postgresql://vision_app:synthetic-password@preview.example.test/vision";
   const environment = {
@@ -101,9 +130,6 @@ async function fixture(nonempty = false) {
     PREVIEW_RESTORE_TARGET_ID: "neon_branch_preview_1",
   };
   const output: string[] = [];
-  const readBackupObject = vi.fn(async () =>
-    serializeEncryptedBackup(encrypted),
-  );
   const createTarget = vi.fn(async () => ({
     target: memoryTarget(nonempty),
     close: async () => undefined,
@@ -114,10 +140,10 @@ async function fixture(nonempty = false) {
     databaseUrl,
     environment,
     output,
-    readBackupObject,
+    backupStore,
     createTarget,
     dependencies: {
-      readBackupObject,
+      backupStore,
       createTarget,
       writeOutput: (line: string) => output.push(line),
     },
@@ -136,6 +162,79 @@ function baseArguments(): string[] {
 }
 
 describe("preview-only backup restore command", () => {
+  it("maps Cloudflare object metadata and native SHA-256 into the shared reader contract", async () => {
+    const restoreModule = await import("../../../scripts/restore-backup");
+    const createReader = Reflect.get(
+      restoreModule,
+      "createCloudflareR2BackupObjectReader",
+    ) as
+      | ((
+          input: {
+            accountId: string;
+            apiToken: string;
+            bucketName: string;
+          },
+          fetchImplementation: typeof fetch,
+        ) => {
+          head(key: string): Promise<unknown>;
+          get(key: string): Promise<unknown>;
+        })
+      | undefined;
+    expect(createReader).toBeTypeOf("function");
+    if (!createReader) return;
+
+    const body = new TextEncoder().encode("encrypted-object");
+    const nativeSha256 = Buffer.from(
+      await crypto.subtle.digest("SHA-256", body),
+    ).toString("base64");
+    const headers = {
+      etag: '"etag-1"',
+      "x-amz-checksum-sha256": nativeSha256,
+      "x-amz-meta-format": BACKUP_FORMAT_V1,
+      "x-amz-meta-createddate": "2026-07-25",
+      "x-amz-meta-ciphertextsha256": "A".repeat(43),
+      "x-amz-meta-keyversion": "7",
+    };
+    const fetchImplementation = vi.fn(async () =>
+      new Response(body, { status: 200, headers }),
+    );
+    const reader = createReader(
+      {
+        accountId: "a".repeat(32),
+        apiToken: "synthetic-api-token-value",
+        bucketName: "vision-preview-backups",
+      },
+      fetchImplementation as typeof fetch,
+    );
+
+    await expect(reader.head(OBJECT_KEY)).resolves.toMatchObject({
+      key: OBJECT_KEY,
+      etag: "etag-1",
+      customMetadata: {
+        format: BACKUP_FORMAT_V1,
+        createdDate: "2026-07-25",
+        ciphertextSha256: "A".repeat(43),
+        keyVersion: "7",
+      },
+      bodySha256: encodeBase64Url(
+        new Uint8Array(await crypto.subtle.digest("SHA-256", body)),
+      ),
+    });
+    await expect(reader.get(OBJECT_KEY)).resolves.toMatchObject({
+      key: OBJECT_KEY,
+      etag: "etag-1",
+      body,
+    });
+    expect(fetchImplementation).toHaveBeenCalledTimes(2);
+    const firstCall = fetchImplementation.mock.calls[0] as unknown as [
+      RequestInfo | URL,
+      RequestInit,
+    ];
+    expect(
+      new Headers(firstCall[1].headers).get("authorization"),
+    ).toBe("Bearer synthetic-api-token-value");
+  });
+
   it("rejects production, a missing confirmation phrase, and missing process secrets before I/O", async () => {
     const test = await fixture();
     await expect(
@@ -161,7 +260,6 @@ describe("preview-only backup restore command", () => {
         test.dependencies,
       ),
     ).rejects.toThrow(/configuration/i);
-    expect(test.readBackupObject).not.toHaveBeenCalled();
     expect(test.createTarget).not.toHaveBeenCalled();
   });
 
@@ -216,5 +314,24 @@ describe("preview-only backup restore command", () => {
     expect(JSON.parse(test.output.at(-1)!)).toMatchObject({
       replacedExisting: true,
     });
+  });
+
+  it("rejects mismatched stored-object metadata before opening the restore target", async () => {
+    const test = await fixture();
+    test.backupStore.replaceMetadata(OBJECT_KEY, {
+      format: BACKUP_FORMAT_V1,
+      createdDate: "2026-07-25",
+      ciphertextSha256: "A".repeat(43),
+      keyVersion: "7",
+    });
+
+    await expect(
+      runRestoreBackupCommand(
+        baseArguments(),
+        test.environment,
+        test.dependencies,
+      ),
+    ).rejects.toThrow(/verification/i);
+    expect(test.createTarget).not.toHaveBeenCalled();
   });
 });

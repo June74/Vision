@@ -13,6 +13,10 @@ Checks the path, safe metadata, R2 checksum, canonical envelope, and ciphertext 
 reads. It then authenticates and decrypts the object, validates its manifest, parses all records, and verifies every
 table count before accepting it.
 
+## `readVerifiedStoredBackup`
+
+Performs the same complete verification and returns the already-checked encrypted object only to the restore command.
+
 ## `dailyObjectKey`
 
 Builds a deterministic opaque object name from the UTC date without putting user data in the name.

@@ -39,14 +39,8 @@ export interface BackupObjectHead {
   readonly bodySha256?: string;
 }
 
-/** Narrow object-storage port shared by backup creation and retention. */
-export interface BackupObjectStore {
-  putIfAbsent(
-    key: string,
-    body: Uint8Array,
-    customMetadata: BackupObjectMetadata,
-    bodySha256: string,
-  ): Promise<boolean>;
+/** Read-only object-storage port used by both scheduled and operator verification. */
+export interface BackupObjectReader {
   head(key: string): Promise<BackupObjectHead | null>;
   get(
     key: string,
@@ -56,6 +50,16 @@ export interface BackupObjectStore {
       })
     | null
   >;
+}
+
+/** Narrow object-storage port shared by backup creation and retention. */
+export interface BackupObjectStore extends BackupObjectReader {
+  putIfAbsent(
+    key: string,
+    body: Uint8Array,
+    customMetadata: BackupObjectMetadata,
+    bodySha256: string,
+  ): Promise<boolean>;
   list(
     prefix: string,
     cursor?: string,
@@ -85,6 +89,12 @@ export interface BackupResult {
   readonly createdDate: string;
   readonly ciphertextSha256: string;
   readonly keyVersion: number;
+}
+
+/** Fully verified encrypted object retained only for the restore import boundary. */
+export interface VerifiedStoredBackup {
+  readonly result: BackupResult;
+  readonly encrypted: ReturnType<typeof parseEncryptedBackup>;
 }
 
 const encoder = new TextEncoder();
@@ -181,12 +191,31 @@ export async function createDailyBackup(
 
 /** Revalidates metadata, native body checksum, canonical envelope, and ciphertext digest. */
 export async function verifyStoredBackup(
-  store: BackupObjectStore,
+  store: BackupObjectReader,
   objectKey: string,
   createdDate: string,
   backupKey: BackupEncryptionKey,
   status: BackupResult["status"] = "existing",
 ): Promise<BackupResult> {
+  return (
+    await readVerifiedStoredBackup(
+      store,
+      objectKey,
+      createdDate,
+      backupKey,
+      status,
+    )
+  ).result;
+}
+
+/** Returns the same fully verified object body used by the restore importer. */
+export async function readVerifiedStoredBackup(
+  store: BackupObjectReader,
+  objectKey: string,
+  createdDate: string,
+  backupKey: BackupEncryptionKey,
+  status: BackupResult["status"] = "existing",
+): Promise<VerifiedStoredBackup> {
   try {
     const expectedKey = await dailyObjectKey(createdDate);
     if (objectKey !== expectedKey) throw new Error("Unexpected object key.");
@@ -264,11 +293,14 @@ export async function verifyStoredBackup(
       archive?.fill(0);
     }
     return Object.freeze({
-      status,
-      objectKey,
-      createdDate,
-      ciphertextSha256: actualCiphertextSha256,
-      keyVersion: encrypted.keyVersion,
+      result: Object.freeze({
+        status,
+        objectKey,
+        createdDate,
+        ciphertextSha256: actualCiphertextSha256,
+        keyVersion: encrypted.keyVersion,
+      }),
+      encrypted,
     });
   } catch {
     throw new Error("Backup verification failed.");

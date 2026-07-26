@@ -79,6 +79,10 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build deployable preview artifact
         run: pnpm build
+        env:
+          CLOUDFLARE_ENV: preview
+      - name: Verify preview deployment bindings
+        run: pnpm deploy:check:preview
       - name: Deploy isolated preview Worker
         if: ${{ steps.preview-token.outputs.deploy == 'true' }}
         run: pnpm exec wrangler deploy --config dist/vision/wrangler.json --env preview --name vision-preview --var GOOGLE_REDIRECT_URI:https://vision-preview.june74.workers.dev/api/auth/google/callback

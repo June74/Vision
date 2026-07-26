@@ -91,6 +91,45 @@ describe("Cloudflare asset routing", () => {
       ),
     ]);
     expect(previewWorkflow).toContain("--env preview");
+    expect(previewWorkflow).toMatch(
+      /Build deployable preview artifact[\s\S]*?env:\s*\n\s+CLOUDFLARE_ENV: preview/u,
+    );
+    expect(previewWorkflow).toContain("pnpm deploy:check:preview");
     expect(productionWorkflow).toContain("--env production");
+  });
+
+  it("accepts only a generated preview artifact with the preview backup binding", async () => {
+    const validationModule = await import(
+      "../../../scripts/validate-preview-deploy-config"
+    );
+    const validate = Reflect.get(
+      validationModule,
+      "validatePreviewDeployConfig",
+    ) as ((candidate: unknown) => void) | undefined;
+    expect(validate).toBeTypeOf("function");
+    if (!validate) return;
+
+    expect(() =>
+      validate({
+        targetEnvironment: "preview",
+        vars: {
+          VISION_ENV: "preview",
+          BACKUP_KEY_VERSION: "1",
+        },
+        r2_buckets: [
+          {
+            binding: "BACKUP_BUCKET",
+            bucket_name: "vision-preview-backups",
+          },
+        ],
+      }),
+    ).not.toThrow();
+    expect(() =>
+      validate({
+        targetEnvironment: "preview",
+        vars: { VISION_ENV: "preview", BACKUP_KEY_VERSION: "1" },
+        r2_buckets: [],
+      }),
+    ).toThrow(/preview deployment configuration/i);
   });
 });

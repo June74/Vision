@@ -106,6 +106,10 @@ before staging.
 
 Run a restore with an object key obtained from the private bucket inventory:
 
+In the operator shell, provide `CLOUDFLARE_ACCOUNT_ID` and a
+`CLOUDFLARE_API_TOKEN` that can read objects from the private preview bucket.
+Do not print, paste into arguments, or commit either value.
+
 ```powershell
 pnpm.cmd restore:backup -- --object "backups/v1/YYYY/MM/DD/<opaque-digest>.vision-backup" --target preview --confirm-disposable-target "RESTORE PREVIEW DISPOSABLE TARGET"
 ```
@@ -116,8 +120,10 @@ For a nonempty disposable preview target, replacement requires both extra argume
 pnpm.cmd restore:backup -- --object "backups/v1/YYYY/MM/DD/<opaque-digest>.vision-backup" --target preview --confirm-disposable-target "RESTORE PREVIEW DISPOSABLE TARGET" --replace-disposable-target --assert-target-id "<exact-preview-target-id>"
 ```
 
-The command reads only `vision-preview-backups`. It validates policy and configuration before downloading the
-encrypted object, then decrypts and validates the complete archive locally. It opens one serializable PostgreSQL
+The command reads only `vision-preview-backups`. Before opening the database, it performs independent authenticated
+object reads and requires stable identity, exact safe custom metadata, the native R2 SHA-256, the calculated body
+SHA-256, canonical encrypted serialization, successful AES-GCM authentication, a matching manifest/date/schema, the
+plaintext archive digest, valid references, and all 29 row counts. It then opens one serializable PostgreSQL
 transaction, verifies the database-owned attestation, locks all authoritative tables, stages all 29 tables, verifies
 references and counts, rereads the attestation, and promotes atomically. Any failure rolls the transaction back.
 
