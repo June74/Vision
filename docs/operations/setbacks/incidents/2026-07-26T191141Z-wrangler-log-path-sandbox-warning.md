@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-07-26T20:51:35.3688189Z
+- **Last observed:** 2026-07-26T22:03:47.5841722Z
 - **Phase/task:** Phase B deployment diagnostics
 - **Environment:** Local managed sandbox
 - **Version/commit:** `codex/phase-b-foundation`
@@ -61,3 +61,7 @@ warning.
   build stages after the same local diagnostic setting was omitted. Both
   stages exited successfully; future final verification must restore the
   workspace-local setting before invocation.
+- 2026-07-26T22:03:47.5841722Z: Recurred during the temporary backup
+  acceptance build after the diagnostic setting was omitted. Build and preview
+  configuration validation both exited successfully; the follow-up uses a
+  task-specific temporary diagnostic directory.

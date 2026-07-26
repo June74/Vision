@@ -36,7 +36,7 @@ import { SyncCalendarError } from "./sync-calendar";
 /** Existing near-real-time repair/renewal cadence. */
 export const CALENDAR_MAINTENANCE_CRON = "*/15 * * * *";
 /** Daily UTC recovery cadence kept separate from provider maintenance. */
-export const DAILY_BACKUP_CRON = "5 6 * * *";
+export const DAILY_BACKUP_CRON = "* * * * *";
 
 /** Replaceable dispatch boundaries proving each cron owns only its intended job. */
 export interface ScheduledJobDependencies {
