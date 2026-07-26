@@ -5,7 +5,8 @@
 `DONE`
 
 - Initial implementation commit: `8ebe4b0`
-- Review-remediation commit: the commit containing this report
+- First review-remediation commit: `4628c59`
+- Final operation-manifest remediation commit: `b27da3a`
 - No live account, secret, deployment, database, queue, R2 bucket, or provider resource was read or changed.
 
 ## Scope
@@ -33,11 +34,15 @@ The reviewer findings were converted into regression tests before remediation:
 - the new binding-boundary import was initially absent;
 - five focused assertions failed for the newly required binding, operation, route, sentinel, and evidence contracts;
 - later focused RED runs demonstrated missing `.all` and `.basePath()` route handling before those branches were added.
+- final independent review reproductions produced 12 expected failures for
+  alternative route naming, source-directory and transport aliases, lowercase
+  percent encoding, and provenance authority; two more expected failures covered
+  computed SDK members and unsafe source filenames.
 
 ### Final GREEN
 
-- Focused security suite: 3 files, 79 tests passed, 0 failed.
-- Focused Google/route suite: 1 file, 27 tests passed, 0 failed.
+- Focused security suite: 3 files, 95 tests passed, 0 failed.
+- Focused Google/route suite: 1 file, 36 tests passed, 0 failed.
 - `pnpm typecheck`: passed.
 - `pnpm docs:check`: passed.
 - Clean `pnpm security:scan`: passed.
@@ -69,7 +74,7 @@ Neither contaminated run printed protected content, OAuth material, provider ide
 Serialized `pnpm check` passed after the final code state:
 
 - TypeScript checks: passed.
-- Unit/integration: 583 passed, 1 skipped.
+- Unit/integration: 599 passed, 1 skipped.
 - Contract: 179 passed.
 - Worker: 75 passed.
 - Documentation coverage: passed.
@@ -103,12 +108,12 @@ The review remediation added or changed:
 ## Self-review
 
 - The exact established canary is centralized and exercised as plain, percent-encoded, base64, base64url, and byte-equivalent data across every required inspection surface.
-- Evidence targets are exact named files, not merely nonempty directories, and each record requires bounded versioned provenance.
+- Evidence targets are exact named local contract fixtures, not merely nonempty directories, and each record requires bounded versioned provenance with the exact reviewed generator, run, and per-surface source identity. Fresh live evidence remains Task 4.
 - Client binding checks derive from one source-owned inventory that is compared against every current runtime schema binding, including the AI provider key.
-- Google operations are allowlisted by exact adapter file, endpoint family, and HTTP method. Unresolved provider calls fail closed.
-- Event mutations are detected through direct calls, method aliases, event-object aliases, and direct HTTP operations.
-- Hono route inspection covers renamed receivers, static constants, Worker-entrypoint routes, `.all`, `.on`, `.route`, and `.basePath()` composition. Unresolved mutating Hono routes fail closed.
-- Diagnostics contain only categories and safe file identifiers; unsafe names become truncated one-way hashes.
+- Google operations are inspected across all production source and allowlisted by exact adapter file, endpoint family, and HTTP method. Unresolved provider calls in approved adapters fail closed.
+- Event mutations are detected through direct calls, dot/bracket computed members, method aliases, event-object aliases, renamed HTTP transports, and direct HTTP operations.
+- Hono route inspection covers renamed receivers, static constants, Worker-entrypoint routes, `.all`, `.on`, `.route`, `.mount`, and direct or chained `.basePath()` composition. Every mutating route must match the exact reviewed file/method/path manifest.
+- Diagnostics contain only categories and safe file identifiers; unsafe names become truncated one-way hashes without disabling AST inspection.
 - Scanner execution is local and deterministic and performs no network call or external write.
 - `git diff --check` reported no whitespace errors.
 
