@@ -1,0 +1,47 @@
+# Phase B completion evidence
+
+**Status:** In progress  
+**Branch:** `codex/phase-b-foundation`  
+**Environment:** Local clean checks plus live preview  
+**Evidence rule:** A gate remains pending until its required live exercise has
+fresh evidence.
+
+This file contains no credentials, database URLs, OAuth codes, tokens,
+encryption keys, emails, protected calendar content, object keys, branch
+identifiers, or provider-controlled URLs.
+
+## Completion-gate map
+
+| Phase B gate | Automated evidence | Live evidence | Status |
+|---|---|---|---|
+| Google access restricted to the approved private owner | `tests/contract/google/oauth.contract.test.ts`, `tests/integration/data/auth-admission.test.ts`, `tests/worker/auth.test.ts` | Real OAuth admission and session persistence succeeded; a fresh wrong-account denial still needs capture | Pending |
+| Vision calendar created or connected only after confirmation | `tests/unit/domain/calendar-setup.test.ts`, `tests/contract/google/calendar-setup.contract.test.ts`, `tests/worker/calendar-setup.test.ts`, `tests/e2e/auth-setup.spec.ts` | Real secondary calendar connected and verified with zero events | Pass |
+| Normal calendar changes synchronize near real time | `tests/contract/google/incremental-sync.contract.test.ts`, `tests/integration/jobs/sync-calendar.test.ts`, `tests/integration/jobs/sync-repository.test.ts` | Fresh provider change-to-Vision timing capture required | Pending |
+| Deliberately missed notification is repaired | `tests/integration/jobs/repair-sync.test.ts` | Fresh missed-signal repair exercise required | Pending |
+| PostgreSQL preserves identity, category, privacy, provenance, and governed relationships | `tests/contract/data/graph-repository.contract.test.ts`, `tests/unit/domain/identity.test.ts`, `tests/unit/domain/category.test.ts`, `tests/unit/domain/graph.test.ts`, repository integration suites | Live preview schema and synchronized-row aggregate checks required | Pending |
+| Protected content absent from raw storage and logs | `pnpm security:scan`, `tests/security/protected-sentinel.test.ts`, release evidence fixtures | Live raw-row, safe-log, and encrypted-object sentinel checks required | Pending |
+| Duplicate, stale, revoked-access, invalid-token, and uncertain-outcome cases pass | Queue, synchronization, OAuth, and concurrency unit/integration/contract suites | Revoked authorization requires a fresh live exercise; the rest have current automated evidence | Pending |
+| Encrypted backup restore succeeds | Backup round-trip, daily-job, retention, corruption, and restore-guard suites | See `restore-drill.md` | In progress |
+| Operational state accurately exposes delayed, failed, action-required, and disconnected conditions | `tests/unit/domain/health.test.ts`, `tests/worker/diagnostics.test.ts`, `tests/e2e/foundation-diagnostics.spec.ts` | Fresh live failure exercises required | Pending |
+| Measured usage remains compatible with approximately $20/month | Deterministic 800/900/950-cent AI budget tests | See `cost-review.md`; live OpenAI/Gateway evidence remains | In progress |
+| No event-level Google write is enabled | `tests/security/google-write-surface.test.ts`, `pnpm security:scan` | Generated preview artifact and live route/UI inspection show no event mutation controls | Pass |
+
+## Current verification record
+
+| Timestamp UTC | Commit | Environment | Verification | Result |
+|---|---|---|---|---|
+| 2026-07-26 | `066fcbd` | Local | `pnpm check` | Pass: 610 unit/integration passed, 1 skipped; 179 contract passed; 75 Worker passed; docs, build, and security scan passed |
+| 2026-07-26 | `066fcbd` | Guarded preview workflow | Application checks, browser smoke, generated configuration validation, deploy | Pass |
+| 2026-07-26 | `066fcbd` | Live preview | Health endpoint and unauthenticated application shell | HTTP 200 and expected safe UI |
+| 2026-07-26 | `3935500` | Local | `pnpm test:e2e` | Pass: 29 browser tests |
+
+The current temporary schedule deployment and all later live exercises will be
+added only after they complete.
+
+## Release decision
+
+**Not complete yet.** The implementation is substantially verified, but the
+backup/restore, synchronization timing and repair, live failure states,
+wrong-account/revocation privacy checks, and OpenAI cost-path acceptance still
+need fresh evidence.
+

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:04:17.387008Z
-- **Last observed:** 2026-07-26T19:04:17.387008Z
+- **Last observed:** 2026-07-26T19:49:20.5044351Z
 - **Phase/task:** Phase B release operations
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `codex/phase-b-foundation`
@@ -56,3 +56,6 @@ context.
 ## Recurrence history
 
 - 2026-07-26T19:04:17.387008Z: First observed.
+- 2026-07-26T19:49:20.5044351Z: Recurred while containing the preview
+  browser-smoke incident. The rejected patch made no partial change; the exact
+  generated row was read before retrying.

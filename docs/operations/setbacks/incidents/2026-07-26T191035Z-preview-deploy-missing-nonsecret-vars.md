@@ -1,8 +1,8 @@
 # SB-20260726-191035-preview-deploy-missing-nonsecret-vars: Preview deployment omitted required non-secret variables
 
-- **Status:** contained
+- **Status:** closed
 - **First observed:** 2026-07-26T19:10:35.606572Z
-- **Last observed:** 2026-07-26T19:19:40.5249114Z
+- **Last observed:** 2026-07-26T19:33:19.4460335Z
 - **Phase/task:** Phase B recovery acceptance
 - **Environment:** Deployed Cloudflare preview
 - **Version/commit:** `1dff60e`
@@ -55,13 +55,16 @@ The live deployment listed neither required non-secret limit nor either cron.
 - **Prevention:** CI now rejects missing preview variables, Queue producer or
   consumer, either cron, or the private R2 binding.
 - **Owner:** Codex and project owner.
-- **Next diagnostic step:** Deploy the corrected commit and verify live
-  variables, Queue consumer, and both crons.
+- **Next diagnostic step:** None while closed.
 
 ## Verification and related work
 
 Focused tests pass 4/4, and the generated preview artifact contains every
 required non-secret variable, R2 binding, Queue role, and two crons.
+The corrected workflow then passed its full checks and deployed commit
+`066fcbd`. A fresh live dashboard inspection confirmed the encrypted backup
+secret, backup key version, AI hard limit, preview environment, private R2
+bucket, Queue producer and consumer, and both approved cron expressions.
 
 ## Recurrence history
 

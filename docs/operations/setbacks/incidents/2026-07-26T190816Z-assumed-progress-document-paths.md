@@ -1,8 +1,8 @@
-# SB-20260726-190816-assumed-progress-document-paths: Progress document paths were assumed
+# SB-20260726-190816-assumed-progress-document-paths: Repository paths were assumed
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:08:16.577518Z
-- **Last observed:** 2026-07-26T19:08:56.5870529Z
+- **Last observed:** 2026-07-26T19:51:33.9920088Z
 - **Phase/task:** Phase B completion audit
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `1dff60e`
@@ -54,3 +54,9 @@ read.
 ## Recurrence history
 
 - 2026-07-26T19:08:16.577518Z: First observed.
+- 2026-07-26T19:38:30.4251990Z: Recurred when the recovery/release plan
+  omitted its numbered `06` prefix. Contained by listing the directory and
+  selecting the exact returned filename before the next read.
+- 2026-07-26T19:51:33.9920088Z: Recurred after `health.ts` was listed but a
+  guessed longer filename was requested. The failed read made no change; the
+  exact listed filename is used next.

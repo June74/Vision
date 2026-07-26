@@ -1,10 +1,10 @@
-# SB-20260726-182445-cloudflare-browser-metadata-exposure: Cloudflare browser metadata exposure
+# SB-20260726-182445-cloudflare-browser-metadata-exposure: Provider browser metadata exposure
 
 - **Status:** contained
 - **First observed:** 2026-07-26T18:24:45.816434Z
-- **Last observed:** 2026-07-26T18:24:45.816434Z
-- **Phase/task:** Phase B recovery
-- **Environment:** Cloudflare preview dashboard controlled through the signed-in browser
+- **Last observed:** 2026-07-26T19:44:34.9730985Z
+- **Phase/task:** Phase B provider acceptance
+- **Environment:** Signed-in provider dashboards controlled through the browser
 - **Version/commit:** `d2aea64`
 
 ## Symptom
@@ -67,3 +67,9 @@ runtime.
 - 2026-07-26T18:24:45.816434Z: Indexed after containment.
 - 2026-07-26: Earlier recurrence in the same Phase B session was preserved in
   the legacy ledger without reproducing the private values.
+- 2026-07-26T19:44:34.9730985Z: Recurred when a complete Neon snapshot was
+  returned to confirm authentication. The output contained account-display
+  metadata and an opaque organization identifier, but no credentials,
+  database URL, token, key, cookie, or secret value. Subsequent provider checks
+  must evaluate fixed booleans and numeric aggregates inside the browser
+  runtime.
