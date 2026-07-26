@@ -1,46 +1,19 @@
 /** Defines Vision's closed, versioned logical-backup manifest and authoritative table order. */
+import {
+  BACKUP_TABLES,
+  type BackupTableName,
+} from "./schema-contract";
+
+export {
+  BACKUP_TABLES,
+  type BackupTableName,
+} from "./schema-contract";
 
 /** The only logical backup format accepted by this Phase B implementation. */
 export const BACKUP_FORMAT_V1 = "vision-backup/v1" as const;
 
 /** The latest migration version represented by this backup contract. */
 export const BACKUP_SCHEMA_VERSION = 9 as const;
-
-/** Dependency-safe table order used for canonical export and staged restore. */
-export const BACKUP_TABLES = [
-  "data_key_state",
-  "wrapped_data_keys",
-  "oauth_admission_windows",
-  "oauth_transactions",
-  "auth_sessions",
-  "google_oauth_tokens",
-  "calendar_setup_states",
-  "calendar_setup_candidates",
-  "vision_calendar_connections",
-  "nodes",
-  "events",
-  "event_sync_payloads",
-  "node_annotations",
-  "node_category_assignments",
-  "edges",
-  "audit_events",
-  "operation_ledger",
-  "calendar_create_snapshots",
-  "recoverable_deletions",
-  "sync_checkpoints",
-  "sync_channels",
-  "calendar_sync_maintenance",
-  "calendar_sync_jobs",
-  "sync_runs",
-  "projection_rebuild_generations",
-  "projection_rebuild_changes",
-  "ai_usage_months",
-  "ai_usage_reservations",
-  "ai_usage_ledger",
-] as const;
-
-/** One table name supported by the current logical backup schema. */
-export type BackupTableName = (typeof BACKUP_TABLES)[number];
 
 /** Values accepted from a consistent raw database snapshot. */
 export type BackupValue =

@@ -1,7 +1,7 @@
 # `src/data/backup/export-backup.ts`
 
-Encodes every raw database row in stable table and primary-key order, hashes that plaintext archive, and encrypts the
-archive together with its manifest.
+Captures every raw database row before waiting, validates it against the current schema, writes it in stable table and
+key order, hashes the bounded plaintext archive, and encrypts the archive together with its manifest.
 
 ## `exportBackup`
 
@@ -26,6 +26,10 @@ Counts every authoritative table in canonical order.
 ## `sha256Base64Url`
 
 Returns the SHA-256 of plaintext bytes as canonical base64url.
+
+## `captureCanonicalBackup`
+
+Owns and validates the complete source snapshot, then builds one bounded archive and its matching row counts.
 
 ## `createArchiveRecord`
 
@@ -66,6 +70,14 @@ Recognizes ordinary or null-prototype records.
 ## `requireExactKeys`
 
 Rejects missing, extra, or symbolic properties.
+
+## `requireBoundedString`
+
+Rejects a string whose encoded bytes exceed the backup format's per-value limit.
+
+## `base64UrlLength`
+
+Calculates how many unpadded base64url characters a byte array will require.
 
 ## `compareCanonicalKeys`
 

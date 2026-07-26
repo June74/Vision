@@ -1,9 +1,10 @@
 # `src/data/backup/export-backup.ts`
 
-The source adapter must supply one complete snapshot at migration 9. Export never calls application decryption:
-`Uint8Array` values are tagged and base64url-encoded exactly as stored. Rows become closed record-version-1 NDJSON,
-tables follow dependency order, and rows sort by a tagged composite primary key. The SHA-256 covers the exact
-plaintext archive bytes; the resulting manifest and encoded archive are then encrypted together.
+The source adapter must supply one complete snapshot at migration 9. Export synchronously captures owned row values
+before its first asynchronous operation and never calls application decryption. Rows are checked against the sole
+schema contract, bounded before amplification, encoded as closed record-version-1 NDJSON, and sorted in dependency
+and tagged composite-key order. The SHA-256 covers the exact plaintext archive bytes; the resulting manifest and
+encoded archive are then encrypted together.
 
 ## `exportBackup`
 
@@ -31,6 +32,11 @@ Produces the complete count map used at manifest, pre-write, staging, and report
 ## `sha256Base64Url`
 
 Copies to owned bytes and uses Web Crypto SHA-256, yielding the 43-character unpadded digest.
+
+## `captureCanonicalBackup`
+
+Performs the synchronous ownership boundary, validates table shape, SQL types, nullability, checks, identities, and
+references, and incrementally accounts for record and archive bytes before producing the immutable archive and counts.
 
 ## `createArchiveRecord`
 
@@ -73,6 +79,14 @@ Allows standard parsed records and deliberately constructed null-prototype maps 
 ## `requireExactKeys`
 
 Compares sorted closed field sets without making source order meaningful.
+
+## `requireBoundedString`
+
+Uses a cheap UTF-16 length rejection before measuring UTF-8 bytes against the per-string limit.
+
+## `base64UrlLength`
+
+Computes the exact unpadded base64url output length so byte values can be rejected before encoding amplification.
 
 ## `compareCanonicalKeys`
 

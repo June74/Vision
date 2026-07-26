@@ -2,9 +2,10 @@
 
 Restore follows a validation-before-write boundary: authenticate the AES-GCM envelope; validate manifest version and
 key agreement; verify plaintext SHA-256; parse canonical NDJSON; verify complete row counts and references; and only
-then inspect the target. The target must be disposable and schema-compatible. A non-empty target additionally requires
-the replace flag plus exact environment and target-ID assertions. Staging, database-side inspection, and promotion are
-called inside one target-owned transaction.
+then enter the target transaction. The target is locked before its identity, revision, disposability, schema, and
+emptiness are used for policy. A non-empty target additionally requires the replace flag plus exact environment and
+target-ID assertions. Staging, database-side inspection, a second unchanged-target assertion, and promotion all remain
+inside that same target-owned transaction.
 
 ## `importBackup`
 
@@ -13,17 +14,12 @@ status before promotion and returns only format, time, counts, checksum, target 
 
 ## `validateSnapshotReferences`
 
-Checks declared PostgreSQL foreign-key relationships for setup, graph, events, annotations, audit, deletion,
-operation snapshots, projection rebuilds, and AI usage. Optional audit node references may be null.
+Delegates to the sole migration-9 schema contract, which checks every declared PostgreSQL foreign-key relationship.
 
-## `referenceKey`
+## `snapshotTargetDescription`
 
-Requires present scalar columns and tags scalar types before JSON encoding, preventing string/number key collisions.
-
-## `validateTargetDescription`
-
-Rejects missing target identity/environment, non-boolean disposal state, invalid schema versions, or incomplete count
-maps before a replacement decision.
+Copies the lock-scoped target facts, rejects missing identity/environment/revision, unsafe disposal or schema state,
+and incomplete counts, then freezes the owned description used by both policy checks and promotion.
 
 ## `requireMatchingCounts`
 

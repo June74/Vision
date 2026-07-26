@@ -1,19 +1,19 @@
-/** Validates encrypted backups completely before staging and atomic disposable-target promotion. */
+/** Validates backups completely before transaction-locked disposable-target promotion. */
 import {
   decryptBackupEnvelope,
   type BackupEncryptionKey,
   type EncryptedBackup,
 } from "../../crypto/backup-envelope";
 import {
+  validateBackupReferences,
+} from "../../domain/backup/schema-contract";
+import {
   BACKUP_SCHEMA_VERSION,
   BACKUP_TABLES,
   validateBackupManifest,
   type BackupManifestV1,
-  type BackupRow,
   type BackupRowCounts,
   type BackupSnapshotV1,
-  type BackupTableName,
-  type BackupValue,
 } from "../../domain/backup/manifest";
 import {
   countSnapshotRows,
@@ -22,12 +22,13 @@ import {
   sha256Base64Url,
 } from "./export-backup";
 
-/** Read-only target facts required before a restore may stage data. */
+/** Locked target facts used for restore policy and a final drift assertion. */
 export interface RestoreTargetDescription {
   readonly targetId: string;
   readonly environment: string;
   readonly disposable: boolean;
   readonly schemaVersion: number;
+  readonly revision: string;
   readonly rowCounts: BackupRowCounts;
 }
 
@@ -42,21 +43,33 @@ export interface BackupRestoreStageInspection {
   readonly referencesValid: boolean;
 }
 
-/** Operations that a target adapter must execute inside one database transaction. */
+/** Operations executed under one database transaction and target-state lock. */
 export interface BackupRestoreTransaction {
+  /**
+   * Inspects and locks authoritative target identity, schema, policy, revision,
+   * and row counts until the transaction completes.
+   */
+  lockTargetForRestore(): Promise<RestoreTargetDescription>;
   stage(snapshot: BackupSnapshotV1): Promise<BackupRestoreStage>;
   inspectStage(
     stage: BackupRestoreStage,
   ): Promise<BackupRestoreStageInspection>;
+  /** Fails unless every locked target fact still equals the supplied snapshot. */
+  assertTargetUnchanged(
+    expected: RestoreTargetDescription,
+  ): Promise<void>;
+  /** Atomically promotes only while the same locked target revision is current. */
   promote(
     stage: BackupRestoreStage,
-    options: { readonly replaceExisting: boolean },
+    options: {
+      readonly replaceExisting: boolean;
+      readonly expectedTarget: RestoreTargetDescription;
+    },
   ): Promise<void>;
 }
 
-/** Disposable database boundary capable of transactional staging and promotion. */
+/** Disposable database boundary capable of one lock/stage/inspect/promote transaction. */
 export interface BackupRestoreTarget {
-  describe(): Promise<RestoreTargetDescription>;
   transaction<T>(
     operation: (transaction: BackupRestoreTransaction) => Promise<T>,
   ): Promise<T>;
@@ -80,119 +93,7 @@ export interface RestoreReport {
   readonly replacedExisting: boolean;
 }
 
-interface ReferenceRule {
-  readonly fromTable: BackupTableName;
-  readonly fromColumns: readonly string[];
-  readonly toTable: BackupTableName;
-  readonly toColumns: readonly string[];
-  readonly optional?: boolean;
-}
-
-const REFERENCE_RULES: readonly ReferenceRule[] = [
-  {
-    fromTable: "calendar_setup_candidates",
-    fromColumns: ["owner_id"],
-    toTable: "calendar_setup_states",
-    toColumns: ["owner_id"],
-  },
-  {
-    fromTable: "vision_calendar_connections",
-    fromColumns: ["owner_id"],
-    toTable: "calendar_setup_states",
-    toColumns: ["owner_id"],
-  },
-  {
-    fromTable: "events",
-    fromColumns: ["node_id", "owner_id"],
-    toTable: "nodes",
-    toColumns: ["id", "owner_id"],
-  },
-  {
-    fromTable: "events",
-    fromColumns: ["node_id", "owner_id", "node_type"],
-    toTable: "nodes",
-    toColumns: ["id", "owner_id", "node_type"],
-  },
-  {
-    fromTable: "event_sync_payloads",
-    fromColumns: ["node_id", "owner_id"],
-    toTable: "events",
-    toColumns: ["node_id", "owner_id"],
-  },
-  {
-    fromTable: "node_annotations",
-    fromColumns: ["node_id", "owner_id"],
-    toTable: "nodes",
-    toColumns: ["id", "owner_id"],
-  },
-  {
-    fromTable: "node_category_assignments",
-    fromColumns: ["node_id", "owner_id"],
-    toTable: "nodes",
-    toColumns: ["id", "owner_id"],
-  },
-  {
-    fromTable: "edges",
-    fromColumns: ["source_node_id", "owner_id"],
-    toTable: "nodes",
-    toColumns: ["id", "owner_id"],
-  },
-  {
-    fromTable: "edges",
-    fromColumns: ["source_node_id", "owner_id", "source_node_type"],
-    toTable: "nodes",
-    toColumns: ["id", "owner_id", "node_type"],
-  },
-  {
-    fromTable: "edges",
-    fromColumns: ["destination_node_id", "owner_id"],
-    toTable: "nodes",
-    toColumns: ["id", "owner_id"],
-  },
-  {
-    fromTable: "edges",
-    fromColumns: [
-      "destination_node_id",
-      "owner_id",
-      "destination_node_type",
-    ],
-    toTable: "nodes",
-    toColumns: ["id", "owner_id", "node_type"],
-  },
-  {
-    fromTable: "audit_events",
-    fromColumns: ["node_id", "owner_id"],
-    toTable: "nodes",
-    toColumns: ["id", "owner_id"],
-    optional: true,
-  },
-  {
-    fromTable: "calendar_create_snapshots",
-    fromColumns: ["operation_id"],
-    toTable: "operation_ledger",
-    toColumns: ["operation_id"],
-  },
-  {
-    fromTable: "recoverable_deletions",
-    fromColumns: ["node_id", "owner_id"],
-    toTable: "nodes",
-    toColumns: ["id", "owner_id"],
-  },
-  {
-    fromTable: "projection_rebuild_changes",
-    fromColumns: ["generation_id"],
-    toTable: "projection_rebuild_generations",
-    toColumns: ["id"],
-  },
-  {
-    fromTable: "ai_usage_ledger",
-    fromColumns: ["reservation_id"],
-    toTable: "ai_usage_reservations",
-    toColumns: ["id"],
-  },
-] as const;
-
-/** Restores only after envelope, manifest, archive, references, counts, and target policy pass. */
+/** Restores only after cryptographic, logical, and transaction-locked policy validation. */
 export async function importBackup(
   encrypted: EncryptedBackup,
   backupKey: BackupEncryptionKey,
@@ -219,30 +120,31 @@ export async function importBackup(
   );
   validateSnapshotReferences(snapshot);
 
-  const description = await target.describe();
-  validateTargetDescription(description);
-  if (!description.disposable) {
-    throw new Error("Backup restore target must be disposable.");
-  }
-  if (description.schemaVersion !== manifest.schemaVersion) {
-    throw new Error("Backup restore target schema version does not match.");
-  }
-  const targetIsEmpty = BACKUP_TABLES.every(
-    (table) => description.rowCounts[table] === 0,
-  );
-  const replaceExisting = !targetIsEmpty;
-  if (
-    replaceExisting &&
-    (!options.replaceDisposableTarget ||
-      options.assertedEnvironment !== description.environment ||
-      options.assertedTargetId !== description.targetId)
-  ) {
-    throw new Error(
-      "Backup restore target is non-empty and requires an exact disposable-target assertion.",
+  const targetResult = await target.transaction(async (transaction) => {
+    const description = snapshotTargetDescription(
+      await transaction.lockTargetForRestore(),
     );
-  }
+    if (!description.disposable) {
+      throw new Error("Backup restore target must be disposable.");
+    }
+    if (description.schemaVersion !== manifest.schemaVersion) {
+      throw new Error("Backup restore target schema version does not match.");
+    }
+    const targetIsEmpty = BACKUP_TABLES.every(
+      (table) => description.rowCounts[table] === 0,
+    );
+    const replaceExisting = !targetIsEmpty;
+    if (
+      replaceExisting &&
+      (!options.replaceDisposableTarget ||
+        options.assertedEnvironment !== description.environment ||
+        options.assertedTargetId !== description.targetId)
+    ) {
+      throw new Error(
+        "Backup restore target is non-empty and requires an exact disposable-target assertion.",
+      );
+    }
 
-  await target.transaction(async (transaction) => {
     const stage = await transaction.stage(snapshot);
     const inspection = await transaction.inspectStage(stage);
     if (inspection.referencesValid !== true) {
@@ -253,7 +155,12 @@ export async function importBackup(
       manifest.rowCounts,
       "Backup staging row counts",
     );
-    await transaction.promote(stage, { replaceExisting });
+    await transaction.assertTargetUnchanged(description);
+    await transaction.promote(stage, {
+      replaceExisting,
+      expectedTarget: description,
+    });
+    return { description, replaceExisting };
   });
 
   return Object.freeze({
@@ -262,71 +169,22 @@ export async function importBackup(
     schemaVersion: manifest.schemaVersion,
     rowCounts: manifest.rowCounts,
     plaintextSha256: manifest.plaintextSha256,
-    targetId: description.targetId,
-    replacedExisting: replaceExisting,
+    targetId: targetResult.description.targetId,
+    replacedExisting: targetResult.replaceExisting,
   });
 }
 
-/** Verifies every declared database reference before the target receives staged rows. */
+/** Verifies every migration-9 database reference before target staging. */
 export function validateSnapshotReferences(
   snapshot: BackupSnapshotV1,
 ): void {
-  for (const rule of REFERENCE_RULES) {
-    const targetKeys = new Set(
-      snapshot.tables[rule.toTable].map((row) =>
-        referenceKey(row, rule.toColumns, false),
-      ),
-    );
-    for (const row of snapshot.tables[rule.fromTable]) {
-      const key = referenceKey(row, rule.fromColumns, rule.optional ?? false);
-      if (key === undefined) continue;
-      if (!targetKeys.has(key)) {
-        throw new Error(
-          `Backup reference from ${rule.fromTable} to ${rule.toTable} is invalid.`,
-        );
-      }
-    }
-  }
+  validateBackupReferences(snapshot.tables);
 }
 
-/** Encodes a scalar reference tuple without conflating null, number, and string values. */
-function referenceKey(
-  row: BackupRow,
-  columns: readonly string[],
-  optional: boolean,
-): string | undefined {
-  const values = columns.map((column) => {
-    if (!Object.hasOwn(row, column)) {
-      throw new Error(`Backup row is missing reference column ${column}.`);
-    }
-    return row[column];
-  });
-  if (optional && values[0] === null) return undefined;
-  if (values.some((value) => value === null)) {
-    throw new Error("Backup reference contains an unexpected null.");
-  }
-  if (
-    values.some(
-      (value) =>
-        typeof value !== "string" &&
-        typeof value !== "number" &&
-        typeof value !== "bigint",
-    )
-  ) {
-    throw new Error("Backup reference contains a non-scalar value.");
-  }
-  return JSON.stringify(
-    values.map((value) => [
-      typeof value,
-      typeof value === "bigint" ? value.toString() : (value as BackupValue),
-    ]),
-  );
-}
-
-/** Validates trusted adapter metadata before using it for destructive policy decisions. */
-function validateTargetDescription(
+/** Validates and owns target metadata before destructive policy decisions. */
+function snapshotTargetDescription(
   description: RestoreTargetDescription,
-): void {
+): RestoreTargetDescription {
   if (
     typeof description !== "object" ||
     description === null ||
@@ -335,7 +193,9 @@ function validateTargetDescription(
     typeof description.environment !== "string" ||
     description.environment.length === 0 ||
     typeof description.disposable !== "boolean" ||
-    !Number.isSafeInteger(description.schemaVersion)
+    !Number.isSafeInteger(description.schemaVersion) ||
+    typeof description.revision !== "string" ||
+    description.revision.length === 0
   ) {
     throw new Error("Backup restore target description is invalid.");
   }
@@ -344,6 +204,14 @@ function validateTargetDescription(
     description.rowCounts,
     "Backup restore target row counts",
   );
+  return Object.freeze({
+    targetId: description.targetId,
+    environment: description.environment,
+    disposable: description.disposable,
+    schemaVersion: description.schemaVersion,
+    revision: description.revision,
+    rowCounts: Object.freeze({ ...description.rowCounts }),
+  });
 }
 
 /** Requires exact complete row-count agreement for all authoritative tables. */

@@ -1,11 +1,12 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createBackupEncryptionKey,
   decryptBackupEnvelope,
   encryptBackupEnvelope,
+  MAX_BACKUP_PLAINTEXT_BYTES,
   serializeEncryptedBackup,
   type EncryptedBackup,
 } from "../../../src/crypto/backup-envelope";
@@ -22,8 +23,11 @@ import {
   type BackupRow,
   type BackupSnapshotV1,
   type BackupTableName,
+  type BackupValue,
 } from "../../../src/domain/backup/manifest";
 import {
+  BACKUP_ARCHIVE_LIMITS,
+  decodeCanonicalBackupArchive,
   encodeCanonicalBackupArchive,
   BACKUP_TABLE_COLUMNS,
   exportBackup,
@@ -49,6 +53,77 @@ function emptyTables(): Record<BackupTableName, BackupRow[]> {
   return Object.fromEntries(
     BACKUP_TABLES.map((table) => [table, []]),
   ) as unknown as Record<BackupTableName, BackupRow[]>;
+}
+
+function auditSnapshot(actions: readonly string[]): MutableBackupSnapshot {
+  const tables = emptyTables();
+  actions.forEach((action, index) => {
+    tables.audit_events.push({
+      id: `audit-${index.toString().padStart(8, "0")}`,
+      owner_id: "owner-1",
+      node_id: null,
+      actor_type: "system",
+      action,
+      outcome: "success",
+      provider: null,
+      error_category: null,
+      occurred_at: new Date("2026-07-25T18:00:00.000Z"),
+    });
+  });
+  return { schemaVersion: BACKUP_SCHEMA_VERSION, tables };
+}
+
+function projectionSnapshot(planningJson: BackupValue): MutableBackupSnapshot {
+  const tables = emptyTables();
+  tables.projection_rebuild_generations.push({
+    id: "generation-1",
+    owner_id: "owner-1",
+    provider: "google-calendar",
+    provider_calendar_id: "calendar-1",
+    job_id: "job-1",
+    queue_claim_id: "claim-1",
+    base_checkpoint_version: 1,
+    status: "staging",
+    page_count: null,
+    created_at: new Date("2026-07-25T16:00:00.000Z"),
+    updated_at: new Date("2026-07-25T16:00:00.000Z"),
+    activated_at: null,
+  });
+  tables.projection_rebuild_changes.push({
+    generation_id: "generation-1",
+    identity_hash: "A".repeat(43),
+    ordinal: 0,
+    planning_json: planningJson,
+    protected_payload_envelope: null,
+    protected_key_version: null,
+  });
+  return { schemaVersion: BACKUP_SCHEMA_VERSION, tables };
+}
+
+function calendarCandidateSnapshot(
+  googleSubject: string,
+  providerEtag: string,
+): MutableBackupSnapshot {
+  const tables = emptyTables();
+  tables.calendar_setup_states.push({
+    owner_id: "owner-1",
+    google_subject: "subject-1",
+    setup_version: 1,
+    status: "awaiting_choice",
+    action_required: false,
+    updated_at: new Date("2026-07-25T16:00:00.000Z"),
+  });
+  tables.calendar_setup_candidates.push({
+    owner_id: "owner-1",
+    provider_calendar_id: "calendar-1",
+    google_subject: googleSubject,
+    summary: "Vision",
+    ownership_access_role: "owner",
+    time_zone: "America/Chicago",
+    provider_etag: providerEtag,
+    verified_at: new Date("2026-07-25T16:00:00.000Z"),
+  });
+  return { schemaVersion: BACKUP_SCHEMA_VERSION, tables };
 }
 
 async function representativeSnapshot(): Promise<MutableBackupSnapshot> {
@@ -271,13 +346,14 @@ function cloneSnapshot(snapshot: BackupSnapshotV1): MutableBackupSnapshot {
 }
 
 class MemoryRestoreTarget implements BackupRestoreTarget {
-  readonly description: RestoreTargetDescription;
-  snapshot: BackupSnapshotV1;
+  description: RestoreTargetDescription;
+  snapshot: MutableBackupSnapshot;
   stageCalls = 0;
   promoteCalls = 0;
   stagedCountDelta = 0;
   stagedReferencesValid = true;
   failPromotion = false;
+  beforeTransaction?: () => void;
 
   constructor(options?: {
     snapshot?: BackupSnapshotV1;
@@ -286,16 +362,18 @@ class MemoryRestoreTarget implements BackupRestoreTarget {
     schemaVersion?: number;
     targetId?: string;
   }) {
-    this.snapshot =
+    this.snapshot = cloneSnapshot(
       options?.snapshot ?? {
         schemaVersion: BACKUP_SCHEMA_VERSION,
         tables: emptyTables(),
-      };
+      },
+    );
     this.description = {
       targetId: options?.targetId ?? "disposable-preview-branch",
       environment: options?.environment ?? "preview",
       disposable: options?.disposable ?? true,
       schemaVersion: options?.schemaVersion ?? BACKUP_SCHEMA_VERSION,
+      revision: "revision-1",
       rowCounts: Object.fromEntries(
         BACKUP_TABLES.map((table) => [table, this.snapshot.tables[table].length]),
       ) as Record<BackupTableName, number>,
@@ -309,8 +387,16 @@ class MemoryRestoreTarget implements BackupRestoreTarget {
   async transaction<T>(
     operation: (transaction: BackupRestoreTransaction) => Promise<T>,
   ): Promise<T> {
-    let pending: BackupSnapshotV1 | undefined;
+    this.beforeTransaction?.();
+    let pending: MutableBackupSnapshot | undefined;
+    const currentDescription = (): RestoreTargetDescription => ({
+      ...this.description,
+      rowCounts: Object.fromEntries(
+        BACKUP_TABLES.map((table) => [table, this.snapshot.tables[table].length]),
+      ) as Record<BackupTableName, number>,
+    });
     const transaction: BackupRestoreTransaction = {
+      lockTargetForRestore: async () => currentDescription(),
       stage: async (snapshot) => {
         this.stageCalls += 1;
         pending = cloneSnapshot(snapshot);
@@ -326,6 +412,13 @@ class MemoryRestoreTarget implements BackupRestoreTarget {
         ) as Record<BackupTableName, number>,
         referencesValid: this.stagedReferencesValid,
       }),
+      assertTargetUnchanged: async (expected) => {
+        if (
+          JSON.stringify(currentDescription()) !== JSON.stringify(expected)
+        ) {
+          throw new Error("Backup restore target changed.");
+        }
+      },
       promote: async (_stage, _options) => {
         this.promoteCalls += 1;
         if (!pending) throw new Error("Missing staged snapshot.");
@@ -336,6 +429,120 @@ class MemoryRestoreTarget implements BackupRestoreTarget {
     const result = await operation(transaction);
     if (pending) this.snapshot = pending;
     return result;
+  }
+}
+
+class DatabaseBackedRacyTarget implements BackupRestoreTarget {
+  promoteCalls = 0;
+
+  private constructor(
+    readonly database: PGlite,
+    private readonly drift: "occupy" | "replacement-policy",
+  ) {}
+
+  static async create(
+    drift: "occupy" | "replacement-policy",
+  ): Promise<DatabaseBackedRacyTarget> {
+    const database = new PGlite();
+    await database.exec(`
+      create table restore_target_state (
+        target_id text not null,
+        environment text not null,
+        disposable boolean not null,
+        schema_version integer not null,
+        revision text not null
+      );
+      create table restore_target_counts (
+        table_name text primary key,
+        row_count integer not null
+      );
+      insert into restore_target_state
+        (target_id, environment, disposable, schema_version, revision)
+      values
+        ('disposable-preview-branch', 'preview', true, 9, 'revision-1');
+    `);
+    for (const table of BACKUP_TABLES) {
+      await database.query(
+        `insert into restore_target_counts (table_name, row_count)
+         values ($1, $2)`,
+        [table, drift === "replacement-policy" && table === "audit_events" ? 1 : 0],
+      );
+    }
+    return new DatabaseBackedRacyTarget(database, drift);
+  }
+
+  async transaction<T>(
+    operation: (transaction: BackupRestoreTransaction) => Promise<T>,
+  ): Promise<T> {
+    let pending: MutableBackupSnapshot | undefined;
+    let driftApplied = false;
+    const describe = async (): Promise<RestoreTargetDescription> => {
+      const state = await this.database.query<{
+        target_id: string;
+        environment: string;
+        disposable: boolean;
+        schema_version: number;
+        revision: string;
+      }>(`select * from restore_target_state`);
+      const counts = await this.database.query<{
+        table_name: BackupTableName;
+        row_count: number;
+      }>(`select table_name, row_count from restore_target_counts`);
+      const row = state.rows[0]!;
+      return {
+        targetId: row.target_id,
+        environment: row.environment,
+        disposable: row.disposable,
+        schemaVersion: row.schema_version,
+        revision: row.revision,
+        rowCounts: Object.fromEntries(
+          counts.rows.map((count) => [count.table_name, count.row_count]),
+        ) as Record<BackupTableName, number>,
+      };
+    };
+    const applyDrift = async () => {
+      if (driftApplied) return;
+      driftApplied = true;
+      if (this.drift === "occupy") {
+        await this.database.exec(`
+          update restore_target_counts
+          set row_count = 1
+          where table_name = 'audit_events';
+          update restore_target_state set revision = 'revision-2';
+        `);
+      } else {
+        await this.database.exec(`
+          update restore_target_state
+          set environment = 'production', revision = 'revision-2';
+        `);
+      }
+    };
+    const transaction: BackupRestoreTransaction = {
+      lockTargetForRestore: describe,
+      stage: async (snapshot) => {
+        pending = cloneSnapshot(snapshot);
+        await applyDrift();
+        return { opaqueId: "database-stage" };
+      },
+      inspectStage: async () => ({
+        rowCounts: Object.fromEntries(
+          BACKUP_TABLES.map((table) => [
+            table,
+            pending?.tables[table].length ?? 0,
+          ]),
+        ) as Record<BackupTableName, number>,
+        referencesValid: true,
+      }),
+      assertTargetUnchanged: async (expected) => {
+        if (JSON.stringify(await describe()) !== JSON.stringify(expected)) {
+          throw new Error("Backup restore target changed during transaction.");
+        }
+      },
+      promote: async () => {
+        this.promoteCalls += 1;
+      },
+    };
+    return operation(transaction);
   }
 }
 
@@ -399,7 +606,7 @@ describe("encrypted backup round trip", () => {
     } finally {
       await database.close();
     }
-  });
+  }, 15_000);
 
   it("uses stable canonical table/key order and preserves application ciphertext exactly", async () => {
     const first = await representativeSnapshot();
@@ -449,6 +656,32 @@ describe("encrypted backup round trip", () => {
     );
     expect(target.stageCalls).toBe(1);
     expect(target.promoteCalls).toBe(1);
+  });
+
+  it("round-trips the canonical completely empty snapshot and rejects malformed empty encodings", async () => {
+    const source: MutableBackupSnapshot = {
+      schemaVersion: BACKUP_SCHEMA_VERSION,
+      tables: emptyTables(),
+    };
+    const key = await backupKey();
+    const encrypted = await exportBackup(source, key, { createdAt: CREATED_AT });
+    const target = new MemoryRestoreTarget();
+
+    await expect(importBackup(encrypted, key, target)).resolves.toMatchObject({
+      rowCounts: Object.fromEntries(BACKUP_TABLES.map((table) => [table, 0])),
+    });
+    expect(target.stageCalls).toBe(1);
+
+    for (const malformed of ["=", " ", "A", null]) {
+      const candidate = await reencryptPayload(encrypted, key, (payload) => {
+        payload.archive = malformed;
+      });
+      const malformedTarget = new MemoryRestoreTarget();
+      await expect(importBackup(candidate, key, malformedTarget)).rejects.toThrow(
+        /archive|payload/i,
+      );
+      expect(malformedTarget.stageCalls).toBe(0);
+    }
   });
 
   it("fails closed before target writes for a wrong key or tampered ciphertext", async () => {
@@ -610,6 +843,156 @@ describe("encrypted backup round trip", () => {
     expect(target.stageCalls).toBe(0);
   });
 
+  it("rejects wrong SQL representations, nullability violations, checks, and alternate identities before hashing or writes", async () => {
+    const key = await backupKey();
+    const invalidSnapshots: MutableBackupSnapshot[] = [];
+
+    const wrongTimestamp = await representativeSnapshot();
+    wrongTimestamp.tables.nodes[0] = {
+      ...wrongTimestamp.tables.nodes[0]!,
+      created_at: "not-a-timestamp",
+    };
+    invalidSnapshots.push(wrongTimestamp);
+
+    const wrongBytea = await representativeSnapshot();
+    wrongBytea.tables.events[0] = {
+      ...wrongBytea.tables.events[0]!,
+      title_envelope: "not-postgresql-bytea",
+    };
+    invalidSnapshots.push(wrongBytea);
+
+    const wrongInteger: MutableBackupSnapshot = {
+      schemaVersion: BACKUP_SCHEMA_VERSION,
+      tables: emptyTables(),
+    };
+    wrongInteger.tables.data_key_state.push({
+      id: "primary",
+      active_key_version: "not-an-integer",
+    });
+    invalidSnapshots.push(wrongInteger);
+
+    const wrongJson: MutableBackupSnapshot = {
+      schemaVersion: BACKUP_SCHEMA_VERSION,
+      tables: emptyTables(),
+    };
+    wrongJson.tables.projection_rebuild_generations.push({
+      id: "generation-1",
+      owner_id: "owner-1",
+      provider: "google-calendar",
+      provider_calendar_id: "calendar-1",
+      job_id: "job-1",
+      queue_claim_id: "claim-1",
+      base_checkpoint_version: 1,
+      status: "staging",
+      page_count: null,
+      created_at: new Date("2026-07-25T16:00:00.000Z"),
+      updated_at: new Date("2026-07-25T16:00:00.000Z"),
+      activated_at: null,
+    });
+    wrongJson.tables.projection_rebuild_changes.push({
+      generation_id: "generation-1",
+      identity_hash: "A".repeat(43),
+      ordinal: 0,
+      planning_json: new Date("2026-07-25T16:00:00.000Z"),
+      protected_payload_envelope: null,
+      protected_key_version: null,
+    });
+    invalidSnapshots.push(wrongJson);
+
+    const nullViolation = await representativeSnapshot();
+    nullViolation.tables.nodes[0] = {
+      ...nullViolation.tables.nodes[0]!,
+      owner_id: null,
+    };
+    invalidSnapshots.push(nullViolation);
+
+    const checkViolation: MutableBackupSnapshot = {
+      schemaVersion: BACKUP_SCHEMA_VERSION,
+      tables: emptyTables(),
+    };
+    checkViolation.tables.data_key_state.push({
+      id: "secondary",
+      active_key_version: 1,
+    });
+    invalidSnapshots.push(checkViolation);
+
+    const duplicateAlternateIdentity = await representativeSnapshot();
+    duplicateAlternateIdentity.tables.nodes.push({
+      ...duplicateAlternateIdentity.tables.nodes[0]!,
+      id: "calendar-node-duplicate",
+    });
+    invalidSnapshots.push(duplicateAlternateIdentity);
+
+    for (const snapshot of invalidSnapshots) {
+      const digest = vi.spyOn(crypto.subtle, "digest");
+      await expect(
+        exportBackup(snapshot, key, { createdAt: CREATED_AT }),
+      ).rejects.toThrow(/backup/i);
+      expect(digest).not.toHaveBeenCalled();
+      digest.mockRestore();
+    }
+  });
+
+  it("rejects semantically equivalent but noncanonical NDJSON bytes", async () => {
+    const source = await representativeSnapshot();
+    source.tables.edges[0] = {
+      ...source.tables.edges[0]!,
+      confidence: 0,
+    };
+    const archive = new TextDecoder().decode(
+      encodeCanonicalBackupArchive(source),
+    );
+    const lines = archive.split("\n").filter(Boolean);
+    const first = JSON.parse(lines[0]!) as Record<string, unknown>;
+    const firstWithReorderedProperties = JSON.stringify({
+      table: first.table,
+      recordVersion: first.recordVersion,
+      row: first.row,
+      key: first.key,
+    });
+    const mutations = [
+      `${[`  ${lines[0]}`, ...lines.slice(1)].join("\n")}\n`,
+      `${[firstWithReorderedProperties, ...lines.slice(1)].join("\n")}\n`,
+      `${[
+        lines[0]!.replace(
+          '{"recordVersion":1,',
+          '{"recordVersion":1,"recordVersion":1,',
+        ),
+        ...lines.slice(1),
+      ].join("\n")}\n`,
+      archive.replace(
+        '["confidence",["number",0]]',
+        '["confidence",["number",-0]]',
+      ),
+      archive.replace('["number",1]', '["number",1e0]'),
+    ];
+
+    for (const mutatedArchive of mutations) {
+      expect(mutatedArchive).not.toBe(archive);
+      const mutated = new TextEncoder().encode(mutatedArchive);
+      expect(() => decodeCanonicalBackupArchive(mutated)).toThrow(
+        /canonical|record|encoded|unsupported/i,
+      );
+    }
+  });
+
+  it("owns archive rows and counts before the first asynchronous boundary", async () => {
+    const source = await representativeSnapshot();
+    const key = await backupKey();
+    const exportPromise = exportBackup(source, key, { createdAt: CREATED_AT });
+    source.tables.audit_events.push({
+      ...source.tables.audit_events[0]!,
+      id: "audit-late-mutation",
+    });
+
+    const encrypted = await exportPromise;
+    const target = new MemoryRestoreTarget();
+    await expect(importBackup(encrypted, key, target)).resolves.toBeDefined();
+    expect(target.snapshot.tables.audit_events.map((row) => row.id)).toEqual([
+      "audit-1",
+    ]);
+  });
+
   it("rolls back when staged counts disagree", async () => {
     const key = await backupKey();
     const encrypted = await exportBackup(await representativeSnapshot(), key, {
@@ -676,6 +1059,333 @@ describe("encrypted backup round trip", () => {
       }),
     ).resolves.toBeDefined();
     expect(replace.promoteCalls).toBe(1);
+  });
+
+  it("fails closed when an empty target becomes occupied before the restore transaction", async () => {
+    const key = await backupKey();
+    const encrypted = await exportBackup(await representativeSnapshot(), key, {
+      createdAt: CREATED_AT,
+    });
+    const target = new MemoryRestoreTarget();
+    target.beforeTransaction = () => {
+      target.snapshot.tables.audit_events.push({
+        id: "concurrent-audit",
+        owner_id: "owner-1",
+        node_id: null,
+        actor_type: "system",
+        action: "concurrent.write",
+        outcome: "success",
+        provider: null,
+        error_category: null,
+        occurred_at: new Date("2026-07-25T18:00:00.000Z"),
+      });
+    };
+
+    await expect(importBackup(encrypted, key, target)).rejects.toThrow(
+      /target|changed|non-empty/i,
+    );
+    expect(target.promoteCalls).toBe(0);
+  });
+
+  it("fails closed when an authorized replacement target drifts before the transaction", async () => {
+    const key = await backupKey();
+    const encrypted = await exportBackup(await representativeSnapshot(), key, {
+      createdAt: CREATED_AT,
+    });
+    const target = new MemoryRestoreTarget({
+      snapshot: await representativeSnapshot(),
+    });
+    target.beforeTransaction = () => {
+      target.description = {
+        ...target.description,
+        environment: "production",
+      };
+    };
+
+    await expect(
+      importBackup(encrypted, key, target, {
+        replaceDisposableTarget: true,
+        assertedEnvironment: "preview",
+        assertedTargetId: "disposable-preview-branch",
+      }),
+    ).rejects.toThrow(/target|assertion|changed/i);
+    expect(target.promoteCalls).toBe(0);
+  });
+
+  it("detects a database-backed empty-to-non-empty interleaving after the target lock", async () => {
+    const key = await backupKey();
+    const encrypted = await exportBackup(await representativeSnapshot(), key, {
+      createdAt: CREATED_AT,
+    });
+    const target = await DatabaseBackedRacyTarget.create("occupy");
+    try {
+      await expect(importBackup(encrypted, key, target)).rejects.toThrow(
+        /target changed/i,
+      );
+      expect(target.promoteCalls).toBe(0);
+    } finally {
+      await target.database.close();
+    }
+  });
+
+  it("detects database-backed replacement-policy drift after authorization", async () => {
+    const key = await backupKey();
+    const encrypted = await exportBackup(await representativeSnapshot(), key, {
+      createdAt: CREATED_AT,
+    });
+    const target = await DatabaseBackedRacyTarget.create("replacement-policy");
+    try {
+      await expect(
+        importBackup(encrypted, key, target, {
+          replaceDisposableTarget: true,
+          assertedEnvironment: "preview",
+          assertedTargetId: "disposable-preview-branch",
+        }),
+      ).rejects.toThrow(/target changed/i);
+      expect(target.promoteCalls).toBe(0);
+    } finally {
+      await target.database.close();
+    }
+  });
+
+  it("rejects oversized and deeply nested sources before hashing or encryption", async () => {
+    const key = await backupKey();
+    const oversizedString = await representativeSnapshot();
+    oversizedString.tables.audit_events[0] = {
+      ...oversizedString.tables.audit_events[0]!,
+      action: "x".repeat(7 * 1024 * 1024),
+    };
+    const oversizedBytes = await representativeSnapshot();
+    oversizedBytes.tables.events[0] = {
+      ...oversizedBytes.tables.events[0]!,
+      title_envelope: new Uint8Array(
+        BACKUP_ARCHIVE_LIMITS.maximumByteValueBytes + 1,
+      ),
+    };
+    const deeplyNested = await representativeSnapshot();
+    let nested: BackupRow | readonly unknown[] = Object.create(null);
+    for (
+      let depth = 0;
+      depth <= BACKUP_ARCHIVE_LIMITS.maximumValueDepth;
+      depth += 1
+    ) {
+      nested = [nested];
+    }
+    deeplyNested.tables.events[0] = {
+      ...deeplyNested.tables.events[0]!,
+      attendees_envelope: nested as unknown as Uint8Array,
+    };
+
+    for (const snapshot of [oversizedString, oversizedBytes, deeplyNested]) {
+      const digest = vi.spyOn(crypto.subtle, "digest");
+      const encrypt = vi.spyOn(crypto.subtle, "encrypt");
+      await expect(
+        exportBackup(snapshot, key, { createdAt: CREATED_AT }),
+      ).rejects.toThrow(/limit|size|depth|backup/i);
+      expect(digest).not.toHaveBeenCalled();
+      expect(encrypt).not.toHaveBeenCalled();
+      digest.mockRestore();
+      encrypt.mockRestore();
+    }
+  });
+
+  it("enforces the immediate string, byte, collection, and nesting boundaries", async () => {
+    const maximumString = auditSnapshot([
+      "x".repeat(BACKUP_ARCHIVE_LIMITS.maximumStringBytes),
+    ]);
+    expect(() => encodeCanonicalBackupArchive(maximumString)).not.toThrow();
+    maximumString.tables.audit_events[0] = {
+      ...maximumString.tables.audit_events[0]!,
+      action: "x".repeat(BACKUP_ARCHIVE_LIMITS.maximumStringBytes + 1),
+    };
+    expect(() => encodeCanonicalBackupArchive(maximumString)).toThrow(
+      /string.*limit|size limit/i,
+    );
+
+    const maximumBytes = await representativeSnapshot();
+    maximumBytes.tables.events[0] = {
+      ...maximumBytes.tables.events[0]!,
+      title_envelope: new Uint8Array(
+        BACKUP_ARCHIVE_LIMITS.maximumByteValueBytes,
+      ),
+    };
+    expect(() => encodeCanonicalBackupArchive(maximumBytes)).not.toThrow();
+    maximumBytes.tables.events[0] = {
+      ...maximumBytes.tables.events[0]!,
+      title_envelope: new Uint8Array(
+        BACKUP_ARCHIVE_LIMITS.maximumByteValueBytes + 1,
+      ),
+    };
+    expect(() => encodeCanonicalBackupArchive(maximumBytes)).toThrow(
+      /byte value.*limit|size limit/i,
+    );
+
+    const maximumArray = projectionSnapshot(
+      Array.from(
+        { length: BACKUP_ARCHIVE_LIMITS.maximumArrayItems },
+        () => null,
+      ),
+    );
+    expect(() => encodeCanonicalBackupArchive(maximumArray)).not.toThrow();
+    maximumArray.tables.projection_rebuild_changes[0] = {
+      ...maximumArray.tables.projection_rebuild_changes[0]!,
+      planning_json: Array.from(
+        { length: BACKUP_ARCHIVE_LIMITS.maximumArrayItems + 1 },
+        () => null,
+      ),
+    };
+    expect(() => encodeCanonicalBackupArchive(maximumArray)).toThrow(
+      /array.*limit/i,
+    );
+
+    const maximumObject = Object.fromEntries(
+      Array.from(
+        { length: BACKUP_ARCHIVE_LIMITS.maximumObjectProperties },
+        (_, index) => [`property-${index.toString().padStart(4, "0")}`, null],
+      ),
+    );
+    expect(() =>
+      encodeCanonicalBackupArchive(projectionSnapshot(maximumObject)),
+    ).not.toThrow();
+    maximumObject.extra = null;
+    expect(() =>
+      encodeCanonicalBackupArchive(projectionSnapshot(maximumObject)),
+    ).toThrow(/object.*limit/i);
+
+    const nestedValue = (levels: number): BackupValue => {
+      let value: BackupValue = null;
+      for (let index = 0; index < levels; index += 1) value = [value];
+      return value;
+    };
+    expect(() =>
+      encodeCanonicalBackupArchive(
+        projectionSnapshot(
+          nestedValue(BACKUP_ARCHIVE_LIMITS.maximumValueDepth - 1),
+        ),
+      ),
+    ).not.toThrow();
+    expect(() =>
+      encodeCanonicalBackupArchive(
+        projectionSnapshot(
+          nestedValue(BACKUP_ARCHIVE_LIMITS.maximumValueDepth),
+        ),
+      ),
+    ).toThrow(/depth.*limit/i);
+  });
+
+  it("enforces immediate record and complete-archive byte boundaries", () => {
+    const baseCandidate = calendarCandidateSnapshot("g", "e");
+    const baseCandidateArchive = new TextDecoder().decode(
+      encodeCanonicalBackupArchive(baseCandidate),
+    );
+    const baseCandidateLine = baseCandidateArchive
+      .split("\n")
+      .find((line) => line.includes('"calendar_setup_candidates"'))!;
+    const candidateAdditional =
+      BACKUP_ARCHIVE_LIMITS.maximumRecordBytes -
+      new TextEncoder().encode(baseCandidateLine).byteLength;
+    const subjectAdditional = Math.floor(candidateAdditional / 2);
+    const etagAdditional = candidateAdditional - subjectAdditional;
+    const maximumRecord = calendarCandidateSnapshot(
+      `g${"x".repeat(subjectAdditional)}`,
+      `e${"x".repeat(etagAdditional)}`,
+    );
+    const maximumRecordArchive = new TextDecoder().decode(
+      encodeCanonicalBackupArchive(maximumRecord),
+    );
+    const maximumRecordLine = maximumRecordArchive
+      .split("\n")
+      .find((line) => line.includes('"calendar_setup_candidates"'))!;
+    expect(new TextEncoder().encode(maximumRecordLine)).toHaveLength(
+      BACKUP_ARCHIVE_LIMITS.maximumRecordBytes,
+    );
+    maximumRecord.tables.calendar_setup_candidates[0] = {
+      ...maximumRecord.tables.calendar_setup_candidates[0]!,
+      provider_etag: `${maximumRecord.tables.calendar_setup_candidates[0]!.provider_etag}x`,
+    };
+    expect(() => encodeCanonicalBackupArchive(maximumRecord)).toThrow(
+      /record.*size limit/i,
+    );
+
+    const baseActions = Array.from({ length: 16 }, () => "");
+    const baseArchiveBytes = encodeCanonicalBackupArchive(
+      auditSnapshot(baseActions),
+    ).byteLength;
+    const archiveAdditional =
+      BACKUP_ARCHIVE_LIMITS.maximumArchiveBytes - baseArchiveBytes - 1;
+    const actionAdditional = Math.floor(archiveAdditional / baseActions.length);
+    let remainder = archiveAdditional % baseActions.length;
+    const boundedActions = baseActions.map(() => {
+      const extra = actionAdditional + (remainder > 0 ? 1 : 0);
+      remainder -= remainder > 0 ? 1 : 0;
+      return "x".repeat(extra);
+    });
+    const maximumArchive = auditSnapshot(boundedActions);
+    expect(encodeCanonicalBackupArchive(maximumArchive)).toHaveLength(
+      BACKUP_ARCHIVE_LIMITS.maximumArchiveBytes - 1,
+    );
+    maximumArchive.tables.audit_events[0] = {
+      ...maximumArchive.tables.audit_events[0]!,
+      action: `${maximumArchive.tables.audit_events[0]!.action}xx`,
+    };
+    expect(() => encodeCanonicalBackupArchive(maximumArchive)).toThrow(
+      /archive.*size limit/i,
+    );
+  });
+
+  it("enforces immediate per-table and total-record boundaries before traversal", () => {
+    const maximumRows = auditSnapshot(
+      Array.from(
+        { length: BACKUP_ARCHIVE_LIMITS.maximumRowsPerTable },
+        () => "",
+      ),
+    );
+    expect(() => encodeCanonicalBackupArchive(maximumRows)).not.toThrow();
+
+    maximumRows.tables.audit_events.push({
+      ...maximumRows.tables.audit_events[0]!,
+      id: "audit-over-table-limit",
+    });
+    expect(() => encodeCanonicalBackupArchive(maximumRows)).toThrow(
+      /row count.*limit/i,
+    );
+
+    const totalOverflow = auditSnapshot(
+      Array.from(
+        { length: BACKUP_ARCHIVE_LIMITS.maximumRecords },
+        () => "",
+      ),
+    );
+    totalOverflow.tables.oauth_admission_windows.push({
+      admission_key_hash: "window-1",
+      window_started_at: new Date("2026-07-25T18:00:00.000Z"),
+      request_count: 1,
+    });
+    expect(() => encodeCanonicalBackupArchive(totalOverflow)).toThrow(
+      /record-count limit/i,
+    );
+  });
+
+  it("rejects decoded archives and plaintext envelopes immediately above their limits", async () => {
+    expect(() =>
+      decodeCanonicalBackupArchive(
+        new Uint8Array(BACKUP_ARCHIVE_LIMITS.maximumArchiveBytes + 1),
+      ),
+    ).toThrow(/size|limit|exceeds/i);
+
+    const key = await backupKey();
+    await expect(
+      encryptBackupEnvelope(
+        new Uint8Array(MAX_BACKUP_PLAINTEXT_BYTES + 1),
+        key,
+      ),
+    ).rejects.toThrow(/size|exceeds/i);
+
+    const maximumPlaintext = new Uint8Array(MAX_BACKUP_PLAINTEXT_BYTES);
+    const maximumEnvelope = await encryptBackupEnvelope(maximumPlaintext, key);
+    await expect(
+      decryptBackupEnvelope(maximumEnvelope, key),
+    ).resolves.toHaveLength(MAX_BACKUP_PLAINTEXT_BYTES);
   });
 
   it("rejects a non-disposable or schema-mismatched target before staging", async () => {

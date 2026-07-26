@@ -1,6 +1,7 @@
 # `src/data/backup/import-backup.ts`
 
-Checks a backup completely before any database write, then stages and promotes it inside one target transaction.
+Checks a backup completely before any database write, then locks, stages, rechecks, and promotes it inside one target
+transaction.
 
 ## `importBackup`
 
@@ -10,13 +11,9 @@ Authenticates, verifies, stages, inspects, and promotes an encrypted backup into
 
 Checks every declared relationship between restored rows.
 
-## `referenceKey`
+## `snapshotTargetDescription`
 
-Builds a typed scalar key for one relationship.
-
-## `validateTargetDescription`
-
-Checks safe target identity, environment, disposal, schema, and count facts.
+Copies and validates the transaction-locked target identity, revision, safety policy, schema, and row counts.
 
 ## `requireMatchingCounts`
 

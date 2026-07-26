@@ -2,8 +2,8 @@
 
 The envelope is a closed `vision-backup-envelope` version 1 object using AES-256-GCM. Only envelope routing metadata
 is visible; both the logical manifest and canonical NDJSON remain ciphertext. The 96-bit IV is generated per export,
-and additional authenticated data binds purpose, version, algorithm, and key version. Plaintext is bounded to 16 MiB
-for the private-pilot Worker memory boundary.
+and additional authenticated data binds purpose, version, algorithm, and key version. Plaintext is bounded to 6 MiB
+so the 4 MiB canonical archive and its base64url payload remain within private-pilot Worker memory headroom.
 
 ## `createBackupEncryptionKey`
 

@@ -5,8 +5,11 @@ import {
   validateKeyVersion,
 } from "./envelope";
 
-/** Maximum plaintext accepted by one private-pilot logical backup. */
-export const MAX_BACKUP_PLAINTEXT_BYTES = 16 * 1024 * 1024;
+/**
+ * Maximum encrypted payload after accounting for a 4 MiB archive's base64
+ * expansion, manifest, JSON framing, ciphertext, and Worker heap headroom.
+ */
+export const MAX_BACKUP_PLAINTEXT_BYTES = 6 * 1024 * 1024;
 
 /** Public serialization metadata for one authenticated encrypted backup object. */
 export interface EncryptedBackup {
