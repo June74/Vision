@@ -183,3 +183,28 @@ describe("preview AI acceptance policy", () => {
     );
   });
 });
+
+describe("preview live diagnostics policy", () => {
+  it("can tail one scheduled event without exposing raw provider output", async () => {
+    const preview = await readWorkflow("preview.yml");
+    const tailStep = readWorkflowStep(
+      preview,
+      "Print only allowlisted scheduled evidence",
+    );
+
+    expect(preview).toContain("safe_tail:");
+    expect(preview).toContain("if: ${{ inputs.safe_tail == false }}");
+    expect(preview).toContain("if: ${{ inputs.safe_tail == true }}");
+    expect(tailStep).toContain(
+      "pnpm exec tsx scripts/print-safe-tail.ts",
+    );
+    expect(tailStep).toContain("--format json 2>/dev/null");
+    expect(tailStep).toContain(
+      "CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}",
+    );
+    expect(tailStep).toContain(
+      "CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}",
+    );
+    expect(tailStep).not.toContain("--log");
+  });
+});

@@ -43,12 +43,13 @@
 | [SB-20260726-201636-live-neon-schema-behind-release](incidents/2026-07-26T201636Z-live-neon-schema-behind-release.md) | closed | 2026-07-26T21:58:19.6876526Z | Phase B live recovery and diagnostics | Live Neon schema was behind the Phase B release |
 | [SB-20260726-201749-incorrect-live-migration-range](incidents/2026-07-26T201749Z-incorrect-live-migration-range.md) | closed | 2026-07-26T20:18:31.4381230Z | Phase B live database recovery | Initial live migration range was incomplete |
 | [SB-20260726-215753-repository-search-entered-dependencies](incidents/2026-07-26T215753Z-repository-search-entered-dependencies.md) | closed | 2026-07-26T21:57:53Z | Phase B live migration verification | Repository search entered dependencies |
-| [SB-20260726-220017-guessed-preview-workflow-filename](incidents/2026-07-26T220017Z-guessed-preview-workflow-filename.md) | closed | 2026-07-26T22:00:17Z | Phase B temporary backup deployment | Guessed preview workflow filename |
+| [SB-20260726-220017-guessed-preview-workflow-filename](incidents/2026-07-26T220017Z-guessed-preview-workflow-filename.md) | closed | 2026-07-26T22:24:39.8262153Z | Phase B temporary backup deployment | Guessed preview workflow filename |
 | [SB-20260726-220528-github-status-filter-quoting](incidents/2026-07-26T220528Z-github-status-filter-quoting.md) | closed | 2026-07-26T22:06:00Z | Phase B temporary backup deployment | GitHub status filter quoting failed |
 | [SB-20260726-220707-preview-workflow-abbreviated-ref](incidents/2026-07-26T220707Z-preview-workflow-abbreviated-ref.md) | closed | 2026-07-26T22:07:07Z | Phase B temporary backup deployment | Preview workflow received abbreviated ref |
 | [SB-20260726-220940-browser-locator-bulk-text-unsupported](incidents/2026-07-26T220940Z-browser-locator-bulk-text-unsupported.md) | closed | 2026-07-26T22:09:40Z | Phase B R2 backup acceptance | Browser locator bulk text unsupported |
 | [SB-20260726-221344-post-migration-backup-object-not-visible](incidents/2026-07-26T221344Z-post-migration-backup-object-not-visible.md) | investigating | 2026-07-26T22:13:44Z | Phase B live encrypted backup acceptance | Post-migration backup object not visible |
 | [SB-20260726-222051-tdd-skill-read-late-and-root-misresolved](incidents/2026-07-26T222051Z-tdd-skill-read-late-and-root-misresolved.md) | closed | 2026-07-26T22:20:51Z | Phase B temporary backup acceptance | TDD skill read late and root misresolved |
+| [SB-20260726-222601-tail-job-inserted-inside-deploy-step](incidents/2026-07-26T222601Z-tail-job-inserted-inside-deploy-step.md) | closed | 2026-07-26T22:26:01Z | Phase B privacy-safe live diagnostics | Tail job inserted inside deploy step |
 
 ## Legacy history
 

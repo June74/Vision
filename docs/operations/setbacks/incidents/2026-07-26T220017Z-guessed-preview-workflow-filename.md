@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T22:00:17Z
-- **Last observed:** 2026-07-26T22:00:17Z
+- **Last observed:** 2026-07-26T22:24:39.8262153Z
 - **Phase/task:** Phase B temporary backup deployment
 - **Environment:** Local PowerShell worktree
 - **Version/commit:** `6a14659`
@@ -50,3 +50,6 @@ Closed after bounded directory enumeration identified the workflow.
 ## Recurrence history
 
 - 2026-07-26T22:00:17Z: First occurrence.
+- 2026-07-26T22:24:39.8262153Z: Recurred after enumerating
+  `tests/unit/ci/workflows.test.ts` but opening the singular filename. No state
+  changed; the enumerated path is used directly.
