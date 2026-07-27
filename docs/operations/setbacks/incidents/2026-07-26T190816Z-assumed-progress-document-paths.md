@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:08:16.577518Z
-- **Last observed:** 2026-07-27T03:29:24Z
-- **Phase/task:** Phase B restore Task 2
+- **Last observed:** 2026-07-27T03:56:50Z
+- **Phase/task:** Phase B restore Task 3
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `1dff60e`
 
@@ -90,3 +90,7 @@ read.
   again, and an incident filename was typed without its listed timestamp
   suffix. All reads failed without changing provider or private state. The
   adapter and incident were then resolved only from bounded directory output.
+- 2026-07-27T03:56:50Z: Recurred during Task 3 when the skill's conventional
+  `scripts/new_setback.py` path was used before checking the repository
+  listing. The read failed without changing state; the existing incident was
+  updated directly from the exact listed paths.

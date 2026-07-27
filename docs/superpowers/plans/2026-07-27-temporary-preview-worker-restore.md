@@ -482,6 +482,12 @@ git commit -m "feat: add safe scheduled restore evidence"
 - Modify: `tests/unit/server/wrangler-routing.test.ts`
 - Modify: `tests/unit/ci/workflows.test.ts`
 - Modify: `tests/security/secret-bundle.test.ts`
+- Modify: `src/server/client-binding-boundary.ts`
+- Modify: `scripts/scan-release.ts`
+- Modify: `docs/reference/simple/src/server/client-binding-boundary.md`
+- Modify: `docs/reference/technical/src/server/client-binding-boundary.md`
+- Modify: `docs/reference/simple/scripts/scan-release.md`
+- Modify: `docs/reference/technical/scripts/scan-release.md`
 - Modify: `docs/operations/secrets.md`
 
 **Interfaces:**
@@ -541,8 +547,14 @@ The safe-tail job continues to pipe Wrangler JSON directly to
 
 Extend `tests/security/secret-bundle.test.ts` so the temporary secret names,
 restore evidence type, target identity, and any fixture sentinel are absent
-from built client assets. Keep the server Worker bundle allowed to reference
-the two secret names but not any values.
+from built client assets. Classify both temporary runtime fields through
+`RUNTIME_CLIENT_FORBIDDEN_BINDING_NAMES` so the exhaustive runtime-boundary
+test remains exact. Add `dist/vision` to `scanRelease` as a required
+protected-value-only target: it rejects the configured protected sentinel and
+its encoded variants, but `secretBindings` remains `false` so the server
+Worker bundle may reference the two secret names. Add failing fixtures for a
+Worker protected value, missing Worker bundle, and an allowed server-only
+binding name before implementing the scanner target.
 
 - [ ] **Step 6: Record temporary credential intent without values**
 
@@ -574,7 +586,7 @@ private values.
 - [ ] **Step 8: Commit and independently review the temporary candidate**
 
 ```powershell
-git add -- wrangler.jsonc scripts/validate-preview-deploy-config.ts tests/unit/server/wrangler-routing.test.ts tests/unit/ci/workflows.test.ts tests/security/secret-bundle.test.ts docs/operations/secrets.md
+git add -- wrangler.jsonc scripts/validate-preview-deploy-config.ts scripts/scan-release.ts src/server/client-binding-boundary.ts tests/unit/server/wrangler-routing.test.ts tests/unit/ci/workflows.test.ts tests/security/secret-bundle.test.ts docs/reference/simple/src/server/client-binding-boundary.md docs/reference/technical/src/server/client-binding-boundary.md docs/reference/simple/scripts/scan-release.md docs/reference/technical/scripts/scan-release.md docs/operations/secrets.md
 git commit -m "ops: prepare temporary preview restore"
 git push origin codex/phase-b-foundation
 ```
