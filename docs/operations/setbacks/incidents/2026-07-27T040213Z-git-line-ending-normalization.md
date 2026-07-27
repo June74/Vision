@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T04:02:13Z
-- **Last observed:** 2026-07-27T18:06:02Z
-- **Phase/task:** Phase B restore Tasks 3-4 verification
+- **Last observed:** 2026-07-27T21:34:04.0505403Z
+- **Phase/task:** Listener-first restore retry Task 2
 - **Environment:** Local Phase B worktree
-- **Version/commit:** `1d6ad12`
+- **Version/commit:** `ca11c6c`
 
 ## Symptom
 
@@ -80,3 +80,7 @@ this incident was recorded.
 - 2026-07-27T21:15:38Z: Recurred during Task 1 focused verification. The
   workflow test, documentation validator, and `git diff --check` all exited
   zero; the warning remained limited to expected Windows normalization metadata.
+- 2026-07-27T21:34:04.0505403Z: Recurred during Task 2 blocked-report
+  verification for value-free setback records. Documentation validation,
+  `git diff --check`, and the bounded report privacy scan all exited zero; no
+  formatting rewrite was performed.

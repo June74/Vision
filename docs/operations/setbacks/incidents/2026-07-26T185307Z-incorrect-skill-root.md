@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T18:53:07.263429Z
-- **Last observed:** 2026-07-27T03:06:16.8505755Z
-- **Phase/task:** Phase B restore Task 1 fix wave
+- **Last observed:** 2026-07-27T21:23:34.6899801Z
+- **Phase/task:** Listener-first restore retry Task 2
 - **Environment:** Local Codex workspace
 - **Version/commit:** `codex/phase-b-foundation`
 
@@ -59,3 +59,8 @@ The correct skill file was read successfully in the same run.
   expanding the catalog-declared `r1` root. The lookup failed before repository
   work, the correct catalog path was read successfully, and no project,
   provider, or private state changed.
+- 2026-07-27T21:23:34.6899801Z: A combined read-only instruction lookup again
+  assumed that `scope-gate` lived under `r0` instead of expanding its
+  catalog-declared `r1` root. The lookup failed before provider work, the
+  correct catalog path was read successfully, and no repository, provider, or
+  private state changed.

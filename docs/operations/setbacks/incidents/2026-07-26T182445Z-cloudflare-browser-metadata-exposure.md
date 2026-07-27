@@ -2,10 +2,10 @@
 
 - **Status:** contained
 - **First observed:** 2026-07-26T18:24:45.816434Z
-- **Last observed:** 2026-07-27T17:18:48Z
-- **Phase/task:** Phase B provider acceptance and restore Task 4
+- **Last observed:** 2026-07-27T21:26:00.5847673Z
+- **Phase/task:** Listener-first restore retry Task 2
 - **Environment:** Signed-in provider dashboards controlled through the browser
-- **Version/commit:** `d2aea64`
+- **Version/commit:** `ca11c6c`
 
 ## Symptom
 
@@ -91,3 +91,10 @@ runtime.
   URL, password, token, key, OAuth value, cookie, callback value, or account
   identifier; no provider state changed. Provider label lists are prohibited
   for the remainder of the task, including when character-filtered.
+- 2026-07-27T21:26:00.5847673Z: Recurred when a complete signed-in Neon project
+  snapshot was returned before target selection. The output contained account
+  display metadata and opaque provider routing identifiers, but no password,
+  connection string, database value, token, encryption key, OAuth value,
+  cookie, or callback value. No provider state changed. All remaining provider
+  inspection is restricted to fixed-shape booleans and counts evaluated inside
+  the browser runtime.

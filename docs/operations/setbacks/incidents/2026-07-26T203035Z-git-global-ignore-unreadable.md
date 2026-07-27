@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:30:35.2961897Z
-- **Last observed:** 2026-07-27T18:07:39Z
-- **Phase/task:** Phase B release operations and restore Task 4 evidence
+- **Last observed:** 2026-07-27T21:24:34.4110712Z
+- **Phase/task:** Listener-first restore retry Task 2
 - **Environment:** Local Phase B worktree under the managed sandbox
-- **Version/commit:** `3128b5c`
+- **Version/commit:** `ca11c6c`
 
 ## Symptom
 
@@ -82,3 +82,7 @@ commit `3128b5c`.
   The check confirmed 18 operations files and zero prohibited patterns; no
   configuration workaround was attempted. Remaining Git output is captured
   and classified before display.
+- 2026-07-27T21:24:34.4110712Z: Recurred during the Task 2 immutable-candidate
+  check. Git returned matching local and remote candidate commits, and the
+  focused test command passed all 7 tests. No configuration workaround or
+  provider action was attempted.

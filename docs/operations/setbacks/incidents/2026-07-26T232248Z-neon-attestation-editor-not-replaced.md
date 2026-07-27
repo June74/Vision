@@ -1,9 +1,9 @@
 # SB-20260726-232248-neon-attestation-editor-not-replaced: Neon attestation editor was not replaced
 
-- **Status:** closed
+- **Status:** contained
 - **First observed:** 2026-07-26T23:22:48Z
-- **Last observed:** 2026-07-27T19:00:19Z
-- **Phase/task:** Phase B disposable Neon restore
+- **Last observed:** 2026-07-27T22:10:58Z
+- **Phase/task:** Listener-first restore retry Task 2
 - **Environment:** Neon SQL editor on the disposable schema-only branch
 - **Version/commit:** `d7da15d`
 
@@ -33,6 +33,9 @@ characters. No SQL text, branch identifier, or connection detail was printed.
 - The mandatory copy-back equality check prevented execution.
 - The recovery path uses direct contenteditable replacement, followed by a
   second exact copy-back comparison.
+- The final corrected submission selected 1,325 characters against an expected
+  4,166-character transaction. The selected text did not match the editor or
+  the reviewed source, so execution was not attempted.
 
 ## Cause classification
 
@@ -52,7 +55,9 @@ characters. No SQL text, branch identifier, or connection detail was printed.
   copy the full buffer back and compare it byte-for-byte with the reviewed
   source.
 - **Owner:** Codex and project owner.
-- **Next diagnostic step:** Continue the authenticated restore path.
+- **Next diagnostic step:** In a separately authorized diagnostic, determine
+  which browser-local CodeMirror API can prove the full model selection without
+  exposing SQL text.
 
 ## Verification and related work
 
@@ -72,3 +77,7 @@ completed with one success line and zero query-error lines.
 - 2026-07-27T19:00:19Z: Closed after clipboard copy-back proved the complete
   editor buffer exactly before both the attestation transaction and the
   independent read-only ready check executed.
+- 2026-07-27T22:10:58Z: Recurred during the final corrected listener-first
+  clearing submission. Browser-local selection introspection exposed only
+  1,325 of 4,166 expected characters, so the mandatory proof gate stopped the
+  task before execution. No SQL or provider mutation occurred.
