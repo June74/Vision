@@ -91,6 +91,7 @@
 | [SB-20260727-024307-task-brief-included-prior-tasks](incidents/2026-07-27T024307Z-task-brief-included-prior-tasks.md) | closed | 2026-07-27T02:43:07Z | Phase B restore planning | Generated task briefs included prior tasks |
 | [SB-20260727-024307-agent-wait-below-minimum](incidents/2026-07-27T024307Z-agent-wait-below-minimum.md) | closed | 2026-07-27T02:43:07Z | Phase B restore orchestration | Agent wait used a duration below the tool minimum |
 | [SB-20260727-025304-restore-test-fixture-typecheck](incidents/2026-07-27T025304Z-restore-test-fixture-typecheck.md) | closed | 2026-07-27T02:53:57Z | Phase B restore Task 1 | Restore test fixtures failed TypeScript checks |
+| [SB-20260727-025808-powershell-review-package-array-flattening](incidents/2026-07-27T025808Z-powershell-review-package-array-flattening.md) | closed | 2026-07-27T02:58:08Z | Phase B restore Task 1 review | PowerShell review package did not flatten command output |
 
 ## Legacy history
 
