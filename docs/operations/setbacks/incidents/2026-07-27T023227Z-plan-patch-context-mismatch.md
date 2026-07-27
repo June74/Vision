@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T02:32:27Z
-- **Last observed:** 2026-07-27T04:42:44Z
+- **Last observed:** 2026-07-27T05:08:50Z
 - **Phase/task:** Phase B restore Task 3
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `6fdb9cb`
@@ -60,3 +60,7 @@ The retry must modify only the intended plan paragraph and pass
   from privacy-redacted inspection output. The patch was rejected atomically,
   `git diff` confirmed neither test changed, and the retry uses short anchors
   that do not include URL-bearing source.
+- 2026-07-27T05:08:50Z: Recurred twice while updating the provider-URL
+  incident because current Task 3 text differed from remembered patch
+  context. Both patches were rejected atomically; the successful retry used
+  exact current lines.

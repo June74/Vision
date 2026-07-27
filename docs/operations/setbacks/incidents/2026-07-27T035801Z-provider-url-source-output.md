@@ -1,8 +1,8 @@
 # SB-20260727-035801-provider-url-source-output: Raw source inspection emitted provider URL literals
 
-- **Status:** closed
+- **Status:** contained
 - **First observed:** 2026-07-27T03:58:01Z
-- **Last observed:** 2026-07-27T04:43:35Z
+- **Last observed:** 2026-07-27T05:08:21Z
 - **Phase/task:** Phase B restore Task 3
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `1d6ad12`
@@ -72,3 +72,9 @@ interfaces without emitting URL contents.
   credential, restore value, account identifier, OAuth value, or provider
   action was involved. All remaining edits and evidence use URL-independent
   anchors plus bounded boolean, count, or line-number output.
+- 2026-07-27T05:08:21Z: Recurred when the unsanitized Task 3 review package
+  included URL-bearing diff context and was circulated to the independent
+  reviewer. It contained source-controlled endpoint text but no credential
+  or provider-private value. The package is retired and replaced by a
+  zero-context, scheme-sanitized package. Closure awaits explicit project-owner
+  disposition of the historical non-secret URL exposure.
