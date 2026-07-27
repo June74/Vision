@@ -1,11 +1,11 @@
 # SB-20260727-011929-backup-key-not-retained-for-restore: Backup key was not retained for restore
 
-- **Status:** investigating
+- **Status:** contained
 - **First observed:** 2026-07-27T01:19:29Z
-- **Last observed:** 2026-07-27T01:19:29Z
+- **Last observed:** 2026-07-27T02:03:51Z
 - **Phase/task:** Phase B encrypted restore drill
 - **Environment:** Preview Cloudflare Worker and local operator command
-- **Version/commit:** `13badf7`
+- **Version/commit:** `4ccf04b`
 
 ## Symptom
 
@@ -18,11 +18,34 @@ The reviewed local restore command cannot authenticate and decrypt the live
 backup object. The disposable Neon branch must remain until a valid encrypted
 round trip succeeds.
 
+## Reproduction conditions and safe evidence
+
+- The unchanged backup key is available only to the existing Worker secret
+  binding.
+- The local operator environment has no retained copy.
+- The encrypted object, disposable target, and target attestation exist, but
+  none can supply the local decryptor with the key.
+
+## Attempts and outcomes
+
+1. The local restore path was stopped before decryption because its required
+   operator key is unavailable.
+2. Key rotation was excluded by explicit user instruction.
+3. A temporary preview-only scheduled restore inside the existing Worker was
+   designed as the remaining unchanged-key path.
+4. Explicit approval for that new runtime mechanism remained unanswered across
+   three consecutive goal turns. No restore code, deployment, database write,
+   branch deletion, or key change occurred.
+
 ## Cause classification
 
 - **Confirmed cause:** The backup-only key was configured in Cloudflare without
   first retaining the same version in an operator-controlled secret manager as
   required by the runbook.
+- **Hypotheses:** None.
+- **Rejected hypotheses:** The existing local restore command cannot recover
+  the key from the encrypted object, target database, or write-only Worker
+  secret.
 - **Known exclusions:** The encrypted object, R2 binding, target attestation,
   and database migrations are present; none supplies the missing decryption
   capability to the local operator command.
@@ -37,10 +60,16 @@ round trip succeeds.
   in the approved operator secret manager. Never treat a runtime secret store
   as the only copy of recovery material.
 - **Owner:** Codex and project owner.
-- **Next diagnostic step:** Obtain explicit approval for one recovery design
-  before changing runtime code or rotating recovery material.
+- **Next diagnostic step:** Obtain explicit approval for the temporary
+  preview-only scheduled restore before changing runtime code. The existing
+  key remains unchanged.
 
 ## Verification and related work
 
 Pending.
 
+## Recurrence history
+
+- 2026-07-27T01:19:29Z: First observed and contained before any restore write.
+- 2026-07-27T02:03:51Z: The approval dependency persisted for three
+  consecutive goal turns after all independent safe work was exhausted.
