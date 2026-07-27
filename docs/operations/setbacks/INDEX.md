@@ -22,7 +22,7 @@
 | [SB-20260726-203035-git-global-ignore-unreadable](incidents/2026-07-26T203035Z-git-global-ignore-unreadable.md) | closed | 2026-07-27T01:52:24Z | Phase B release operations | Git global ignore file was unreadable |
 | [SB-20260726-203035-powershell-utc-flag-unsupported](incidents/2026-07-26T203035Z-powershell-utc-flag-unsupported.md) | closed | 2026-07-26T23:54:52Z | Phase B release operations | PowerShell UTC flag was unsupported |
 | [SB-20260726-190637-unbounded-backup-code-inspection](incidents/2026-07-26T190637Z-unbounded-backup-code-inspection.md) | closed | 2026-07-26T19:08:56.5870529Z | Phase B recovery acceptance | Backup source inspection was too broad |
-| [SB-20260726-190816-assumed-progress-document-paths](incidents/2026-07-26T190816Z-assumed-progress-document-paths.md) | closed | 2026-07-27T02:10:30Z | Phase B completion audit | Repository paths were assumed |
+| [SB-20260726-190816-assumed-progress-document-paths](incidents/2026-07-26T190816Z-assumed-progress-document-paths.md) | closed | 2026-07-27T02:32:27Z | Phase B completion audit | Repository paths were assumed |
 | [SB-20260726-191035-preview-deploy-missing-nonsecret-vars](incidents/2026-07-26T191035Z-preview-deploy-missing-nonsecret-vars.md) | closed | 2026-07-26T19:33:19.4460335Z | Phase B recovery acceptance | Preview deployment omitted required non-secret variables |
 | [SB-20260726-191141-wrangler-log-path-sandbox-warning](incidents/2026-07-26T191141Z-wrangler-log-path-sandbox-warning.md) | closed | 2026-07-27T01:40:05Z | Phase B deployment diagnostics | Wrangler log path was blocked by sandbox |
 | [SB-20260726-191141-generated-config-nesting-assumption](incidents/2026-07-26T191141Z-generated-config-nesting-assumption.md) | closed | 2026-07-26T19:19:40.5249114Z | Phase B deployment diagnostics | Generated Wrangler config nesting was assumed |
@@ -85,6 +85,8 @@
 | [SB-20260727-014333-security-scan-raced-build](incidents/2026-07-27T014333Z-security-scan-raced-build.md) | closed | 2026-07-27T01:43:33Z | Phase B clean-room verification | Security scan raced the production build |
 | [SB-20260727-014937-verification-command-discovery-mistakes](incidents/2026-07-27T014937Z-verification-command-discovery-mistakes.md) | closed | 2026-07-27T01:49:37Z | Phase B fresh verification handoff | Verification commands were guessed or searched too broadly |
 | [SB-20260727-015932-safe-workflow-watch-window-expired](incidents/2026-07-27T015932Z-safe-workflow-watch-window-expired.md) | closed | 2026-07-27T01:59:32Z | Phase B privacy-safe scheduled acceptance | Safe workflow outlived the local watch window |
+| [SB-20260727-023227-plan-patch-context-mismatch](incidents/2026-07-27T023227Z-plan-patch-context-mismatch.md) | closed | 2026-07-27T02:32:27Z | Phase B restore implementation plan | Plan patch context did not match wrapped text |
+| [SB-20260727-023338-approved-spec-trailing-whitespace](incidents/2026-07-27T023338Z-approved-spec-trailing-whitespace.md) | closed | 2026-07-27T02:33:38Z | Phase B restore implementation plan | Approved spec header had trailing whitespace |
 
 ## Legacy history
 

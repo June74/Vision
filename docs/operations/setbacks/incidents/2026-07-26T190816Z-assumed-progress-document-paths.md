@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:08:16.577518Z
-- **Last observed:** 2026-07-27T02:10:30Z
+- **Last observed:** 2026-07-27T02:32:27Z
 - **Phase/task:** Phase B completion audit
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `1dff60e`
@@ -77,3 +77,11 @@ read.
   from production modules before listing the backup-test directory. The failed
   read changed nothing; the returned `neon-adapter.test.ts` and
   `restore-command.test.ts` paths were opened successfully.
+- 2026-07-27T02:24:03Z: Recurred when a conventional scheduler-test filename
+  was probed with errors suppressed after the job-test directory had already
+  been listed. No file or provider state changed; plan mapping now uses source
+  search results and only exact returned test paths.
+- 2026-07-27T02:32:27Z: Recurred when the skill's conventional
+  `scripts/new_setback.py` path was used without first confirming that this
+  repository provides that helper. The read failed without changing state;
+  the existing incident was updated directly using exact listed paths.

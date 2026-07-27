@@ -42,6 +42,8 @@ round trip succeeds.
 6. The written specification was committed and pushed, but its required review
    approval remained unanswered for three consecutive resumed goal turns. No
    implementation or external mutation occurred.
+7. The user approved the written specification. A test-first implementation
+   plan was prepared; no runtime or provider state changed during planning.
 
 ## Cause classification
 
@@ -66,7 +68,7 @@ round trip succeeds.
   in the approved operator secret manager. Never treat a runtime secret store
   as the only copy of recovery material.
 - **Owner:** Codex and project owner.
-- **Next diagnostic step:** Complete written-spec review, then implement the
+- **Next diagnostic step:** Select the plan execution mode, then implement the
   approved temporary path. The existing key remains unchanged.
 
 ## Verification and related work

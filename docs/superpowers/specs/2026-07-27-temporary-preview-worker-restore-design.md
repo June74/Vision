@@ -1,8 +1,9 @@
 # Temporary Preview Worker Restore Design
 
-**Status:** Design approved; written specification awaiting user review  
+**Status:** Approved
 **Approved by:** Project owner  
 **Approval date:** 2026-07-27  
+**Written-spec approval date:** 2026-07-27
 **Environment:** Preview only  
 **Purpose:** Complete the Phase B encrypted restore drill without rotating or
 exporting the existing backup key.
@@ -226,4 +227,3 @@ This design is complete only when:
 - both temporary secrets and the temporary runtime path are removed;
 - the disposable Neon branch is permanently deleted;
 - safe evidence and credential-change records are committed and pushed.
-
