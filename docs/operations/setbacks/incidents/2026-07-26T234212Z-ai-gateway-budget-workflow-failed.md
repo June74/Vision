@@ -2,7 +2,7 @@
 
 - **Status:** investigating
 - **First observed:** 2026-07-26T23:42:12Z
-- **Last observed:** 2026-07-27T01:08:27Z
+- **Last observed:** 2026-07-27T01:15:59Z
 - **Phase/task:** Phase B AI Gateway configuration
 - **Environment:** Guarded GitHub preview operator workflow
 - **Version/commit:** `0cd841a`
@@ -55,14 +55,15 @@ emitted no Cloudflare response body, identifier, credential, or URL.
   Worker, not an AI Gateway.
 - The approved AI Gateway was then created exactly once. The next isolated run
   passed lookup and moved to the safe category `update_failed`.
+- The status-refined retry returned `update_unauthorized`.
 
 ## Cause classification
 
 - **Confirmed cause:** The preview token initially lacked Read, and the intended
   AI Gateway did not yet exist. A Worker with the same visible name was
   mistakenly treated as proof that it did. Those lookup blockers are corrected.
-- **Hypotheses:** The update is rejected by either update authorization or the
-  request contract.
+- **Confirmed cause:** The current preview token is rejected at the AI Gateway
+  write-protected update operation.
 - **Rejected hypotheses:** No application deployment or scheduled-job failure
   occurred.
 - **Known exclusions:** No provider-controlled response content or secret was
@@ -76,9 +77,9 @@ emitted no Cloudflare response body, identifier, credential, or URL.
 - **Prevention:** External mutation commands need privacy-safe stage categories,
   not one undifferentiated failure.
 - **Owner:** Codex and project owner.
-- **Next diagnostic step:** Rerun with status-only update categories that
-  distinguish authorization, invalid request, and missing target without
-  reading provider content.
+- **Next diagnostic step:** Verify that account-level AI Gateway Edit is saved
+  on the token used by the preview environment, or apply the approved limit in
+  the dashboard and verify it read-only.
 
 ## Verification and related work
 
@@ -110,3 +111,6 @@ Pending.
   visible `vision-preview` resource was the Worker, not a Gateway.
 - 2026-07-27T01:08:27Z: The approved Gateway was created. Lookup then succeeded
   and the safe category moved to `update_failed`.
+- 2026-07-27T01:15:59Z: The refined category was `update_unauthorized`. Direct
+  navigation to the saved Gateway dashboard route was then blocked by browser
+  policy and was not bypassed.

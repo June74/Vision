@@ -74,6 +74,8 @@
 | [SB-20260727-010116-worker-link-misidentified-as-gateway](incidents/2026-07-27T010116Z-worker-link-misidentified-as-gateway.md) | closed | 2026-07-27T01:01:16Z | Phase B preview AI Gateway configuration | Worker link was misidentified as an AI Gateway |
 | [SB-20260727-010827-direct-vitest-command-unavailable](incidents/2026-07-27T010827Z-direct-vitest-command-unavailable.md) | closed | 2026-07-27T01:08:27Z | Phase B AI Gateway update diagnostics | Direct Vitest command was unavailable |
 | [SB-20260727-010827-powershell-asutc-unsupported](incidents/2026-07-27T010827Z-powershell-asutc-unsupported.md) | closed | 2026-07-27T01:08:27Z | Phase B setback logging | PowerShell UTC flag was unsupported |
+| [SB-20260727-011559-gateway-route-blocked-by-browser-policy](incidents/2026-07-27T011559Z-gateway-route-blocked-by-browser-policy.md) | contained | 2026-07-27T01:15:59Z | Phase B AI Gateway budget acceptance | Gateway route was blocked by browser policy |
+| [SB-20260727-011929-backup-key-not-retained-for-restore](incidents/2026-07-27T011929Z-backup-key-not-retained-for-restore.md) | investigating | 2026-07-27T01:19:29Z | Phase B encrypted restore drill | Backup key was not retained for restore |
 
 ## Legacy history
 
