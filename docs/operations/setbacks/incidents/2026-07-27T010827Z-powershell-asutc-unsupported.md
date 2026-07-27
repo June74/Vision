@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:08:27Z
-- **Last observed:** 2026-07-27T01:08:27Z
+- **Last observed:** 2026-07-27T19:24:12Z
 - **Phase/task:** Phase B setback logging
 - **Environment:** Local Windows worktree
 - **Version/commit:** `22c5dc0`
@@ -31,3 +31,9 @@ The timestamp subcommand failed; subsequent read-only inspection still ran.
 
 The replacement returned a valid UTC timestamp.
 
+## Recurrence
+
+- **2026-07-27T19:24:12Z:** The unsupported flag was used again while preparing
+  the Cloudflare dialog setback entry. The timestamp subcommand failed, no
+  provider or filesystem mutation depended on it, and the documented .NET UTC
+  API immediately returned a valid timestamp.

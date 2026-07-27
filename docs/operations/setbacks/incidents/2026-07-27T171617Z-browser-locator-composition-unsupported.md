@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T17:16:17Z
-- **Last observed:** 2026-07-27T17:57:10Z
+- **Last observed:** 2026-07-27T19:16:40Z
 - **Phase/task:** Phase B restore Task 4
 - **Environment:** Signed-in disposable database provider dashboard
 - **Version/commit:** `80e8c3e` with reviewed candidate `41b05fd`
@@ -64,3 +64,6 @@ project and disposable branch rows and completed the bounded provider work.
 - 2026-07-27T17:57:10Z: Closed after one scoped text-filtered row locator
   replaced the unsupported composed locator and completed the required
   selection without returning provider identifiers.
+- 2026-07-27T19:16:40Z: Recurred while composing the variables-and-secrets
+  section with its heading locator. No form opened and no value moved. The
+  fresh visible-node section map replaced locator composition.

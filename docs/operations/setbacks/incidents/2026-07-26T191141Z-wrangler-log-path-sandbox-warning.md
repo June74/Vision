@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-07-27T02:38:35Z
+- **Last observed:** 2026-07-27T19:43:48Z
 - **Phase/task:** Phase B deployment diagnostics
 - **Environment:** Local managed sandbox
 - **Version/commit:** `codex/phase-b-foundation`
@@ -78,3 +78,6 @@ warning.
   because the workspace-local diagnostic setting was omitted. The complete
   repository gate and all 29 browser tests still exited successfully; future
   restore checks set a task-local `XDG_CONFIG_HOME`.
+- 2026-07-27T19:43:48Z: Recurred during the corrected full Worker suite after
+  the task-local diagnostic setting was again omitted. All 75 Worker
+  assertions passed with a zero exit.

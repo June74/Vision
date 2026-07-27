@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:16:44.091309Z
-- **Last observed:** 2026-07-27T00:19:11Z
+- **Last observed:** 2026-07-27T19:41:30Z
 - **Phase/task:** Phase B deployment fix tests
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** `codex/phase-b-foundation`
@@ -62,5 +62,8 @@ The focused test suite subsequently ran and passed 4/4.
 - 2026-07-27T13:14:09Z: Recurred during the restore tail-correction RED run.
   No test process started; the retry uses the repository-local Windows wrapper
   directly.
+- 2026-07-27T19:41:30Z: Recurred during the missed routing-test correction.
+  No test process started; the retry uses
+  `node_modules/.bin/vitest.cmd` directly.
 
 The repository-local wrapper then ran the focused suite with 8 passing tests.

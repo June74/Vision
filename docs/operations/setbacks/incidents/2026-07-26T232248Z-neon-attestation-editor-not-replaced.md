@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T23:22:48Z
-- **Last observed:** 2026-07-26T23:40:19Z
+- **Last observed:** 2026-07-27T19:00:19Z
 - **Phase/task:** Phase B disposable Neon restore
 - **Environment:** Neon SQL editor on the disposable schema-only branch
 - **Version/commit:** `d7da15d`
@@ -65,3 +65,10 @@ completed with one success line and zero query-error lines.
 - 2026-07-26T23:22:48Z: First observed and contained before execution.
 - 2026-07-26T23:40:19Z: Closed after exact replacement and an independent
   database assertion succeeded.
+- 2026-07-27T18:44:27Z: Recurred during retained-branch emptiness
+  re-attestation. The visible editor copy-back was 43 characters shorter than
+  the reviewed query, so execution was blocked. No SQL ran and the direct
+  replacement plus exact copy-back path remained mandatory.
+- 2026-07-27T19:00:19Z: Closed after clipboard copy-back proved the complete
+  editor buffer exactly before both the attestation transaction and the
+  independent read-only ready check executed.

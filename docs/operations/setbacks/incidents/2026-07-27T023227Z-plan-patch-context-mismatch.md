@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T02:32:27Z
-- **Last observed:** 2026-07-27T05:08:50Z
+- **Last observed:** 2026-07-27T19:17:18Z
 - **Phase/task:** Phase B restore Task 3
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `6fdb9cb`
@@ -64,3 +64,6 @@ The retry must modify only the intended plan paragraph and pass
   incident because current Task 3 text differed from remembered patch
   context. Both patches were rejected atomically; the successful retry used
   exact current lines.
+- 2026-07-27T19:17:18Z: Recurred when a locator-limitation recurrence used an
+  outdated sentence fragment. The patch was rejected atomically; the retry
+  copied the exact current tail before applying once.

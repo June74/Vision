@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:13:58.409352Z
-- **Last observed:** 2026-07-26T20:20:58.8180152Z
+- **Last observed:** 2026-07-27T18:43:04Z
 - **Phase/task:** Phase B live database diagnostics
 - **Environment:** Signed-in Neon SQL editor
 - **Version/commit:** Live preview database diagnosis
@@ -56,3 +56,7 @@ evidence.
 ## Recurrence history
 
 - 2026-07-26T20:13:58.409352Z: First observed.
+- 2026-07-27T18:43:04Z: Recurred during the retained-branch emptiness
+  re-attestation. The hidden textarea timed out before submission, so no query
+  ran and no database state changed. The documented visible content-editable
+  path was selected.

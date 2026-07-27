@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:38:42.4041444Z
-- **Last observed:** 2026-07-26T20:46:22.9385791Z
+- **Last observed:** 2026-07-27T19:36:21Z
 - **Phase/task:** Phase B clean-room verification
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `9f5a0d5`
@@ -62,3 +62,6 @@ verification. A separate migration-file read incident is tracked independently.
 - 2026-07-26T20:38:42.4041444Z: First observed.
 - 2026-07-26T20:46:22.9385791Z: Closed after the background process returned
   a complete suite result without the command tool terminating it.
+- 2026-07-27T19:36:21Z: Recurred under an intentionally short 55-second
+  diagnostic window during unit tests. No assertion failure was reported;
+  verification was again split into individual stages.
