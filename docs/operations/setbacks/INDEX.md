@@ -2,6 +2,7 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
+| [SB-20260727-131823-required-report-ignored-by-git](incidents/2026-07-27T131823Z-required-report-ignored-by-git.md) | closed | 2026-07-27T13:18:23Z | Phase B restore Task 4 tail correction | Required implementation report matched an ignored path |
 | [SB-20260727-131625-branch-label-in-source-inspection](incidents/2026-07-27T131625Z-branch-label-in-source-inspection.md) | contained | 2026-07-27T13:16:25Z | Phase B restore Task 4 tail correction | Source inspection returned a branch label |
 | [SB-20260727-131409-pnpm-powershell-wrapper-policy](incidents/2026-07-27T131409Z-pnpm-powershell-wrapper-policy.md) | closed | 2026-07-27T13:14:09Z | Phase B restore Task 4 tail correction | PowerShell blocked the package-manager script wrapper |
 | [SB-20260726-182445-cloudflare-browser-metadata-exposure](incidents/2026-07-26T182445Z-cloudflare-browser-metadata-exposure.md) | contained | 2026-07-27T17:18:48Z | Phase B provider acceptance and restore Task 4 | Provider browser metadata exposure |
@@ -9,7 +10,7 @@
 | [SB-20260726-203906-process-metadata-access-denied](incidents/2026-07-26T203906Z-process-metadata-access-denied.md) | closed | 2026-07-26T20:39:06.2646501Z | Phase B clean-room verification | Process metadata query was denied |
 | [SB-20260726-204229-background-process-path-collision](incidents/2026-07-26T204229Z-background-process-path-collision.md) | closed | 2026-07-26T23:07:19Z | Phase B clean-room verification | Background process launch hit a Path-key collision |
 | [SB-20260726-204622-ai-budget-migration-file-open-error](incidents/2026-07-26T204622Z-ai-budget-migration-file-open-error.md) | closed | 2026-07-26T20:50:27.1782591Z | Phase B clean-room verification | AI budget test could not open a migration file |
-| [SB-20260726-205519-bash-review-package-unavailable](incidents/2026-07-26T205519Z-bash-review-package-unavailable.md) | closed | 2026-07-27T02:40:08Z | Recovery Task 3 independent review | Bash review-package helper could not start |
+| [SB-20260726-205519-bash-review-package-unavailable](incidents/2026-07-26T205519Z-bash-review-package-unavailable.md) | closed | 2026-07-27T18:19:36Z | Recovery Task 3 independent review | Bash review-package helper could not start |
 | [SB-20260726-205550-premature-review-package-verification](incidents/2026-07-26T205550Z-premature-review-package-verification.md) | closed | 2026-07-26T20:55:50.9456743Z | Recovery Task 3 independent review | Review package was documented before generation |
 | [SB-20260726-205929-preview-ai-secret-policy-conflict](incidents/2026-07-26T205929Z-preview-ai-secret-policy-conflict.md) | closed | 2026-07-26T21:00:52.2014411Z | Phase B AI live acceptance | Preview AI key policy contradicted the acceptance plan |
 | [SB-20260726-210652-cloudflare-ai-config-inspection-inconclusive](incidents/2026-07-26T210652Z-cloudflare-ai-config-inspection-inconclusive.md) | contained | 2026-07-26T21:06:52.7787262Z | Phase B AI live acceptance | Cloudflare AI configuration inspection was inconclusive |

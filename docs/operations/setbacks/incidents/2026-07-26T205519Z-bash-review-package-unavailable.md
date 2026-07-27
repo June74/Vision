@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:55:19.3868194Z
-- **Last observed:** 2026-07-27T02:40:08Z
+- **Last observed:** 2026-07-27T18:19:36Z
 - **Phase/task:** Recovery Task 3 independent review
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** `9620e06`
@@ -62,3 +62,7 @@ The PowerShell fallback produced a 36,835-byte package for
   Git Bash but its required `awk` utility was unavailable. It produced only
   an empty ignored scratch file; the deterministic PowerShell extraction
   fallback is used for all restore-task briefs and review packages.
+- 2026-07-27T18:19:36Z: Recurred when the review-package helper started under
+  Git Bash but its required `dirname` utility was unavailable. It created no
+  review artifact. The exact-range PowerShell fallback was selected again;
+  future work in this desktop session must skip the Bash helper entirely.
