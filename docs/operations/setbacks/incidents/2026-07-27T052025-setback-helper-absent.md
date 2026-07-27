@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T05:20:25Z
-- **Last observed:** 2026-07-27T05:20:25Z
-- **Phase/task:** Phase B restore Task 4 setback logging
+- **Last observed:** 2026-07-27T23:45:03.8237805Z
+- **Phase/task:** Listener-first restore retry Task 2
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `80e8c3e`
 
@@ -30,6 +30,13 @@ The filesystem reported that the repository-relative helper path was absent.
 
 - The helper lookup failed because the file does not exist.
 - The established incident template and index format were used directly.
+- The recurrence again confirmed that the repository-relative helper path is
+  absent. A narrowed lookup found the maintained helper under the setback
+  skill root, and that helper created the new incident successfully.
+- A broad recursive lookup crossed an unrelated missing package subpath before
+  the search was narrowed to the operations and skill directories.
+- The index link contained a timestamp suffix that was absent from this
+  incident's filename; the link was corrected to the existing file.
 
 ## Cause classification
 
@@ -41,9 +48,11 @@ The filesystem reported that the repository-relative helper path was absent.
 
 ## Correction and prevention
 
-- **Correction:** Create incidents from the established repository template.
-- **Prevention:** Check helper existence before invoking it; use the template
-  fallback when absent.
+- **Correction:** Use the maintained helper from the setback skill root, or
+  create incidents from the established repository template when unavailable.
+- **Prevention:** Resolve the helper relative to the fully read skill instead
+  of assuming a repository-relative path, and keep index links aligned with
+  existing incident filenames.
 - **Owner:** Codex.
 - **Next diagnostic step:** None while closed.
 
@@ -52,6 +61,14 @@ The filesystem reported that the repository-relative helper path was absent.
 Both this incident and the triggering browser incident were indexed without
 using the absent helper.
 
+The recurrence used the maintained skill helper successfully, and the index
+link now resolves to this existing incident.
+
 ## Recurrence history
 
 - 2026-07-27T05:20:25Z: First observed and closed with the template fallback.
+- 2026-07-27T23:45:03.8237805Z: Recurred when the repository-relative helper
+  path was invoked before resolving it against the setback skill root. The
+  skill helper then created the required provider-navigation incident. A
+  narrowed lookup avoided the unrelated package-directory gap, and the stale
+  index link was corrected. No provider or database state changed.

@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:31:42.622047Z
-- **Last observed:** 2026-07-27T18:02:59Z
-- **Phase/task:** Phase B live deployment verification and restore Task 4
-- **Environment:** Signed-in Cloudflare browser session
-- **Version/commit:** `066fcbd`
+- **Last observed:** 2026-07-27T23:42:27.0051244Z
+- **Phase/task:** Listener-first restore retry Task 2
+- **Environment:** Signed-in provider browser session
+- **Version/commit:** `4420f6d`
 
 ## Symptom
 
@@ -56,6 +56,10 @@ configuration.
 The recovered Worker page showed every required live variable, binding, Queue
 event, and cron schedule.
 
+The amended Task 2 browser connection remained responsive after interruption;
+the stale tab binding was discarded before any provider selection or database
+action.
+
 ## Recurrence history
 
 - 2026-07-26T19:31:42.622047Z: First observed.
@@ -79,3 +83,8 @@ event, and cron schedule.
   but the expected single Triggers control was not ready after the bounded
   load delay. The check failed before interaction and no provider state
   changed. The locator must be rebuilt from a fresh page state.
+- 2026-07-27T23:42:27.0051244Z: Recurred after the amended Task 2 browser
+  setup was interrupted and the previously created provider tab was no longer
+  part of the browser session. The browser connection itself remained
+  responsive; the stale tab binding was discarded before any provider
+  selection or database action.

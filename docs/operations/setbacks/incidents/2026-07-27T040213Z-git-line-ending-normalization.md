@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T04:02:13Z
-- **Last observed:** 2026-07-27T21:34:04.0505403Z
+- **Last observed:** 2026-07-27T23:52:52.7850873Z
 - **Phase/task:** Listener-first restore retry Task 2
 - **Environment:** Local Phase B worktree
-- **Version/commit:** `ca11c6c`
+- **Version/commit:** `4420f6d`
 
 ## Symptom
 
@@ -84,3 +84,7 @@ this incident was recorded.
   verification for value-free setback records. Documentation validation,
   `git diff --check`, and the bounded report privacy scan all exited zero; no
   formatting rewrite was performed.
+- 2026-07-27T23:52:52.7850873Z: Recurred during the amended Task 2 blocked
+  report validation for value-free setback records. Documentation validation,
+  security scanning, and `git diff --check` all exited zero; no formatting
+  rewrite was performed.

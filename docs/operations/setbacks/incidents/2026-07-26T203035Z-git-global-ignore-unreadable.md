@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:30:35.2961897Z
-- **Last observed:** 2026-07-27T21:24:34.4110712Z
+- **Last observed:** 2026-07-27T23:34:27.6431391Z
 - **Phase/task:** Listener-first restore retry Task 2
 - **Environment:** Local Phase B worktree under the managed sandbox
 - **Version/commit:** `ca11c6c`
@@ -55,7 +55,7 @@ results, followed by a permission warning for the global ignore file.
 ## Verification and related work
 
 The branch was clean, tracked its expected remote, and was synchronized at
-commit `3128b5c`.
+commit `4420f6d`.
 
 ## Recurrence history
 
@@ -86,3 +86,7 @@ commit `3128b5c`.
   check. Git returned matching local and remote candidate commits, and the
   focused test command passed all 7 tests. No configuration workaround or
   provider action was attempted.
+- 2026-07-27T23:34:27.6431391Z: Recurred during the amended Task 2
+  immutable-candidate check. Git returned matching local and remote candidate
+  commits, and the focused test command passed all 7 tests. No configuration
+  workaround or provider action was attempted.
