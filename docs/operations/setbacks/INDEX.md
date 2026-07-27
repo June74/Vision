@@ -61,10 +61,11 @@
 | [SB-20260726-232248-neon-attestation-editor-not-replaced](incidents/2026-07-26T232248Z-neon-attestation-editor-not-replaced.md) | closed | 2026-07-26T23:40:19Z | Phase B disposable Neon restore | Neon attestation editor was not replaced |
 | [SB-20260726-232735-r2-object-key-in-route-diagnostic](incidents/2026-07-26T232735Z-r2-object-key-in-route-diagnostic.md) | contained | 2026-07-26T23:27:35Z | Phase B AI Gateway navigation | R2 object key in route diagnostic |
 | [SB-20260726-233656-gateway-workflow-policy-test-missed](incidents/2026-07-26T233656Z-gateway-workflow-policy-test-missed.md) | closed | 2026-07-26T23:36:56Z | Phase B AI Gateway configuration | Gateway workflow policy test was missed |
-| [SB-20260726-234212-ai-gateway-budget-workflow-failed](incidents/2026-07-26T234212Z-ai-gateway-budget-workflow-failed.md) | investigating | 2026-07-27T00:18:19Z | Phase B AI Gateway configuration | AI Gateway budget workflow failed |
+| [SB-20260726-234212-ai-gateway-budget-workflow-failed](incidents/2026-07-26T234212Z-ai-gateway-budget-workflow-failed.md) | investigating | 2026-07-27T00:27:16Z | Phase B AI Gateway configuration | AI Gateway budget workflow failed |
 | [SB-20260727-000552-cloudflare-permission-option-inspection-too-broad](incidents/2026-07-27T000552Z-cloudflare-permission-option-inspection-too-broad.md) | closed | 2026-07-27T00:05:52Z | Phase B AI Gateway configuration | Cloudflare permission option inspection was too broad |
 | [SB-20260727-001121-github-workflow-dispatch-network-sandbox](incidents/2026-07-27T001121Z-github-workflow-dispatch-network-sandbox.md) | closed | 2026-07-27T00:13:05Z | Phase B AI Gateway configuration | GitHub workflow dispatch was blocked by the network sandbox |
 | [SB-20260727-002225-full-check-shell-timeout](incidents/2026-07-27T002225Z-full-check-shell-timeout.md) | closed | 2026-07-27T00:24:17Z | Phase B AI Gateway identifier verification | Full check exceeded the shell time limit |
+| [SB-20260727-003046-browser-current-url-helper-invalid](incidents/2026-07-27T003046Z-browser-current-url-helper-invalid.md) | closed | 2026-07-27T00:30:46Z | Phase B AI Gateway identity diagnostics | Browser current URL helper was invalid |
 
 ## Legacy history
 

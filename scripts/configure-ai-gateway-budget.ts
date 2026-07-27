@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 
 export const AI_GATEWAY_LIMIT_DOLLARS = 9.5;
 export const AI_GATEWAY_WINDOW_SECONDS = 30 * 24 * 60 * 60;
-const AI_GATEWAY_NAME = "vision-preview";
+const AI_GATEWAY_APPROVED_ID_OR_NAME = "vision-preview";
 
 interface GatewayCredentials {
   readonly accountId: string;
@@ -95,10 +95,11 @@ export async function configureAiGatewayBudget(
   const matchingGateways = current.result.filter(
     (gateway): gateway is Record<string, unknown> =>
       isRecord(gateway) &&
-      gateway.name === AI_GATEWAY_NAME &&
       typeof gateway.id === "string" &&
       gateway.id.length >= 1 &&
-      gateway.id.length <= 64,
+      gateway.id.length <= 64 &&
+      (gateway.id === AI_GATEWAY_APPROVED_ID_OR_NAME ||
+        gateway.name === AI_GATEWAY_APPROVED_ID_OR_NAME),
   );
   if (matchingGateways.length === 0) {
     throw new Error("AI Gateway was not found.");

@@ -2,7 +2,7 @@
 
 - **Status:** investigating
 - **First observed:** 2026-07-26T23:42:12Z
-- **Last observed:** 2026-07-27T00:18:19Z
+- **Last observed:** 2026-07-27T00:27:16Z
 - **Phase/task:** Phase B AI Gateway configuration
 - **Environment:** Guarded GitHub preview operator workflow
 - **Version/commit:** `0cd841a`
@@ -42,15 +42,18 @@ emitted no Cloudflare response body, identifier, credential, or URL.
   requires the separate Read permission before the Edit-protected update can
   run.
 - Adding Read moved the safe category to `lookup_not_found`.
-- The dashboard contains exactly one expected visible Gateway name, but its
-  internal link identifier is different from that name.
+- The dashboard contains exactly one expected visible Gateway label. An initial
+  route-suffix check incorrectly treated its deeper subpage path as proof that
+  the internal identifier differed.
+- The name-to-identifier lookup retry still returned `lookup_not_found`.
 
 ## Cause classification
 
-- **Confirmed cause:** Two sequential issues were established: the preview
-  token lacked Read for lookup, and the operator script incorrectly assumed the
-  visible Gateway name was also its provider identifier.
-- **Hypotheses:** None for the current lookup failure.
+- **Confirmed cause:** The preview token lacked Read for lookup. The later
+  identifier-mismatch conclusion was not supported and is rejected.
+- **Hypotheses:** The signed-in Gateway and the account configured in the
+  operator workflow may differ, or the list response may expose the visible
+  value in its `id` rather than its `name`.
 - **Rejected hypotheses:** No application deployment or scheduled-job failure
   occurred.
 - **Known exclusions:** No provider-controlled response content or secret was
@@ -58,13 +61,14 @@ emitted no Cloudflare response body, identifier, credential, or URL.
 
 ## Correction and prevention
 
-- **Correction:** Configure Read and Edit, list Gateways, select the exact
-  approved visible name, and use only its returned identifier for the update.
+- **Correction:** Configure Read and Edit, then compare the signed-in Gateway
+  account with the deployed Worker account using only a boolean equality check
+  before changing the lookup contract again.
 - **Prevention:** External mutation commands need privacy-safe stage categories,
   not one undifferentiated failure.
 - **Owner:** Codex and project owner.
-- **Next diagnostic step:** Add the name-to-identifier lookup test first, update
-  the operator script, and retry the isolated workflow.
+- **Next diagnostic step:** Establish whether the Gateway and Worker dashboard
+  routes use the same account without emitting either identifier.
 
 ## Verification and related work
 
@@ -82,3 +86,6 @@ Pending.
 - 2026-07-27T00:18:19Z: Read authorization succeeded and the category moved to
   `lookup_not_found`. Dashboard evidence confirmed that the expected visible
   name exists under a different internal identifier.
+- 2026-07-27T00:27:16Z: The name-based retry also returned
+  `lookup_not_found`. The prior route-suffix inference was rejected because the
+  route continued to a normal Gateway subpage after the expected segment.

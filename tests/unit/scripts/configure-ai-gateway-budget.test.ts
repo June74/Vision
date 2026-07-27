@@ -14,7 +14,7 @@ describe("preview AI Gateway budget configuration", () => {
         Response.json({
           success: true,
           result: [
-            { id: "private-preview-gateway-id", name: "vision-preview" },
+            { id: "vision-preview", name: "Private preview gateway" },
           ],
         }),
       )
@@ -58,7 +58,7 @@ describe("preview AI Gateway budget configuration", () => {
     expect(fetchImplementation).toHaveBeenCalledTimes(2);
     const update = fetchImplementation.mock.calls[1]!;
     expect(String(update[0])).toMatch(
-      /\/ai-gateway\/gateways\/private-preview-gateway-id$/u,
+      /\/ai-gateway\/gateways\/vision-preview$/u,
     );
     expect(update[1]).toMatchObject({
       method: "PUT",
