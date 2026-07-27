@@ -6,7 +6,7 @@ Keeps the most recent 30 UTC calendar dates of valid Vision backup objects.
 
 Pages through only the fixed backup prefix and deletes valid objects that are 30 whole UTC dates old or older.
 
-## `validatedObjectDate`
+## `validatedBackupObjectDate`
 
 Ignores anything whose path, metadata, date, or checksums do not match the Vision backup format.
 

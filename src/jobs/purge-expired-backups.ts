@@ -45,7 +45,7 @@ export async function purgeExpiredBackups(
   do {
     const page = await dependencies.store.list(BACKUP_OBJECT_PREFIX, cursor);
     for (const object of page.objects) {
-      const createdDate = validatedObjectDate(object);
+      const createdDate = validatedBackupObjectDate(object);
       if (createdDate === undefined) {
         ignoredMalformed += 1;
         continue;
@@ -76,7 +76,9 @@ export async function purgeExpiredBackups(
 }
 
 /** Validates that object path, date, and closed safe metadata describe the same backup. */
-function validatedObjectDate(object: BackupObjectHead): number | undefined {
+export function validatedBackupObjectDate(
+  object: BackupObjectHead,
+): number | undefined {
   const match = OBJECT_KEY_PATTERN.exec(object.key);
   if (!match) return undefined;
   const createdDate = `${match[1]}-${match[2]}-${match[3]}`;

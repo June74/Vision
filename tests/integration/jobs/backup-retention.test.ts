@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   BACKUP_OBJECT_PREFIX,
+  type BackupObjectHead,
   type BackupObjectMetadata,
 } from "../../../src/jobs/create-daily-backup";
-import { purgeExpiredBackups } from "../../../src/jobs/purge-expired-backups";
+import {
+  purgeExpiredBackups,
+  validatedBackupObjectDate,
+} from "../../../src/jobs/purge-expired-backups";
 import { MemoryBackupObjectStore } from "./backup-test-helpers";
 
 const NOW = new Date("2026-08-31T23:59:59.999Z");
@@ -23,6 +27,47 @@ function key(createdDate: string, opaque = "A".repeat(43)): string {
 }
 
 describe("encrypted backup retention", () => {
+  it("accepts only path/date-agreed closed metadata with a native checksum", () => {
+    const validObject: BackupObjectHead = {
+      key: key("2026-08-02"),
+      etag: "opaque-etag",
+      customMetadata: { ...metadata("2026-08-02") },
+      bodySha256: "B".repeat(43),
+    };
+
+    expect(validatedBackupObjectDate(validObject)).toBe(
+      Date.UTC(2026, 7, 2),
+    );
+    expect(
+      validatedBackupObjectDate({
+        ...validObject,
+        key: "backups/v1/not-a-canonical-name",
+      }),
+    ).toBeUndefined();
+    expect(
+      validatedBackupObjectDate({
+        ...validObject,
+        customMetadata: {
+          ...validObject.customMetadata,
+          unexpected: "private-sentinel",
+        },
+      }),
+    ).toBeUndefined();
+    expect(
+      validatedBackupObjectDate({
+        ...validObject,
+        customMetadata: { ...metadata("2026-08-01") },
+      }),
+    ).toBeUndefined();
+    expect(
+      validatedBackupObjectDate({
+        key: validObject.key,
+        etag: validObject.etag,
+        customMetadata: validObject.customMetadata,
+      }),
+    ).toBeUndefined();
+  });
+
   it("keeps 29-day objects and purges the 30-day boundary and older objects", async () => {
     const store = new MemoryBackupObjectStore();
     store.seed(key("2026-08-02"), metadata("2026-08-02"));

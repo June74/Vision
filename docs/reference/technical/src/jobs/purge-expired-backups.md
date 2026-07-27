@@ -8,7 +8,7 @@ or foreign objects are counted but never deleted.
 Traverses every page under `backups/v1/`, rejects looping cursors, deletes admitted objects whose age is at least 30
 whole UTC dates, and reports a safe count-only result. Delete failures are retriable and make the pass fail.
 
-## `validatedObjectDate`
+## `validatedBackupObjectDate`
 
 Requires the exact versioned key grammar, path/metadata date agreement, the four-field metadata record, canonical
 digests, and a positive safe key version before an object becomes eligible.

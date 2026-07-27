@@ -192,6 +192,8 @@ export const RuntimeEnvSchema = z
     KEY_ENCRYPTION_KEY: keyEncryptionKeySchema,
     BACKUP_ENCRYPTION_KEY: backupEncryptionKeySchema.optional(),
     BACKUP_KEY_VERSION: backupKeyVersionSchema.optional(),
+    PREVIEW_RESTORE_DATABASE_URL: z.string().optional(),
+    PREVIEW_RESTORE_TARGET_ID: z.string().optional(),
     GOOGLE_CLIENT_ID: googleClientIdSchema.optional(),
     GOOGLE_CLIENT_SECRET: googleClientSecretSchema.optional(),
     GOOGLE_REDIRECT_URI: googleRedirectSchema.optional(),
@@ -250,6 +252,17 @@ export const RuntimeEnvSchema = z
       });
     }
   });
+
+/** Validates the exact preview-only database target bindings used by the temporary restore cron. */
+export const TemporaryRestoreEnvSchema = z
+  .object({
+    VISION_ENV: z.literal("preview"),
+    PREVIEW_RESTORE_DATABASE_URL: RuntimeEnvSchema.shape.DATABASE_URL,
+    PREVIEW_RESTORE_TARGET_ID: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{1,128}$/u),
+  })
+  .strict();
 
 /** Safely validates a Worker-only database URL without including credential text in errors. */
 export function parseVisionDatabaseUrl(databaseUrl: unknown): string {

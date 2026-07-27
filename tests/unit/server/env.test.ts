@@ -6,6 +6,7 @@ import {
   GoogleAuthEnvSchema,
   OpenAiEnvSchema,
   RuntimeEnvSchema,
+  TemporaryRestoreEnvSchema,
 } from "../../../src/server/env";
 
 function encodeBase64Url(bytes: Uint8Array): string {
@@ -106,6 +107,82 @@ describe("RuntimeEnvSchema", () => {
         BACKUP_KEY_VERSION: "1",
       }),
     ).toMatchObject({ BACKUP_KEY_VERSION: 1 });
+  });
+});
+
+describe("TemporaryRestoreEnvSchema", () => {
+  const targetUrl =
+    "postgresql://vision_app:synthetic@preview.example.test/vision";
+  const validEnvironment = {
+    VISION_ENV: "preview",
+    PREVIEW_RESTORE_DATABASE_URL: targetUrl,
+    PREVIEW_RESTORE_TARGET_ID: "disposable_preview_1",
+  };
+
+  it("accepts exactly a preview vision_app target URL and opaque target ID", () => {
+    expect(TemporaryRestoreEnvSchema.parse(validEnvironment)).toMatchObject({
+      VISION_ENV: "preview",
+    });
+  });
+
+  it("rejects local and production restore execution", () => {
+    for (const VISION_ENV of ["local", "production"]) {
+      expect(() =>
+        TemporaryRestoreEnvSchema.parse({
+          ...validEnvironment,
+          VISION_ENV,
+        }),
+      ).toThrow();
+    }
+  });
+
+  it("rejects either missing restore target binding", () => {
+    const { PREVIEW_RESTORE_DATABASE_URL, ...missingUrl } = validEnvironment;
+    const { PREVIEW_RESTORE_TARGET_ID, ...missingTargetId } = validEnvironment;
+
+    expect(() => TemporaryRestoreEnvSchema.parse(missingUrl)).toThrow();
+    expect(() => TemporaryRestoreEnvSchema.parse(missingTargetId)).toThrow();
+    expect(PREVIEW_RESTORE_DATABASE_URL).toBe(targetUrl);
+    expect(PREVIEW_RESTORE_TARGET_ID).toBe("disposable_preview_1");
+  });
+
+  it("rejects privileged URLs, control characters, and unexpected fields without echoing values", () => {
+    const privateUrl =
+      "postgresql://neondb_owner:PRIVATE_PASSWORD_SENTINEL@preview.example.test/vision";
+    const privateTarget = "private-target\nsentinel";
+    const privateUnexpected = "PRIVATE_UNEXPECTED_SENTINEL";
+    const invalidEnvironments = [
+      {
+        ...validEnvironment,
+        PREVIEW_RESTORE_DATABASE_URL: privateUrl,
+      },
+      {
+        ...validEnvironment,
+        PREVIEW_RESTORE_TARGET_ID: privateTarget,
+      },
+      {
+        ...validEnvironment,
+        unexpected: privateUnexpected,
+      },
+    ];
+
+    for (const environment of invalidEnvironments) {
+      let rendered = "";
+      try {
+        TemporaryRestoreEnvSchema.parse(environment);
+      } catch (error) {
+        rendered = String(error);
+      }
+      expect(rendered).not.toBe("");
+      for (const privateValue of [
+        privateUrl,
+        "PRIVATE_PASSWORD_SENTINEL",
+        privateTarget,
+        privateUnexpected,
+      ]) {
+        expect(rendered).not.toContain(privateValue);
+      }
+    }
   });
 });
 
