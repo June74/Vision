@@ -1,0 +1,33 @@
+# SB-20260727-010827-powershell-asutc-unsupported: PowerShell UTC flag was unsupported
+
+- **Status:** closed
+- **First observed:** 2026-07-27T01:08:27Z
+- **Last observed:** 2026-07-27T01:08:27Z
+- **Phase/task:** Phase B setback logging
+- **Environment:** Local Windows worktree
+- **Version/commit:** `22c5dc0`
+
+## Symptom
+
+PowerShell rejected the `Get-Date -AsUTC` parameter.
+
+## Impact
+
+The timestamp subcommand failed; subsequent read-only inspection still ran.
+
+## Cause classification
+
+- **Confirmed cause:** The installed PowerShell version does not implement that
+  parameter.
+- **Known exclusions:** No filesystem or provider mutation depended on the
+  failed timestamp.
+
+## Correction and prevention
+
+- **Correction:** Use `[DateTime]::UtcNow.ToString(...)`.
+- **Prevention:** Prefer the .NET UTC API for cross-version PowerShell scripts.
+
+## Verification and related work
+
+The replacement returned a valid UTC timestamp.
+

@@ -27,6 +27,9 @@ export type AiGatewayBudgetErrorCategory =
   | "lookup_not_found"
   | "lookup_unauthorized"
   | "update_failed"
+  | "update_invalid_request"
+  | "update_not_found"
+  | "update_unauthorized"
   | "verification_failed"
   | "unknown_failure";
 
@@ -55,6 +58,15 @@ export function classifyAiGatewayBudgetError(
     return "lookup_not_found";
   }
   if (error.message === "AI Gateway update failed.") return "update_failed";
+  if (error.message === "AI Gateway update authorization failed.") {
+    return "update_unauthorized";
+  }
+  if (error.message === "AI Gateway update request was invalid.") {
+    return "update_invalid_request";
+  }
+  if (error.message === "AI Gateway update target was not found.") {
+    return "update_not_found";
+  }
   if (error.message === "AI Gateway budget verification failed.") {
     return "verification_failed";
   }
@@ -136,6 +148,18 @@ export async function configureAiGatewayBudget(
     headers,
     body: JSON.stringify({ spend_limits: spendLimits }),
   });
+  if (updateResponse.status === 401 || updateResponse.status === 403) {
+    await updateResponse.body?.cancel();
+    throw new Error("AI Gateway update authorization failed.");
+  }
+  if (updateResponse.status === 400 || updateResponse.status === 422) {
+    await updateResponse.body?.cancel();
+    throw new Error("AI Gateway update request was invalid.");
+  }
+  if (updateResponse.status === 404) {
+    await updateResponse.body?.cancel();
+    throw new Error("AI Gateway update target was not found.");
+  }
   const updated: unknown = await updateResponse.json();
   if (
     !updateResponse.ok ||

@@ -1,0 +1,34 @@
+# SB-20260727-010827-direct-vitest-command-unavailable: Direct Vitest command was unavailable
+
+- **Status:** closed
+- **First observed:** 2026-07-27T01:08:27Z
+- **Last observed:** 2026-07-27T01:08:27Z
+- **Phase/task:** Phase B AI Gateway update diagnostics
+- **Environment:** Local Windows worktree
+- **Version/commit:** `22c5dc0`
+
+## Symptom
+
+The targeted test command exited immediately because `vitest` was not resolved
+as a direct executable.
+
+## Impact
+
+No test ran and no project or provider state changed.
+
+## Cause classification
+
+- **Confirmed cause:** The command bypassed the repository's declared package
+  script.
+- **Known exclusions:** This was not a test failure or dependency defect.
+
+## Correction and prevention
+
+- **Correction:** Run the targeted test through `pnpm.cmd test:unit --`.
+- **Prevention:** Inspect `package.json` and use its declared scripts before
+  invoking a project tool directly on Windows.
+
+## Verification and related work
+
+The targeted Gateway test passed all nine cases through the repository's
+declared unit-test script.

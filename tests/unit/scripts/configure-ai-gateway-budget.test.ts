@@ -159,6 +159,21 @@ describe("preview AI Gateway budget configuration", () => {
         new Error("AI Gateway update failed."),
       ),
     ).toBe("update_failed");
+    expect(
+      classifyAiGatewayBudgetError(
+        new Error("AI Gateway update authorization failed."),
+      ),
+    ).toBe("update_unauthorized");
+    expect(
+      classifyAiGatewayBudgetError(
+        new Error("AI Gateway update request was invalid."),
+      ),
+    ).toBe("update_invalid_request");
+    expect(
+      classifyAiGatewayBudgetError(
+        new Error("AI Gateway update target was not found."),
+      ),
+    ).toBe("update_not_found");
     expect(classifyAiGatewayBudgetError(new Error("private response"))).toBe(
       "unknown_failure",
     );
@@ -218,4 +233,38 @@ describe("preview AI Gateway budget configuration", () => {
       ),
     ).rejects.toThrow("AI Gateway lookup authorization failed.");
   });
+
+  it.each([
+    [403, "AI Gateway update authorization failed."],
+    [422, "AI Gateway update request was invalid."],
+    [404, "AI Gateway update target was not found."],
+  ])(
+    "classifies update status %i without reading provider content",
+    async (status, expectedMessage) => {
+      const rejectedUpdate = new Response("private provider content", {
+        status,
+      });
+      const cancel = vi.spyOn(rejectedUpdate.body!, "cancel");
+      const fetchImplementation = vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(
+          Response.json({
+            success: true,
+            result: [{ id: "vision-preview", name: "vision-preview" }],
+          }),
+        )
+        .mockResolvedValueOnce(rejectedUpdate);
+
+      await expect(
+        configureAiGatewayBudget(
+          {
+            accountId: "f".repeat(32),
+            apiToken: "private-token-that-is-never-returned",
+          },
+          fetchImplementation,
+        ),
+      ).rejects.toThrow(expectedMessage);
+      expect(cancel).toHaveBeenCalledOnce();
+    },
+  );
 });
