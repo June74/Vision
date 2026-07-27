@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T00:43:57Z
-- **Last observed:** 2026-07-27T00:49:45Z
-- **Phase/task:** Phase B preview Cloudflare account correction
+- **Last observed:** 2026-07-27T17:21:56Z
+- **Phase/task:** Phase B preview Cloudflare account correction and restore Task 4
 - **Environment:** Chrome control, local PowerShell, and GitHub CLI
 - **Version/commit:** `22c5dc0`
 
@@ -69,3 +69,8 @@ update.
 - 2026-07-27T00:43:57Z: First observed and contained.
 - 2026-07-27T00:49:45Z: Closed after replacing the clipboard assumption with a
   validated host-clipboard bridge.
+- 2026-07-27T17:21:56Z: Recurred when a provider copy control wrote outside
+  the controlled tab clipboard surface. The in-browser read failed strict
+  connection-string validation, and no value was printed or transferred. The
+  restore workflow must not rely on provider copy controls crossing clipboard
+  surfaces.

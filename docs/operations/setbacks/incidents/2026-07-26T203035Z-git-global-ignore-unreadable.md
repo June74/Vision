@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:30:35.2961897Z
-- **Last observed:** 2026-07-27T03:56:50Z
-- **Phase/task:** Phase B release operations
+- **Last observed:** 2026-07-27T18:07:39Z
+- **Phase/task:** Phase B release operations and restore Task 4 evidence
 - **Environment:** Local Phase B worktree under the managed sandbox
 - **Version/commit:** `3128b5c`
 
@@ -75,3 +75,10 @@ commit `3128b5c`.
 - 2026-07-27T03:56:50Z: Recurred during Task 3 repository inspection. Git
   returned the requested branch, commit, and status data successfully; no
   configuration workaround or provider action was attempted.
+- 2026-07-27T18:04:36Z: Recurred during restore Task 4 documentation and
+  whitespace verification. Both checks exited zero and Git returned the
+  requested status; no configuration workaround was attempted.
+- 2026-07-27T18:07:39Z: Recurred during the read-only staged privacy check.
+  The check confirmed 18 operations files and zero prohibited patterns; no
+  configuration workaround was attempted. Remaining Git output is captured
+  and classified before display.

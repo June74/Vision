@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T22:05:28Z
-- **Last observed:** 2026-07-27T02:00:11Z
-- **Phase/task:** Phase B temporary backup deployment
+- **Last observed:** 2026-07-27T17:32:28Z
+- **Phase/task:** Phase B temporary backup deployment and restore Task 4
 - **Environment:** Local PowerShell GitHub CLI
 - **Version/commit:** `cab6d4d`
 
@@ -61,3 +61,7 @@ quoting boundary.
   passed through PowerShell to jq. Parsing failed before a status result; the
   workflow remained unchanged. The replacement omits the string filter and
   returns only fixed job status fields.
+- 2026-07-27T17:32:28Z: Recurred when another job-name comparison with spaces
+  was passed through PowerShell while monitoring the restore candidate. The
+  read-only query failed before returning status, and the workflow continued
+  unchanged. Remaining status reads omit string comparisons.

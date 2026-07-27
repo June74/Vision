@@ -2,8 +2,8 @@
 
 - **Status:** contained
 - **First observed:** 2026-07-26T18:24:45.816434Z
-- **Last observed:** 2026-07-27T01:57:02Z
-- **Phase/task:** Phase B provider acceptance
+- **Last observed:** 2026-07-27T17:18:48Z
+- **Phase/task:** Phase B provider acceptance and restore Task 4
 - **Environment:** Signed-in provider dashboards controlled through the browser
 - **Version/commit:** `d2aea64`
 
@@ -51,7 +51,9 @@ runtime.
 - **Correction:** Return only fixed booleans or explicitly sanitized safe
   categories from provider pages.
 - **Prevention:** Use the global `setback-logger` privacy boundary and treat
-  titles, URLs, and snapshot lines as private by default.
+  titles, URLs, account labels, and snapshot lines as private by default.
+  Never return a complete provider dashboard snapshot; evaluate an exact
+  fixed-shape boolean or count inside the browser runtime.
 - **Owner:** Codex.
 - **Next diagnostic step:** None while contained; reopen if any browser result
   returns uncontrolled provider text.
@@ -78,3 +80,14 @@ runtime.
   contained private account and browsing metadata but no credential, token,
   encryption key, database URL, cookie, OAuth code, or callback value. Browser
   work stopped immediately; no returned value was copied into project files.
+- 2026-07-27T05:17:16Z: Recurred when a complete signed-in provider dashboard
+  snapshot was returned during restore setup. The output contained an account
+  display label and opaque provider routing identifiers. It contained no
+  password, API token, database value, encryption key, OAuth value, cookie, or
+  callback value; no provider state changed. Broad provider snapshots are now
+  prohibited for the remainder of the task.
+- 2026-07-27T17:18:48Z: Recurred when a sanitized provider-label projection
+  still allowed the disposable branch display name. It contained no database
+  URL, password, token, key, OAuth value, cookie, callback value, or account
+  identifier; no provider state changed. Provider label lists are prohibited
+  for the remainder of the task, including when character-filtered.

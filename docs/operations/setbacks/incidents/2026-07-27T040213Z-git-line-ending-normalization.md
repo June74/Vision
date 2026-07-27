@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T04:02:13Z
-- **Last observed:** 2026-07-27T04:58:22Z
-- **Phase/task:** Phase B restore Task 3 verification
+- **Last observed:** 2026-07-27T18:06:02Z
+- **Phase/task:** Phase B restore Tasks 3-4 verification
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `1d6ad12`
 
@@ -70,3 +70,10 @@ this incident was recorded.
 - 2026-07-27T04:58:22Z: Recurred during the Task 3 final whitespace check.
   The check exited zero; the warning remained limited to expected Windows
   normalization metadata for edited text files.
+- 2026-07-27T18:04:36Z: Recurred during Task 4 documentation and whitespace
+  verification for the value-free live containment records. Both checks
+  exited zero; no broad formatting rewrite was performed.
+- 2026-07-27T18:06:02Z: Recurred during the bounded privacy scan of the same
+  documentation diff. The scan returned zero prohibited patterns and no
+  formatting rewrite was performed. Remaining Git output is captured and
+  classified before display.

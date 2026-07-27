@@ -11,6 +11,10 @@ authorization and safe verification result.
 | 2026-07-27 | Preview | `BACKUP_ENCRYPTION_KEY` | **No change. User explicitly prohibited rotation** | Direct user instruction | Worker secret and key version remain unchanged |
 | 2026-07-27 | Preview | `CLOUDFLARE_API_TOKEN_PREVIEW` | Token value was not rotated; account-level AI Gateway Read and Edit permissions were added | Phase B Gateway approval | Gateway list/read succeeds and the exact saved budget passes read-only verification |
 | 2026-07-27 | Preview | `CLOUDFLARE_ACCOUNT_ID_PREVIEW` | Protected GitHub environment configuration was corrected to the approved preview account; this is an identifier, not a key | Phase B Gateway approval | Gateway lookup resolves exactly one approved preview Gateway |
+| 2026-07-27 | Preview | `PREVIEW_RESTORE_DATABASE_URL` | Created as a temporary Worker secret for the one approved restore drill | Direct user approval for Phase B restore Task 4 | The secret name is present in preview and the value remained masked |
+| 2026-07-27 | Preview | `PREVIEW_RESTORE_TARGET_ID` | Created as a temporary Worker secret for the one approved restore drill | Direct user approval for Phase B restore Task 4 | The secret name is present in preview and the database-owned attestation was matched without returning the value |
+| 2026-07-27 | Preview | `PREVIEW_RESTORE_DATABASE_URL` | Deleted after the restore capture returned `no_scheduled_event` and normal code was redeployed | Direct user approval for Phase B restore Task 4 cleanup | The temporary secret name is absent; the disposable branch remains retained |
+| 2026-07-27 | Preview | `PREVIEW_RESTORE_TARGET_ID` | Deleted after the restore capture returned `no_scheduled_event` and normal code was redeployed | Direct user approval for Phase B restore Task 4 cleanup | The temporary secret name is absent; the disposable branch remains retained |
 
 ## Required entry for every future change
 
@@ -26,4 +30,3 @@ Record:
 
 Never record the old value, new value, a partial value, hash, fingerprint,
 email, account identifier, database URL, branch identifier, or object key.
-

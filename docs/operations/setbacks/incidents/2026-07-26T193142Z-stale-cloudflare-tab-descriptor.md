@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:31:42.622047Z
-- **Last observed:** 2026-07-26T22:08:06.7712930Z
-- **Phase/task:** Phase B live deployment verification
+- **Last observed:** 2026-07-27T18:02:59Z
+- **Phase/task:** Phase B live deployment verification and restore Task 4
 - **Environment:** Signed-in Cloudflare browser session
 - **Version/commit:** `066fcbd`
 
@@ -46,7 +46,8 @@ configuration.
 - **Correction:** Recovered through the dashboard root and a unique visible
   Worker link.
 - **Prevention:** Treat old discovery descriptors as claim handles only; use
-  current DOM navigation for later route recovery.
+  current DOM navigation for later route recovery. After an interrupted turn,
+  confirm the browser and tab bindings exist before reusing them.
 - **Owner:** Codex and project owner.
 - **Next diagnostic step:** None while closed.
 
@@ -61,3 +62,20 @@ event, and cron schedule.
 - 2026-07-26T22:08:06.7712930Z: Recurred when the saved Cloudflare tab handle
   timed out before an R2 read-only inspection; no provider action occurred and
   the tab was reacquired from the current browser session.
+- 2026-07-27T17:06:16Z: Recurred after the user interruption reset the
+  browser-control session and the saved tab binding was no longer defined. No
+  page interaction or provider state change occurred. Recovery must initialize
+  a fresh browser session and navigate from visible controls without tab
+  enumeration.
+- 2026-07-27T17:07:10Z: The fresh dashboard did not expose exactly one
+  expected Worker shortcut after the bounded readiness delay, so recovery
+  failed closed before navigation. No provider state changed. The next attempt
+  must use a stable visible search control and require one exact result.
+- 2026-07-27T17:09:42Z: A previously unique Workers link locator became stale
+  after the dashboard client-side update, and its route read reached the
+  interaction deadline before navigation. No provider state changed. The
+  locator must be rebuilt from a fresh snapshot before reuse.
+- 2026-07-27T18:02:59Z: The final schedule recheck reached the Worker overview,
+  but the expected single Triggers control was not ready after the bounded
+  load delay. The check failed before interaction and no provider state
+  changed. The locator must be rebuilt from a fresh page state.

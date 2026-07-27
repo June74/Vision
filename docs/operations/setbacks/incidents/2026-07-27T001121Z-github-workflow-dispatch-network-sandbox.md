@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T00:11:21Z
-- **Last observed:** 2026-07-27T00:13:05Z
-- **Phase/task:** Phase B AI Gateway configuration
+- **Last observed:** 2026-07-27T17:28:39Z
+- **Phase/task:** Phase B AI Gateway configuration and restore Task 4
 - **Environment:** Local PowerShell and GitHub CLI
 - **Version/commit:** `ac1f044`
 
@@ -59,3 +59,7 @@ provider-stage failure was independent of the local network sandbox.
 - 2026-07-27T00:11:21Z: First observed and contained.
 - 2026-07-27T00:13:05Z: Closed after the same fixed dispatch succeeded through
   the approved external-network path.
+- 2026-07-27T17:28:39Z: Recurred when the immutable restore-candidate workflow
+  dispatch used the default network sandbox. The connection was denied before
+  GitHub received the request, so no workflow or provider state was created.
+  The exact fixed dispatch must use the external-network path.

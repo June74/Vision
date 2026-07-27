@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:34:31.380828Z
-- **Last observed:** 2026-07-26T20:09:01.5419445Z
-- **Phase/task:** Phase B live deployment verification
+- **Last observed:** 2026-07-27T17:49:57Z
+- **Phase/task:** Phase B live deployment verification and restore Task 4
 - **Environment:** Live preview Worker and local read-only client
 - **Version/commit:** `066fcbd`
 
@@ -57,3 +57,7 @@ The direct check returned HTTP 200 with the expected health response.
   navigation to the authenticated diagnostics JSON route before the request
   reached Vision. No provider or application state changed. Continued through
   safe rendered UI and provider logs instead.
+- 2026-07-27T17:49:57Z: Recurred when Chrome control blocked the public health
+  JSON route after the fail-closed rollback. The request was rejected before
+  Vision returned a response and no state changed. The replacement is a
+  bounded read-only client that emits only status and closed health booleans.

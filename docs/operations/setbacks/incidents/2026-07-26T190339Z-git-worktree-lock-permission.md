@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:03:39.626332Z
-- **Last observed:** 2026-07-27T05:01:37Z
-- **Phase/task:** Phase B restore Task 3
+- **Last observed:** 2026-07-27T18:06:52Z
+- **Phase/task:** Phase B restore Tasks 3-4
 - **Environment:** Local linked worktree under the managed sandbox
 - **Version/commit:** `f7778b8`
 
@@ -76,3 +76,7 @@ The retry completed successfully and produced commit `f7778b8`.
   through explicit paths. The default sandbox denied the linked-worktree index
   lock before any index write; the exact path set is retried through the
   established metadata-permission boundary.
+- 2026-07-27T18:06:52Z: Recurred while staging only Task 4 value-free
+  credential and setback records. The default sandbox denied the linked
+  worktree index lock before any index write; the same explicit path set is
+  retried through the established metadata-permission boundary.
