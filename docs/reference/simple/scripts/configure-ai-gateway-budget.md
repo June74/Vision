@@ -8,6 +8,15 @@ command prints only whether that exact rule was returned.
 
 Checks that an API value is an object before reading it.
 
+## `hasExactSpendLimit`
+
+Checks that the gateway has exactly Vision's one enabled, global $9.50 rule.
+
+## `createBudgetEvidence`
+
+Builds the fixed safe result returned after either read-only verification or a
+successful update.
+
 ## `classifyAiGatewayBudgetError`
 
 Maps a failure to one safe stage name, including authorization and not-found
@@ -15,8 +24,9 @@ lookup results, without copying Cloudflare's response.
 
 ## `configureAiGatewayBudget`
 
-Finds the existing preview gateway, applies the exact cost rule, and fails
-unless Cloudflare returns the same global rule.
+Finds the existing preview gateway and reads its current settings. It returns
+success without an update when the exact rule already exists; otherwise it
+applies the rule and verifies Cloudflare's returned settings.
 
 ## `main`
 

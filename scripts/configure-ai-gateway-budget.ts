@@ -38,6 +38,40 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+/** Accepts only Vision's one unscoped global fixed-window cost rule. */
+function hasExactSpendLimit(result: unknown): boolean {
+  const returnedSpendLimits =
+    isRecord(result) && isRecord(result.spend_limits)
+      ? result.spend_limits
+      : {};
+  const rules = Array.isArray(returnedSpendLimits.rules)
+    ? returnedSpendLimits.rules
+    : [];
+  const rule = rules.length === 1 && isRecord(rules[0]) ? rules[0] : {};
+  return (
+    returnedSpendLimits.enabled === true &&
+    rule.enabled === true &&
+    rule.limit === AI_GATEWAY_LIMIT_DOLLARS &&
+    rule.limitType === "cost" &&
+    rule.technique === "fixed" &&
+    rule.window === AI_GATEWAY_WINDOW_SECONDS &&
+    !Object.hasOwn(rule, "metadata") &&
+    !Object.hasOwn(rule, "model") &&
+    !Object.hasOwn(rule, "provider")
+  );
+}
+
+/** Returns the fixed privacy-safe acceptance evidence. */
+function createBudgetEvidence(): AiGatewayBudgetEvidence {
+  return Object.freeze({
+    configured: true as const,
+    global: true as const,
+    limitDollars: AI_GATEWAY_LIMIT_DOLLARS,
+    technique: "fixed" as const,
+    windowSeconds: AI_GATEWAY_WINDOW_SECONDS,
+  });
+}
+
 /** Maps internal failures to a fixed category without copying provider content. */
 export function classifyAiGatewayBudgetError(
   error: unknown,
@@ -131,6 +165,26 @@ export async function configureAiGatewayBudget(
   const gatewayId = matchingGateways[0]!.id as string;
   const endpoint = `${listEndpoint}/${encodeURIComponent(gatewayId)}`;
 
+  const detailResponse = await fetchImplementation(endpoint, { headers });
+  if (detailResponse.status === 401 || detailResponse.status === 403) {
+    await detailResponse.body?.cancel();
+    throw new Error("AI Gateway lookup authorization failed.");
+  }
+  if (detailResponse.status === 404) {
+    await detailResponse.body?.cancel();
+    throw new Error("AI Gateway was not found.");
+  }
+  const detail: unknown = await detailResponse.json();
+  if (
+    !detailResponse.ok ||
+    !isRecord(detail) ||
+    detail.success !== true ||
+    !isRecord(detail.result)
+  ) {
+    throw new Error("AI Gateway lookup failed.");
+  }
+  if (hasExactSpendLimit(detail.result)) return createBudgetEvidence();
+
   const spendLimits = Object.freeze({
     enabled: true,
     rules: Object.freeze([
@@ -168,36 +222,11 @@ export async function configureAiGatewayBudget(
   ) {
     throw new Error("AI Gateway update failed.");
   }
-  const returnedSpendLimits =
-    isRecord(updated.result) &&
-    isRecord(updated.result.spend_limits)
-      ? updated.result.spend_limits
-      : {};
-  const rules = Array.isArray(returnedSpendLimits.rules)
-    ? returnedSpendLimits.rules
-    : [];
-  const rule = rules.length === 1 && isRecord(rules[0]) ? rules[0] : {};
-  if (
-    returnedSpendLimits.enabled !== true ||
-    rule.enabled !== true ||
-    rule.limit !== AI_GATEWAY_LIMIT_DOLLARS ||
-    rule.limitType !== "cost" ||
-    rule.technique !== "fixed" ||
-    rule.window !== AI_GATEWAY_WINDOW_SECONDS ||
-    Object.hasOwn(rule, "metadata") ||
-    Object.hasOwn(rule, "model") ||
-    Object.hasOwn(rule, "provider")
-  ) {
+  if (!hasExactSpendLimit(updated.result)) {
     throw new Error("AI Gateway budget verification failed.");
   }
 
-  return Object.freeze({
-    configured: true as const,
-    global: true as const,
-    limitDollars: AI_GATEWAY_LIMIT_DOLLARS,
-    technique: "fixed" as const,
-    windowSeconds: AI_GATEWAY_WINDOW_SECONDS,
-  });
+  return createBudgetEvidence();
 }
 
 /** Executes the preview operator action while emitting only allowlisted evidence. */

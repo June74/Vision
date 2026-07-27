@@ -23,6 +23,17 @@ describe("preview AI Gateway budget configuration", () => {
           success: true,
           result: {
             spend_limits: {
+              enabled: false,
+              rules: [],
+            },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          success: true,
+          result: {
+            spend_limits: {
               enabled: true,
               rules: [
                 {
@@ -55,8 +66,8 @@ describe("preview AI Gateway budget configuration", () => {
     });
     expect(AI_GATEWAY_LIMIT_DOLLARS).toBe(9.5);
     expect(AI_GATEWAY_WINDOW_SECONDS).toBe(2_592_000);
-    expect(fetchImplementation).toHaveBeenCalledTimes(2);
-    const update = fetchImplementation.mock.calls[1]!;
+    expect(fetchImplementation).toHaveBeenCalledTimes(3);
+    const update = fetchImplementation.mock.calls[2]!;
     expect(String(update[0])).toMatch(
       /\/ai-gateway\/gateways\/vision-preview$/u,
     );
@@ -85,6 +96,57 @@ describe("preview AI Gateway budget configuration", () => {
     expect(JSON.stringify(result)).not.toContain("a".repeat(32));
   });
 
+  it("accepts an already exact rule using read-only verification", async () => {
+    const fetchImplementation = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({
+          success: true,
+          result: [{ id: "vision-preview", name: "vision-preview" }],
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          success: true,
+          result: {
+            spend_limits: {
+              enabled: true,
+              rules: [
+                {
+                  enabled: true,
+                  limit: 9.5,
+                  limitType: "cost",
+                  technique: "fixed",
+                  window: 2_592_000,
+                },
+              ],
+            },
+          },
+        }),
+      );
+
+    await expect(
+      configureAiGatewayBudget(
+        {
+          accountId: "9".repeat(32),
+          apiToken: "private-token-that-is-never-returned",
+        },
+        fetchImplementation,
+      ),
+    ).resolves.toMatchObject({
+      configured: true,
+      global: true,
+      limitDollars: 9.5,
+    });
+    expect(fetchImplementation).toHaveBeenCalledTimes(2);
+    expect(fetchImplementation.mock.calls[1]![1]).toEqual({
+      headers: {
+        authorization: "Bearer private-token-that-is-never-returned",
+        "content-type": "application/json",
+      },
+    });
+  });
+
   it("fails closed when Cloudflare does not return the exact global rule", async () => {
     const fetchImplementation = vi
       .fn<typeof fetch>()
@@ -94,6 +156,17 @@ describe("preview AI Gateway budget configuration", () => {
           result: [
             { id: "private-preview-gateway-id", name: "vision-preview" },
           ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          success: true,
+          result: {
+            spend_limits: {
+              enabled: false,
+              rules: [],
+            },
+          },
         }),
       )
       .mockResolvedValueOnce(
@@ -251,6 +324,17 @@ describe("preview AI Gateway budget configuration", () => {
           Response.json({
             success: true,
             result: [{ id: "vision-preview", name: "vision-preview" }],
+          }),
+        )
+        .mockResolvedValueOnce(
+          Response.json({
+            success: true,
+            result: {
+              spend_limits: {
+                enabled: false,
+                rules: [],
+              },
+            },
           }),
         )
         .mockResolvedValueOnce(rejectedUpdate);

@@ -13,6 +13,16 @@ dimensions makes the bucket global.
 
 Narrows untrusted Cloudflare JSON to a non-null, non-array record.
 
+## `hasExactSpendLimit`
+
+Requires one enabled cost rule with the approved limit, fixed window, and no
+metadata, model, or provider dimension.
+
+## `createBudgetEvidence`
+
+Returns the immutable allowlisted evidence object shared by the read-only and
+write-then-verify success paths.
+
 ## `classifyAiGatewayBudgetError`
 
 Maps only the command's own fixed configuration, authorization, not-found,
@@ -21,8 +31,9 @@ thrown values remain `unknown_failure`.
 
 ## `configureAiGatewayBudget`
 
-Performs the authenticated lookup and partial update, then requires exactly one
-enabled global rule with the approved limit, type, technique, and window.
+Performs the authenticated list and detail lookup. If the detail already
+matches the exact global rule, it succeeds without write access; otherwise it
+performs the partial update and applies the same strict verification.
 
 ## `main`
 
