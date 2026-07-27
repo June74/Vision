@@ -2,7 +2,7 @@
 
 - **Status:** contained
 - **First observed:** 2026-07-27T13:16:25Z
-- **Last observed:** 2026-07-27T13:16:25Z
+- **Last observed:** 2026-07-27T13:17:45Z
 - **Phase/task:** Phase B restore Task 4 tail correction
 - **Environment:** Local repository inspection
 - **Version/commit:** Pending correction commit
@@ -46,3 +46,9 @@ Read a complete existing incident instead of projecting only the safe fields nee
 ## Verification and related work
 
 - Subsequent verification commands return only pass counts or fixed safe results.
+
+## Recurrence history
+
+- 2026-07-27T13:17:45Z: A local commit-status line returned the existing branch
+  label. No credentials, provider data, database value, or raw tail data was
+  returned. Subsequent repository writes use quiet output.
