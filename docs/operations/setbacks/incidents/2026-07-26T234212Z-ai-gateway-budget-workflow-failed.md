@@ -2,7 +2,7 @@
 
 - **Status:** investigating
 - **First observed:** 2026-07-26T23:42:12Z
-- **Last observed:** 2026-07-27T00:27:16Z
+- **Last observed:** 2026-07-27T00:35:45Z
 - **Phase/task:** Phase B AI Gateway configuration
 - **Environment:** Guarded GitHub preview operator workflow
 - **Version/commit:** `0cd841a`
@@ -46,14 +46,15 @@ emitted no Cloudflare response body, identifier, credential, or URL.
   route-suffix check incorrectly treated its deeper subpage path as proof that
   the internal identifier differed.
 - The name-to-identifier lookup retry still returned `lookup_not_found`.
+- A conservative exact ID-or-name lookup also returned `lookup_not_found`.
 
 ## Cause classification
 
 - **Confirmed cause:** The preview token lacked Read for lookup. The later
   identifier-mismatch conclusion was not supported and is rejected.
-- **Hypotheses:** The signed-in Gateway and the account configured in the
-  operator workflow may differ, or the list response may expose the visible
-  value in its `id` rather than its `name`.
+- **Hypotheses:** The operator account may have an empty Gateway list, the
+  Gateway endpoint may return 404 for that account, or the nonempty list may
+  expose neither fixed identity field.
 - **Rejected hypotheses:** No application deployment or scheduled-job failure
   occurred.
 - **Known exclusions:** No provider-controlled response content or secret was
@@ -67,8 +68,8 @@ emitted no Cloudflare response body, identifier, credential, or URL.
 - **Prevention:** External mutation commands need privacy-safe stage categories,
   not one undifferentiated failure.
 - **Owner:** Codex and project owner.
-- **Next diagnostic step:** Establish whether the Gateway and Worker dashboard
-  routes use the same account without emitting either identifier.
+- **Next diagnostic step:** Split the current not-found category into endpoint
+  404, empty list, and nonempty identity mismatch.
 
 ## Verification and related work
 
@@ -89,3 +90,6 @@ Pending.
 - 2026-07-27T00:27:16Z: The name-based retry also returned
   `lookup_not_found`. The prior route-suffix inference was rejected because the
   route continued to a normal Gateway subpage after the expected segment.
+- 2026-07-27T00:35:45Z: The exact ID-or-name retry still returned
+  `lookup_not_found`; the next closed classifier distinguishes an empty account
+  from a nonempty identity mismatch.

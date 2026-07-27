@@ -146,6 +146,16 @@ describe("preview AI Gateway budget configuration", () => {
     ).toBe("lookup_not_found");
     expect(
       classifyAiGatewayBudgetError(
+        new Error("AI Gateway list was empty."),
+      ),
+    ).toBe("lookup_empty");
+    expect(
+      classifyAiGatewayBudgetError(
+        new Error("AI Gateway identity did not match."),
+      ),
+    ).toBe("lookup_identity_mismatch");
+    expect(
+      classifyAiGatewayBudgetError(
         new Error("AI Gateway update failed."),
       ),
     ).toBe("update_failed");
@@ -154,7 +164,7 @@ describe("preview AI Gateway budget configuration", () => {
     );
   });
 
-  it("fails closed when the approved visible Gateway name is absent", async () => {
+  it("fails closed when a nonempty Gateway list has no approved identity", async () => {
     const fetchImplementation = vi.fn<typeof fetch>().mockResolvedValueOnce(
       Response.json({
         success: true,
@@ -170,8 +180,27 @@ describe("preview AI Gateway budget configuration", () => {
         },
         fetchImplementation,
       ),
-    ).rejects.toThrow("AI Gateway was not found.");
+    ).rejects.toThrow("AI Gateway identity did not match.");
     expect(fetchImplementation).toHaveBeenCalledTimes(1);
+  });
+
+  it("distinguishes an empty Gateway list without exposing provider data", async () => {
+    const fetchImplementation = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      Response.json({
+        success: true,
+        result: [],
+      }),
+    );
+
+    await expect(
+      configureAiGatewayBudget(
+        {
+          accountId: "e".repeat(32),
+          apiToken: "private-token-that-is-never-returned",
+        },
+        fetchImplementation,
+      ),
+    ).rejects.toThrow("AI Gateway list was empty.");
   });
 
   it("classifies an authorization rejection before reading provider content", async () => {

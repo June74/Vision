@@ -21,7 +21,9 @@ export interface AiGatewayBudgetEvidence {
 
 export type AiGatewayBudgetErrorCategory =
   | "invalid_configuration"
+  | "lookup_empty"
   | "lookup_failed"
+  | "lookup_identity_mismatch"
   | "lookup_not_found"
   | "lookup_unauthorized"
   | "update_failed"
@@ -42,6 +44,10 @@ export function classifyAiGatewayBudgetError(
     return "invalid_configuration";
   }
   if (error.message === "AI Gateway lookup failed.") return "lookup_failed";
+  if (error.message === "AI Gateway list was empty.") return "lookup_empty";
+  if (error.message === "AI Gateway identity did not match.") {
+    return "lookup_identity_mismatch";
+  }
   if (error.message === "AI Gateway lookup authorization failed.") {
     return "lookup_unauthorized";
   }
@@ -92,6 +98,9 @@ export async function configureAiGatewayBudget(
   ) {
     throw new Error("AI Gateway lookup failed.");
   }
+  if (current.result.length === 0) {
+    throw new Error("AI Gateway list was empty.");
+  }
   const matchingGateways = current.result.filter(
     (gateway): gateway is Record<string, unknown> =>
       isRecord(gateway) &&
@@ -102,7 +111,7 @@ export async function configureAiGatewayBudget(
         gateway.name === AI_GATEWAY_APPROVED_ID_OR_NAME),
   );
   if (matchingGateways.length === 0) {
-    throw new Error("AI Gateway was not found.");
+    throw new Error("AI Gateway identity did not match.");
   }
   if (matchingGateways.length !== 1) {
     throw new Error("AI Gateway lookup failed.");
