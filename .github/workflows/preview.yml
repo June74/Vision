@@ -107,7 +107,7 @@ jobs:
     if: ${{ inputs.safe_tail == true && inputs.configure_ai_budget == false }}
     runs-on: ubuntu-latest
     environment: preview
-    timeout-minutes: 3
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -124,8 +124,8 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
         run: |
           set +o pipefail
-          timeout 85s pnpm exec wrangler tail vision-preview --format json 2>/dev/null |
-            pnpm exec tsx scripts/print-safe-tail.ts
+          timeout 16m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |
+            pnpm exec tsx scripts/print-safe-tail.ts --restore-only
 
   configure_gateway:
     name: Configure approved AI Gateway budget

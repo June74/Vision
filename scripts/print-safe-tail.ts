@@ -1,7 +1,10 @@
-/** Prints the first allowlisted recovery or restore result and nothing raw. */
+/** Prints a privacy-safe result, optionally requiring closed restore evidence. */
 import { createInterface } from "node:readline";
 import { createSafeTailAccumulator } from "./safe-tail-classifier";
 
+const RESTORE_ONLY_ARGUMENT = "--restore-only";
+const restoreOnly =
+  process.argv.length === 3 && process.argv[2] === RESTORE_ONLY_ARGUMENT;
 let emitted = false;
 const accumulator = createSafeTailAccumulator();
 const lines = createInterface({
@@ -11,7 +14,13 @@ const lines = createInterface({
 
 lines.on("line", (line) => {
   const evidence = accumulator.push(line);
-  if (!evidence || emitted) return;
+  if (
+    !evidence ||
+    emitted ||
+    (restoreOnly && !("evidenceType" in evidence))
+  ) {
+    return;
+  }
   emitted = true;
   process.stdout.write(`${JSON.stringify(evidence)}\n`);
   process.exit(0);

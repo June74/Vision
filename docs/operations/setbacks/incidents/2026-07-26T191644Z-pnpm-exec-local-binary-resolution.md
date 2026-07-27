@@ -59,3 +59,8 @@ The focused test suite subsequently ran and passed 4/4.
 - 2026-07-27T00:19:11Z: Recurred during the AI Gateway identifier regression
   test. No test process started; the retry uses the repository-local Windows
   wrapper directly.
+- 2026-07-27T13:14:09Z: Recurred during the restore tail-correction RED run.
+  No test process started; the retry uses the repository-local Windows wrapper
+  directly.
+
+The repository-local wrapper then ran the focused suite with 8 passing tests.

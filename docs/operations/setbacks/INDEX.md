@@ -2,6 +2,8 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
+| [SB-20260727-131625-branch-label-in-source-inspection](incidents/2026-07-27T131625Z-branch-label-in-source-inspection.md) | contained | 2026-07-27T13:16:25Z | Phase B restore Task 4 tail correction | Source inspection returned a branch label |
+| [SB-20260727-131409-pnpm-powershell-wrapper-policy](incidents/2026-07-27T131409Z-pnpm-powershell-wrapper-policy.md) | closed | 2026-07-27T13:14:09Z | Phase B restore Task 4 tail correction | PowerShell blocked the package-manager script wrapper |
 | [SB-20260726-182445-cloudflare-browser-metadata-exposure](incidents/2026-07-26T182445Z-cloudflare-browser-metadata-exposure.md) | contained | 2026-07-27T17:18:48Z | Phase B provider acceptance and restore Task 4 | Provider browser metadata exposure |
 | [SB-20260726-203842-full-check-tool-timeout](incidents/2026-07-26T203842Z-full-check-tool-timeout.md) | closed | 2026-07-26T20:46:22.9385791Z | Phase B clean-room verification | Full quality gate exceeded tool timeout |
 | [SB-20260726-203906-process-metadata-access-denied](incidents/2026-07-26T203906Z-process-metadata-access-denied.md) | closed | 2026-07-26T20:39:06.2646501Z | Phase B clean-room verification | Process metadata query was denied |

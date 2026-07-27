@@ -209,9 +209,10 @@ describe("preview live diagnostics policy", () => {
     expect(preview.match(/^  deploy:/gmu)).toHaveLength(1);
     expect(preview.match(/^  tail:/gmu)).toHaveLength(1);
     expect(preview.match(/^  configure_gateway:/gmu)).toHaveLength(1);
+    expect(preview).toContain("timeout-minutes: 18");
     expect(tailStep).toContain(
-      "pnpm exec wrangler tail vision-preview --format json 2>/dev/null |\n" +
-        "            pnpm exec tsx scripts/print-safe-tail.ts",
+      "timeout 16m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |\n" +
+        "            pnpm exec tsx scripts/print-safe-tail.ts --restore-only",
     );
     expect(tailStep).toContain("--format json 2>/dev/null");
     expect(tailStep).toContain(
