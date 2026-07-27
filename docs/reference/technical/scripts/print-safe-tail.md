@@ -6,4 +6,5 @@ after the first allowlisted scheduled-event classification. The fixed
 `vision.preview-restore/v1` evidence, ignoring recovery classifications while
 the stream remains open. If no accepted result arrives before input closes, it
 emits a fixed closed-vocabulary result. Raw input is never written to standard
-output.
+output. Every argument vector other than no option or the exact fixed option
+exits nonzero without output.

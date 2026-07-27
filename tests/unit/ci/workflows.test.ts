@@ -18,6 +18,23 @@ function readWorkflowStep(workflow: string, name: string): string {
   return workflow.slice(start, nextStep === -1 ? undefined : nextStep);
 }
 
+/** Extracts one top-level workflow job without requiring a YAML runtime dependency. */
+function readWorkflowJob(workflow: string, name: string): string {
+  const marker = `  ${name}:`;
+  const start = workflow.indexOf(marker);
+  if (start === -1) {
+    throw new Error(`Workflow job not found: ${name}`);
+  }
+  const remainder = workflow.slice(start + marker.length);
+  const nextJobOffset = remainder.search(/\n {2}[A-Za-z_][A-Za-z0-9_]*:/u);
+  return workflow.slice(
+    start,
+    nextJobOffset === -1
+      ? undefined
+      : start + marker.length + nextJobOffset,
+  );
+}
+
 /** Reads the package metadata without adding a YAML parser dependency to policy tests. */
 async function readPackage(): Promise<{ packageManager?: string }> {
   const contents = await readFile(resolve(process.cwd(), "package.json"), "utf8");
@@ -194,6 +211,7 @@ describe("preview live diagnostics policy", () => {
       preview,
       "Print only allowlisted scheduled evidence",
     );
+    const tailJob = readWorkflowJob(preview, "tail");
 
     expect(preview).toContain("safe_tail:");
     expect(preview).toContain("configure_ai_budget:");
@@ -209,7 +227,7 @@ describe("preview live diagnostics policy", () => {
     expect(preview.match(/^  deploy:/gmu)).toHaveLength(1);
     expect(preview.match(/^  tail:/gmu)).toHaveLength(1);
     expect(preview.match(/^  configure_gateway:/gmu)).toHaveLength(1);
-    expect(preview).toContain("timeout-minutes: 18");
+    expect(tailJob).toContain("timeout-minutes: 18");
     expect(tailStep).toContain(
       "timeout 16m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |\n" +
         "            pnpm exec tsx scripts/print-safe-tail.ts --restore-only",

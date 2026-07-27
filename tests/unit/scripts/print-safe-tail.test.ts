@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 async function runPrintSafeTail(
   args: readonly string[],
   input: readonly string[],
-): Promise<string> {
+): Promise<{ readonly exitCode: number | null; readonly stdout: string }> {
   const child = spawn(
     process.execPath,
     ["--import", "tsx", resolve(process.cwd(), "scripts", "print-safe-tail.ts"), ...args],
@@ -20,8 +20,7 @@ async function runPrintSafeTail(
   });
   child.stdin.end(input.join("\n"));
   const [exitCode] = (await once(child, "close")) as [number | null];
-  expect(exitCode).toBe(0);
-  return stdout;
+  return { exitCode, stdout };
 }
 
 /** Builds a synthetic scheduled tail event with no provider-controlled fields. */
@@ -53,24 +52,42 @@ describe("print-safe-tail", () => {
   it("keeps default mode backward compatible by emitting recovery evidence first", async () => {
     await expect(
       runPrintSafeTail([], [scheduledTail(), restoreTail(restoreFailure())]),
-    ).resolves.toBe(
-      '{"category":"none","cron":"temporary_recovery","outcome":"ok"}\n',
-    );
+    ).resolves.toEqual({
+      exitCode: 0,
+      stdout:
+        '{"category":"none","cron":"temporary_recovery","outcome":"ok"}\n',
+    });
   });
 
   it("ignores recovery evidence in restore-only mode until an exact restore result arrives", async () => {
     await expect(
       runPrintSafeTail(["--restore-only"], [scheduledTail(), restoreTail(restoreFailure())]),
-    ).resolves.toBe(
-      '{"evidenceType":"vision.preview-restore/v1","outcome":"failed","category":"restore_unknown_failure"}\n',
-    );
+    ).resolves.toEqual({
+      exitCode: 0,
+      stdout:
+        '{"evidenceType":"vision.preview-restore/v1","outcome":"failed","category":"restore_unknown_failure"}\n',
+    });
   });
 
   it("emits the closed fallback when restore-only mode ends without restore evidence", async () => {
     await expect(
       runPrintSafeTail(["--restore-only"], [scheduledTail()]),
-    ).resolves.toBe(
-      '{"category":"no_scheduled_event","cron":"none","outcome":"unknown"}\n',
-    );
+    ).resolves.toEqual({
+      exitCode: 0,
+      stdout:
+        '{"category":"no_scheduled_event","cron":"none","outcome":"unknown"}\n',
+    });
+  });
+
+  it("rejects unknown arguments without emitting recovery evidence", async () => {
+    await expect(
+      runPrintSafeTail(["--unrecognized"], [scheduledTail()]),
+    ).resolves.toEqual({ exitCode: 1, stdout: "" });
+  });
+
+  it("rejects restore-only mode with extra arguments without emitting recovery evidence", async () => {
+    await expect(
+      runPrintSafeTail(["--restore-only", "extra"], [scheduledTail()]),
+    ).resolves.toEqual({ exitCode: 1, stdout: "" });
   });
 });

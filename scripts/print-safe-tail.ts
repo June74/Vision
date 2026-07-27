@@ -3,8 +3,12 @@ import { createInterface } from "node:readline";
 import { createSafeTailAccumulator } from "./safe-tail-classifier";
 
 const RESTORE_ONLY_ARGUMENT = "--restore-only";
+const noArguments = process.argv.length === 2;
 const restoreOnly =
   process.argv.length === 3 && process.argv[2] === RESTORE_ONLY_ARGUMENT;
+if (!noArguments && !restoreOnly) {
+  process.exit(1);
+}
 let emitted = false;
 const accumulator = createSafeTailAccumulator();
 const lines = createInterface({
