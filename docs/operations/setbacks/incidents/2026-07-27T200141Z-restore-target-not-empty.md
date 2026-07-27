@@ -23,9 +23,15 @@ fail-closed rollback before further diagnosis.
 
 - **Confirmed stage:** Restore target precondition rejected a non-empty
   authoritative target.
-- **Working hypothesis:** A scheduled restore may have run before the safe-tail
-  listener attached and populated the target, after which the observed retry
-  correctly rejected the now non-empty target.
+- **Confirmed timing condition:** The temporary Worker deploy step completed
+  127 seconds before the restore-only tail step started. With the one-minute
+  restore schedule, at least two scheduled boundaries could occur before the
+  observer attached.
+- **Strongly supported causal inference:** A scheduled restore ran during that
+  unobserved window and populated the target, after which the observed retry
+  correctly rejected the now non-empty target. This is supported by the target
+  being verified empty immediately before deployment and later containing one
+  atomically promoted backup snapshot.
 - **Alternative hypothesis:** Some other operation populated authoritative
   rows after the last successful emptiness attestation.
 - **Known exclusions:** The evidence is not `no_scheduled_event`, is not a log
@@ -65,5 +71,7 @@ deployment. The restore importer promotes all authoritative tables in one
 serializable transaction after staging reference and row-count validation.
 Therefore the target change is consistent with one committed import before the
 safe-tail listener attached, followed by the captured non-overwrite failure.
-The required explicit success record was still missed, so a final retry design
-must attach observation before activation or durably retain the first result.
+The 127-second measured observation gap makes that event ordering the supported
+explanation. The required explicit success record was still missed, so a final
+retry design must attach observation before activation or durably retain the
+first result.
