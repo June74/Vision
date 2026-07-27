@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T02:53:04.228543Z
-- **Last observed:** 2026-07-27T02:53:57Z
-- **Phase/task:** Phase B restore Task 1
+- **Last observed:** 2026-07-27T03:39:49Z
+- **Phase/task:** Phase B restore Task 2
 - **Environment:** Local managed Windows workspace
 - **Version/commit:** `1ce1b889466faf9e6395d7881a29bb1664fc8b13` plus Task 1 working changes
 
@@ -54,8 +54,13 @@ retention and restore fixture declarations. The runtime project passed.
 
 ## Verification and related work
 
-`pnpm.cmd typecheck` exited zero after the fixture-only correction.
+`pnpm.cmd typecheck` exited zero after both fixture-only corrections.
 
 ## Recurrence history
 
 - 2026-07-27T02:53:04.228543Z: First observed.
+- 2026-07-27T03:39:03Z: Recurred when a Task 2 negative row-count fixture
+  deleted a key from a statically complete record. Runtime assertions passed,
+  but test-project type checking rejected the fixture. The correction will
+  construct the same incomplete unknown shape without deleting a required
+  typed property.

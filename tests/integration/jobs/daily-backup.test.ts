@@ -26,6 +26,7 @@ import {
   runScheduledJob,
   runScheduledRecovery,
 } from "../../../src/jobs/scheduled";
+import { TEMPORARY_PREVIEW_RESTORE_CRON } from "../../../src/jobs/temporary-preview-restore";
 import { parseBackupEnvironment } from "../../../src/server/env";
 import { MemoryBackupObjectStore } from "./backup-test-helpers";
 
@@ -228,25 +229,46 @@ describe("daily encrypted backup job", () => {
     ).toThrow(/distinct/i);
   });
 
-  it("dispatches the daily cron separately without changing the maintenance cron", async () => {
-    const maintenance = vi.fn(async () => undefined);
-    const recovery = vi.fn(async () => undefined);
+  it("dispatches maintenance, recovery, and temporary restore by exact cron", async () => {
+    const dependencies = {
+      maintenance: vi.fn(async () => undefined),
+      recovery: vi.fn(async () => undefined),
+      temporaryRestore: vi.fn(async () => undefined),
+    };
 
     expect(DAILY_BACKUP_CRON).toBe("5 6 * * *");
-    await runScheduledJob(CALENDAR_MAINTENANCE_CRON, NOW, {
-      maintenance,
-      recovery,
-    });
-    expect(maintenance).toHaveBeenCalledWith(NOW);
-    expect(recovery).not.toHaveBeenCalled();
+    await runScheduledJob(
+      CALENDAR_MAINTENANCE_CRON,
+      NOW,
+      dependencies,
+    );
+    expect(dependencies.maintenance).toHaveBeenCalledWith(NOW);
+    expect(dependencies.recovery).not.toHaveBeenCalled();
+    expect(dependencies.temporaryRestore).not.toHaveBeenCalled();
 
-    maintenance.mockClear();
-    await runScheduledJob(DAILY_BACKUP_CRON, NOW, {
-      maintenance,
-      recovery,
-    });
-    expect(recovery).toHaveBeenCalledWith(NOW);
-    expect(maintenance).not.toHaveBeenCalled();
+    vi.clearAllMocks();
+    await runScheduledJob(DAILY_BACKUP_CRON, NOW, dependencies);
+    expect(dependencies.recovery).toHaveBeenCalledWith(NOW);
+    expect(dependencies.maintenance).not.toHaveBeenCalled();
+    expect(dependencies.temporaryRestore).not.toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    await runScheduledJob(
+      TEMPORARY_PREVIEW_RESTORE_CRON,
+      NOW,
+      dependencies,
+    );
+    expect(dependencies.temporaryRestore).toHaveBeenCalledOnce();
+    expect(dependencies.maintenance).not.toHaveBeenCalled();
+    expect(dependencies.recovery).not.toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    await expect(
+      runScheduledJob("unsupported cron", NOW, dependencies),
+    ).rejects.toThrow("Scheduled cron is unsupported.");
+    expect(dependencies.maintenance).not.toHaveBeenCalled();
+    expect(dependencies.recovery).not.toHaveBeenCalled();
+    expect(dependencies.temporaryRestore).not.toHaveBeenCalled();
   });
 
   it("finishes and verifies the daily backup before starting retention", async () => {

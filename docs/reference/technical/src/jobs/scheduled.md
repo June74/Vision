@@ -1,11 +1,13 @@
 # `src/jobs/scheduled.ts`
 
-The scheduled entry point routes exact cron expressions to isolated Google-maintenance and encrypted-recovery
-capability sets. The daily branch never constructs Google credentials; the maintenance branch never constructs the
-backup key.
+The scheduled entry point routes exact cron expressions to isolated
+Google-maintenance, encrypted-recovery, and temporary preview-restore
+capability sets. The normal branches never construct the restore target, and
+the temporary restore path never receives the normal `DATABASE_URL`.
 
 ## `runScheduledJob`
-Matches only the two configured cron expressions and rejects any unexpected scheduled event.
+Matches only the three configured cron expressions and rejects any unexpected
+scheduled event.
 
 ## `runScheduledRecovery`
 Awaits verified daily creation before retention, so a failed backup can never be followed by a destructive purge.
@@ -16,6 +18,11 @@ Lazily constructs and executes only the existing calendar maintenance dependenci
 ## `recovery`
 Lazily constructs and executes only backup and retention dependencies.
 
+## `temporaryRestore`
+Lazily runs the injected preview restore engine, emits exactly the
+`backup.restore` action plus closed evidence, and throws only a fixed
+value-free failure.
+
 ## `runScheduledCalendarMaintenance`
 Runs projection cleanup and repair before renewal, isolates all three operations, and reports a failure only after every maintenance path has been attempted.
 ## `cleanupProjectionRebuilds`
@@ -24,6 +31,23 @@ Invokes the owner-scoped database-only projection retention boundary before cred
 Routes typed OAuth failure through the generation-safe maintenance checkpoint transition before rethrowing.
 ## `scheduled`
 Uses Cloudflare's scheduled time and exact cron string for capability-separated dispatch.
+## `createProductionTemporaryRestoreDependencies`
+Imports the unchanged backup key, binds R2, and exposes target-only adapter
+callbacks. It validates the fixed owner subject independently and never passes
+the normal application database URL into restore creation, snapshot read-back,
+or diagnostic read-back.
+## `createTarget`
+Constructs the interactive Neon adapter with the operator-known target ID,
+preview environment, and disposable flag so the database-owned schema-9
+attestation remains authoritative.
+## `readTargetSnapshot`
+Uses the canonical read-only repeatable-read migration-9 projection against
+only the validated temporary target URL.
+## `countReadableEvents`
+Derives the normal opaque owner, restores wrapped keys from the temporary
+target, exercises the diagnostic repository's owner authorization and title
+decryption path, discards all returned rows immediately, and retains only a
+nonnegative count.
 ## `createProductionScheduledRecoveryDependencies`
 Validates the separate key/version, imports a non-extractable key, and constructs the R2 and repeatable-read Neon
 adapters.

@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:08:16.577518Z
-- **Last observed:** 2026-07-27T02:32:27Z
-- **Phase/task:** Phase B completion audit
+- **Last observed:** 2026-07-27T03:29:24Z
+- **Phase/task:** Phase B restore Task 2
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `1dff60e`
 
@@ -85,3 +85,8 @@ read.
   `scripts/new_setback.py` path was used without first confirming that this
   repository provides that helper. The read failed without changing state;
   the existing incident was updated directly using exact listed paths.
+- 2026-07-27T03:29:24Z: Recurred during Task 2 when the Neon adapter was read
+  from a shortened path, the absent conventional setback helper was probed
+  again, and an incident filename was typed without its listed timestamp
+  suffix. All reads failed without changing provider or private state. The
+  adapter and incident were then resolved only from bounded directory output.

@@ -1,4 +1,4 @@
-/** Prints the first allowlisted scheduled-event classification and nothing raw. */
+/** Prints the first allowlisted recovery or restore result and nothing raw. */
 import { createInterface } from "node:readline";
 import { createSafeTailAccumulator } from "./safe-tail-classifier";
 

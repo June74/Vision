@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:24:05.647183Z
-- **Last observed:** 2026-07-27T02:38:35Z
-- **Phase/task:** Phase B deployment fix verification
+- **Last observed:** 2026-07-27T03:43:22Z
+- **Phase/task:** Phase B restore Task 2
 - **Environment:** Local managed sandbox Worker test pool
 - **Version/commit:** `codex/phase-b-foundation`
 
@@ -72,3 +72,9 @@ passed, 75 Worker passed, and the overall command exited zero.
 - 2026-07-27T02:38:35Z: The unchanged-key restore baseline emitted the same
   sandbox-only analyzer warnings and passed all 75 Worker assertions; the
   complete repository gate and all 29 browser tests exited successfully.
+- 2026-07-27T03:37:34Z: The Task 2 Worker gate used a task-local
+  `XDG_CONFIG_HOME`, emitted the same sandbox-only analyzer warning, and passed
+  all 75 Worker assertions with a zero exit.
+- 2026-07-27T03:43:22Z: The fresh Task 2 completion rerun used the same local
+  configuration boundary, repeated the known warning, and passed all 75
+  Worker assertions with a zero exit.
