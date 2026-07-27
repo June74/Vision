@@ -1071,6 +1071,15 @@ export async function scanRelease(
       evidenceSurface: undefined,
       evidenceSource: undefined,
     },
+    {
+      relativePath: "dist/vision",
+      kind: "directory" as const,
+      protectedValues: true,
+      secretBindings: false,
+      sourceKind: undefined,
+      evidenceSurface: undefined,
+      evidenceSource: undefined,
+    },
     ...EVIDENCE_TARGETS.map((target) => ({
       relativePath: target.relativePath,
       kind: "file" as const,

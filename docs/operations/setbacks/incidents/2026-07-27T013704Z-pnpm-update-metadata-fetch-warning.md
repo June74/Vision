@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:37:04Z
-- **Last observed:** 2026-07-27T01:37:04Z
-- **Phase/task:** Phase B clean-room verification
+- **Last observed:** 2026-07-27T04:49:11Z
+- **Phase/task:** Phase B restore Task 3 verification
 - **Environment:** Local restricted-network worktree
 - **Version/commit:** `50569e6`
 
@@ -35,3 +35,14 @@ did not change. The optional warning made the output non-pristine.
 
 The frozen install exited zero and reported the workspace already up to date.
 
+## Recurrence history
+
+- 2026-07-27T01:37:04Z: First observed and contained.
+- 2026-07-27T04:48:42Z: Recurred during the Task 3 frozen-install gate. The
+  command exited zero, reported dependencies current, and the before/after
+  lockfile digests matched. The clean rerun disables only the optional update
+  notifier before the gate sequence continues.
+- 2026-07-27T04:49:11Z: The generic notifier environment flag was a rejected
+  mitigation because pnpm repeated the non-fatal metadata warning. The command
+  again exited zero with an unchanged lockfile. The next bounded rerun uses
+  pnpm's configuration-specific environment key.

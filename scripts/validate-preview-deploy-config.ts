@@ -64,9 +64,10 @@ export function validatePreviewDeployConfig(candidate: unknown): void {
     (consumers[0] as Record<string, unknown>).max_retries === 5 &&
     (consumers[0] as Record<string, unknown>).max_concurrency === 1;
   const validCrons =
-    crons.length === 2 &&
+    crons.length === 3 &&
     crons[0] === "*/15 * * * *" &&
-    crons[1] === "5 6 * * *";
+    crons[1] === "5 6 * * *" &&
+    crons[2] === "* * * * *";
   if (
     config.targetEnvironment !== "preview" ||
     vars.VISION_ENV !== "preview" ||

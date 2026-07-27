@@ -29,6 +29,11 @@ export async function createCleanReleaseFixture(): Promise<string> {
     `dist/client/${clientRelativePath}`,
     clientContents,
   );
+  await writeFixtureFile(
+    root,
+    "dist/vision/index.js",
+    "globalThis.__VISION_WORKER_RELEASE_BUILD__ = true;",
+  );
   const buildDigest = createHash("sha256")
     .update(`${Buffer.byteLength(clientRelativePath, "utf8")}:`)
     .update(clientRelativePath, "utf8")

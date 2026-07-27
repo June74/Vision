@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T02:53:04.228543Z
-- **Last observed:** 2026-07-27T03:39:49Z
-- **Phase/task:** Phase B restore Task 2
+- **Last observed:** 2026-07-27T04:50:03Z
+- **Phase/task:** Phase B restore Task 3
 - **Environment:** Local managed Windows workspace
 - **Version/commit:** `1ce1b889466faf9e6395d7881a29bb1664fc8b13` plus Task 1 working changes
 
@@ -64,3 +64,8 @@ retention and restore fixture declarations. The runtime project passed.
   but test-project type checking rejected the fixture. The correction will
   construct the same incomplete unknown shape without deleting a required
   typed property.
+- 2026-07-27T04:50:03Z: Recurred when the Task 3 test-shape patch inserted
+  `triggers` beside the existing root declaration instead of inside the
+  environment declaration. Focused runtime assertions passed, but test-project
+  type checking reported the duplicate and missing property. The field is
+  moved to the per-environment shape before typecheck is rerun.

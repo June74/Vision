@@ -18,6 +18,8 @@ Never expose `GOOGLE_CLIENT_SECRET`, `OPENAI_API_KEY`, `DATABASE_URL`, `KEY_ENCR
 | `DATABASE_URL` | Data owner | Cloudflare Worker runtime, using a least-privileged role dedicated to the environment | Credential rotation, incident, schema-host move, or owner change | Yes, with a preview-only role and database |
 | `KEY_ENCRYPTION_KEY` and replacement key-encryption secrets | Security owner | Cloudflare Worker runtime, with an independent key per environment | Key ceremony, suspected disclosure, cryptographic policy change, or owner change | Yes, with a preview-only key |
 | `BACKUP_ENCRYPTION_KEY` and historical backup-key versions | Recovery owner | Cloudflare Worker runtime plus the approved operator recovery store | Key ceremony, suspected disclosure, cryptographic policy change, or owner change; retain every version while its backups exist | Yes, with a preview-only backup key distinct from `KEY_ENCRYPTION_KEY` |
+| `PREVIEW_RESTORE_DATABASE_URL` | Recovery owner | Cloudflare preview Worker runtime only, targeting the disposable restore database only | Remove immediately after verified restore and normal Worker redeployment; replace on suspected disclosure | Temporary restore window only |
+| `PREVIEW_RESTORE_TARGET_ID` | Recovery owner | Cloudflare preview Worker runtime only, identifying the disposable restore target only | Remove immediately after verified restore and normal Worker redeployment; replace when the disposable target changes | Temporary restore window only |
 
 No application data-service secret is configured in these workflows. Preview deployment uses `CLOUDFLARE_API_TOKEN_PREVIEW` and `CLOUDFLARE_ACCOUNT_ID_PREVIEW` from the protected GitHub `preview` environment; their values, scopes, and Cloudflare resource details are intentionally absent from the repository. Application secrets remain in the Cloudflare Worker runtime as separately managed, non-live preview values. Non-secret runtime configuration such as `GOOGLE_CLIENT_ID` and `VISION_USER_TIME_ZONE` follows the same environment separation.
 
@@ -25,6 +27,14 @@ All credential changes are recorded without values in
 [`credential-change-log.md`](credential-change-log.md). The preview backup key
 must remain unchanged unless the project owner explicitly authorizes a
 rotation.
+
+The two `PREVIEW_RESTORE_*` entries are temporary, preview-only, and
+target-only. They are configured only for an approved restore window, never
+copied into GitHub secrets, workflow files, generated artifacts, documentation
+values, or the normal preview `DATABASE_URL`, and are removed only after the
+restore succeeds, read-back verification succeeds, and the normal Worker is
+redeployed. A pending credential-log row is added only when configuration
+actually occurs; preparing this local candidate does not create one.
 
 ## Technical controls
 

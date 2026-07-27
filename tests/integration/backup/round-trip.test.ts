@@ -34,6 +34,7 @@ import {
   sha256Base64Url,
 } from "../../../src/data/backup/export-backup";
 import {
+  BackupRestorePromotionError,
   importBackup,
   type BackupRestoreStage,
   type BackupRestoreTarget,
@@ -1457,7 +1458,7 @@ describe("encrypted backup round trip", () => {
     const failedPromotion = new MemoryRestoreTarget();
     failedPromotion.failPromotion = true;
     await expect(importBackup(encrypted, key, failedPromotion)).rejects.toThrow(
-      /promotion failure/i,
+      BackupRestorePromotionError,
     );
     expect(failedPromotion.promoteCalls).toBe(1);
     expect(failedPromotion.snapshot.tables.nodes).toHaveLength(0);

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T04:06:24Z
-- **Last observed:** 2026-07-27T04:06:24Z
+- **Last observed:** 2026-07-27T04:45:35Z
 - **Phase/task:** Phase B restore Task 3
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `1d6ad12`
@@ -66,3 +66,7 @@ classification.
 ## Recurrence history
 
 - 2026-07-27T04:06:24Z: First observed and contained before candidate edits.
+- 2026-07-27T04:45:35Z: Recurred when the new required Worker scan target
+  caused existing clean release fixtures to lack required `dist/vision`
+  evidence. The shared fixture helper was added to Task 3's authoritative
+  file list before implementation continued.

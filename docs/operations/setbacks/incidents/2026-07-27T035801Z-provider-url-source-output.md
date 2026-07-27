@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T03:58:01Z
-- **Last observed:** 2026-07-27T04:06:24Z
+- **Last observed:** 2026-07-27T04:43:35Z
 - **Phase/task:** Phase B restore Task 3
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `1d6ad12`
@@ -67,3 +67,8 @@ interfaces without emitting URL contents.
   scanner while resolving the Task 3 security-scope ambiguity. The read was
   stopped after source-controlled endpoint literals appeared; it exposed no
   credential or provider-private value and changed no state.
+- 2026-07-27T04:43:35Z: Recurred when an otherwise test-only patch included
+  two existing URL-bearing test lines as context. The patch succeeded, but no
+  credential, restore value, account identifier, OAuth value, or provider
+  action was involved. All remaining edits and evidence use URL-independent
+  anchors plus bounded boolean, count, or line-number output.

@@ -59,6 +59,9 @@ describe("delivery workflow policy", () => {
     expect(preview).toContain("git rev-parse HEAD");
     expect(preview).toContain("ref: ${{ needs.verify.outputs.verified_sha }}");
     expect(preview).toContain("permissions:\n  contents: read");
+    expect(preview).not.toContain("PREVIEW_RESTORE_DATABASE_URL");
+    expect(preview).not.toContain("PREVIEW_RESTORE_TARGET_ID");
+    expect(preview).not.toContain('echo "$');
 
     expect(production).toContain("workflow_dispatch:");
     expect(production).toContain("environment: production");
@@ -203,8 +206,12 @@ describe("preview live diagnostics policy", () => {
     expect(preview).toContain(
       "if: ${{ inputs.configure_ai_budget == true && inputs.safe_tail == false }}",
     );
+    expect(preview.match(/^  deploy:/gmu)).toHaveLength(1);
+    expect(preview.match(/^  tail:/gmu)).toHaveLength(1);
+    expect(preview.match(/^  configure_gateway:/gmu)).toHaveLength(1);
     expect(tailStep).toContain(
-      "pnpm exec tsx scripts/print-safe-tail.ts",
+      "pnpm exec wrangler tail vision-preview --format json 2>/dev/null |\n" +
+        "            pnpm exec tsx scripts/print-safe-tail.ts",
     );
     expect(tailStep).toContain("--format json 2>/dev/null");
     expect(tailStep).toContain(
@@ -214,5 +221,6 @@ describe("preview live diagnostics policy", () => {
       "CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}",
     );
     expect(tailStep).not.toContain("--log");
+    expect(tailStep).not.toContain("actions/upload-artifact");
   });
 });

@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T02:32:27Z
-- **Last observed:** 2026-07-27T02:32:27Z
-- **Phase/task:** Phase B restore implementation plan
+- **Last observed:** 2026-07-27T04:42:44Z
+- **Phase/task:** Phase B restore Task 3
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `6fdb9cb`
 
@@ -56,3 +56,7 @@ The retry must modify only the intended plan paragraph and pass
 ## Recurrence history
 
 - 2026-07-27T02:32:27Z: First observed and contained.
+- 2026-07-27T04:42:44Z: Recurred when a test-only patch used context copied
+  from privacy-redacted inspection output. The patch was rejected atomically,
+  `git diff` confirmed neither test changed, and the retry uses short anchors
+  that do not include URL-bearing source.

@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T04:02:13Z
-- **Last observed:** 2026-07-27T04:04:09Z
-- **Phase/task:** Phase B restore Task 3
+- **Last observed:** 2026-07-27T04:58:22Z
+- **Phase/task:** Phase B restore Task 3 verification
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `1d6ad12`
 
@@ -67,3 +67,6 @@ this incident was recorded.
 - 2026-07-27T04:04:09Z: Recurred when a command-scoped conversion override
   made existing carriage returns appear as trailing whitespace. The override
   was rejected; no file was staged or committed.
+- 2026-07-27T04:58:22Z: Recurred during the Task 3 final whitespace check.
+  The check exited zero; the warning remained limited to expected Windows
+  normalization metadata for edited text files.

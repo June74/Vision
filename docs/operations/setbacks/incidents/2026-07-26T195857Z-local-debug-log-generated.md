@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:58:57.365788Z
-- **Last observed:** 2026-07-26T20:53:19.9855914Z
-- **Phase/task:** Phase B clean-room verification
+- **Last observed:** 2026-07-27T04:58:39Z
+- **Phase/task:** Phase B restore Task 3 verification
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `3935500`
 
@@ -61,3 +61,7 @@ The generated file is absent and the setback itself is indexed.
   verification. The 198-byte file was inspected only through fixed privacy
   booleans; all five prohibited-shape checks were false before exact-path
   removal.
+- 2026-07-27T04:58:39Z: Recurred after the Task 3 build and Worker gates. The
+  594-byte untracked file was never printed; six fixed-shape privacy checks
+  were false, and its resolved path was confirmed inside the worktree before
+  exact-path removal.

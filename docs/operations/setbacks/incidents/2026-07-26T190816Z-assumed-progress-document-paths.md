@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:08:16.577518Z
-- **Last observed:** 2026-07-27T03:56:50Z
+- **Last observed:** 2026-07-27T04:41:28Z
 - **Phase/task:** Phase B restore Task 3
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `1dff60e`
@@ -94,3 +94,9 @@ read.
   `scripts/new_setback.py` path was used before checking the repository
   listing. The read failed without changing state; the existing incident was
   updated directly from the exact listed paths.
+- 2026-07-27T04:41:28Z: Recurred during the corrected Task 3 implementation
+  when one environment-schema path was inferred and the already-known absent
+  conventional setback-helper path was probed. Both reads failed safely after
+  other bounded reads completed; no source, provider, or private state changed.
+  The environment schema was then resolved from the exact import path, and the
+  existing incident was updated directly.

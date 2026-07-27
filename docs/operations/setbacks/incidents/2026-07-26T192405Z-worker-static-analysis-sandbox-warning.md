@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:24:05.647183Z
-- **Last observed:** 2026-07-27T03:43:22Z
-- **Phase/task:** Phase B restore Task 2
+- **Last observed:** 2026-07-27T04:56:36Z
+- **Phase/task:** Phase B restore Task 3 verification
 - **Environment:** Local managed sandbox Worker test pool
 - **Version/commit:** `codex/phase-b-foundation`
 
@@ -78,3 +78,6 @@ passed, 75 Worker passed, and the overall command exited zero.
 - 2026-07-27T03:43:22Z: The fresh Task 2 completion rerun used the same local
   configuration boundary, repeated the known warning, and passed all 75
   Worker assertions with a zero exit.
+- 2026-07-27T04:56:36Z: The Task 3 Worker gate used the task-local
+  configuration boundary, repeated the same sandbox-only analyzer warning,
+  and passed all 75 assertions with a zero exit.

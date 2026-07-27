@@ -53,6 +53,40 @@ describe("client secret-bundle boundary", () => {
       Object.keys(RuntimeEnvSchema.shape).sort(),
     );
     expect(CLIENT_FORBIDDEN_BINDING_NAMES).toContain("OPENAI_API_KEY");
+    expect(RUNTIME_CLIENT_FORBIDDEN_BINDING_NAMES).toEqual(
+      expect.arrayContaining([
+        "PREVIEW_RESTORE_DATABASE_URL",
+        "PREVIEW_RESTORE_TARGET_ID",
+      ]),
+    );
+  });
+
+  it.each([
+    ["temporary restore evidence", "temporary-restore-evidence-fixture"],
+    ["temporary target identity", "temporary-target-identity-fixture"],
+    ["fixture sentinel", "temporary-preview-fixture-sentinel"],
+  ])("rejects a protected %s from built client assets", async (_, sentinel) => {
+    const root = await createCleanReleaseFixture();
+    roots.push(root);
+    await writeFixtureFile(
+      root,
+      "dist/client/assets/app.js",
+      `globalThis.restoreFixture = "${sentinel}";`,
+    );
+
+    const result = await scanRelease({
+      projectRoot: root,
+      protectedSentinel: sentinel,
+    });
+
+    expect(result.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: "protected-value",
+          file: "dist/client/assets/app.js",
+        }),
+      ]),
+    );
   });
 
   it("fails closed when the built client assets are missing", async () => {
@@ -70,5 +104,66 @@ describe("client secret-bundle boundary", () => {
         }),
       ]),
     );
+  });
+
+  it("rejects a protected value from the Worker bundle", async () => {
+    const root = await createCleanReleaseFixture();
+    roots.push(root);
+    await writeFixtureFile(
+      root,
+      "dist/vision/index.js",
+      `globalThis.restoreFixture = "${PROTECTED_SENTINEL}";`,
+    );
+
+    const result = await scanRelease({
+      projectRoot: root,
+      protectedSentinel: PROTECTED_SENTINEL,
+    });
+
+    expect(result.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: "protected-value",
+          file: "dist/vision/index.js",
+        }),
+      ]),
+    );
+  });
+
+  it("fails closed when the Worker bundle is missing", async () => {
+    const root = await createCleanReleaseFixture();
+    roots.push(root);
+    await rm(`${root}/dist/vision`, { recursive: true, force: true });
+
+    const result = await scanRelease({
+      projectRoot: root,
+      protectedSentinel: PROTECTED_SENTINEL,
+    });
+
+    expect(result.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: "missing-evidence",
+          file: "dist/vision",
+        }),
+      ]),
+    );
+  });
+
+  it("allows server-only binding names in the Worker bundle", async () => {
+    const root = await createCleanReleaseFixture();
+    roots.push(root);
+    await writeFixtureFile(
+      root,
+      "dist/vision/index.js",
+      'globalThis.restoreBinding = "PREVIEW_RESTORE_DATABASE_URL";',
+    );
+
+    const result = await scanRelease({
+      projectRoot: root,
+      protectedSentinel: PROTECTED_SENTINEL,
+    });
+
+    expect(result.violations).toEqual([]);
   });
 });

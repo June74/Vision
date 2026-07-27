@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:03:39.626332Z
-- **Last observed:** 2026-07-27T04:04:09Z
+- **Last observed:** 2026-07-27T05:01:37Z
 - **Phase/task:** Phase B restore Task 3
 - **Environment:** Local linked worktree under the managed sandbox
 - **Version/commit:** `f7778b8`
@@ -72,3 +72,7 @@ The retry completed successfully and produced commit `f7778b8`.
   when incident files were staged under the default sandbox. No index write
   occurred. Future Task 3 staging uses the already established scoped metadata
   permission boundary and explicit paths.
+- 2026-07-27T05:01:37Z: Recurred while staging the corrected Task 3 candidate
+  through explicit paths. The default sandbox denied the linked-worktree index
+  lock before any index write; the exact path set is retried through the
+  established metadata-permission boundary.
