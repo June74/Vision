@@ -1,8 +1,8 @@
 # SB-20260727-194036-tail-correction-missed-routing-test: Tail correction missed an older cross-cutting workflow test
 
-- **Status:** contained
+- **Status:** closed
 - **First observed:** 2026-07-27T19:40:36Z
-- **Last observed:** 2026-07-27T19:40:36Z
+- **Last observed:** 2026-07-27T19:50:46Z
 - **Phase/task:** Phase B restore Task 4 tail correction
 - **Environment:** Local and GitHub Actions verification
 - **Version/commit:** `9bbc4be`
@@ -40,5 +40,9 @@ retained for a corrected, reviewed retry.
 
 ## Verification and related work
 
-The failing test provides the required red state. Implementation, full unit
-verification, and renewed review remain pending.
+The corrected focused test passed 2/2, the full unit suite passed 672 tests
+with one skip, and all TypeScript, contract, Worker, documentation, build, and
+security gates passed. A fresh independent review of `9bbc4be..7ef941b`
+returned specification PASS, quality PASS, safe to redeploy, and zero Critical,
+Important, or Minor findings. Its privacy scan covered all 997 added lines and
+found no value leak.

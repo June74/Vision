@@ -2,7 +2,7 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
-| [SB-20260727-194036-tail-correction-missed-routing-test](incidents/2026-07-27T194036Z-tail-correction-missed-routing-test.md) | contained | 2026-07-27T19:40:36Z | Phase B restore Task 4 tail correction | Tail correction missed an older cross-cutting workflow test |
+| [SB-20260727-194036-tail-correction-missed-routing-test](incidents/2026-07-27T194036Z-tail-correction-missed-routing-test.md) | closed | 2026-07-27T19:50:46Z | Phase B restore Task 4 tail correction | Tail correction missed an older cross-cutting workflow test |
 | [SB-20260727-193832-unit-suite-short-timeout](incidents/2026-07-27T193832Z-unit-suite-short-timeout.md) | closed | 2026-07-27T19:38:32Z | Phase B restore Task 4 diagnosis | Unit suite exceeded the short segmented timeout |
 | [SB-20260727-193621-incident-filename-z-omitted](incidents/2026-07-27T193621Z-incident-filename-z-omitted.md) | closed | 2026-07-27T19:36:21Z | Phase B restore Task 4 diagnosis | Historical incident filename omitted its timestamp Z |
 | [SB-20260727-193438-restore-retry-deployment-failed](incidents/2026-07-27T193438Z-restore-retry-deployment-failed.md) | contained | 2026-07-27T19:34:38Z | Phase B restore Task 4 live retry | Exact reviewed restore retry deployment failed |
