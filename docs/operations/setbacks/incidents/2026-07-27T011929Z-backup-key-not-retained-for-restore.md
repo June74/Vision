@@ -36,6 +36,9 @@ round trip succeeds.
 4. Explicit approval for that new runtime mechanism remained unanswered across
    three consecutive goal turns. No restore code, deployment, database write,
    branch deletion, or key change occurred.
+5. On 2026-07-27, the user explicitly approved the temporary preview-only
+   restore using the existing unchanged backup key. Design documentation and
+   review resumed; implementation remains gated on written-spec review.
 
 ## Cause classification
 
@@ -60,9 +63,8 @@ round trip succeeds.
   in the approved operator secret manager. Never treat a runtime secret store
   as the only copy of recovery material.
 - **Owner:** Codex and project owner.
-- **Next diagnostic step:** Obtain explicit approval for the temporary
-  preview-only scheduled restore before changing runtime code. The existing
-  key remains unchanged.
+- **Next diagnostic step:** Complete written-spec review, then implement the
+  approved temporary path. The existing key remains unchanged.
 
 ## Verification and related work
 

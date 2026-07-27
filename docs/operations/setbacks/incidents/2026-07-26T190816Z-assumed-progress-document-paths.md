@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:08:16.577518Z
-- **Last observed:** 2026-07-27T01:55:34Z
+- **Last observed:** 2026-07-27T02:10:30Z
 - **Phase/task:** Phase B completion audit
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `1dff60e`
@@ -73,3 +73,7 @@ read.
   from route concepts instead of discovered from the directory. Both reads
   failed without changing state; the directory was listed and the exact
   `*-routes.ts` filenames are used next.
+- 2026-07-27T02:10:30Z: Recurred when restore test filenames were inferred
+  from production modules before listing the backup-test directory. The failed
+  read changed nothing; the returned `neon-adapter.test.ts` and
+  `restore-command.test.ts` paths were opened successfully.
