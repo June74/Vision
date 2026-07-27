@@ -9,10 +9,11 @@ restore surface, and permanently delete only the attested disposable target.
 **Architecture:** GitHub Actions assigns safe-tail observers and preview
 mutations to separate conditional concurrency groups so the allowlisted
 listener can be active before deployment. The retained disposable target is
-re-attested and emptied in one serializable transaction, then the existing
-reviewed temporary restore Worker runs once. Success is followed by normal
-rollback, secret removal, cleanup code, verification, and branch deletion;
-every other result retains the branch.
+re-attested and emptied through one temporary in-memory Neon driver session and
+one serializable retained-connection transaction, then the existing reviewed
+temporary restore Worker runs once. Success is followed by normal rollback,
+secret removal, cleanup code, verification, and branch deletion; every other
+result retains the branch.
 
 **Tech Stack:** GitHub Actions, TypeScript, Vitest, Cloudflare Workers and
 Wrangler, Neon PostgreSQL, R2, pnpm, PowerShell.
@@ -28,6 +29,11 @@ Wrangler, Neon PostgreSQL, R2, pnpm, PowerShell.
 - Secret values, database identifiers, provider-private URLs, object keys,
   personal data, and protected rows never enter commands, logs, commits,
   documentation, screenshots, or chat.
+- The disposable connection value exists only in one temporary Node-backed
+  process. It never enters the clipboard, filesystem, shell environment,
+  command arguments, persistent tool storage, console, or returned tool text.
+- The temporary Node process releases the database client, closes its pool,
+  removes live credential references, and resets after success or failure.
 - Safe-tail must be actively running its
   `Print only allowlisted scheduled evidence` step before restore deployment.
 - Safe-tail retains `--restore-only`, a 16-minute observation window, and an
@@ -236,21 +242,32 @@ Expected: clean worktree, equal local/remote commits, and focused tests pass.
 Retain the exact commit in memory as `$candidateSha`; do not place any private
 provider value in a shell variable.
 
-- [ ] **Step 2: Select the exact target and role privately**
+- [ ] **Step 2: Acquire the exact target connection in memory only**
 
-In the signed-in Neon control:
+Use the signed-in Neon control and one temporary Node-backed browser/driver
+session:
 
 1. Select the already-retained disposable restore branch.
 2. Select the `vision_app` role.
 3. Confirm privately that this is not the normal preview branch.
-4. Do not display, record, or copy the branch name, branch identifier,
-   connection string, host, database name, or role credential.
+4. Read the connection value directly from the signed-in browser surface into a
+   process-local variable in that same temporary session.
+5. Do not use the clipboard, filesystem, shell environment, command arguments,
+   persistent tool storage, console, returned tool text, screenshots,
+   documentation, or chat for the branch name, branch identifier, connection
+   value, host, database name, or role credential.
+6. Load the repository-installed `@neondatabase/serverless` package and create
+   `new Pool({ connectionString, max: 1 })`. This is the same retained-session
+   driver already used by `src/data/backup/neon-adapter.ts`.
 
-Stop before SQL execution if any selector is ambiguous.
+Stop before SQL execution if any selector is ambiguous or any private value
+would cross the in-memory-only boundary.
 
-- [ ] **Step 3: Run the one-transaction fail-closed clear**
+- [ ] **Step 3: Run the one-transaction fail-closed clear on one client**
 
-Execute this exact SQL only on the privately selected disposable branch:
+Obtain one client with `await pool.connect()` and execute this exact SQL only on
+that retained client and privately selected disposable branch. Do not run it in
+the Neon web editor and do not split it across clients or requests:
 
 ```sql
 begin isolation level serializable;
@@ -404,13 +421,17 @@ $vision$;
 commit;
 ```
 
-Expected: one safe notice with the five fixed fields above. Any error rolls
-back the entire clear. Do not retry until the error is logged and diagnosed.
+Expected: the driver call completes successfully. Treat the safe notice as
+diagnostic only; do not forward raw driver notices. Any error rolls back the
+entire clear. Release the client, close the pool, remove live connection
+references, reset the temporary Node process, and do not retry until the error
+is logged and diagnosed.
 
-- [ ] **Step 4: Recheck the target without mutation**
+- [ ] **Step 4: Recheck without mutation, then destroy the session**
 
-Run a separate read-only aggregate check against the same provider-selected
-branch. Accept only:
+Using a newly obtained client from the same still-private pool, run a separate
+read-only aggregate check against the same provider-selected branch. Accept
+only:
 
 ```text
 attestation_ok=true
@@ -422,6 +443,12 @@ event_rows=0
 
 The check must not return table rows, target identity, connection information,
 or attestation values.
+
+In a `finally` path, release every client, close the pool, set every live
+connection-value reference to `undefined`, and reset the temporary Node kernel.
+JavaScript strings cannot be guaranteed to be physically zeroized; no
+persistence, no output, shortest practical lifetime, and kernel reset are the
+required controls.
 
 ---
 

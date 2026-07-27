@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T00:11:21Z
-- **Last observed:** 2026-07-27T17:28:39Z
-- **Phase/task:** Phase B AI Gateway configuration and restore Task 4
+- **Last observed:** 2026-07-27T23:29:53Z
+- **Phase/task:** Phase B listener-first restore retry Task 2
 - **Environment:** Local PowerShell and GitHub CLI
 - **Version/commit:** `ac1f044`
 
@@ -63,3 +63,9 @@ provider-stage failure was independent of the local network sandbox.
   dispatch used the default network sandbox. The connection was denied before
   GitHub received the request, so no workflow or provider state was created.
   The exact fixed dispatch must use the external-network path.
+- 2026-07-27T23:29:53Z: Recurred when the documentation-amendment push ran
+  after the preceding commit had already been blocked by the linked-worktree
+  metadata boundary. The default network sandbox could not reach GitHub; no
+  commit existed to push and no remote state changed. The fixed explicit-path
+  commit and push must use the established scoped metadata and external-network
+  path.

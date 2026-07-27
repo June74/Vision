@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:03:39.626332Z
-- **Last observed:** 2026-07-27T21:17:36Z
-- **Phase/task:** Phase B restore Tasks 3-4
+- **Last observed:** 2026-07-27T23:29:53Z
+- **Phase/task:** Phase B listener-first restore retry Tasks 1-2
 - **Environment:** Local linked worktree under the managed sandbox
 - **Version/commit:** `f7778b8`
 
@@ -89,3 +89,8 @@ The retry completed successfully and produced commit `f7778b8`.
   safe-directory override resolved ownership validation but did not grant the
   separate linked-worktree index-write permission. Git stopped before creating
   the lock; no stage, commit, or push was attempted afterward.
+- 2026-07-27T23:29:53Z: Recurred while staging only the approved in-memory
+  Task 2 specification and plan amendment. Git stopped before creating the
+  linked-worktree index lock, so neither documentation file was staged or
+  committed. The unchanged files remain in the worktree for retry through the
+  established scoped metadata-permission boundary.
