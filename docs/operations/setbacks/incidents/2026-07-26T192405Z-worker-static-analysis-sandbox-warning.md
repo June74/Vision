@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:24:05.647183Z
-- **Last observed:** 2026-07-27T01:40:05Z
+- **Last observed:** 2026-07-27T02:38:35Z
 - **Phase/task:** Phase B deployment fix verification
 - **Environment:** Local managed sandbox Worker test pool
 - **Version/commit:** `codex/phase-b-foundation`
@@ -69,3 +69,6 @@ passed, 75 Worker passed, and the overall command exited zero.
   Worker assertions passed with a zero exit.
 - 2026-07-27T01:40:05Z: The fresh Phase B Worker gate emitted the same
   sandbox-only analyzer warnings and passed all 75 assertions with a zero exit.
+- 2026-07-27T02:38:35Z: The unchanged-key restore baseline emitted the same
+  sandbox-only analyzer warnings and passed all 75 Worker assertions; the
+  complete repository gate and all 29 browser tests exited successfully.
