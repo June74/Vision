@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T02:58:08Z
-- **Last observed:** 2026-07-27T02:58:08Z
+- **Last observed:** 2026-07-27T19:57:34Z
 - **Phase/task:** Phase B restore Task 1 review
 - **Environment:** Local ignored scratch workspace
 - **Version/commit:** `3e2f60d`
@@ -59,3 +59,7 @@ sections and cover the exact Task 1 range.
 ## Recurrence history
 
 - 2026-07-27T02:58:08Z: First observed and contained before dispatch.
+- 2026-07-27T19:57:34Z: Recurred while reducing a successful deployment log
+  to two closed booleans. PowerShell `-match` returned matching line arrays;
+  no log lines were printed. The retry joins the lines in memory before
+  comparison.

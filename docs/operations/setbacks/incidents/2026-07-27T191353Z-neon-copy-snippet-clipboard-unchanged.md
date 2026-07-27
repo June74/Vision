@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T19:13:53Z
-- **Last observed:** 2026-07-27T19:15:05Z
+- **Last observed:** 2026-07-27T20:25:14Z
 - **Phase/task:** Phase B restore Task 4 live retry
 - **Environment:** Signed-in Neon connection modal
 - **Version/commit:** `9bbc4be`
@@ -63,3 +63,7 @@ browser memory. Only fixed shape booleans and length were returned.
 - 2026-07-27T19:13:53Z: First observed and contained without state change.
 - 2026-07-27T19:15:05Z: Closed after the validated connection field was read
   directly without using the clipboard action.
+- 2026-07-27T20:25:14Z: Recurred during retained-target diagnosis. The
+  provider control left the system clipboard without a valid connection token;
+  no clipboard content was printed. A user-like visible select-and-copy action
+  is used for the shell transfer instead.

@@ -17,6 +17,8 @@ authorization and safe verification result.
 | 2026-07-27 | Preview | `PREVIEW_RESTORE_TARGET_ID` | Deleted after the restore capture returned `no_scheduled_event` and normal code was redeployed | Direct user approval for Phase B restore Task 4 cleanup | The temporary secret name is absent; the disposable branch remains retained |
 | 2026-07-27 | Preview | `PREVIEW_RESTORE_DATABASE_URL` | Re-created as a temporary Worker secret for the approved restore retry after the safe-tail propagation window was corrected | Direct user approval for Phase B restore Task 4 | The secret name is present in preview, its type is Secret, and the value was never printed |
 | 2026-07-27 | Preview | `PREVIEW_RESTORE_TARGET_ID` | Re-created as a temporary Worker secret for the approved restore retry after the disposable target was re-attested | Direct user approval for Phase B restore Task 4 | The secret name is present in preview, its type is Secret, and the database-owned attestation was matched without returning the value |
+| 2026-07-27 | Preview | `PREVIEW_RESTORE_DATABASE_URL` | Permanently deleted after the allowlisted retry result failed closed with `restore_target_not_empty` and the exact normal Worker was redeployed | Direct user approval for Phase B restore Task 4 cleanup | The temporary secret name is absent; the disposable branch remains retained |
+| 2026-07-27 | Preview | `PREVIEW_RESTORE_TARGET_ID` | Permanently deleted after the allowlisted retry result failed closed with `restore_target_not_empty` and the exact normal Worker was redeployed | Direct user approval for Phase B restore Task 4 cleanup | The temporary secret name is absent; the disposable branch remains retained |
 
 ## Required entry for every future change
 

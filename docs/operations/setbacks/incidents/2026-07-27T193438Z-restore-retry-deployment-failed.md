@@ -1,8 +1,8 @@
 # SB-20260727-193438-restore-retry-deployment-failed: Exact reviewed restore retry deployment failed
 
-- **Status:** contained
+- **Status:** closed
 - **First observed:** 2026-07-27T19:34:38Z
-- **Last observed:** 2026-07-27T19:34:38Z
+- **Last observed:** 2026-07-27T19:57:34Z
 - **Phase/task:** Phase B restore Task 4 live retry
 - **Environment:** Preview GitHub Actions deployment
 - **Version/commit:** `9bbc4be`
@@ -39,5 +39,7 @@ cleanup.
 ## Verification and related work
 
 The failure was isolated to `Run application checks`, then reproduced locally
-as one failing routing/workflow unit test. Correction and renewed review remain
-pending.
+as one failing routing/workflow unit test. After correction, full local gates
+and a reopened independent review passed. The new workflow run completed
+successfully, and a closed log check confirmed both the exact reviewed commit
+and deploy step without printing hosted logs.
