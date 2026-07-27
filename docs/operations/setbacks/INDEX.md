@@ -61,7 +61,7 @@
 | [SB-20260726-232248-neon-attestation-editor-not-replaced](incidents/2026-07-26T232248Z-neon-attestation-editor-not-replaced.md) | closed | 2026-07-26T23:40:19Z | Phase B disposable Neon restore | Neon attestation editor was not replaced |
 | [SB-20260726-232735-r2-object-key-in-route-diagnostic](incidents/2026-07-26T232735Z-r2-object-key-in-route-diagnostic.md) | contained | 2026-07-26T23:27:35Z | Phase B AI Gateway navigation | R2 object key in route diagnostic |
 | [SB-20260726-233656-gateway-workflow-policy-test-missed](incidents/2026-07-26T233656Z-gateway-workflow-policy-test-missed.md) | closed | 2026-07-26T23:36:56Z | Phase B AI Gateway configuration | Gateway workflow policy test was missed |
-| [SB-20260726-234212-ai-gateway-budget-workflow-failed](incidents/2026-07-26T234212Z-ai-gateway-budget-workflow-failed.md) | investigating | 2026-07-27T01:08:27Z | Phase B AI Gateway configuration | AI Gateway budget workflow failed |
+| [SB-20260726-234212-ai-gateway-budget-workflow-failed](incidents/2026-07-26T234212Z-ai-gateway-budget-workflow-failed.md) | closed | 2026-07-27T01:33:23Z | Phase B AI Gateway configuration | AI Gateway budget workflow failed |
 | [SB-20260727-000552-cloudflare-permission-option-inspection-too-broad](incidents/2026-07-27T000552Z-cloudflare-permission-option-inspection-too-broad.md) | closed | 2026-07-27T00:05:52Z | Phase B AI Gateway configuration | Cloudflare permission option inspection was too broad |
 | [SB-20260727-001121-github-workflow-dispatch-network-sandbox](incidents/2026-07-27T001121Z-github-workflow-dispatch-network-sandbox.md) | closed | 2026-07-27T00:13:05Z | Phase B AI Gateway configuration | GitHub workflow dispatch was blocked by the network sandbox |
 | [SB-20260727-002225-full-check-shell-timeout](incidents/2026-07-27T002225Z-full-check-shell-timeout.md) | closed | 2026-07-27T00:24:17Z | Phase B AI Gateway identifier verification | Full check exceeded the shell time limit |
@@ -78,6 +78,9 @@
 | [SB-20260727-011929-backup-key-not-retained-for-restore](incidents/2026-07-27T011929Z-backup-key-not-retained-for-restore.md) | investigating | 2026-07-27T01:19:29Z | Phase B encrypted restore drill | Backup key was not retained for restore |
 | [SB-20260727-012329-gateway-helper-references-missing](incidents/2026-07-27T012329Z-gateway-helper-references-missing.md) | closed | 2026-07-27T01:23:29Z | Phase B read-only Gateway acceptance | Gateway helper references were missing |
 | [SB-20260727-012623-browser-finalize-keep-shape-invalid](incidents/2026-07-27T012623Z-browser-finalize-keep-shape-invalid.md) | closed | 2026-07-27T01:26:23Z | Phase B dashboard handoff | Browser handoff shape was invalid |
+| [SB-20260727-013001-guessed-release-checklist-file](incidents/2026-07-27T013001Z-guessed-release-checklist-file.md) | closed | 2026-07-27T01:30:01Z | Phase B completion audit | Release checklist filename was guessed |
+| [SB-20260727-013115-guessed-worker-entry-path](incidents/2026-07-27T013115Z-guessed-worker-entry-path.md) | closed | 2026-07-27T01:31:15Z | Phase B unchanged-key restore design | Worker entry path was guessed |
+| [SB-20260727-013323-select-string-match-name-missing](incidents/2026-07-27T013323Z-select-string-match-name-missing.md) | closed | 2026-07-27T01:33:23Z | Phase B credential-log discovery | Select-String match had no Name property |
 
 ## Legacy history
 

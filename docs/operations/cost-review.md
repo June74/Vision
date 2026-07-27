@@ -18,13 +18,13 @@ email addresses, protected calendar content, or secret values.
 | Cloudflare Queues | One private synchronization queue; low-volume single-user messages | Far below 10,000 operations per day | Within Workers Free Queue allowance |
 | Cloudflare R2 | Paid R2 subscription active at zero fixed monthly charge; one private Standard bucket | Thirty encrypted daily objects plus verification reads are far below 10 GB-month, 1 million Class A, and 10 million Class B free allowances | Expected $0 at private-pilot scale |
 | Google Calendar API | Push notifications plus 15-minute repair/renewal maintenance | Far below 10,000 requests/minute per project, 600 requests/minute per user, and 1,000,000 requests/day | Expected $0 |
-| OpenAI through AI Gateway | No live preview usage has yet been accepted | Application hard stop is 950 cents per Chicago accounting month | Blocked pending one approved live request and provider usage evidence |
+| OpenAI through AI Gateway | One global fixed 30-day $9.50 Gateway spend rule is live and independently verified | Application hard stop is 950 cents per Chicago accounting month | Provider-side ceiling passes; one harmless live category request and aggregate usage evidence remain |
 
 The measured infrastructure subtotal is currently $0. The application AI
-barrier limits OpenAI dispatch to $9.50 per accounting month, leaving more than
-$10 of the personal budget for unexpected managed-service usage. Phase B is not
-cost-accepted until the live AI path is configured and its dashboard usage is
-checked.
+barrier and independently verified Gateway rule both limit AI dispatch to
+$9.50, leaving more than $10 of the personal budget for unexpected
+managed-service usage. Phase B is not cost-accepted until one harmless live
+category request and fixed-shape aggregate usage evidence pass.
 
 ## Deterministic AI protections
 
@@ -53,6 +53,6 @@ application must refresh injected rates whenever the provider price changes.
 ## Release decision
 
 **Pending.** Current measured and projected infrastructure usage is compatible
-with the ceiling. The remaining cost gate is a harmless live OpenAI category
-request through the configured Gateway, followed by fixed-shape usage evidence.
-
+with the ceiling, and the provider-side $9.50 rule is verified. The remaining
+cost gate is a harmless live OpenAI category request through the configured
+Gateway, followed by fixed-shape usage evidence.

@@ -17,8 +17,14 @@ Never expose `GOOGLE_CLIENT_SECRET`, `OPENAI_API_KEY`, `DATABASE_URL`, `KEY_ENCR
 | `OPENAI_API_KEY` | AI integration owner | Server-side approved environments only after explicit AI acceptance approval | Provider key rotation, budget/security incident, or owner change | Yes, with a preview-only value after explicit approval |
 | `DATABASE_URL` | Data owner | Cloudflare Worker runtime, using a least-privileged role dedicated to the environment | Credential rotation, incident, schema-host move, or owner change | Yes, with a preview-only role and database |
 | `KEY_ENCRYPTION_KEY` and replacement key-encryption secrets | Security owner | Cloudflare Worker runtime, with an independent key per environment | Key ceremony, suspected disclosure, cryptographic policy change, or owner change | Yes, with a preview-only key |
+| `BACKUP_ENCRYPTION_KEY` and historical backup-key versions | Recovery owner | Cloudflare Worker runtime plus the approved operator recovery store | Key ceremony, suspected disclosure, cryptographic policy change, or owner change; retain every version while its backups exist | Yes, with a preview-only backup key distinct from `KEY_ENCRYPTION_KEY` |
 
 No application data-service secret is configured in these workflows. Preview deployment uses `CLOUDFLARE_API_TOKEN_PREVIEW` and `CLOUDFLARE_ACCOUNT_ID_PREVIEW` from the protected GitHub `preview` environment; their values, scopes, and Cloudflare resource details are intentionally absent from the repository. Application secrets remain in the Cloudflare Worker runtime as separately managed, non-live preview values. Non-secret runtime configuration such as `GOOGLE_CLIENT_ID` and `VISION_USER_TIME_ZONE` follows the same environment separation.
+
+All credential changes are recorded without values in
+[`credential-change-log.md`](credential-change-log.md). The preview backup key
+must remain unchanged unless the project owner explicitly authorizes a
+rotation.
 
 ## Technical controls
 

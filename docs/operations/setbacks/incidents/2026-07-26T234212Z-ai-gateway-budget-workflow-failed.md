@@ -1,8 +1,8 @@
 # SB-20260726-234212-ai-gateway-budget-workflow-failed: AI Gateway budget workflow failed
 
-- **Status:** investigating
+- **Status:** closed
 - **First observed:** 2026-07-26T23:42:12Z
-- **Last observed:** 2026-07-27T01:15:59Z
+- **Last observed:** 2026-07-27T01:33:23Z
 - **Phase/task:** Phase B AI Gateway configuration
 - **Environment:** Guarded GitHub preview operator workflow
 - **Version/commit:** `0cd841a`
@@ -56,6 +56,8 @@ emitted no Cloudflare response body, identifier, credential, or URL.
 - The approved AI Gateway was then created exactly once. The next isolated run
   passed lookup and moved to the safe category `update_failed`.
 - The status-refined retry returned `update_unauthorized`.
+- The owner saved the exact rule through the Gateway dashboard. The guarded
+  workflow then verified it read-only and skipped the denied update.
 
 ## Cause classification
 
@@ -77,13 +79,13 @@ emitted no Cloudflare response body, identifier, credential, or URL.
 - **Prevention:** External mutation commands need privacy-safe stage categories,
   not one undifferentiated failure.
 - **Owner:** Codex and project owner.
-- **Next diagnostic step:** Verify that account-level AI Gateway Edit is saved
-  on the token used by the preview environment, or apply the approved limit in
-  the dashboard and verify it read-only.
+- **Next diagnostic step:** None. Preserve the read-only idempotent acceptance
+  path and keep provider mutations confined to explicit operator approval.
 
 ## Verification and related work
 
-Pending.
+Guarded workflow run `30230011441` passed the exact global rule verification.
+Deployment, safe-tail, and normal preview verification jobs remained skipped.
 
 ## Recurrence history
 
@@ -114,3 +116,5 @@ Pending.
 - 2026-07-27T01:15:59Z: The refined category was `update_unauthorized`. Direct
   navigation to the saved Gateway dashboard route was then blocked by browser
   policy and was not bypassed.
+- 2026-07-27T01:33:23Z: The dashboard-saved rule passed the read-only guarded
+  workflow. The incident is closed without broadening token write access.
