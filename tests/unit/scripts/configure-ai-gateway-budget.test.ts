@@ -13,7 +13,9 @@ describe("preview AI Gateway budget configuration", () => {
       .mockResolvedValueOnce(
         Response.json({
           success: true,
-          result: { id: "vision-preview" },
+          result: [
+            { id: "private-preview-gateway-id", name: "vision-preview" },
+          ],
         }),
       )
       .mockResolvedValueOnce(
@@ -55,6 +57,9 @@ describe("preview AI Gateway budget configuration", () => {
     expect(AI_GATEWAY_WINDOW_SECONDS).toBe(2_592_000);
     expect(fetchImplementation).toHaveBeenCalledTimes(2);
     const update = fetchImplementation.mock.calls[1]!;
+    expect(String(update[0])).toMatch(
+      /\/ai-gateway\/gateways\/private-preview-gateway-id$/u,
+    );
     expect(update[1]).toMatchObject({
       method: "PUT",
       headers: {
@@ -86,7 +91,9 @@ describe("preview AI Gateway budget configuration", () => {
       .mockResolvedValueOnce(
         Response.json({
           success: true,
-          result: { id: "vision-preview" },
+          result: [
+            { id: "private-preview-gateway-id", name: "vision-preview" },
+          ],
         }),
       )
       .mockResolvedValueOnce(
@@ -145,6 +152,26 @@ describe("preview AI Gateway budget configuration", () => {
     expect(classifyAiGatewayBudgetError(new Error("private response"))).toBe(
       "unknown_failure",
     );
+  });
+
+  it("fails closed when the approved visible Gateway name is absent", async () => {
+    const fetchImplementation = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      Response.json({
+        success: true,
+        result: [{ id: "other-private-id", name: "other-gateway" }],
+      }),
+    );
+
+    await expect(
+      configureAiGatewayBudget(
+        {
+          accountId: "d".repeat(32),
+          apiToken: "private-token-that-is-never-returned",
+        },
+        fetchImplementation,
+      ),
+    ).rejects.toThrow("AI Gateway was not found.");
+    expect(fetchImplementation).toHaveBeenCalledTimes(1);
   });
 
   it("classifies an authorization rejection before reading provider content", async () => {

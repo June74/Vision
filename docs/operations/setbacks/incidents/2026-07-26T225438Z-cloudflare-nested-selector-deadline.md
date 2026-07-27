@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T22:54:38Z
-- **Last observed:** 2026-07-26T22:54:38Z
+- **Last observed:** 2026-07-27T00:02:19Z
 - **Phase/task:** Phase B R2 backup acceptance
 - **Environment:** Codex in-app browser control
 - **Version/commit:** `ffb3c0a`
@@ -58,3 +58,6 @@ The Cloudflare tab remained available after the read-only timeout.
 ## Recurrence history
 
 - 2026-07-26T22:54:38Z: First observed and closed.
+- 2026-07-27T00:02:19Z: Recurred while mapping a focused Cloudflare token
+  combobox through nested ancestors. The read-only query timed out; the form
+  remained unchanged, and direct ID comparison replaced the nested query.

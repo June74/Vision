@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 
 export const AI_GATEWAY_LIMIT_DOLLARS = 9.5;
 export const AI_GATEWAY_WINDOW_SECONDS = 30 * 24 * 60 * 60;
-const AI_GATEWAY_ID = "vision-preview";
+const AI_GATEWAY_NAME = "vision-preview";
 
 interface GatewayCredentials {
   readonly accountId: string;
@@ -66,15 +66,15 @@ export async function configureAiGatewayBudget(
   ) {
     throw new Error("AI Gateway budget configuration is invalid.");
   }
-  const endpoint =
+  const listEndpoint =
     `https://api.cloudflare.com/client/v4/accounts/${credentials.accountId}` +
-    `/ai-gateway/gateways/${AI_GATEWAY_ID}`;
+    "/ai-gateway/gateways";
   const headers = Object.freeze({
     authorization: `Bearer ${credentials.apiToken}`,
     "content-type": "application/json",
   });
 
-  const currentResponse = await fetchImplementation(endpoint, { headers });
+  const currentResponse = await fetchImplementation(listEndpoint, { headers });
   if (currentResponse.status === 401 || currentResponse.status === 403) {
     await currentResponse.body?.cancel();
     throw new Error("AI Gateway lookup authorization failed.");
@@ -88,11 +88,26 @@ export async function configureAiGatewayBudget(
     !currentResponse.ok ||
     !isRecord(current) ||
     current.success !== true ||
-    !isRecord(current.result) ||
-    current.result.id !== AI_GATEWAY_ID
+    !Array.isArray(current.result)
   ) {
     throw new Error("AI Gateway lookup failed.");
   }
+  const matchingGateways = current.result.filter(
+    (gateway): gateway is Record<string, unknown> =>
+      isRecord(gateway) &&
+      gateway.name === AI_GATEWAY_NAME &&
+      typeof gateway.id === "string" &&
+      gateway.id.length >= 1 &&
+      gateway.id.length <= 64,
+  );
+  if (matchingGateways.length === 0) {
+    throw new Error("AI Gateway was not found.");
+  }
+  if (matchingGateways.length !== 1) {
+    throw new Error("AI Gateway lookup failed.");
+  }
+  const gatewayId = matchingGateways[0]!.id as string;
+  const endpoint = `${listEndpoint}/${encodeURIComponent(gatewayId)}`;
 
   const spendLimits = Object.freeze({
     enabled: true,

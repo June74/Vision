@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:30:35.2961897Z
-- **Last observed:** 2026-07-26T22:51:41Z
+- **Last observed:** 2026-07-26T23:54:52Z
 - **Phase/task:** Phase B release operations
 - **Environment:** Local PowerShell runtime
 - **Version/commit:** `3128b5c`
@@ -56,3 +56,6 @@ The compatible form returned a correctly formatted UTC timestamp.
 - 2026-07-26T22:51:41Z: Recurred while timestamping an unrelated browser
   diagnostic incident. The failed command had no side effects; the compatible
   `[DateTime]::UtcNow` form succeeded immediately afterward.
+- 2026-07-26T23:54:52Z: Recurred while timestamping another browser helper
+  incident. No state changed; the compatible .NET UTC clock form succeeded
+  immediately afterward.

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:30:35.2961897Z
-- **Last observed:** 2026-07-26T20:54:22.5223781Z
+- **Last observed:** 2026-07-27T00:24:17Z
 - **Phase/task:** Phase B release operations
 - **Environment:** Local Phase B worktree under the managed sandbox
 - **Version/commit:** `3128b5c`
@@ -67,3 +67,5 @@ commit `3128b5c`.
 - 2026-07-26T20:54:22.5223781Z: An attempted `NUL` excludes-file override
   failed before the Git diff check. Documentation had already passed; the
   diff check was rerun normally instead of pursuing another workaround.
+- 2026-07-27T00:24:17Z: Recurred during the AI Gateway identifier pre-commit
+  status check. Git returned the requested state successfully.

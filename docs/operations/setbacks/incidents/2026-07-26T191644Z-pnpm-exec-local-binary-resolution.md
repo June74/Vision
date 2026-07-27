@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:16:44.091309Z
-- **Last observed:** 2026-07-26T22:57:22Z
+- **Last observed:** 2026-07-27T00:19:11Z
 - **Phase/task:** Phase B deployment fix tests
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** `codex/phase-b-foundation`
@@ -56,3 +56,6 @@ The focused test suite subsequently ran and passed 4/4.
   used for the retry.
 - 2026-07-26T22:57:22Z: Recurred during normal backup-schedule restoration.
   No test started; the retry uses `node_modules/.bin/vitest.cmd` directly.
+- 2026-07-27T00:19:11Z: Recurred during the AI Gateway identifier regression
+  test. No test process started; the retry uses the repository-local Windows
+  wrapper directly.

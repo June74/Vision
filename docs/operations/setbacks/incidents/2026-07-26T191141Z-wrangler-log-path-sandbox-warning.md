@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-07-26T22:58:14Z
+- **Last observed:** 2026-07-27T00:22:25Z
 - **Phase/task:** Phase B deployment diagnostics
 - **Environment:** Local managed sandbox
 - **Version/commit:** `codex/phase-b-foundation`
@@ -68,3 +68,6 @@ warning.
 - 2026-07-26T22:58:14Z: Recurred while rebuilding the normal backup schedule
   after the diagnostic setting was omitted. The focused tests, build, and
   preview artifact validation all exited successfully.
+- 2026-07-27T00:22:25Z: Recurred during the AI Gateway identifier full gate
+  because the workspace-local diagnostic setting was omitted. The remaining
+  checks are rerun separately with that setting restored.

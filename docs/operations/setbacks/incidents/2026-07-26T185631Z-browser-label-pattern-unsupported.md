@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T18:56:31.205139Z
-- **Last observed:** 2026-07-26T21:02:48.1034572Z
+- **Last observed:** 2026-07-26T23:54:52Z
 - **Phase/task:** Phase B Cloudflare configuration
 - **Environment:** Cloudflare preview dashboard through browser control
 - **Version/commit:** `codex/phase-b-foundation`
@@ -61,3 +61,6 @@ were safely verified as present.
   navigation probe that used a regular-expression text locator. The control
   layer rejected it before returning page content; exact strings were used
   next.
+- 2026-07-26T23:54:52Z: Recurred during a read-only validation of the
+  Cloudflare token permission form. The control layer rejected the pattern
+  before returning page content; no data changed or was exposed.
