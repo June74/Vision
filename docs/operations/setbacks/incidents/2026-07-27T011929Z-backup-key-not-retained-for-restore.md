@@ -2,10 +2,10 @@
 
 - **Status:** contained
 - **First observed:** 2026-07-27T01:19:29Z
-- **Last observed:** 2026-07-27T02:03:51Z
+- **Last observed:** 2026-07-27T02:16:44Z
 - **Phase/task:** Phase B encrypted restore drill
 - **Environment:** Preview Cloudflare Worker and local operator command
-- **Version/commit:** `4ccf04b`
+- **Version/commit:** `84b50be`
 
 ## Symptom
 
@@ -39,6 +39,9 @@ round trip succeeds.
 5. On 2026-07-27, the user explicitly approved the temporary preview-only
    restore using the existing unchanged backup key. Design documentation and
    review resumed; implementation remains gated on written-spec review.
+6. The written specification was committed and pushed, but its required review
+   approval remained unanswered for three consecutive resumed goal turns. No
+   implementation or external mutation occurred.
 
 ## Cause classification
 
@@ -75,3 +78,6 @@ Pending.
 - 2026-07-27T01:19:29Z: First observed and contained before any restore write.
 - 2026-07-27T02:03:51Z: The approval dependency persisted for three
   consecutive goal turns after all independent safe work was exhausted.
+- 2026-07-27T02:16:44Z: The approved approach had been converted into a
+  self-reviewed written specification, but the written-spec approval gate
+  remained unanswered for three consecutive resumed goal turns.
