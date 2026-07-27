@@ -93,6 +93,14 @@ export interface RestoreReport {
   readonly replacedExisting: boolean;
 }
 
+/** Value-free marker emitted only when the transactional promotion call fails. */
+export class BackupRestorePromotionError extends Error {
+  constructor() {
+    super("Backup restore promotion failed.");
+    this.name = "BackupRestorePromotionError";
+  }
+}
+
 /** Restores only after cryptographic, logical, and transaction-locked policy validation. */
 export async function importBackup(
   encrypted: EncryptedBackup,
@@ -156,10 +164,14 @@ export async function importBackup(
       "Backup staging row counts",
     );
     await transaction.assertTargetUnchanged(description);
-    await transaction.promote(stage, {
-      replaceExisting,
-      expectedTarget: description,
-    });
+    try {
+      await transaction.promote(stage, {
+        replaceExisting,
+        expectedTarget: description,
+      });
+    } catch {
+      throw new BackupRestorePromotionError();
+    }
     return { description, replaceExisting };
   });
 

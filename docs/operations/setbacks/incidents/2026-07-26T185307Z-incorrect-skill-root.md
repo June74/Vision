@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T18:53:07.263429Z
-- **Last observed:** 2026-07-26T18:53:07.263429Z
-- **Phase/task:** Phase B release operations
+- **Last observed:** 2026-07-27T03:06:16.8505755Z
+- **Phase/task:** Phase B restore Task 1 fix wave
 - **Environment:** Local Codex workspace
 - **Version/commit:** `codex/phase-b-foundation`
 
@@ -54,3 +54,8 @@ The correct skill file was read successfully in the same run.
 ## Recurrence history
 
 - 2026-07-26T18:53:07.263429Z: First observed.
+- 2026-07-27T03:06:16.8505755Z: A read-only lookup for the
+  `deliverable-acceptance-check` skill again assumed the `r0` root instead of
+  expanding the catalog-declared `r1` root. The lookup failed before repository
+  work, the correct catalog path was read successfully, and no project,
+  provider, or private state changed.

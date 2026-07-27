@@ -6,6 +6,7 @@ import {
   sha256Base64Url,
 } from "../data/backup/export-backup";
 import {
+  BackupRestorePromotionError,
   importBackup,
   type RestoreReport,
 } from "../data/backup/import-backup";
@@ -247,6 +248,9 @@ async function selectBackupCandidate(
 /** Maps only stable value-free importer messages into the closed evidence categories. */
 function classifyImportFailure(error: unknown): TemporaryRestoreFailureCategory {
   if (!(error instanceof Error)) return "restore_unknown_failure";
+  if (error instanceof BackupRestorePromotionError) {
+    return "restore_promotion_failed";
+  }
   const message = error.message.toLowerCase();
   if (message.includes("non-empty")) return "restore_target_not_empty";
   if (
@@ -267,7 +271,7 @@ function classifyImportFailure(error: unknown): TemporaryRestoreFailureCategory 
   ) {
     return "restore_backup_validation_failed";
   }
-  return "restore_promotion_failed";
+  return "restore_unknown_failure";
 }
 
 /** Requires exact complete authoritative-table count agreement. */

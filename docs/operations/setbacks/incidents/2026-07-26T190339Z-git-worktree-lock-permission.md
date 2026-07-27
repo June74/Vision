@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:03:39.626332Z
-- **Last observed:** 2026-07-26T22:01:39Z
-- **Phase/task:** Phase B release operations
+- **Last observed:** 2026-07-27T03:14:01.3548535Z
+- **Phase/task:** Phase B restore Task 1 fix wave
 - **Environment:** Local linked worktree under the managed sandbox
 - **Version/commit:** `f7778b8`
 
@@ -60,3 +60,7 @@ The retry completed successfully and produced commit `f7778b8`.
 - 2026-07-26T22:01:39Z: Recurred while staging live migration evidence;
   contained before any index write and retried through the approved metadata
   boundary.
+- 2026-07-27T03:13:22.2147232Z: Recurred while staging the Task 1 fix wave
+  through explicit paths. The default sandbox denied the linked-worktree index
+  lock before any index write; the same explicit-path operation then succeeded
+  through the scoped metadata-permission boundary.

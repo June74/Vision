@@ -13,15 +13,15 @@
 | [SB-20260726-210652-cloudflare-ai-config-inspection-inconclusive](incidents/2026-07-26T210652Z-cloudflare-ai-config-inspection-inconclusive.md) | contained | 2026-07-26T21:06:52.7787262Z | Phase B AI live acceptance | Cloudflare AI configuration inspection was inconclusive |
 | [SB-20260726-210852-skill-loaded-after-status-announcement](incidents/2026-07-26T210852Z-skill-loaded-after-status-announcement.md) | closed | 2026-07-26T21:08:52.2324591Z | Phase B blocked audit | Workflow skill was loaded after the status announcement |
 | [SB-20260726-215244-neon-editor-rendered-text-not-full-model](incidents/2026-07-26T215244Z-neon-editor-rendered-text-not-full-model.md) | closed | 2026-07-26T21:58:19.6876526Z | Phase B live database migration | Neon editor rendered text did not prove full migration transfer |
-| [SB-20260726-185307-incorrect-skill-root](incidents/2026-07-26T185307Z-incorrect-skill-root.md) | closed | 2026-07-26T18:53:07.263429Z | Phase B release operations | Incorrect local skill root used |
+| [SB-20260726-185307-incorrect-skill-root](incidents/2026-07-26T185307Z-incorrect-skill-root.md) | closed | 2026-07-27T03:06:16.8505755Z | Phase B restore Task 1 fix wave | Incorrect local skill root used |
 | [SB-20260726-185327-setback-index-row-placement](incidents/2026-07-26T185327Z-setback-index-row-placement.md) | closed | 2026-07-26T18:53:27.936691Z | Phase B release operations | Setback index row appended outside table |
 | [SB-20260726-185631-browser-label-pattern-unsupported](incidents/2026-07-26T185631Z-browser-label-pattern-unsupported.md) | closed | 2026-07-26T23:54:52Z | Phase B Cloudflare configuration | Browser label pattern was unsupported |
 | [SB-20260726-190208-assumed-wrangler-config-path](incidents/2026-07-26T190208Z-assumed-wrangler-config-path.md) | closed | 2026-07-26T19:02:08.702614Z | Phase B release operations | Conventional Wrangler config path was assumed |
-| [SB-20260726-190339-git-worktree-lock-permission](incidents/2026-07-26T190339Z-git-worktree-lock-permission.md) | closed | 2026-07-26T22:01:39Z | Phase B release operations | Git worktree lock creation was denied |
+| [SB-20260726-190339-git-worktree-lock-permission](incidents/2026-07-26T190339Z-git-worktree-lock-permission.md) | closed | 2026-07-27T03:14:01.3548535Z | Phase B restore Task 1 fix wave | Git worktree lock creation was denied |
 | [SB-20260726-190417-setback-row-timestamp-assumption](incidents/2026-07-26T190417Z-setback-row-timestamp-assumption.md) | closed | 2026-07-26T19:49:20.5044351Z | Phase B release operations | Setback row timestamp was assumed |
 | [SB-20260726-203035-git-global-ignore-unreadable](incidents/2026-07-26T203035Z-git-global-ignore-unreadable.md) | closed | 2026-07-27T01:52:24Z | Phase B release operations | Git global ignore file was unreadable |
 | [SB-20260726-203035-powershell-utc-flag-unsupported](incidents/2026-07-26T203035Z-powershell-utc-flag-unsupported.md) | closed | 2026-07-26T23:54:52Z | Phase B release operations | PowerShell UTC flag was unsupported |
-| [SB-20260726-190637-unbounded-backup-code-inspection](incidents/2026-07-26T190637Z-unbounded-backup-code-inspection.md) | closed | 2026-07-26T19:08:56.5870529Z | Phase B recovery acceptance | Backup source inspection was too broad |
+| [SB-20260726-190637-unbounded-backup-code-inspection](incidents/2026-07-26T190637Z-unbounded-backup-code-inspection.md) | closed | 2026-07-27T03:08:11.5689988Z | Phase B restore Task 1 fix wave | Backup source inspection was too broad |
 | [SB-20260726-190816-assumed-progress-document-paths](incidents/2026-07-26T190816Z-assumed-progress-document-paths.md) | closed | 2026-07-27T02:32:27Z | Phase B completion audit | Repository paths were assumed |
 | [SB-20260726-191035-preview-deploy-missing-nonsecret-vars](incidents/2026-07-26T191035Z-preview-deploy-missing-nonsecret-vars.md) | closed | 2026-07-26T19:33:19.4460335Z | Phase B recovery acceptance | Preview deployment omitted required non-secret variables |
 | [SB-20260726-191141-wrangler-log-path-sandbox-warning](incidents/2026-07-26T191141Z-wrangler-log-path-sandbox-warning.md) | closed | 2026-07-27T02:38:35Z | Phase B deployment diagnostics | Wrangler log path was blocked by sandbox |
@@ -92,6 +92,8 @@
 | [SB-20260727-024307-agent-wait-below-minimum](incidents/2026-07-27T024307Z-agent-wait-below-minimum.md) | closed | 2026-07-27T02:43:07Z | Phase B restore orchestration | Agent wait used a duration below the tool minimum |
 | [SB-20260727-025304-restore-test-fixture-typecheck](incidents/2026-07-27T025304Z-restore-test-fixture-typecheck.md) | closed | 2026-07-27T02:53:57Z | Phase B restore Task 1 | Restore test fixtures failed TypeScript checks |
 | [SB-20260727-025808-powershell-review-package-array-flattening](incidents/2026-07-27T025808Z-powershell-review-package-array-flattening.md) | closed | 2026-07-27T02:58:08Z | Phase B restore Task 1 review | PowerShell review package did not flatten command output |
+| [SB-20260727-030811-restore-test-diagnostic-value-exposure](incidents/2026-07-27T030811Z-restore-test-diagnostic-value-exposure.md) | closed | 2026-07-27T03:12:26.5130820Z | Phase B restore Task 1 fix wave | Restore tests could render private-shaped values on assertion failure |
+| [SB-20260727-030812-restore-promotion-overclassification](incidents/2026-07-27T030812Z-restore-promotion-overclassification.md) | closed | 2026-07-27T03:12:26.5130820Z | Phase B restore Task 1 fix wave | Unexpected importer errors were classified as promotion failures |
 
 ## Legacy history
 

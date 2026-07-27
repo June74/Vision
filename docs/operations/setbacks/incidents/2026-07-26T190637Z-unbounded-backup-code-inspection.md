@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:06:37.768763Z
-- **Last observed:** 2026-07-26T19:08:56.5870529Z
-- **Phase/task:** Phase B recovery acceptance
+- **Last observed:** 2026-07-27T03:08:11.5689988Z
+- **Phase/task:** Phase B restore Task 1 fix wave
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `1dff60e`
 
@@ -64,3 +64,7 @@ exact index rows.
 - 2026-07-26T19:06:37.768763Z: First observed.
 - 2026-07-26T19:08:56.5870529Z: Recurred in two completion-document
   inspections; output scope was then corrected and verified.
+- 2026-07-27T03:08:11.5689988Z: A recursive instruction-file lookup used a
+  broad include pattern and returned many repository paths. No dependency
+  contents, provider data, or private values were emitted; subsequent reads
+  returned to exact paths and bounded line ranges.

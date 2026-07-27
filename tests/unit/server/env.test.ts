@@ -13,6 +13,16 @@ function encodeBase64Url(bytes: Uint8Array): string {
   return btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
 }
 
+function expectPrivateValuesAbsent(
+  rendered: string,
+  privateValues: readonly string[],
+): void {
+  const valuesAreAbsent = privateValues.every(
+    (privateValue) => !rendered.includes(privateValue),
+  );
+  expect(valuesAreAbsent).toBe(true);
+}
+
 describe("RuntimeEnvSchema", () => {
   it("rejects a missing deployment environment", () => {
     expect(() => RuntimeEnvSchema.parse({})).toThrow();
@@ -173,16 +183,30 @@ describe("TemporaryRestoreEnvSchema", () => {
       } catch (error) {
         rendered = String(error);
       }
-      expect(rendered).not.toBe("");
-      for (const privateValue of [
+      const errorWasRendered = rendered.length > 0;
+      expect(errorWasRendered).toBe(true);
+      expectPrivateValuesAbsent(rendered, [
         privateUrl,
         "PRIVATE_PASSWORD_SENTINEL",
         privateTarget,
         privateUnexpected,
-      ]) {
-        expect(rendered).not.toContain(privateValue);
-      }
+      ]);
     }
+  });
+
+  it("keeps value-free assertion diagnostics boolean-only", () => {
+    const privateValue = ["PRIVATE", "DIAGNOSTIC", "SENTINEL"].join("_");
+    let diagnostic = "";
+    try {
+      expectPrivateValuesAbsent(privateValue, [privateValue]);
+    } catch (error) {
+      diagnostic = String(error);
+    }
+
+    const assertionFailed = diagnostic.length > 0;
+    const diagnosticIsValueFree = !diagnostic.includes(privateValue);
+    expect(assertionFailed).toBe(true);
+    expect(diagnosticIsValueFree).toBe(true);
   });
 });
 

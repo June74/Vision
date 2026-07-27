@@ -50,6 +50,7 @@ const KEY_VERSION = 7;
 interface MutableTargetState {
   snapshot: BackupSnapshotV1;
   attestationFailure: boolean;
+  ordinaryImportFailure: boolean;
   promotionFailure: boolean;
 }
 
@@ -68,6 +69,16 @@ interface RestoreFixture {
   readonly createTarget: ReturnType<typeof vi.fn>;
   readonly close: Mock<() => Promise<void>>;
   readonly privateSentinel: string;
+}
+
+function expectPrivateValuesAbsent(
+  rendered: string,
+  privateValues: readonly string[],
+): void {
+  const valuesAreAbsent = privateValues.every(
+    (privateValue) => !rendered.includes(privateValue),
+  );
+  expect(valuesAreAbsent).toBe(true);
 }
 
 function emptySnapshot(): BackupSnapshotV1 {
@@ -181,6 +192,9 @@ function memoryManagedTarget(
           return description;
         },
         async stage(snapshot) {
+          if (state.ordinaryImportFailure) {
+            throw new Error("Synthetic import step failed.");
+          }
           staged = cloneSnapshot(snapshot);
           return { opaqueId: "synthetic-stage" } satisfies BackupRestoreStage;
         },
@@ -239,12 +253,15 @@ async function restoreFixture(options?: {
   const state: MutableTargetState = {
     snapshot: cloneSnapshot(options?.target ?? emptySnapshot()),
     attestationFailure: false,
+    ordinaryImportFailure: false,
     promotionFailure: false,
   };
   const close = vi.fn(async () => undefined);
   const createTarget = vi.fn(async (databaseUrl: string, targetId: string) => {
-    expect(databaseUrl).toBe(DATABASE_URL);
-    expect(targetId).toBe(TARGET_ID);
+    const databaseBindingMatches = databaseUrl === DATABASE_URL;
+    const targetIdentityMatches = targetId === TARGET_ID;
+    expect(databaseBindingMatches).toBe(true);
+    expect(targetIdentityMatches).toBe(true);
     return memoryManagedTarget(state, close);
   });
   const readback = options?.readback ?? cloneSnapshot;
@@ -253,13 +270,15 @@ async function restoreFixture(options?: {
     backupKey: key,
     createTarget,
     async readTargetSnapshot(databaseUrl) {
-      expect(databaseUrl).toBe(DATABASE_URL);
+      const databaseBindingMatches = databaseUrl === DATABASE_URL;
+      expect(databaseBindingMatches).toBe(true);
       return readback(cloneSnapshot(state.snapshot));
     },
     countReadableEvents:
       options?.countReadableEvents ??
       (async (databaseUrl) => {
-        expect(databaseUrl).toBe(DATABASE_URL);
+        const databaseBindingMatches = databaseUrl === DATABASE_URL;
+        expect(databaseBindingMatches).toBe(true);
         return state.snapshot.tables.audit_events.length;
       }),
   };
@@ -315,7 +334,9 @@ describe("temporary preview restore", () => {
       category: "restore_configuration_invalid",
     });
     expect(fixture.store.listCalls).toHaveLength(0);
-    expect(JSON.stringify(result)).not.toContain(fixture.privateSentinel);
+    expectPrivateValuesAbsent(JSON.stringify(result), [
+      fixture.privateSentinel,
+    ]);
   });
 
   it.each([
@@ -353,7 +374,9 @@ describe("temporary preview restore", () => {
 
     expect(result.outcome).toBe("failed");
     expect(result.category).toMatch(/^restore_/u);
-    expect(JSON.stringify(result)).not.toContain(fixture.privateSentinel);
+    expectPrivateValuesAbsent(JSON.stringify(result), [
+      fixture.privateSentinel,
+    ]);
     expect(fixture.createTarget).not.toHaveBeenCalled();
   });
 
@@ -416,7 +439,9 @@ describe("temporary preview restore", () => {
       category: "restore_object_verification_failed",
     });
     expect(fixture.createTarget).not.toHaveBeenCalled();
-    expect(JSON.stringify(result)).not.toContain(fixture.privateSentinel);
+    expectPrivateValuesAbsent(JSON.stringify(result), [
+      fixture.privateSentinel,
+    ]);
   });
 
   it("fails closed on independent target attestation mismatch and releases the pool", async () => {
@@ -471,6 +496,22 @@ describe("temporary preview restore", () => {
     expect(fixture.close).toHaveBeenCalledOnce();
   });
 
+  it("maps an ordinary unexpected importer error to unknown failure", async () => {
+    const fixture = await restoreFixture();
+    fixture.state.ordinaryImportFailure = true;
+
+    await expect(
+      runTemporaryPreviewRestore(
+        fixture.environment,
+        fixture.dependencies,
+      ),
+    ).resolves.toMatchObject({
+      outcome: "failed",
+      category: "restore_unknown_failure",
+    });
+    expect(fixture.close).toHaveBeenCalledOnce();
+  });
+
   it("returns closed success evidence for all 29 authoritative tables after independent read-back", async () => {
     const fixture = await restoreFixture();
 
@@ -505,9 +546,11 @@ describe("temporary preview restore", () => {
       ),
     ).toBe(true);
     expect(fixture.close).toHaveBeenCalledOnce();
-    expect(JSON.stringify(result)).not.toContain(fixture.privateSentinel);
-    expect(JSON.stringify(result)).not.toContain(TARGET_ID);
-    expect(JSON.stringify(result)).not.toContain(fixture.objectKey);
+    expectPrivateValuesAbsent(JSON.stringify(result), [
+      fixture.privateSentinel,
+      TARGET_ID,
+      fixture.objectKey,
+    ]);
   });
 
   it("rejects a read-back row-count mismatch", async () => {
