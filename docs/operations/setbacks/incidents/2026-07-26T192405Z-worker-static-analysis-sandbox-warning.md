@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:24:05.647183Z
-- **Last observed:** 2026-07-27T00:24:17Z
+- **Last observed:** 2026-07-27T01:40:05Z
 - **Phase/task:** Phase B deployment fix verification
 - **Environment:** Local managed sandbox Worker test pool
 - **Version/commit:** `codex/phase-b-foundation`
@@ -67,3 +67,5 @@ passed, 75 Worker passed, and the overall command exited zero.
   evidence, so the suite is rerun independently.
 - 2026-07-27T00:24:17Z: The segmented retry emitted the same warning and all 75
   Worker assertions passed with a zero exit.
+- 2026-07-27T01:40:05Z: The fresh Phase B Worker gate emitted the same
+  sandbox-only analyzer warnings and passed all 75 assertions with a zero exit.

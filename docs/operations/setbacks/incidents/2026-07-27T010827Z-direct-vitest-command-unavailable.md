@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:08:27Z
-- **Last observed:** 2026-07-27T01:08:27Z
+- **Last observed:** 2026-07-27T01:41:39Z
 - **Phase/task:** Phase B AI Gateway update diagnostics
 - **Environment:** Local Windows worktree
 - **Version/commit:** `22c5dc0`
@@ -24,7 +24,7 @@ No test ran and no project or provider state changed.
 
 ## Correction and prevention
 
-- **Correction:** Run the targeted test through `pnpm.cmd test:unit --`.
+- **Correction:** Run the target through `pnpm.cmd test:unit <path>`.
 - **Prevention:** Inspect `package.json` and use its declared scripts before
   invoking a project tool directly on Windows.
 
@@ -32,3 +32,10 @@ No test ran and no project or provider state changed.
 
 The targeted Gateway test passed all nine cases through the repository's
 declared unit-test script.
+
+## Recurrence history
+
+- 2026-07-27T01:08:27Z: First observed during focused Gateway testing.
+- 2026-07-27T01:41:39Z: Recurred during the clean-room integration-only
+  rerun when `pnpm exec vitest` bypassed the declared script. No test ran; the
+  corrected command uses `pnpm.cmd test:unit tests/integration`.

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-07-27T00:22:25Z
+- **Last observed:** 2026-07-27T01:40:05Z
 - **Phase/task:** Phase B deployment diagnostics
 - **Environment:** Local managed sandbox
 - **Version/commit:** `codex/phase-b-foundation`
@@ -71,3 +71,6 @@ warning.
 - 2026-07-27T00:22:25Z: Recurred during the AI Gateway identifier full gate
   because the workspace-local diagnostic setting was omitted. The remaining
   checks are rerun separately with that setting restored.
+- 2026-07-27T01:40:05Z: Recurred during the fresh Phase B Worker gate after
+  the workspace-local diagnostic setting was again omitted. All 75 Worker
+  assertions passed; remaining commands restore the setting.
