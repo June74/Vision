@@ -2,7 +2,7 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
-| [SB-20260726-182445-cloudflare-browser-metadata-exposure](incidents/2026-07-26T182445Z-cloudflare-browser-metadata-exposure.md) | contained | 2026-07-26T19:44:34.9730985Z | Phase B provider acceptance | Provider browser metadata exposure |
+| [SB-20260726-182445-cloudflare-browser-metadata-exposure](incidents/2026-07-26T182445Z-cloudflare-browser-metadata-exposure.md) | contained | 2026-07-27T01:57:02Z | Phase B provider acceptance | Provider browser metadata exposure |
 | [SB-20260726-203842-full-check-tool-timeout](incidents/2026-07-26T203842Z-full-check-tool-timeout.md) | closed | 2026-07-26T20:46:22.9385791Z | Phase B clean-room verification | Full quality gate exceeded tool timeout |
 | [SB-20260726-203906-process-metadata-access-denied](incidents/2026-07-26T203906Z-process-metadata-access-denied.md) | closed | 2026-07-26T20:39:06.2646501Z | Phase B clean-room verification | Process metadata query was denied |
 | [SB-20260726-204229-background-process-path-collision](incidents/2026-07-26T204229Z-background-process-path-collision.md) | closed | 2026-07-26T23:07:19Z | Phase B clean-room verification | Background process launch hit a Path-key collision |
@@ -22,7 +22,7 @@
 | [SB-20260726-203035-git-global-ignore-unreadable](incidents/2026-07-26T203035Z-git-global-ignore-unreadable.md) | closed | 2026-07-27T01:52:24Z | Phase B release operations | Git global ignore file was unreadable |
 | [SB-20260726-203035-powershell-utc-flag-unsupported](incidents/2026-07-26T203035Z-powershell-utc-flag-unsupported.md) | closed | 2026-07-26T23:54:52Z | Phase B release operations | PowerShell UTC flag was unsupported |
 | [SB-20260726-190637-unbounded-backup-code-inspection](incidents/2026-07-26T190637Z-unbounded-backup-code-inspection.md) | closed | 2026-07-26T19:08:56.5870529Z | Phase B recovery acceptance | Backup source inspection was too broad |
-| [SB-20260726-190816-assumed-progress-document-paths](incidents/2026-07-26T190816Z-assumed-progress-document-paths.md) | closed | 2026-07-26T20:41:44.0266068Z | Phase B completion audit | Repository paths were assumed |
+| [SB-20260726-190816-assumed-progress-document-paths](incidents/2026-07-26T190816Z-assumed-progress-document-paths.md) | closed | 2026-07-27T01:55:34Z | Phase B completion audit | Repository paths were assumed |
 | [SB-20260726-191035-preview-deploy-missing-nonsecret-vars](incidents/2026-07-26T191035Z-preview-deploy-missing-nonsecret-vars.md) | closed | 2026-07-26T19:33:19.4460335Z | Phase B recovery acceptance | Preview deployment omitted required non-secret variables |
 | [SB-20260726-191141-wrangler-log-path-sandbox-warning](incidents/2026-07-26T191141Z-wrangler-log-path-sandbox-warning.md) | closed | 2026-07-27T01:40:05Z | Phase B deployment diagnostics | Wrangler log path was blocked by sandbox |
 | [SB-20260726-191141-generated-config-nesting-assumption](incidents/2026-07-26T191141Z-generated-config-nesting-assumption.md) | closed | 2026-07-26T19:19:40.5249114Z | Phase B deployment diagnostics | Generated Wrangler config nesting was assumed |
@@ -44,7 +44,7 @@
 | [SB-20260726-201749-incorrect-live-migration-range](incidents/2026-07-26T201749Z-incorrect-live-migration-range.md) | closed | 2026-07-26T20:18:31.4381230Z | Phase B live database recovery | Initial live migration range was incomplete |
 | [SB-20260726-215753-repository-search-entered-dependencies](incidents/2026-07-26T215753Z-repository-search-entered-dependencies.md) | closed | 2026-07-26T21:57:53Z | Phase B live migration verification | Repository search entered dependencies |
 | [SB-20260726-220017-guessed-preview-workflow-filename](incidents/2026-07-26T220017Z-guessed-preview-workflow-filename.md) | closed | 2026-07-26T22:24:39.8262153Z | Phase B temporary backup deployment | Guessed preview workflow filename |
-| [SB-20260726-220528-github-status-filter-quoting](incidents/2026-07-26T220528Z-github-status-filter-quoting.md) | closed | 2026-07-26T22:06:00Z | Phase B temporary backup deployment | GitHub status filter quoting failed |
+| [SB-20260726-220528-github-status-filter-quoting](incidents/2026-07-26T220528Z-github-status-filter-quoting.md) | closed | 2026-07-27T02:00:11Z | Phase B temporary backup deployment | GitHub status filter quoting failed |
 | [SB-20260726-220707-preview-workflow-abbreviated-ref](incidents/2026-07-26T220707Z-preview-workflow-abbreviated-ref.md) | closed | 2026-07-26T22:07:07Z | Phase B temporary backup deployment | Preview workflow received abbreviated ref |
 | [SB-20260726-220940-browser-locator-bulk-text-unsupported](incidents/2026-07-26T220940Z-browser-locator-bulk-text-unsupported.md) | closed | 2026-07-26T22:09:40Z | Phase B R2 backup acceptance | Browser locator bulk text unsupported |
 | [SB-20260726-221344-post-migration-backup-object-not-visible](incidents/2026-07-26T221344Z-post-migration-backup-object-not-visible.md) | closed | 2026-07-26T23:14:06Z | Phase B live encrypted backup acceptance | Post-migration backup object not visible |
@@ -84,6 +84,7 @@
 | [SB-20260727-013704-pnpm-update-metadata-fetch-warning](incidents/2026-07-27T013704Z-pnpm-update-metadata-fetch-warning.md) | closed | 2026-07-27T01:37:04Z | Phase B clean-room verification | pnpm update metadata fetch warned |
 | [SB-20260727-014333-security-scan-raced-build](incidents/2026-07-27T014333Z-security-scan-raced-build.md) | closed | 2026-07-27T01:43:33Z | Phase B clean-room verification | Security scan raced the production build |
 | [SB-20260727-014937-verification-command-discovery-mistakes](incidents/2026-07-27T014937Z-verification-command-discovery-mistakes.md) | closed | 2026-07-27T01:49:37Z | Phase B fresh verification handoff | Verification commands were guessed or searched too broadly |
+| [SB-20260727-015932-safe-workflow-watch-window-expired](incidents/2026-07-27T015932Z-safe-workflow-watch-window-expired.md) | closed | 2026-07-27T01:59:32Z | Phase B privacy-safe scheduled acceptance | Safe workflow outlived the local watch window |
 
 ## Legacy history
 

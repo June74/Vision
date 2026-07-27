@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:08:16.577518Z
-- **Last observed:** 2026-07-26T20:41:44.0266068Z
+- **Last observed:** 2026-07-27T01:55:34Z
 - **Phase/task:** Phase B completion audit
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `1dff60e`
@@ -69,3 +69,7 @@ read.
 - 2026-07-26T20:41:44.0266068Z: Recurred when two conventional alternate
   Vitest configuration paths were read without first listing them. The
   confirmed root `vitest.config.ts` supplied the needed project definition.
+- 2026-07-27T01:55:34Z: Recurred when two API source filenames were inferred
+  from route concepts instead of discovered from the directory. Both reads
+  failed without changing state; the directory was listed and the exact
+  `*-routes.ts` filenames are used next.

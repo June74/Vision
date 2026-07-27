@@ -2,7 +2,7 @@
 
 - **Status:** contained
 - **First observed:** 2026-07-26T18:24:45.816434Z
-- **Last observed:** 2026-07-26T19:44:34.9730985Z
+- **Last observed:** 2026-07-27T01:57:02Z
 - **Phase/task:** Phase B provider acceptance
 - **Environment:** Signed-in provider dashboards controlled through the browser
 - **Version/commit:** `d2aea64`
@@ -73,3 +73,8 @@ runtime.
   database URL, token, key, cookie, or secret value. Subsequent provider checks
   must evaluate fixed booleans and numeric aggregates inside the browser
   runtime.
+- 2026-07-27T01:57:02Z: Recurred when browser tab discovery returned
+  uncontrolled titles and URLs across unrelated signed-in tabs. The output
+  contained private account and browsing metadata but no credential, token,
+  encryption key, database URL, cookie, OAuth code, or callback value. Browser
+  work stopped immediately; no returned value was copied into project files.

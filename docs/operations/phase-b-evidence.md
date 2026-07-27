@@ -45,10 +45,27 @@ identifiers, or provider-controlled URLs.
 | 2026-07-27 | `a433912` | Guarded preview operator workflow | Verify the saved global AI Gateway budget using read-only detail inspection | Pass: exactly one enabled, unscoped $9.50 fixed 30-day cost rule matched; no update or deployment job ran |
 | 2026-07-27 | `50569e6` | Local clean-room verification | Frozen install, TypeScript, unit/integration/security, contract, Worker, browser, docs, build, and release scan | Pass: 627 unit/integration/security tests with one intentional skip; integration-only subset 243 with one skip; 179 contract; 75 Worker; 29 browser; documentation, production build, security scan, and diff checks passed |
 | 2026-07-27 | Current live preview | Authenticated private desk | Reload session, status rail, synchronized-event list, queue retry count, AI allowance, and event-write control inspection | Pass: private desk loaded after a fresh page open; state was `Healthy`, last synchronization was within 15 minutes, queue retries were zero, the synchronized-event count was zero, AI showed $0.00 of $9.50, and no event create/edit/move/cancel/delete control was present |
+| 2026-07-27 | `a2bbc80` | Guarded preview workflow | Capture one privacy-safe scheduled outcome without deployment or configuration work | Diagnostic only: workflow passed and every mutation job was skipped, but the classifier accepts only recovery crons and returned `no_scheduled_event`; this does not prove the 15-minute calendar-maintenance path |
 
 The live preview schema is current through migration 0009. The normal daily
 schedule remains deployed while a fresh encrypted backup and disposable
 restore drill proceed.
+
+## Live-acceptance instrumentation gaps
+
+Current source inspection found four missing safe mechanisms. These remain
+implementation work rather than evidence:
+
+- `scripts/safe-tail-classifier.ts` recognizes only temporary and daily
+  recovery crons, so the guarded workflow cannot classify the 15-minute
+  calendar-maintenance outcome.
+- No operator command returns live graph, privacy, or provenance assertions as
+  fixed booleans and aggregate counts without reading protected rows.
+- Production diagnostics still hard-code database and R2 usage warnings to
+  `false`, and no operator command returns fixed-shape AI provider usage.
+- No preview-only fault harness can safely and reversibly exercise delayed
+  Queue work, failed synchronization, channel expiry, database outage, R2
+  failure, or the AI budget stop.
 
 ## Release decision
 

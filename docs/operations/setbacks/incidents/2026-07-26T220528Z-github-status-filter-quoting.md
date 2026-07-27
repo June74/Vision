@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T22:05:28Z
-- **Last observed:** 2026-07-26T22:06:00Z
+- **Last observed:** 2026-07-27T02:00:11Z
 - **Phase/task:** Phase B temporary backup deployment
 - **Environment:** Local PowerShell GitHub CLI
 - **Version/commit:** `cab6d4d`
@@ -57,3 +57,7 @@ quoting boundary.
 - 2026-07-26T22:05:28Z: First occurrence.
 - 2026-07-26T22:06:00Z: Recurred with a multiline template while identifying
   the failed job; the workflow remained unchanged.
+- 2026-07-27T02:00:11Z: Recurred when a job-name comparison with spaces was
+  passed through PowerShell to jq. Parsing failed before a status result; the
+  workflow remained unchanged. The replacement omits the string filter and
+  returns only fixed job status fields.
