@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:08:27Z
-- **Last observed:** 2026-07-27T19:24:12Z
+- **Last observed:** 2026-07-27T20:46:34Z
 - **Phase/task:** Phase B setback logging
 - **Environment:** Local Windows worktree
 - **Version/commit:** `22c5dc0`
@@ -37,3 +37,8 @@ The replacement returned a valid UTC timestamp.
   the Cloudflare dialog setback entry. The timestamp subcommand failed, no
   provider or filesystem mutation depended on it, and the documented .NET UTC
   API immediately returned a valid timestamp.
+- **2026-07-27T20:46:34Z:** The unsupported flag was used again while logging
+  the restore-retry specification formatting recurrence. No mutation depended
+  on the failed timestamp. The correction used
+  `(Get-Date).ToUniversalTime().ToString(...)`, which returned a valid UTC
+  timestamp.

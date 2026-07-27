@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T02:33:38Z
-- **Last observed:** 2026-07-27T02:33:38Z
+- **Last observed:** 2026-07-27T20:46:34Z
 - **Phase/task:** Phase B restore implementation plan
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `6fdb9cb`
@@ -54,3 +54,7 @@ whitespace gate.
 ## Recurrence history
 
 - 2026-07-27T02:33:38Z: First observed and contained.
+- 2026-07-27T20:46:34Z: A new restore-retry design repeated the Markdown
+  metadata hard-break pattern. The whitespace gate caught three affected
+  header lines before staging. The spaces were replaced with blank-line
+  paragraph separation; no runtime or provider state changed.
