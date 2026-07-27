@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T03:08:11.5689988Z
-- **Last observed:** 2026-07-27T03:12:26.5130820Z
-- **Phase/task:** Phase B restore Task 1 fix wave
+- **Last observed:** 2026-07-27T03:22:45.3339535Z
+- **Phase/task:** Phase B restore Task 1 second fix wave
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `629c609`
 
@@ -65,7 +65,15 @@ assertion categories.
 - `pnpm.cmd typecheck` and `pnpm.cmd docs:check` exited zero.
 - `git diff --check` exited zero.
 - Related fix-wave commit: pending creation after this record is staged.
+- Second fix wave: the required focused suite exited zero with 37/37
+  assertions passing; `pnpm.cmd typecheck`, `pnpm.cmd docs:check`, and
+  `git diff --check` also exited zero.
 
 ## Recurrence history
 
 - 2026-07-27T03:08:11.5689988Z: First observed by independent review.
+- 2026-07-27T03:21:04.6274983Z: Re-review found two direct equality
+  assertions over restore bindings or target identity and two deep-equality
+  assertions over protected-row-shaped snapshots. No assertion failed, no
+  private value was handled, and correction replaced them with precomputed
+  binding booleans and canonical-snapshot-digest equality booleans.

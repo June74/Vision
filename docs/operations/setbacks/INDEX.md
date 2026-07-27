@@ -92,7 +92,7 @@
 | [SB-20260727-024307-agent-wait-below-minimum](incidents/2026-07-27T024307Z-agent-wait-below-minimum.md) | closed | 2026-07-27T02:43:07Z | Phase B restore orchestration | Agent wait used a duration below the tool minimum |
 | [SB-20260727-025304-restore-test-fixture-typecheck](incidents/2026-07-27T025304Z-restore-test-fixture-typecheck.md) | closed | 2026-07-27T02:53:57Z | Phase B restore Task 1 | Restore test fixtures failed TypeScript checks |
 | [SB-20260727-025808-powershell-review-package-array-flattening](incidents/2026-07-27T025808Z-powershell-review-package-array-flattening.md) | closed | 2026-07-27T02:58:08Z | Phase B restore Task 1 review | PowerShell review package did not flatten command output |
-| [SB-20260727-030811-restore-test-diagnostic-value-exposure](incidents/2026-07-27T030811Z-restore-test-diagnostic-value-exposure.md) | closed | 2026-07-27T03:12:26.5130820Z | Phase B restore Task 1 fix wave | Restore tests could render private-shaped values on assertion failure |
+| [SB-20260727-030811-restore-test-diagnostic-value-exposure](incidents/2026-07-27T030811Z-restore-test-diagnostic-value-exposure.md) | closed | 2026-07-27T03:22:45.3339535Z | Phase B restore Task 1 second fix wave | Restore tests could render private-shaped values on assertion failure |
 | [SB-20260727-030812-restore-promotion-overclassification](incidents/2026-07-27T030812Z-restore-promotion-overclassification.md) | closed | 2026-07-27T03:12:26.5130820Z | Phase B restore Task 1 fix wave | Unexpected importer errors were classified as promotion failures |
 
 ## Legacy history

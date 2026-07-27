@@ -11,6 +11,7 @@ import {
   decodeBase64Url,
 } from "../../../src/crypto/envelope";
 import {
+  encodeCanonicalBackupArchive,
   countSnapshotRows,
   exportBackup,
   sha256Base64Url,
@@ -79,6 +80,10 @@ function expectPrivateValuesAbsent(
     (privateValue) => !rendered.includes(privateValue),
   );
   expect(valuesAreAbsent).toBe(true);
+}
+
+async function snapshotDigest(snapshot: BackupSnapshotV1): Promise<string> {
+  return sha256Base64Url(encodeCanonicalBackupArchive(snapshot));
 }
 
 function emptySnapshot(): BackupSnapshotV1 {
@@ -462,6 +467,7 @@ describe("temporary preview restore", () => {
 
   it("forbids replacement of a non-empty target and releases the pool", async () => {
     const nonEmpty = sourceSnapshot();
+    const expectedDigest = await snapshotDigest(nonEmpty);
     const fixture = await restoreFixture({ target: nonEmpty });
 
     await expect(
@@ -473,7 +479,9 @@ describe("temporary preview restore", () => {
       outcome: "failed",
       category: "restore_target_not_empty",
     });
-    expect(fixture.state.snapshot).toEqual(nonEmpty);
+    const targetRemainedUnchanged =
+      (await snapshotDigest(fixture.state.snapshot)) === expectedDigest;
+    expect(targetRemainedUnchanged).toBe(true);
     expect(fixture.close).toHaveBeenCalledOnce();
   });
 
@@ -646,7 +654,9 @@ describe("temporary preview restore", () => {
         fixture.dependencies,
       ),
     ).resolves.toMatchObject({ outcome: "succeeded" });
-    const afterFirstRestore = cloneSnapshot(fixture.state.snapshot);
+    const afterFirstRestoreDigest = await snapshotDigest(
+      fixture.state.snapshot,
+    );
     await expect(
       runTemporaryPreviewRestore(
         fixture.environment,
@@ -657,7 +667,10 @@ describe("temporary preview restore", () => {
       category: "restore_target_not_empty",
     });
 
-    expect(fixture.state.snapshot).toEqual(afterFirstRestore);
+    const repeatedRestoreLeftTargetUnchanged =
+      (await snapshotDigest(fixture.state.snapshot)) ===
+      afterFirstRestoreDigest;
+    expect(repeatedRestoreLeftTargetUnchanged).toBe(true);
     expect(fixture.close).toHaveBeenCalledTimes(2);
   });
 

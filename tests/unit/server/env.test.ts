@@ -152,8 +152,12 @@ describe("TemporaryRestoreEnvSchema", () => {
 
     expect(() => TemporaryRestoreEnvSchema.parse(missingUrl)).toThrow();
     expect(() => TemporaryRestoreEnvSchema.parse(missingTargetId)).toThrow();
-    expect(PREVIEW_RESTORE_DATABASE_URL).toBe(targetUrl);
-    expect(PREVIEW_RESTORE_TARGET_ID).toBe("disposable_preview_1");
+    const removedDatabaseBindingMatches =
+      PREVIEW_RESTORE_DATABASE_URL === targetUrl;
+    const removedTargetIdentityMatches =
+      PREVIEW_RESTORE_TARGET_ID === "disposable_preview_1";
+    expect(removedDatabaseBindingMatches).toBe(true);
+    expect(removedTargetIdentityMatches).toBe(true);
   });
 
   it("rejects privileged URLs, control characters, and unexpected fields without echoing values", () => {
