@@ -1,6 +1,6 @@
 # SB-20260727-035801-provider-url-source-output: Raw source inspection emitted provider URL literals
 
-- **Status:** contained
+- **Status:** closed
 - **First observed:** 2026-07-27T03:58:01Z
 - **Last observed:** 2026-07-27T05:08:21Z
 - **Phase/task:** Phase B restore Task 3
@@ -52,6 +52,10 @@ accessed and no external state changed.
 - **Prevention:** Treat URL-bearing source files as sensitive-output surfaces
   during restore work even when their contents are committed.
 - **Owner:** Codex and project owner.
+- **Project-owner disposition:** The standing owner instruction is to record
+  every setback in this ledger and continue Phase B. This historical
+  source-controlled, non-secret URL exposure is accepted as contained under
+  that instruction; this is not permission to repeat or broaden the output.
 - **Next diagnostic step:** None while closed.
 
 ## Verification and related work
@@ -76,5 +80,5 @@ interfaces without emitting URL contents.
   included URL-bearing diff context and was circulated to the independent
   reviewer. It contained source-controlled endpoint text but no credential
   or provider-private value. The package is retired and replaced by a
-  zero-context, scheme-sanitized package. Closure awaits explicit project-owner
-  disposition of the historical non-secret URL exposure.
+  zero-context, scheme-sanitized package. Closed under the project owner's
+  standing log-and-continue disposition for recorded setbacks.
