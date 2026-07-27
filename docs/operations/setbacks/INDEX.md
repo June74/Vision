@@ -87,6 +87,9 @@
 | [SB-20260727-015932-safe-workflow-watch-window-expired](incidents/2026-07-27T015932Z-safe-workflow-watch-window-expired.md) | closed | 2026-07-27T01:59:32Z | Phase B privacy-safe scheduled acceptance | Safe workflow outlived the local watch window |
 | [SB-20260727-023227-plan-patch-context-mismatch](incidents/2026-07-27T023227Z-plan-patch-context-mismatch.md) | closed | 2026-07-27T02:32:27Z | Phase B restore implementation plan | Plan patch context did not match wrapped text |
 | [SB-20260727-023338-approved-spec-trailing-whitespace](incidents/2026-07-27T023338Z-approved-spec-trailing-whitespace.md) | closed | 2026-07-27T02:33:38Z | Phase B restore implementation plan | Approved spec header had trailing whitespace |
+| [SB-20260727-024307-restore-plan-interface-mismatch](incidents/2026-07-27T024307Z-restore-plan-interface-mismatch.md) | closed | 2026-07-27T02:43:07Z | Phase B restore Task 1 | Restore plan mismatched the current import interface |
+| [SB-20260727-024307-task-brief-included-prior-tasks](incidents/2026-07-27T024307Z-task-brief-included-prior-tasks.md) | closed | 2026-07-27T02:43:07Z | Phase B restore planning | Generated task briefs included prior tasks |
+| [SB-20260727-024307-agent-wait-below-minimum](incidents/2026-07-27T024307Z-agent-wait-below-minimum.md) | closed | 2026-07-27T02:43:07Z | Phase B restore orchestration | Agent wait used a duration below the tool minimum |
 
 ## Legacy history
 

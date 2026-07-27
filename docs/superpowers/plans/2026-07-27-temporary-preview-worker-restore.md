@@ -131,9 +131,11 @@ export function validatedBackupObjectDate(
 ```
 
 - Consumes existing `readVerifiedStoredBackup`, `importBackup`,
-  `createNeonBackupRestoreTarget`, `createNeonBackupSnapshotSource`,
-  `encodeCanonicalBackupArchive`, `countSnapshotRows`,
-  `sha256Base64Url`, and `validateBackupReferences`.
+  `ManagedBackupRestoreTarget`, `encodeCanonicalBackupArchive`,
+  `countSnapshotRows`, `sha256Base64Url`, and
+  `validateBackupReferences`. Concrete Neon adapters remain outside this
+  injected engine and are assembled by Task 2's production dependency
+  factory.
 
 - [ ] **Step 1: Write the failing environment tests**
 
@@ -247,10 +249,15 @@ const managedTarget = await dependencies.createTarget(
   parsed.PREVIEW_RESTORE_TARGET_ID,
 );
 try {
-  report = await importBackup(verifiedBackup, managedTarget.target, {
-    replaceDisposableTarget: false,
-    assertedEnvironment: "preview",
-  });
+  report = await importBackup(
+    verifiedBackup.encrypted,
+    dependencies.backupKey,
+    managedTarget.target,
+    {
+      replaceDisposableTarget: false,
+      assertedEnvironment: "preview",
+    },
+  );
 } finally {
   await managedTarget.close();
 }
