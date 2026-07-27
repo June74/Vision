@@ -9,3 +9,10 @@
 - **Commit SHA:** `3ab9cde`
 - **Self-review:** Default selection still emits the first allowlisted recovery or restore result. The fixed restore-only argument accepts only closed restore evidence, fails closed at end of input, and the guarded tail job now uses the required bounded observation and job windows while preserving exclusivity and privacy assertions.
 - **Remaining concerns:** The live provider workflow was intentionally not invoked by this code-only correction; the separately approved live retry must verify the propagated schedule. Local tool output returned a prohibited branch label twice; the values were not persisted, and safe containment records were added.
+
+## Independent review correction
+
+- **RED command and exact result:** `node_modules/.bin/vitest.CMD run --project unit tests/unit/scripts/print-safe-tail.test.ts tests/unit/ci/workflows.test.ts` produced 3 failed and 7 passed tests: unsupported arguments emitted recovery evidence, while the first scoped job-block extractor needed correction.
+- **GREEN command and exact result:** The same focused command completed with 10 passed tests across 2 files.
+- **Final checks:** `tsc --noEmit`, `tsc --noEmit -p tests/tsconfig.json`, `node --import tsx scripts/validate-doc-coverage.ts`, and `git diff --check` completed successfully.
+- **Correction commit SHA:** `1ba111b`
