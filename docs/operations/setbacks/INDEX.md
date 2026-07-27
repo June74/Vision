@@ -141,6 +141,7 @@
 | [SB-20260727-171617-browser-locator-composition-unsupported](incidents/2026-07-27T171617Z-browser-locator-composition-unsupported.md) | closed | 2026-07-27T19:16:40Z | Phase B restore Task 4 | Browser locator composition was unsupported |
 | [SB-20260727-173757-safe-tail-log-framing-mismatch](incidents/2026-07-27T173757Z-safe-tail-log-framing-mismatch.md) | contained | 2026-07-27T17:37:57Z | Phase B restore Task 4 | Restore evidence was missing from safe-tail |
 | [SB-20260727-173951-normal-restore-baseline-misidentified](incidents/2026-07-27T173951Z-normal-restore-baseline-misidentified.md) | closed | 2026-07-27T17:42:12Z | Phase B restore Task 4 fail-closed rollback | Normal restore baseline was misidentified |
+| [SB-20260727-205420-guessed-source-search-path](incidents/2026-07-27T205420Z-guessed-source-search-path.md) | closed | 2026-07-27T20:54:20Z | Listener-first restore retry implementation planning | Source search included a nonexistent path |
 
 ## Legacy history
 
