@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:55:19.3868194Z
-- **Last observed:** 2026-07-26T20:56:46.7294087Z
+- **Last observed:** 2026-07-27T02:40:08Z
 - **Phase/task:** Recovery Task 3 independent review
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** `9620e06`
@@ -58,3 +58,7 @@ The PowerShell fallback produced a 36,835-byte package for
 - 2026-07-26T20:55:19.3868194Z: First observed.
 - 2026-07-26T20:56:46.7294087Z: Closed with verified fallback package
   generation.
+- 2026-07-27T02:40:08Z: Recurred when the task-brief helper started under
+  Git Bash but its required `awk` utility was unavailable. It produced only
+  an empty ignored scratch file; the deterministic PowerShell extraction
+  fallback is used for all restore-task briefs and review packages.
