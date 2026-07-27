@@ -77,6 +77,7 @@
 | [SB-20260727-011559-gateway-route-blocked-by-browser-policy](incidents/2026-07-27T011559Z-gateway-route-blocked-by-browser-policy.md) | contained | 2026-07-27T01:15:59Z | Phase B AI Gateway budget acceptance | Gateway route was blocked by browser policy |
 | [SB-20260727-011929-backup-key-not-retained-for-restore](incidents/2026-07-27T011929Z-backup-key-not-retained-for-restore.md) | investigating | 2026-07-27T01:19:29Z | Phase B encrypted restore drill | Backup key was not retained for restore |
 | [SB-20260727-012329-gateway-helper-references-missing](incidents/2026-07-27T012329Z-gateway-helper-references-missing.md) | closed | 2026-07-27T01:23:29Z | Phase B read-only Gateway acceptance | Gateway helper references were missing |
+| [SB-20260727-012623-browser-finalize-keep-shape-invalid](incidents/2026-07-27T012623Z-browser-finalize-keep-shape-invalid.md) | closed | 2026-07-27T01:26:23Z | Phase B dashboard handoff | Browser handoff shape was invalid |
 
 ## Legacy history
 
