@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:37:04Z
-- **Last observed:** 2026-07-27T04:49:11Z
+- **Last observed:** 2026-07-27T21:10:21Z
 - **Phase/task:** Phase B restore Task 3 verification
 - **Environment:** Local restricted-network worktree
 - **Version/commit:** `50569e6`
@@ -46,3 +46,6 @@ The frozen install exited zero and reported the workspace already up to date.
   mitigation because pnpm repeated the non-fatal metadata warning. The command
   again exited zero with an unchanged lockfile. The next bounded rerun uses
   pnpm's configuration-specific environment key.
+- 2026-07-27T21:10:21Z: The listener-first execution baseline repeated the
+  optional registry metadata warning. The frozen install reported the
+  workspace already current and exited zero; no lockfile changed.

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:03:39.626332Z
-- **Last observed:** 2026-07-27T19:45:19Z
+- **Last observed:** 2026-07-27T21:17:36Z
 - **Phase/task:** Phase B restore Tasks 3-4
 - **Environment:** Local linked worktree under the managed sandbox
 - **Version/commit:** `f7778b8`
@@ -84,3 +84,8 @@ The retry completed successfully and produced commit `f7778b8`.
   assertion and value-free operational records. The default sandbox denied the
   linked-worktree index lock before any index write; the same explicit path set
   is retried through the established metadata-permission boundary.
+- 2026-07-27T21:17:36Z: Recurred while staging the Task 1 listener-first
+  workflow, test, restore-drill, and safe setback records. The command-scoped
+  safe-directory override resolved ownership validation but did not grant the
+  separate linked-worktree index-write permission. Git stopped before creating
+  the lock; no stage, commit, or push was attempted afterward.

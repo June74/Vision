@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:24:05.647183Z
-- **Last observed:** 2026-07-27T19:43:48Z
+- **Last observed:** 2026-07-27T21:10:21Z
 - **Phase/task:** Phase B restore Task 3 verification
 - **Environment:** Local managed sandbox Worker test pool
 - **Version/commit:** `codex/phase-b-foundation`
@@ -83,3 +83,6 @@ passed, 75 Worker passed, and the overall command exited zero.
   and passed all 75 assertions with a zero exit.
 - 2026-07-27T19:43:48Z: The corrected full Worker suite repeated the same
   sandbox-only analyzer warning and passed all 75 assertions with a zero exit.
+- 2026-07-27T21:10:21Z: The listener-first execution baseline repeated the
+  same sandbox-only analyzer warning and passed all 75 Worker assertions; the
+  complete check exited zero.

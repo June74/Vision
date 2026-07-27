@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-07-27T19:43:48Z
+- **Last observed:** 2026-07-27T21:10:21Z
 - **Phase/task:** Phase B deployment diagnostics
 - **Environment:** Local managed sandbox
 - **Version/commit:** `codex/phase-b-foundation`
@@ -81,3 +81,6 @@ warning.
 - 2026-07-27T19:43:48Z: Recurred during the corrected full Worker suite after
   the task-local diagnostic setting was again omitted. All 75 Worker
   assertions passed with a zero exit.
+- 2026-07-27T21:10:21Z: Recurred during the listener-first execution baseline
+  after the workspace-local diagnostic setting was omitted. Worker tests,
+  build, documentation, and security gates all completed successfully.

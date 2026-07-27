@@ -23,7 +23,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: vision-preview
+  group: ${{ inputs.safe_tail == true && inputs.configure_ai_budget == false && 'vision-preview-observer' || 'vision-preview-mutation' }}
   cancel-in-progress: true
 
 jobs:

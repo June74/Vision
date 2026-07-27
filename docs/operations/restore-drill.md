@@ -25,6 +25,15 @@ schema comparison found the live preview database missing migrations 0004
 through 0009. The normal daily cadence was redeployed and verified before the
 migration approval is resolved.
 
+## Listener-first retry
+
+Confirm the allowlisted listener step is actively running before deploying the restore candidate.
+
+Safe-tail observers use `vision-preview-observer`; deployment, verification, and Gateway configuration use `vision-preview-mutation`.
+
+Runs in the same category cancel one another. Different categories may overlap.
+Do not deploy if the observer never becomes active.
+
 ## Local migration preflight
 
 Before any live schema change, the exact numbered migration chain was exercised

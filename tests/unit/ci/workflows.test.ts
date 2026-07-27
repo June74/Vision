@@ -206,7 +206,10 @@ describe("preview AI acceptance policy", () => {
 
 describe("preview live diagnostics policy", () => {
   it("can tail one scheduled event without exposing raw provider output", async () => {
-    const preview = await readWorkflow("preview.yml");
+    const [preview, restoreDrill] = await Promise.all([
+      readWorkflow("preview.yml"),
+      readOperationsDocument("restore-drill.md"),
+    ]);
     const tailStep = readWorkflowStep(
       preview,
       "Print only allowlisted scheduled evidence",
@@ -227,6 +230,12 @@ describe("preview live diagnostics policy", () => {
     expect(preview.match(/^  deploy:/gmu)).toHaveLength(1);
     expect(preview.match(/^  tail:/gmu)).toHaveLength(1);
     expect(preview.match(/^  configure_gateway:/gmu)).toHaveLength(1);
+    expect(preview).toContain(
+      "concurrency:\n" +
+        "  group: ${{ inputs.safe_tail == true && inputs.configure_ai_budget == false && 'vision-preview-observer' || 'vision-preview-mutation' }}\n" +
+        "  cancel-in-progress: true",
+    );
+    expect(preview).not.toContain("group: vision-preview\n");
     expect(tailJob).toContain("timeout-minutes: 18");
     expect(tailStep).toContain(
       "timeout 16m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |\n" +
@@ -241,5 +250,11 @@ describe("preview live diagnostics policy", () => {
     );
     expect(tailStep).not.toContain("--log");
     expect(tailStep).not.toContain("actions/upload-artifact");
+    expect(restoreDrill).toContain(
+      "Confirm the allowlisted listener step is actively running before deploying the restore candidate.",
+    );
+    expect(restoreDrill).toContain(
+      "Safe-tail observers use `vision-preview-observer`; deployment, verification, and Gateway configuration use `vision-preview-mutation`.",
+    );
   });
 });

@@ -77,3 +77,6 @@ this incident was recorded.
   documentation diff. The scan returned zero prohibited patterns and no
   formatting rewrite was performed. Remaining Git output is captured and
   classified before display.
+- 2026-07-27T21:15:38Z: Recurred during Task 1 focused verification. The
+  workflow test, documentation validator, and `git diff --check` all exited
+  zero; the warning remained limited to expected Windows normalization metadata.

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:55:19.3868194Z
-- **Last observed:** 2026-07-27T18:19:36Z
+- **Last observed:** 2026-07-27T21:10:55Z
 - **Phase/task:** Recovery Task 3 independent review
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** `9620e06`
@@ -66,3 +66,6 @@ The PowerShell fallback produced a 36,835-byte package for
   Git Bash but its required `dirname` utility was unavailable. It created no
   review artifact. The exact-range PowerShell fallback was selected again;
   future work in this desktop session must skip the Bash helper entirely.
+- 2026-07-27T21:10:55Z: Recurred when the Task 1 brief helper could not launch
+  `bash.exe` because the Windows logon session was unavailable. No artifact or
+  repository mutation occurred. Deterministic PowerShell extraction is used.
