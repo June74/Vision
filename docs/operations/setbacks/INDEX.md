@@ -2,6 +2,7 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
+| [SB-20260728-024245-role-probe-handoff-sha-guessed](incidents/2026-07-28T024245Z-role-probe-handoff-sha-guessed.md) | closed | 2026-07-28T02:44:00Z | Preview database role probe Task 2 handoff | Role-probe handoff SHA was guessed |
 | [SB-20260728-021237-role-probe-invalid-url-refinement-threw](incidents/2026-07-28T021237Z-role-probe-invalid-url-refinement-threw.md) | closed | 2026-07-28T02:13:34.9788054Z | Preview database role probe Task 1 GREEN | Role-probe invalid URL refinement threw |
 | [SB-20260728-014416-cloudflare-workers-navigation-label-ambiguous](incidents/2026-07-28T014416Z-cloudflare-workers-navigation-label-ambiguous.md) | closed | 2026-07-28T01:44:16.5948330Z | Listener-first restore retry Task 3 Step 2 | Cloudflare Workers navigation label was ambiguous |
 | [SB-20260728-014416-vitest-project-filter-excluded-focused-files](incidents/2026-07-28T014416Z-vitest-project-filter-excluded-focused-files.md) | closed | 2026-07-28T01:44:16.5948330Z | Listener-first restore retry Task 3 Step 1 | Vitest project filter excluded focused files |
@@ -58,7 +59,7 @@
 | [SB-20260726-185327-setback-index-row-placement](incidents/2026-07-26T185327Z-setback-index-row-placement.md) | closed | 2026-07-26T18:53:27.936691Z | Phase B release operations | Setback index row appended outside table |
 | [SB-20260726-185631-browser-label-pattern-unsupported](incidents/2026-07-26T185631Z-browser-label-pattern-unsupported.md) | closed | 2026-07-26T23:54:52Z | Phase B Cloudflare configuration | Browser label pattern was unsupported |
 | [SB-20260726-190208-assumed-wrangler-config-path](incidents/2026-07-26T190208Z-assumed-wrangler-config-path.md) | closed | 2026-07-26T19:02:08.702614Z | Phase B release operations | Conventional Wrangler config path was assumed |
-| [SB-20260726-190339-git-worktree-lock-permission](incidents/2026-07-26T190339Z-git-worktree-lock-permission.md) | closed | 2026-07-27T23:29:53Z | Phase B listener-first restore retry Tasks 1-2 | Git worktree lock creation was denied |
+| [SB-20260726-190339-git-worktree-lock-permission](incidents/2026-07-26T190339Z-git-worktree-lock-permission.md) | closed | 2026-07-28T02:46:00Z | Preview database role probe Task 2 handoff | Git worktree lock creation was denied |
 | [SB-20260726-190417-setback-row-timestamp-assumption](incidents/2026-07-26T190417Z-setback-row-timestamp-assumption.md) | closed | 2026-07-26T19:49:20.5044351Z | Phase B release operations | Setback row timestamp was assumed |
 | [SB-20260726-203035-git-global-ignore-unreadable](incidents/2026-07-26T203035Z-git-global-ignore-unreadable.md) | closed | 2026-07-28T02:36:34.6558608Z | Preview database role probe Task 1 independent review | Git global ignore file was unreadable |
 | [SB-20260726-203035-powershell-utc-flag-unsupported](incidents/2026-07-26T203035Z-powershell-utc-flag-unsupported.md) | closed | 2026-07-26T23:54:52Z | Phase B release operations | PowerShell UTC flag was unsupported |

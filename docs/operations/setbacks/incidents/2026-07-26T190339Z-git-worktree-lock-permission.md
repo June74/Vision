@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:03:39.626332Z
-- **Last observed:** 2026-07-27T23:29:53Z
-- **Phase/task:** Phase B listener-first restore retry Tasks 1-2
+- **Last observed:** 2026-07-28T02:46:00Z
+- **Phase/task:** Preview database role probe Task 2 handoff
 - **Environment:** Local linked worktree under the managed sandbox
 - **Version/commit:** `f7778b8`
 
@@ -94,3 +94,7 @@ The retry completed successfully and produced commit `f7778b8`.
   linked-worktree index lock, so neither documentation file was staged or
   committed. The unchanged files remain in the worktree for retry through the
   established scoped metadata-permission boundary.
+- 2026-07-28T02:46:00Z: Recurred while staging only the role-probe handoff
+  incident and index update. Git stopped before creating the linked-worktree
+  index lock; no index write or commit occurred. The exact safe path set is
+  retried through the established scoped metadata-permission boundary.
