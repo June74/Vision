@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T03:40:29Z
-- **Last observed:** 2026-07-27T03:41:42Z
-- **Phase/task:** Phase B restore Task 2
+- **Last observed:** 2026-07-28T02:21:26.5488258Z
+- **Phase/task:** Preview database role probe Task 1 full gate
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `e177170`
 
@@ -62,3 +62,7 @@ technical headings. It rendered no secret or provider-controlled value.
 ## Recurrence history
 
 - 2026-07-27T03:40:29Z: First observed and contained before commit.
+- 2026-07-28T02:21:26.5488258Z: Recurred when the returned scheduler
+  dependency method `probeRole` lacked source JSDoc and matching simple and
+  technical scheduled-reference headings. TypeScript, unit, contract, and
+  Worker gates had passed; no provider or private state changed.

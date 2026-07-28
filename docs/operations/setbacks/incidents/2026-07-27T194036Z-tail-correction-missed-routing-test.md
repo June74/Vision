@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T19:40:36Z
-- **Last observed:** 2026-07-27T19:50:46Z
-- **Phase/task:** Phase B restore Task 4 tail correction
+- **Last observed:** 2026-07-28T02:18:06.4385089Z
+- **Phase/task:** Preview database role probe Task 1 full gate
 - **Environment:** Local and GitHub Actions verification
 - **Version/commit:** `9bbc4be`
 
@@ -46,3 +46,12 @@ security gates passed. A fresh independent review of `9bbc4be..7ef941b`
 returned specification PASS, quality PASS, safe to redeploy, and zero Critical,
 Important, or Minor findings. Its privacy scan covered all 997 added lines and
 found no value leak.
+
+## Recurrence history
+
+- 2026-07-28T02:18:06.4385089Z: Recurred when the focused workflow test was
+  updated for role-probe-only observation but the older cross-cutting routing
+  assertion still required restore-only observation. TypeScript and 719 other
+  unit tests passed; no provider, browser, network, commit, push, or private
+  state was involved. The matching workflow assertion is updated before the
+  complete gate is rerun.

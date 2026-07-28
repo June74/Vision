@@ -1,9 +1,9 @@
 # `scripts/safe-tail-classifier.ts`
 
-Provides the closed, privacy-safe projection used for live scheduled recovery
-and temporary-restore acceptance. It incrementally parses Wrangler's pretty
-JSON, caps buffered input at one MiB, recognizes only approved crons, and emits
-no provider-controlled fields.
+Provides the closed, privacy-safe projection used for live scheduled recovery,
+temporary restore, and temporary role-probe acceptance. It incrementally
+parses Wrangler's pretty JSON, caps buffered input at one MiB, recognizes only
+approved crons, and emits no provider-controlled fields.
 
 ## `createSafeTailAccumulator`
 
@@ -13,15 +13,21 @@ or after the one-MiB safety cap.
 ## `push`
 
 Adds one raw line, returns `null` for incomplete or irrelevant input, and
-returns one closed recovery or restore result only for a complete recognized
-event.
+returns one closed recovery, restore, or role-probe result only for a complete
+recognized event.
 
 ## `classifySafeTailLine`
 
 Parses one JSON value, requires a recognized scheduled cron, returns an exact
-accepted restore record before legacy recovery classification, maps known
-fixed backup messages to allowlisted categories, and otherwise uses
+accepted role-probe or restore record before legacy recovery classification,
+maps known fixed backup messages to allowlisted categories, and otherwise uses
 `unknown_failure`.
+
+## `classifyTemporaryPreviewRoleProbeEvidence`
+
+Requires exactly `category`, `evidenceType`, `outcome`, and `roleMatches`;
+validates the complete success/failure combination; and reconstructs a new
+plain frozen object in that key order.
 
 ## `classifyTemporaryRestoreEvidence`
 
@@ -39,6 +45,13 @@ vocabulary; every other value becomes `unknown`.
 Walks the log array and inspects only each entry's first message. An attempted
 `backup.restore` record with extra or invalid data blocks generic fallback.
 
+## `locateTemporaryPreviewRoleProbeEvidence`
+
+Walks only the first log message, recognizes
+`backup.restore-role-probe` on the one-minute cron, and treats malformed or
+wrong-action role-probe-shaped evidence as seen but rejected so provider text
+cannot fall through into generic output.
+
 ## `classifyRestoreRowCounts`
 
 Requires exactly the 29 authoritative migration-9 table names and a
@@ -52,8 +65,9 @@ only with fixed recovery markers and never stringifying the full event.
 
 ## `snapshotOwnEnumerableData`
 
-Uses property descriptors to copy only own enumerable data properties into an
-internal snapshot without invoking accessors or accepting enumerable symbols.
+Uses property descriptors to copy only own enumerable data properties from a
+plain or null-prototype object into an internal snapshot without invoking
+accessors or accepting enumerable symbols.
 
 ## `hasExactKeys`
 

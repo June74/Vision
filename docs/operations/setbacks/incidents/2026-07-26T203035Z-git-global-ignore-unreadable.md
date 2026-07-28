@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:30:35.2961897Z
-- **Last observed:** 2026-07-28T01:20:44.6624354Z
-- **Phase/task:** Listener-first restore retry Task 3 Step 1
+- **Last observed:** 2026-07-28T02:36:34.6558608Z
+- **Phase/task:** Preview database role probe Task 1 independent review
 - **Environment:** Local Phase B worktree under the managed sandbox
-- **Version/commit:** `7d2f9f6`
+- **Version/commit:** Staged Task 1 patch based on `59e6a02`
 
 ## Symptom
 
@@ -101,3 +101,11 @@ commit `4420f6d`.
   synchronized worktree; a repeated `NUL` excludes-file workaround was
   rejected before the retry. No repository or provider mutation occurred, and
   the unsupported workaround is not reused.
+- 2026-07-28T02:02:31.3503418Z: Recurred during the preview role probe
+  implementation preflight. Git returned the exact branch and base commit
+  successfully; no configuration workaround, provider action, or repository
+  runtime mutation occurred.
+- 2026-07-28T02:36:34.6558608Z: Recurred during the independent staged-diff
+  review. Git returned the requested inventory and diff successfully. The
+  reviewer approved the staged implementation with zero Critical or Important
+  findings; no provider or runtime mutation occurred.

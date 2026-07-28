@@ -23,11 +23,11 @@ import {
 import {
   CALENDAR_MAINTENANCE_CRON,
   DAILY_BACKUP_CRON,
-  emitTemporaryRestoreEvidence,
+  emitTemporaryPreviewRoleProbeEvidence,
   runScheduledJob,
   runScheduledRecovery,
 } from "../../../src/jobs/scheduled";
-import { TEMPORARY_PREVIEW_RESTORE_CRON } from "../../../src/jobs/temporary-preview-restore";
+import { TEMPORARY_PREVIEW_ROLE_PROBE_CRON } from "../../../src/jobs/temporary-preview-role-probe";
 import { parseBackupEnvironment } from "../../../src/server/env";
 import { MemoryBackupObjectStore } from "./backup-test-helpers";
 
@@ -230,11 +230,11 @@ describe("daily encrypted backup job", () => {
     ).toThrow(/distinct/i);
   });
 
-  it("dispatches maintenance, recovery, and temporary restore by exact cron", async () => {
+  it("dispatches maintenance, recovery, and the temporary role probe by exact cron", async () => {
     const dependencies = {
       maintenance: vi.fn(async () => undefined),
       recovery: vi.fn(async () => undefined),
-      temporaryRestore: vi.fn(async () => undefined),
+      temporaryRoleProbe: vi.fn(async () => undefined),
     };
 
     expect(DAILY_BACKUP_CRON).toBe("5 6 * * *");
@@ -245,21 +245,21 @@ describe("daily encrypted backup job", () => {
     );
     expect(dependencies.maintenance).toHaveBeenCalledWith(NOW);
     expect(dependencies.recovery).not.toHaveBeenCalled();
-    expect(dependencies.temporaryRestore).not.toHaveBeenCalled();
+    expect(dependencies.temporaryRoleProbe).not.toHaveBeenCalled();
 
     vi.clearAllMocks();
     await runScheduledJob(DAILY_BACKUP_CRON, NOW, dependencies);
     expect(dependencies.recovery).toHaveBeenCalledWith(NOW);
     expect(dependencies.maintenance).not.toHaveBeenCalled();
-    expect(dependencies.temporaryRestore).not.toHaveBeenCalled();
+    expect(dependencies.temporaryRoleProbe).not.toHaveBeenCalled();
 
     vi.clearAllMocks();
     await runScheduledJob(
-      TEMPORARY_PREVIEW_RESTORE_CRON,
+      TEMPORARY_PREVIEW_ROLE_PROBE_CRON,
       NOW,
       dependencies,
     );
-    expect(dependencies.temporaryRestore).toHaveBeenCalledOnce();
+    expect(dependencies.temporaryRoleProbe).toHaveBeenCalledOnce();
     expect(dependencies.maintenance).not.toHaveBeenCalled();
     expect(dependencies.recovery).not.toHaveBeenCalled();
 
@@ -269,22 +269,20 @@ describe("daily encrypted backup job", () => {
     ).rejects.toThrow("Scheduled cron is unsupported.");
     expect(dependencies.maintenance).not.toHaveBeenCalled();
     expect(dependencies.recovery).not.toHaveBeenCalled();
-    expect(dependencies.temporaryRestore).not.toHaveBeenCalled();
+    expect(dependencies.temporaryRoleProbe).not.toHaveBeenCalled();
   });
 
-  it("emits nothing for a non-owner and preserves the exact owner evidence log contract", () => {
+  it("preserves the exact value-free role-probe evidence log contract", () => {
     const write = vi.fn();
-    expect(emitTemporaryRestoreEvidence(null, write)).toBe(false);
-    expect(write).not.toHaveBeenCalled();
-
     const evidence = {
-      evidenceType: "vision.preview-restore/v1" as const,
+      evidenceType: "vision.preview-role-probe/v1" as const,
       outcome: "succeeded" as const,
       category: "none" as const,
+      roleMatches: true,
     };
-    expect(emitTemporaryRestoreEvidence(evidence, write)).toBe(true);
+    emitTemporaryPreviewRoleProbeEvidence(evidence, write);
     expect(write).toHaveBeenCalledWith({
-      action: "backup.restore",
+      action: "backup.restore-role-probe",
       evidence,
     });
   });

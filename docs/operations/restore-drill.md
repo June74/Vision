@@ -34,6 +34,24 @@ Safe-tail observers use `vision-preview-observer`; deployment, verification, and
 Runs in the same category cancel one another. Different categories may overlap.
 Do not deploy if the observer never becomes active.
 
+## Temporary read-only role probe
+
+Before the fenced restore can claim its one-shot marker, deploy the separately
+reviewed role-probe candidate only after the role-probe-only listener is
+actively running. The candidate accepts only the preview environment marker
+and `PREVIEW_RESTORE_DATABASE_URL`, opens one max-one retained client, performs
+one fixed boolean role check, releases the client, closes the pool, and emits
+only `vision.preview-role-probe/v1` evidence.
+
+The probe has no restore, clear, R2, backup-key, target-identity, table, or HTTP
+capability. Accept only one unambiguous succeeded record with
+`category=none` and `roleMatches=true`. Any failure, malformed result,
+duplicate ambiguity, missing result, or attribution mismatch stops the
+restore. Immediately redeploy normal preview ref `40872a5` after the terminal
+record, whether the probe succeeds or fails. The unchanged key remains at
+version 1, and neither `backups/v1/` nor `restore-attempts/v1/` is accessed by
+the probe.
+
 ## Fenced one-shot candidate
 
 Before any target access, the temporary job verifies the stored encrypted

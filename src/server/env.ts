@@ -185,7 +185,13 @@ export const RuntimeEnvSchema = z
     VISION_ENV: visionEnvironmentSchema,
     DATABASE_URL: z.string().url().superRefine((databaseUrl, context) => {
       // The username is safe configuration metadata; never include the URL or password in a validation message.
-      if (new URL(databaseUrl).username !== "vision_app") {
+      let parsed: URL;
+      try {
+        parsed = new URL(databaseUrl);
+      } catch {
+        return;
+      }
+      if (parsed.username !== "vision_app") {
         context.addIssue({ code: "custom", message: "DATABASE_URL must authenticate as the vision_app role." });
       }
     }),
@@ -261,6 +267,14 @@ export const TemporaryRestoreEnvSchema = z
     PREVIEW_RESTORE_TARGET_ID: z
       .string()
       .regex(/^[A-Za-z0-9_-]{1,128}$/u),
+  })
+  .strict();
+
+/** Validates only the preview disposable-target connection used by the read-only role probe. */
+export const TemporaryRoleProbeEnvSchema = z
+  .object({
+    VISION_ENV: z.literal("preview"),
+    PREVIEW_RESTORE_DATABASE_URL: RuntimeEnvSchema.shape.DATABASE_URL,
   })
   .strict();
 

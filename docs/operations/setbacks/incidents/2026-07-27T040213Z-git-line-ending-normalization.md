@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T04:02:13Z
-- **Last observed:** 2026-07-27T23:52:52.7850873Z
-- **Phase/task:** Listener-first restore retry Task 2
+- **Last observed:** 2026-07-28T02:26:35.1058775Z
+- **Phase/task:** Preview database role probe Task 1 self-review
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `4420f6d`
 
@@ -88,3 +88,7 @@ this incident was recorded.
   report validation for value-free setback records. Documentation validation,
   security scanning, and `git diff --check` all exited zero; no formatting
   rewrite was performed.
+- 2026-07-28T02:26:35.1058775Z: Recurred during the preview role-probe
+  changed-file and privacy review. The complete repository gate and
+  `git diff --check` exited zero; no formatting rewrite, provider action, or
+  private-data operation was performed.

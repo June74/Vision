@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T20:54:20Z
-- **Last observed:** 2026-07-28T00:12:55.4064136Z
-- **Phase/task:** Listener-first restore retry clear-job design
+- **Last observed:** 2026-07-28T02:36:34.6558608Z
+- **Phase/task:** Preview database role probe Task 1 independent review
 - **Environment:** Local Phase B worktree
-- **Version/commit:** `e6240ce`
+- **Version/commit:** Staged Task 1 patch based on `59e6a02`
 
 ## Symptom
 
@@ -46,3 +46,12 @@ continues using discovered files only.
   this worktree. The search stopped without changing any file or provider
   state. Migration SQL is discovered from the repository file list before the
   search is retried.
+- 2026-07-28T02:03:41.8573195Z: Recurred when a read-only inspection inferred
+  a temporary clear job filename from the existing adapter name. The other
+  requested files were read, no source or provider state changed, and further
+  inspection is limited to paths proven by imports or file discovery.
+- 2026-07-28T02:36:34.6558608Z: Recurred during independent review when one
+  read-only search included a conventional configuration path that does not
+  exist and a later discovery search entered dependency directories. Both
+  searches were contained without mutation. The reviewer completed tracing
+  from the tracked-file inventory and approved the exact staged implementation.

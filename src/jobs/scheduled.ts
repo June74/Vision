@@ -1,7 +1,6 @@
 /** Coordinates periodic channel renewal and missed-notification repair. */
 import { createDb } from "../data/db";
 import { createChannelMaintenanceRepository } from "../data/repositories/channel-maintenance-repository";
-import { createDiagnosticRepository } from "../data/repositories/diagnostic-repository";
 import { createProjectionRepository } from "../data/repositories/projection-repository";
 import {
   DrizzleTokenStore,
@@ -13,13 +12,9 @@ import { importBackupEncryptionKey } from "../crypto/backup-key";
 import { encodeBase64Url, serializeCipherEnvelope } from "../crypto/envelope";
 import { createWrappedKeyProvider } from "../crypto/key-provider";
 import { encryptProtectedFields } from "../crypto/protected-fields";
-import {
-  createNeonBackupRestoreTarget,
-  createNeonBackupSnapshotSource,
-} from "../data/backup/neon-adapter";
+import { createNeonBackupSnapshotSource } from "../data/backup/neon-adapter";
 import { createR2BackupObjectStore } from "../data/backup/r2-object-store";
-import { createR2RestoreAttemptStore } from "../data/backup/r2-restore-attempt-store";
-import { createTemporaryPreviewClearAdapter } from "../data/backup/temporary-preview-clear-adapter";
+import { createTemporaryPreviewRoleProbeAdapter } from "../data/backup/temporary-preview-role-probe-adapter";
 import { CalendarClient } from "../integrations/google-calendar/calendar-client";
 import {
   GoogleOAuthClient,
@@ -28,10 +23,8 @@ import {
   parseGoogleAuthEnvironment,
   parseBackupEnvironment,
   parseVisionKeyEncryptionKey,
-  GoogleAuthEnvSchema,
   type Env,
 } from "../server/env";
-import { createAiEventRepositoryAccess } from "../server/authorization/event-content-authorization";
 import { createDailyBackup } from "./create-daily-backup";
 import { purgeExpiredBackups } from "./purge-expired-backups";
 import { renewExpiringChannels } from "./renew-google-channels";
@@ -41,11 +34,11 @@ import {
 } from "./queue-consumer";
 import { SyncCalendarError } from "./sync-calendar";
 import {
-  runTemporaryPreviewRestore,
-  TEMPORARY_PREVIEW_RESTORE_CRON,
-  type TemporaryPreviewRestoreDependencies,
-  type TemporaryRestoreEvidence,
-} from "./temporary-preview-restore";
+  runTemporaryPreviewRoleProbe,
+  TEMPORARY_PREVIEW_ROLE_PROBE_CRON,
+  type TemporaryPreviewRoleProbeDependencies,
+  type TemporaryPreviewRoleProbeEvidence,
+} from "./temporary-preview-role-probe";
 
 /** Existing near-real-time repair/renewal cadence. */
 export const CALENDAR_MAINTENANCE_CRON = "*/15 * * * *";
@@ -56,7 +49,7 @@ export const DAILY_BACKUP_CRON = "5 6 * * *";
 export interface ScheduledJobDependencies {
   readonly maintenance: (now: Date) => Promise<void>;
   readonly recovery: (now: Date) => Promise<void>;
-  readonly temporaryRestore: (now: Date) => Promise<void>;
+  readonly temporaryRoleProbe: (now: Date) => Promise<void>;
 }
 
 /** Recovery operations kept separate so retention can run only after verified creation. */
@@ -79,8 +72,8 @@ export async function runScheduledJob(
     await dependencies.recovery(now);
     return;
   }
-  if (cron === TEMPORARY_PREVIEW_RESTORE_CRON) {
-    await dependencies.temporaryRestore(now);
+  if (cron === TEMPORARY_PREVIEW_ROLE_PROBE_CRON) {
+    await dependencies.temporaryRoleProbe(now);
     return;
   }
   throw new Error("Scheduled cron is unsupported.");
@@ -95,17 +88,15 @@ export async function runScheduledRecovery(
   await dependencies.purge(now);
 }
 
-/** Emits only owner evidence; a non-owner invocation remains completely silent. */
-export function emitTemporaryRestoreEvidence(
-  evidence: TemporaryRestoreEvidence | null,
+/** Emits only the fixed role-probe action and its already-closed evidence. */
+export function emitTemporaryPreviewRoleProbeEvidence(
+  evidence: TemporaryPreviewRoleProbeEvidence,
   write: (entry: {
-    readonly action: "backup.restore";
-    readonly evidence: TemporaryRestoreEvidence;
+    readonly action: "backup.restore-role-probe";
+    readonly evidence: TemporaryPreviewRoleProbeEvidence;
   }) => void = console.info,
-): boolean {
-  if (evidence === null) return false;
-  write({ action: "backup.restore", evidence });
-  return true;
+): void {
+  write({ action: "backup.restore-role-probe", evidence });
 }
 
 /** Injected maintenance functions keep the scheduler free of event-fetching capability. */
@@ -203,86 +194,30 @@ export async function scheduled(
         await createProductionScheduledRecoveryDependencies(environment);
       await runScheduledRecovery(scheduledAt, dependencies);
     },
-    /** Builds preview restore capability only for the temporary cron. */
-    temporaryRestore: async () => {
-      const evidence = await runTemporaryPreviewRestore(
+    /** Builds only the preview read probe for the temporary cron. */
+    temporaryRoleProbe: async () => {
+      const evidence = await runTemporaryPreviewRoleProbe(
         {
           VISION_ENV: environment.VISION_ENV,
           PREVIEW_RESTORE_DATABASE_URL:
             environment.PREVIEW_RESTORE_DATABASE_URL,
-          PREVIEW_RESTORE_TARGET_ID: environment.PREVIEW_RESTORE_TARGET_ID,
         },
-        await createProductionTemporaryRestoreDependencies(environment),
+        createProductionTemporaryRoleProbeDependencies(),
       );
-      if (evidence === null) return;
-      emitTemporaryRestoreEvidence(evidence);
+      emitTemporaryPreviewRoleProbeEvidence(evidence);
       if (evidence.outcome !== "succeeded") {
-        throw new Error("Temporary preview restore failed.");
+        throw new Error("Temporary preview role probe failed.");
       }
     },
   });
 }
 
-/** Creates preview-only restore functions without admitting the normal database URL. */
-async function createProductionTemporaryRestoreDependencies(
-  environment: Env,
-): Promise<TemporaryPreviewRestoreDependencies> {
-  if (!environment.BACKUP_BUCKET) {
-    throw new Error("Backup object storage is unavailable.");
-  }
-  const backupEnvironment = parseBackupEnvironment(environment);
-  const backupKey = await importBackupEncryptionKey(
-    backupEnvironment.BACKUP_ENCRYPTION_KEY,
-    backupEnvironment.BACKUP_KEY_VERSION,
-  );
-  const store = createR2BackupObjectStore(environment.BACKUP_BUCKET);
-  const attemptStore = createR2RestoreAttemptStore(environment.BACKUP_BUCKET);
-  const googleSubject =
-    GoogleAuthEnvSchema.shape.GOOGLE_ALLOWED_SUB.parse(
-      environment.GOOGLE_ALLOWED_SUB,
-    );
+/** Creates only the max-one read adapter required by the preview probe. */
+function createProductionTemporaryRoleProbeDependencies(): TemporaryPreviewRoleProbeDependencies {
   return {
-    store,
-    backupKey,
-    attemptStore,
-    /** Clears only after the job has validated the backup and claimed the fence. */
-    clearTarget: (targetDatabaseUrl, targetId, rowCounts) =>
-      createTemporaryPreviewClearAdapter(
-        targetDatabaseUrl,
-        targetId,
-      ).clear(rowCounts),
-    /** Creates only an independently attested disposable preview target. */
-    createTarget: async (targetDatabaseUrl, targetId) =>
-      createNeonBackupRestoreTarget(targetDatabaseUrl, {
-        environment: "preview",
-        targetId,
-        disposable: true,
-      }),
-    /** Reads the restored target through the canonical migration-9 projection. */
-    readTargetSnapshot: (targetDatabaseUrl) =>
-      createNeonBackupSnapshotSource(
-        targetDatabaseUrl,
-      ).readConsistentSnapshot(),
-    /** Exercises the owner-scoped decrypting diagnostic event path and retains only its count. */
-    countReadableEvents: async (targetDatabaseUrl) => {
-      const targetDatabase = createDb(targetDatabaseUrl);
-      const ownerId = `usr_${await sha256Base64Url(googleSubject)}`;
-      const keyProvider = await createWrappedKeyProvider(
-        parseVisionKeyEncryptionKey(environment.KEY_ENCRYPTION_KEY),
-        new DrizzleWrappedDataKeyStore(targetDatabase),
-        1,
-      );
-      const repository = createDiagnosticRepository(
-        targetDatabase,
-        keyProvider,
-        createAiEventRepositoryAccess(ownerId),
-        {
-          databaseUsageWarning: false,
-          r2UsageWarning: false,
-        },
-      );
-      return (await repository.listEvents()).length;
-    },
+    /** Opens, reads, and closes only the temporary max-one role-probe adapter. */
+    probeRole: (connectionString) =>
+      createTemporaryPreviewRoleProbeAdapter(connectionString).probeRole(),
   };
 }
 

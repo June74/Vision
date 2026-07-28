@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T18:53:07.263429Z
-- **Last observed:** 2026-07-27T21:23:34.6899801Z
-- **Phase/task:** Listener-first restore retry Task 2
+- **Last observed:** 2026-07-28T02:01:36.2087445Z
+- **Phase/task:** Preview database role probe Task 1
 - **Environment:** Local Codex workspace
 - **Version/commit:** `codex/phase-b-foundation`
 
@@ -64,3 +64,7 @@ The correct skill file was read successfully in the same run.
   catalog-declared `r1` root. The lookup failed before provider work, the
   correct catalog path was read successfully, and no repository, provider, or
   private state changed.
+- 2026-07-28T02:01:36.2087445Z: A combined read-only instruction lookup for
+  four catalog-declared `r1` skills again assumed the `r0` root. The lookup
+  failed before implementation work, no private data entered the output, and
+  the correction was to use each skill's declared root mapping.

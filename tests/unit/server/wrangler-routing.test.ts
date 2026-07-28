@@ -120,7 +120,7 @@ describe("Cloudflare asset routing", () => {
       "pnpm gateway:configure:preview",
     );
     expect(previewWorkflow).toMatch(
-      /Print only allowlisted scheduled evidence[\s\S]*?set \+o pipefail[\s\S]*?timeout 16m[\s\S]*?scripts\/print-safe-tail\.ts --restore-only/u,
+      /Print only allowlisted scheduled evidence[\s\S]*?set \+o pipefail[\s\S]*?timeout 16m[\s\S]*?scripts\/print-safe-tail\.ts --role-probe-only/u,
     );
     expect(previewWorkflow).toMatch(
       /Build deployable preview artifact[\s\S]*?env:\s*\n\s+CLOUDFLARE_ENV: preview/u,

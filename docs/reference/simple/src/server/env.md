@@ -8,6 +8,12 @@
 
 `RuntimeEnv` is the TypeScript description of a checked deployment environment.
 
+## `TemporaryRoleProbeEnvSchema`
+
+Accepts exactly `VISION_ENV=preview` and the temporary restore database
+binding. Extra fields, the normal database binding, target identity, storage,
+and encryption-key settings are rejected.
+
 ## `parseVisionDatabaseUrl`
 
 Checks a server-only database URL and accepts only the `vision_app` role without repeating the secret in errors.

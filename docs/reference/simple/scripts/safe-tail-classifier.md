@@ -1,7 +1,8 @@
 # safe-tail-classifier
 
-Turns a Cloudflare scheduled-event log into either a tiny recovery result or
-the exact closed temporary-restore evidence object.
+Turns a Cloudflare scheduled-event log into a tiny recovery result, the exact
+closed temporary-restore evidence object, or the exact four-field temporary
+role-probe evidence object.
 
 ## `createSafeTailAccumulator`
 
@@ -13,8 +14,14 @@ Accepts one line and returns a safe result only after one complete event exists.
 
 ## `classifySafeTailLine`
 
-Recognizes only the temporary or normal backup schedules, returns exact restore
-evidence first, and otherwise maps known backup failures to fixed names.
+Recognizes only the temporary or normal backup schedules, returns exact
+role-probe or restore evidence first, and otherwise maps known backup failures
+to fixed names.
+
+## `classifyTemporaryPreviewRoleProbeEvidence`
+
+Accepts only the exact four keys and valid success or failure combinations,
+then returns a new plain value-free object.
 
 ## `classifyTemporaryRestoreEvidence`
 
@@ -28,6 +35,12 @@ Converts Cloudflare's outcome into Vision's small approved outcome list.
 ## `locateTemporaryRestoreEvidence`
 
 Checks only the first message in each log entry for the exact restore record.
+
+## `locateTemporaryPreviewRoleProbeEvidence`
+
+Checks only the first message in each log entry for the exact role-probe
+action, and blocks generic fallback for malformed or wrongly labeled
+role-probe-shaped records.
 
 ## `classifyRestoreRowCounts`
 

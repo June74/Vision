@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T05:20:25Z
-- **Last observed:** 2026-07-27T23:45:03.8237805Z
-- **Phase/task:** Listener-first restore retry Task 2
+- **Last observed:** 2026-07-28T02:01:36.2087445Z
+- **Phase/task:** Preview database role probe Task 1
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `80e8c3e`
 
@@ -72,3 +72,7 @@ link now resolves to this existing incident.
   skill helper then created the required provider-navigation incident. A
   narrowed lookup avoided the unrelated package-directory gap, and the stale
   index link was corrected. No provider or database state changed.
+- 2026-07-28T02:01:36.2087445Z: Recurred when the repository-relative helper
+  path was invoked while recording the skill-root setback. The established
+  incident and index formats were used directly; no provider, repository
+  runtime, or private state changed.

@@ -1,7 +1,7 @@
 # `src/jobs/scheduled.ts`
 
 Routes the 15-minute Google maintenance schedule, daily encrypted recovery
-schedule, and temporary preview restore schedule without mixing their
+schedule, and temporary preview role-probe schedule without mixing their
 credentials or database targets.
 
 ## `runScheduledJob`
@@ -17,13 +17,13 @@ Builds Google maintenance capability only for the 15-minute cron.
 ## `recovery`
 Builds backup capability only for the daily recovery cron.
 
-## `temporaryRestore`
-Builds preview-only restore capability. A non-owner logs nothing; the owner logs
-only the existing closed restore evidence and reports failure with one fixed message.
+## `temporaryRoleProbe`
+Builds only the preview read adapter, logs the fixed role-probe evidence, and
+reports failure with one fixed message.
 
-## `emitTemporaryRestoreEvidence`
-Returns without output for `null`; otherwise preserves the exact
-`{ action: "backup.restore", evidence }` log shape.
+## `emitTemporaryPreviewRoleProbeEvidence`
+Preserves the exact
+`{ action: "backup.restore-role-probe", evidence }` log shape.
 
 ## `runScheduledCalendarMaintenance`
 Runs expired rebuild cleanup, queues repair, still attempts renewal if either fails, and reports a failure afterward.
@@ -33,20 +33,10 @@ Removes expired encrypted rebuild staging before Google credentials are needed.
 Stores a safe credential failure before the scheduler reports it.
 ## `scheduled`
 Connects Cloudflare scheduled events to exact cron routing.
-## `createProductionTemporaryRestoreDependencies`
-Builds only the R2 backup reader, opaque attempt store, unchanged backup key,
-serializable clear, disposable preview target, and owner-scoped readable-event
-dependencies needed by the temporary restore.
-## `clearTarget`
-Creates the max-one clear adapter only after the job owns the attempt fence.
-## `createTarget`
-Connects only to the temporary target URL and requires its independent preview
-identity.
-## `readTargetSnapshot`
-Reads every migration-9 backup table from the temporary target.
-## `countReadableEvents`
-Uses the same owner-scoped decrypting event list as diagnostics, discards the
-rows, and returns only their count.
+## `createProductionTemporaryRoleProbeDependencies`
+Builds only the max-one read adapter required by the temporary role probe.
+## `probeRole`
+Opens, reads, and closes only the temporary max-one role-probe adapter.
 ## `createProductionScheduledRecoveryDependencies`
 Builds the separate backup key, R2 store, and consistent Neon snapshot source.
 ## `create`

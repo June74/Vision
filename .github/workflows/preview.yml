@@ -125,7 +125,7 @@ jobs:
         run: |
           set +o pipefail
           timeout 16m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |
-            pnpm exec tsx scripts/print-safe-tail.ts --restore-only
+            pnpm exec tsx scripts/print-safe-tail.ts --role-probe-only
 
   configure_gateway:
     name: Configure approved AI Gateway budget

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   classifySafeTailLine,
+  classifyTemporaryPreviewRoleProbeEvidence,
   classifyTemporaryRestoreEvidence,
   createSafeTailAccumulator,
 } from "../../../scripts/safe-tail-classifier";
@@ -9,6 +10,7 @@ import type {
   TemporaryRestoreEvidence,
   TemporaryRestoreFailureCategory,
 } from "../../../src/jobs/temporary-preview-restore";
+import type { TemporaryPreviewRoleProbeEvidence } from "../../../src/jobs/temporary-preview-role-probe";
 
 const FAILURE_CATEGORIES: readonly TemporaryRestoreFailureCategory[] = [
   "restore_configuration_invalid",
@@ -62,6 +64,18 @@ function restoreTail(evidence: unknown, recordExtra?: unknown): string {
         ],
       },
     ],
+  });
+}
+
+/** Wraps one synthetic role-probe result in the scheduled tail shape. */
+function roleProbeTail(
+  evidence: unknown,
+  action: unknown = "backup.restore-role-probe",
+): string {
+  return JSON.stringify({
+    outcome: "ok",
+    event: { cron: "* * * * *" },
+    logs: [{ message: [{ action, evidence }] }],
   });
 }
 
@@ -332,5 +346,144 @@ describe("safe Cloudflare tail classification", () => {
         }),
       ),
     ).toBeNull();
+  });
+
+  it("reconstructs only the exact four-key role-probe success and failures", () => {
+    const success: TemporaryPreviewRoleProbeEvidence = {
+      evidenceType: "vision.preview-role-probe/v1",
+      outcome: "succeeded",
+      category: "none",
+      roleMatches: true,
+    };
+    const classified = classifySafeTailLine(roleProbeTail(success));
+
+    expect(classified).toEqual(success);
+    expect(classified).not.toBe(success);
+    expect(Object.keys(classified ?? {})).toEqual([
+      "category",
+      "evidenceType",
+      "outcome",
+      "roleMatches",
+    ]);
+    for (const category of [
+      "role_probe_configuration_invalid",
+      "role_probe_query_failed",
+      "role_probe_role_mismatch",
+    ] as const) {
+      expect(
+        classifyTemporaryPreviewRoleProbeEvidence({
+          evidenceType: "vision.preview-role-probe/v1",
+          outcome: "failed",
+          category,
+          roleMatches: false,
+        }),
+      ).toEqual({
+        category,
+        evidenceType: "vision.preview-role-probe/v1",
+        outcome: "failed",
+        roleMatches: false,
+      });
+    }
+  });
+
+  it("rejects missing, extra, and inconsistent role-probe fields", () => {
+    const success = {
+      evidenceType: "vision.preview-role-probe/v1",
+      outcome: "succeeded",
+      category: "none",
+      roleMatches: true,
+    } as const;
+    for (const candidate of [
+      { ...success, extra: true },
+      {
+        evidenceType: success.evidenceType,
+        outcome: success.outcome,
+        category: success.category,
+      },
+      { ...success, roleMatches: false },
+      { ...success, outcome: "failed" },
+      {
+        ...success,
+        outcome: "failed",
+        category: "role_probe_query_failed",
+        roleMatches: true,
+      },
+      {
+        ...success,
+        outcome: "failed",
+        category: "private-provider-error",
+        roleMatches: false,
+      },
+    ]) {
+      expect(classifyTemporaryPreviewRoleProbeEvidence(candidate)).toBeNull();
+    }
+  });
+
+  it("rejects wrong actions, wrong crons, and raw provider text", () => {
+    const privateText = "private_provider_text_sentinel";
+    const success = {
+      evidenceType: "vision.preview-role-probe/v1",
+      outcome: "succeeded",
+      category: "none",
+      roleMatches: true,
+    };
+
+    expect(
+      classifySafeTailLine(roleProbeTail(success, "backup.restore")),
+    ).toBeNull();
+    expect(
+      classifySafeTailLine(
+        JSON.stringify({
+          outcome: "ok",
+          event: { cron: "*/15 * * * *" },
+          logs: [
+            {
+              message: [
+                { action: "backup.restore-role-probe", evidence: success },
+              ],
+            },
+          ],
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      classifySafeTailLine(
+        roleProbeTail({ ...success, providerError: privateText }),
+      ),
+    ).toBeNull();
+    expect(JSON.stringify(classifySafeTailLine(roleProbeTail(success)))).not.toContain(
+      privateText,
+    );
+  });
+
+  it("rejects role-probe accessors, symbols, and non-plain prototypes without invoking them", () => {
+    let getterCalls = 0;
+    const accessor = {
+      evidenceType: "vision.preview-role-probe/v1",
+      outcome: "succeeded",
+      category: "none",
+      get roleMatches() {
+        getterCalls += 1;
+        return true;
+      },
+    };
+    const symbol = {
+      evidenceType: "vision.preview-role-probe/v1",
+      outcome: "succeeded",
+      category: "none",
+      roleMatches: true,
+      [Symbol("private")]: true,
+    };
+    const prototype = Object.assign(Object.create({ inherited: true }), {
+      evidenceType: "vision.preview-role-probe/v1",
+      outcome: "succeeded",
+      category: "none",
+      roleMatches: true,
+    });
+
+    expect(classifyTemporaryPreviewRoleProbeEvidence(accessor)).toBeNull();
+    expect(getterCalls).toBe(0);
+    expect(classifyTemporaryPreviewRoleProbeEvidence(symbol)).toBeNull();
+    expect(classifyTemporaryPreviewRoleProbeEvidence(prototype)).toBeNull();
   });
 });

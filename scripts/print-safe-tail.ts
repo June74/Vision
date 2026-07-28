@@ -3,10 +3,14 @@ import { createInterface } from "node:readline";
 import { createSafeTailAccumulator } from "./safe-tail-classifier";
 
 const RESTORE_ONLY_ARGUMENT = "--restore-only";
+const ROLE_PROBE_ONLY_ARGUMENT = "--role-probe-only";
 const noArguments = process.argv.length === 2;
 const restoreOnly =
   process.argv.length === 3 && process.argv[2] === RESTORE_ONLY_ARGUMENT;
-if (!noArguments && !restoreOnly) {
+const roleProbeOnly =
+  process.argv.length === 3 &&
+  process.argv[2] === ROLE_PROBE_ONLY_ARGUMENT;
+if (!noArguments && !restoreOnly && !roleProbeOnly) {
   process.exit(1);
 }
 let emitted = false;
@@ -21,7 +25,12 @@ lines.on("line", (line) => {
   if (
     !evidence ||
     emitted ||
-    (restoreOnly && !("evidenceType" in evidence))
+    (restoreOnly &&
+      (!("evidenceType" in evidence) ||
+        evidence.evidenceType !== "vision.preview-restore/v1")) ||
+    (roleProbeOnly &&
+      (!("evidenceType" in evidence) ||
+        evidence.evidenceType !== "vision.preview-role-probe/v1"))
   ) {
     return;
   }

@@ -239,8 +239,9 @@ describe("preview live diagnostics policy", () => {
     expect(tailJob).toContain("timeout-minutes: 18");
     expect(tailStep).toContain(
       "timeout 16m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |\n" +
-        "            pnpm exec tsx scripts/print-safe-tail.ts --restore-only",
+        "            pnpm exec tsx scripts/print-safe-tail.ts --role-probe-only",
     );
+    expect(tailStep).not.toContain("--restore-only");
     expect(tailStep).toContain("--format json 2>/dev/null");
     expect(tailStep).toContain(
       "CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}",

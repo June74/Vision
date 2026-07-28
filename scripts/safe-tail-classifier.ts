@@ -4,6 +4,10 @@ import type {
   TemporaryRestoreEvidence,
   TemporaryRestoreFailureCategory,
 } from "../src/jobs/temporary-preview-restore";
+import type {
+  TemporaryPreviewRoleProbeEvidence,
+  TemporaryPreviewRoleProbeFailureCategory,
+} from "../src/jobs/temporary-preview-role-probe";
 
 /** Closed, privacy-safe recovery evidence emitted from one Wrangler JSON tail line. */
 export interface SafeTailEvidence {
@@ -28,8 +32,11 @@ export interface SafeTailEvidence {
     | "unknown_failure";
 }
 
-/** The only two evidence objects that the safe tail may emit. */
-export type SafeTailResult = SafeTailEvidence | TemporaryRestoreEvidence;
+/** The only evidence objects that the safe tail may emit. */
+export type SafeTailResult =
+  | SafeTailEvidence
+  | TemporaryRestoreEvidence
+  | TemporaryPreviewRoleProbeEvidence;
 
 const FAILURE_MARKERS = Object.freeze([
   ["Backup creation failed.", "backup_creation_failed"],
@@ -73,6 +80,17 @@ const RESTORE_SUCCESS_KEYS = Object.freeze([
   "rowCounts",
   "schemaVersion",
   "targetWasEmpty",
+] as const);
+const ROLE_PROBE_FAILURE_CATEGORIES = Object.freeze([
+  "role_probe_configuration_invalid",
+  "role_probe_query_failed",
+  "role_probe_role_mismatch",
+] as const satisfies readonly TemporaryPreviewRoleProbeFailureCategory[]);
+const ROLE_PROBE_KEYS = Object.freeze([
+  "category",
+  "evidenceType",
+  "outcome",
+  "roleMatches",
 ] as const);
 const MAX_TAIL_EVENT_BYTES = 1_048_576;
 
@@ -122,6 +140,12 @@ export function classifySafeTailLine(line: string): SafeTailResult | null {
         : null;
   if (!cron) return null;
 
+  const roleProbe = locateTemporaryPreviewRoleProbeEvidence(tail.logs);
+  if (roleProbe.evidence) {
+    return cron === "temporary_recovery" ? roleProbe.evidence : null;
+  }
+  if (roleProbe.seen) return null;
+
   const restore = locateTemporaryRestoreEvidence(tail.logs);
   if (restore.evidence) {
     return cron === "temporary_recovery" ? restore.evidence : null;
@@ -137,6 +161,49 @@ export function classifySafeTailLine(line: string): SafeTailResult | null {
     cron,
     outcome,
   });
+}
+
+/** Reconstructs one exact closed role-probe result and rejects all shape or value drift. */
+export function classifyTemporaryPreviewRoleProbeEvidence(
+  candidate: unknown,
+): TemporaryPreviewRoleProbeEvidence | null {
+  const evidence = snapshotOwnEnumerableData(candidate);
+  if (
+    !evidence ||
+    !hasExactKeys(evidence, ROLE_PROBE_KEYS) ||
+    evidence.evidenceType !== "vision.preview-role-probe/v1"
+  ) {
+    return null;
+  }
+  if (
+    evidence.outcome === "succeeded" &&
+    evidence.category === "none" &&
+    evidence.roleMatches === true
+  ) {
+    return Object.freeze({
+      category: "none",
+      evidenceType: "vision.preview-role-probe/v1",
+      outcome: "succeeded",
+      roleMatches: true,
+    });
+  }
+  if (
+    evidence.outcome === "failed" &&
+    typeof evidence.category === "string" &&
+    ROLE_PROBE_FAILURE_CATEGORIES.includes(
+      evidence.category as TemporaryPreviewRoleProbeFailureCategory,
+    ) &&
+    evidence.roleMatches === false
+  ) {
+    return Object.freeze({
+      category:
+        evidence.category as TemporaryPreviewRoleProbeFailureCategory,
+      evidenceType: "vision.preview-role-probe/v1",
+      outcome: "failed",
+      roleMatches: false,
+    });
+  }
+  return null;
 }
 
 /** Reconstructs one exact closed restore result and rejects all shape or value drift. */
@@ -238,6 +305,42 @@ function locateTemporaryRestoreEvidence(candidate: unknown): {
   return { seen, evidence: null };
 }
 
+/** Finds the first exact role-probe log record without copying any other message. */
+function locateTemporaryPreviewRoleProbeEvidence(candidate: unknown): {
+  readonly seen: boolean;
+  readonly evidence: TemporaryPreviewRoleProbeEvidence | null;
+} {
+  if (!Array.isArray(candidate)) return { seen: false, evidence: null };
+  let seen = false;
+  for (const logCandidate of candidate) {
+    const log = snapshotOwnEnumerableData(logCandidate);
+    if (!log || !Array.isArray(log.message) || log.message.length === 0) {
+      continue;
+    }
+    const firstMessage = snapshotOwnEnumerableData(log.message[0]);
+    if (!firstMessage) continue;
+    const candidateEvidence = snapshotOwnEnumerableData(
+      firstMessage.evidence,
+    );
+    const roleProbeLike =
+      candidateEvidence?.evidenceType ===
+      "vision.preview-role-probe/v1";
+    if (firstMessage.action !== "backup.restore-role-probe") {
+      if (roleProbeLike) seen = true;
+      continue;
+    }
+    seen = true;
+    if (!hasExactKeys(firstMessage, ["action", "evidence"] as const)) {
+      continue;
+    }
+    const evidence = classifyTemporaryPreviewRoleProbeEvidence(
+      firstMessage.evidence,
+    );
+    if (evidence) return { seen: true, evidence };
+  }
+  return { seen, evidence: null };
+}
+
 /** Reconstructs all and only the authoritative nonnegative row counts. */
 function classifyRestoreRowCounts(
   candidate: unknown,
@@ -290,6 +393,8 @@ function snapshotOwnEnumerableData(
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return null;
   const snapshot: Record<string, unknown> = Object.create(null);
   for (const key of Reflect.ownKeys(value)) {
     const descriptor = Object.getOwnPropertyDescriptor(value, key);

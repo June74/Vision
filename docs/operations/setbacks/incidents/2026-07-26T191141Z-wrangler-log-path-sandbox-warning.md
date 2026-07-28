@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-07-28T01:00:14.2508518Z
-- **Phase/task:** Listener-first restore retry Task 2 verification
+- **Last observed:** 2026-07-28T02:21:26.5488258Z
+- **Phase/task:** Preview database role probe Task 1 full gate
 - **Environment:** Local managed sandbox
 - **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`
 
@@ -93,3 +93,7 @@ security validation passed.
   with one skip, 179 contract tests passed, 75 Worker tests passed, and build,
   documentation, typecheck, and security validation passed. No provider state
   or private data was affected.
+- 2026-07-28T02:21:26.5488258Z: Recurred during the preview role-probe Worker
+  gate because the task-local diagnostic setting was omitted. All 75 Worker
+  assertions passed; the enclosing gate later stopped at documentation
+  coverage.

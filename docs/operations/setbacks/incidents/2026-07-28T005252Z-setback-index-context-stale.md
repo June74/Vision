@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T00:52:52.8805934Z
-- **Last observed:** 2026-07-28T01:21:32.8180667Z
-- **Phase/task:** Listener-first restore retry Task 3 Step 1 reporting
+- **Last observed:** 2026-07-28T02:22:11.4959069Z
+- **Phase/task:** Preview database role probe Task 1 documentation correction
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `7d2f9f6`
 
@@ -58,3 +58,7 @@ is indexed once.
   atomically. Fresh numbered inspection confirmed no partial change, and the
   incident files are patched separately from their exact current lines. No
   source, provider, or private-data boundary was involved.
+- 2026-07-28T02:22:11.4959069Z: A combined documentation and setback update
+  used stale index-row context and was rejected atomically. No source,
+  provider, or private-data state changed; the source/reference correction and
+  incident bookkeeping are split before retry.

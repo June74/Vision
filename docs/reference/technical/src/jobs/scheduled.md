@@ -1,9 +1,9 @@
 # `src/jobs/scheduled.ts`
 
 The scheduled entry point routes exact cron expressions to isolated
-Google-maintenance, encrypted-recovery, and temporary preview-restore
-capability sets. The normal branches never construct the restore target, and
-the temporary restore path never receives the normal `DATABASE_URL`.
+Google-maintenance, encrypted-recovery, and temporary preview role-probe
+capability sets. The temporary branch receives only the preview environment
+marker and temporary connection binding.
 
 ## `runScheduledJob`
 Matches only the three configured cron expressions and rejects any unexpected
@@ -18,14 +18,13 @@ Lazily constructs and executes only the existing calendar maintenance dependenci
 ## `recovery`
 Lazily constructs and executes only backup and retention dependencies.
 
-## `temporaryRestore`
-Lazily runs the injected preview restore engine. It returns silently for a
-non-owner, emits exactly the `backup.restore` action plus closed evidence for
-the owner, and throws only a fixed value-free failure.
+## `temporaryRoleProbe`
+Lazily runs the injected preview role-probe job, emits exactly the
+`backup.restore-role-probe` action plus closed evidence, and throws only a
+fixed value-free failure after failed evidence is emitted.
 
-## `emitTemporaryRestoreEvidence`
-Treats `null` as an explicit silent non-owner outcome. For owner evidence it
-preserves the exact allowlisted action/evidence object and returns `true`.
+## `emitTemporaryPreviewRoleProbeEvidence`
+Writes only the exact allowlisted action/evidence object.
 
 ## `runScheduledCalendarMaintenance`
 Runs projection cleanup and repair before renewal, isolates all three operations, and reports a failure only after every maintenance path has been attempted.
@@ -35,27 +34,13 @@ Invokes the owner-scoped database-only projection retention boundary before cred
 Routes typed OAuth failure through the generation-safe maintenance checkpoint transition before rethrowing.
 ## `scheduled`
 Uses Cloudflare's scheduled time and exact cron string for capability-separated dispatch.
-## `createProductionTemporaryRestoreDependencies`
-Imports the unchanged backup key, binds the backup reader and disjoint opaque
-attempt store to R2, and exposes target-only adapter callbacks. It validates
-the fixed owner subject independently and never passes the normal application
-database URL into clear, restore creation, snapshot read-back, or diagnostic
-read-back.
-## `clearTarget`
-Constructs `Pool({ max: 1 })` only after `claimOnce` returns true, runs the
-prepared-count clear, and closes the pool before importer target construction.
-## `createTarget`
-Constructs the interactive Neon adapter with the operator-known target ID,
-preview environment, and disposable flag so the database-owned schema-9
-attestation remains authoritative.
-## `readTargetSnapshot`
-Uses the canonical read-only repeatable-read migration-9 projection against
-only the validated temporary target URL.
-## `countReadableEvents`
-Derives the normal opaque owner, restores wrapped keys from the temporary
-target, exercises the diagnostic repository's owner authorization and title
-decryption path, discards all returned rows immediately, and retains only a
-nonnegative count.
+## `createProductionTemporaryRoleProbeDependencies`
+Constructs only the max-one role-probe adapter. The temporary branch cannot
+reach restore, clear, R2, backup-key, target-identity, table, or HTTP code.
+## `probeRole`
+Constructs the adapter from the already validated temporary connection string,
+executes the fixed read-only predicate, and awaits cleanup before returning the
+boolean.
 ## `createProductionScheduledRecoveryDependencies`
 Validates the separate key/version, imports a non-extractable key, and constructs the R2 and repeatable-read Neon
 adapters.

@@ -44,6 +44,16 @@ The schema accepts `VISION_ENV`, Worker-only `DATABASE_URL`, and Worker-only `KE
 
 This server-only, secret-bearing type keeps TypeScript consumers aligned with the runtime schema. It has no side effects and does not validate values by itself.
 
+## `TemporaryRoleProbeEnvSchema`
+
+**Signature:** strict Zod object containing only `VISION_ENV: "preview"` and
+`PREVIEW_RESTORE_DATABASE_URL`.
+
+The database binding reuses the existing Worker-only database URL validator,
+while the object-level strictness rejects every unrelated capability. Invalid
+URL text remains a normal closed schema rejection and is never rethrown by the
+role refinement.
+
 ## `parseVisionDatabaseUrl`
 
 **Signature:** `(databaseUrl: unknown) => string`
