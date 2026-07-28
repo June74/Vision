@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T00:22:25Z
-- **Last observed:** 2026-07-27T00:24:17Z
-- **Phase/task:** Phase B AI Gateway identifier verification
+- **Last observed:** 2026-07-28T14:41:10Z
+- **Phase/task:** Phase B completion resume verification
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** working tree after `ac1f044`
 
@@ -60,3 +60,8 @@ contract stages had already passed.
 
 - 2026-07-27T00:22:25Z: First observed and contained.
 - 2026-07-27T00:24:17Z: Closed after every remaining check passed separately.
+- 2026-07-28T14:41:10Z: Recurred because the controller mistakenly assigned
+  a one-second timeout to the complete `pnpm check` command. The shell stopped
+  the command during its opening TypeScript stage; no file or provider state
+  changed. The same gate is rerun with a duration appropriate to the recorded
+  suite size.

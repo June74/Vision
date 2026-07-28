@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:30:35.2961897Z
-- **Last observed:** 2026-07-28T14:35:22Z
+- **Last observed:** 2026-07-28T14:44:32Z
 - **Phase/task:** Phase B completion resume preflight
 - **Environment:** Local Phase B worktree under the managed sandbox
 - **Version/commit:** Staged Task 1 patch based on `59e6a02`
@@ -128,3 +128,8 @@ commit `4420f6d`.
 - 2026-07-28T14:35:22Z: Recurred during the resumed setback diff and status
   checks. Both requested Git operations exited successfully and returned their
   requested results; no workaround or external action was attempted.
+- 2026-07-28T14:44:32Z: Recurred when a status check suppressed the known
+  warning stream. Git still returned the four expected modified setback paths,
+  but the shell reported a nonzero native-command status, so that invocation
+  was not accepted as clean-state proof. No repository or provider mutation
+  occurred.

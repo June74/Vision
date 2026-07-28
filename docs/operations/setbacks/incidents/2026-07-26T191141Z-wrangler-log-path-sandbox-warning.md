@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-07-28T02:21:26.5488258Z
-- **Phase/task:** Preview database role probe Task 1 full gate
+- **Last observed:** 2026-07-28T14:43:50Z
+- **Phase/task:** Phase B completion resume full gate
 - **Environment:** Local managed sandbox
 - **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`
 
@@ -97,3 +97,8 @@ security validation passed.
   gate because the task-local diagnostic setting was omitted. All 75 Worker
   assertions passed; the enclosing gate later stopped at documentation
   coverage.
+- 2026-07-28T14:43:50Z: Recurred during the resumed complete repository gate
+  because the task-local diagnostic setting was omitted. The command exited
+  zero after 720 unit/integration tests passed with one intentional skip, 179
+  contract tests passed, 75 Worker tests passed, and documentation, build, and
+  security validation passed.

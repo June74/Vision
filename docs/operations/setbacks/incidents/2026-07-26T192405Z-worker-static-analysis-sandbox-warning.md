@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:24:05.647183Z
-- **Last observed:** 2026-07-28T02:21:26.5488258Z
-- **Phase/task:** Preview database role probe Task 1 full gate
+- **Last observed:** 2026-07-28T14:43:50Z
+- **Phase/task:** Phase B completion resume full gate
 - **Environment:** Local managed sandbox Worker test pool
 - **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`
 
@@ -97,3 +97,8 @@ documentation, typecheck, and security validation also passed.
   repeated the same sandbox-only analyzer warning and passed all 75 Worker
   assertions. The enclosing gate later stopped at documentation coverage, not
   Worker behavior.
+- 2026-07-28T14:43:50Z: The resumed complete repository gate repeated the
+  same sandbox-only analyzer warning and passed all 75 Worker assertions. The
+  complete command exited zero after 720 unit/integration tests passed with one
+  intentional skip, 179 contract tests passed, and documentation, build, and
+  security validation passed.
