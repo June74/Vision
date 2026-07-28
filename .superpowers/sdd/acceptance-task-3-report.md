@@ -1,4 +1,4 @@
-Status: NEEDS_CONTEXT
+Status: DONE_WITH_CONCERNS
 
 ## Checkpoints
 
@@ -73,3 +73,55 @@ Status: NEEDS_CONTEXT
   unavailable and no live privilege-success claim is made.
 - Independent database/security review should use the committed diff after
   the controller supplies or separately attests the privilege contract.
+
+## Independent-review fix wave
+
+- Scope: resolved Important findings 2 and 3 and Minor finding 1 from
+  `.superpowers/sdd/acceptance-task-3-review.md`. The production privilege
+  manifest and all live privilege values remain unchanged.
+- Raw database storage: the unique admitted sentinel now checks the raw
+  `title_envelope` bytes for the fixed public marker before title decryption.
+  Only the derived absence boolean contributes to
+  `protectedStorageMatches`; the decrypted title still determines
+  `sentinelStatus`, and every application-controlled plaintext buffer remains
+  cleared in `finally`.
+- Schema binding: the source admits only the fixed production application
+  schema, and every application relation in both SQL statements is statically
+  qualified with that schema. Tests cover every `nodes`, `edges`, `events`,
+  and `sync_checkpoints` occurrence and reject unqualified reads, making the
+  result independent of `search_path`.
+- Numeric evidence: safe-tail accepts `numeric_bound_exceeded` only when at
+  least one numeric field is zero, which is the exact observable condition
+  created when the job sanitizes a rejected integer. The job test proves the
+  rejected field becomes zero even when every other numeric field is positive.
+- RED command:
+  `pnpm.cmd test:unit tests/integration/data/phase-b-foundation-probe.test.ts
+  tests/integration/jobs/phase-b-foundation-probe.test.ts
+  tests/unit/scripts/safe-tail-classifier.test.ts`.
+  Output: 2 failed files, 1 passed file; 4 expected failed tests and 80 passed
+  tests. The failures were schema admission, static relation qualification,
+  raw-envelope marker absence, and impossible numeric evidence.
+- First GREEN command: the same three-file command.
+  Output: 3 passed files, 84 passed tests, zero failures.
+- Final covering command:
+  `pnpm.cmd test:unit tests/integration/data/phase-b-foundation-probe.test.ts
+  tests/integration/jobs/phase-b-foundation-probe.test.ts
+  tests/unit/scripts/safe-tail-classifier.test.ts
+  tests/unit/scripts/print-safe-tail.test.ts`.
+  Output: 4 passed files, 98 passed tests, zero failures.
+- `pnpm.cmd typecheck` output:
+  `tsc --noEmit && tsc --noEmit -p tests/tsconfig.json`; exit 0.
+- `pnpm.cmd docs:check` output:
+  `tsx scripts/validate-doc-coverage.ts`; exit 0.
+- `pnpm.cmd security:scan` output:
+  `Fresh release evidence captured.` and
+  `Release security scan passed.`; exit 0.
+- `git diff --check` passed. Migration and
+  `src/domain/operations/phase-b-privilege-manifest.ts` diffs are empty.
+
+## Remaining concern after review fixes
+
+- The sole remaining concern is the controller-gated live privilege contract.
+  `PHASE_B_PRIVILEGE_MANIFEST` remains deliberately unavailable, so source
+  construction still rejects before I/O and no live privilege-success claim
+  is made.
