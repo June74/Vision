@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T02:32:27Z
-- **Last observed:** 2026-07-28T19:51:22.5993220Z
-- **Phase/task:** Phase B acceptance instrumentation Task 2 implementation
+- **Last observed:** 2026-07-28T20:40:45.2724773Z
+- **Phase/task:** Phase B acceptance instrumentation Task 3 replacement brief
 - **Environment:** Local Phase B worktree
-- **Version/commit:** `6fdb9cb`
+- **Version/commit:** `36f9df2`
 
 ## Symptom
 
@@ -86,3 +86,11 @@ The retry must modify only the intended plan paragraph and pass
   more identical replacement hunks than the file contained. The first patch
   and an index-title retry were rejected atomically. Bounded searches then
   supplied the exact fixture count and current index title.
+- 2026-07-28T20:40:02.5496749Z: Recurred when the ignored Task 3 brief patch
+  assumed controller-resolution lines were already present. The patch was
+  rejected atomically, no brief content changed, and the exact current header
+  was read before retrying with a short insertion anchor.
+- 2026-07-28T20:40:45.2724773Z: The short-anchor retry was also rejected
+  against the ignored CRLF brief despite the rendered header match. No file
+  changed. The correction is to create a new versioned ignored brief instead
+  of repeatedly patching the existing generated artifact.

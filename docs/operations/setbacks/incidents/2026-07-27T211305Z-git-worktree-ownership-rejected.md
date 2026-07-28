@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T21:13:05Z
-- **Last observed:** 2026-07-28T14:49:26Z
-- **Phase/task:** Phase B temporary cleanup boundary audit
+- **Last observed:** 2026-07-28T20:43:57.5678432Z
+- **Phase/task:** Phase B acceptance instrumentation Task 3 setup
 - **Environment:** Managed local sandbox, linked worktree
 - **Version/commit:** Not inspected; Git metadata access was rejected first.
 
@@ -70,3 +70,7 @@ configuration was changed.
   The first Git read stopped at the ownership check; the audit then used the
   existing command-scoped safe-directory boundary and completed without a
   persistent Git configuration change, tracked-file edit, or provider action.
+- 2026-07-28T20:43:57.5678432Z: Recurred during Task 3 branch/base validation.
+  The initial reads stopped at the ownership check; the controller-approved
+  command-scoped boundary then verified the expected worktree, branch, and base
+  commit without a persistent Git configuration change or provider action.

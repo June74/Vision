@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:47:00Z
-- **Last observed:** 2026-07-28T19:37:57Z
-- **Phase/task:** Phase B acceptance instrumentation Task 2 handoff
+- **Last observed:** 2026-07-28T21:20:45.5557364Z
+- **Phase/task:** Phase B acceptance instrumentation Task 3 test design
 - **Environment:** Local worktree
 - **Version/commit:** `50569e6`
 
@@ -89,3 +89,24 @@ At 2026-07-27T01:50Z, the repository's `docs:check` script and
   task-only extraction. Direct inspection confirmed the correct section. The
   ignored brief receives an explicit binding-values preface and is verified
   against the actual full heading.
+- 2026-07-28T20:44:57.5288369Z: A repository file-list filter supplied one
+  literal composite string where an explicit PowerShell pattern array was
+  intended, so the read-only discovery returned no matches. The retry uses an
+  explicit array and changes no project or provider state.
+- 2026-07-28T21:12:25.3539371Z: A documentation inspection command assumed
+  temporary role-probe reference filenames before listing their directories.
+  The read-only command reported only missing paths; directory discovery
+  supplied the actual names before retry, with no product-data or provider
+  access.
+- 2026-07-28T21:13:02.0639099Z: A follow-up read-only command assumed
+  `scripts/check-docs.ts`; the discovered validator is
+  `scripts/validate-doc-coverage.ts`. The retry uses the observed path and no
+  project behavior or external state changed.
+- 2026-07-28T21:20:01.8709129Z: A read-only self-review search included a
+  nonexistent optional Task 1 specification filename. The binding plan search
+  remained valid; listing the SDD directory supplied the available filenames,
+  and no project or provider state changed.
+- 2026-07-28T21:20:45.5557364Z: The provider-revision self-review guessed a
+  schema filename before discovering the tracked path. The failed read was
+  local and read-only. The review is constrained to paths returned by
+  `git ls-files` before finalization.

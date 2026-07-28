@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T19:54:22.2560981Z
-- **Last observed:** 2026-07-28T19:54:22.2560981Z
-- **Phase/task:** Phase B acceptance instrumentation Task 2 typecheck
+- **Last observed:** 2026-07-28T21:08:42.5183444Z
+- **Phase/task:** Phase B acceptance instrumentation Task 3 typecheck
 - **Environment:** Local Phase B worktree
 - **Version/commit:** Task 2 patch based on `429124f`
 
@@ -54,3 +54,11 @@ Rerun `pnpm.cmd typecheck`.
 ## Recurrence history
 
 - 2026-07-28T19:54:22.2560981Z: First observed and contained.
+- 2026-07-28T21:07:55.8841349Z: The Task 3 production sources compiled, while
+  the new database-client mock returned a base record array instead of
+  preserving its generic row subtype. The fixture now casts only its synthetic
+  rows at the port boundary; no runtime or provider state changed.
+- 2026-07-28T21:08:42.5183444Z: Vitest's mock wrapper still erased the generic
+  method even after the synthetic rows were cast. The fixture separates an
+  inspectable non-generic mock from a generic port wrapper; no production or
+  provider state changed.

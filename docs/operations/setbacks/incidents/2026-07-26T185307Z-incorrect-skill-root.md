@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T18:53:07.263429Z
-- **Last observed:** 2026-07-28T20:19:03.8827218Z
+- **Last observed:** 2026-07-28T20:43:57.5678432Z
 - **Phase/task:** Phase B acceptance instrumentation Task 3 instruction discovery
 - **Environment:** Local Codex workspace
 - **Version/commit:** `codex/phase-b-foundation`
@@ -70,5 +70,9 @@ The correct skill file was read successfully in the same run.
   the correction was to use each skill's declared root mapping.
 - 2026-07-28T20:19:03.8827218Z: A combined read-only instruction lookup
   treated the catalog-declared `r0` setback skill as an `r1` skill. The lookup
+  failed before implementation work, the correct catalog path was read
+  successfully, and no project, provider, or private state changed.
+- 2026-07-28T20:43:57.5678432Z: A combined read-only instruction lookup
+  treated the catalog-declared `r1` scope skill as an `r0` skill. The lookup
   failed before implementation work, the correct catalog path was read
   successfully, and no project, provider, or private state changed.

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:03:39.626332Z
-- **Last observed:** 2026-07-28T20:34:20.6673153Z
+- **Last observed:** 2026-07-28T21:23:39.6303315Z
 - **Phase/task:** Phase B acceptance plan-review resolution staging
 - **Environment:** Local linked worktree under the managed sandbox
 - **Version/commit:** `f7778b8`
@@ -115,3 +115,8 @@ metadata boundary. Earlier related work produced commit `f7778b8`.
   worktree index lock; no file was partially staged or committed. The same
   explicit documentation path is retried through the established scoped
   metadata-permission boundary.
+- 2026-07-28T21:23:39.6303315Z: Recurred while staging the explicit Task 3
+  source, test, script, and reference path set. Git stopped before creating the
+  linked-worktree index lock, so no file was partially staged. The identical
+  path set is retried through the established scoped metadata-permission
+  boundary.
