@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T03:58:01Z
-- **Last observed:** 2026-07-28T14:49:26Z
-- **Phase/task:** Phase B temporary cleanup boundary audit
+- **Last observed:** 2026-07-28T15:00:32Z
+- **Phase/task:** Phase B production-environment protection audit
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `1d6ad12`
 
@@ -99,3 +99,9 @@ interfaces without emitting URL contents.
   URL. Broad configuration output stopped immediately; later inspection used
   targeted tracked-file queries and redaction. No credential, token, database
   value, account identifier, protected row, or provider action was involved.
+- 2026-07-28T15:00:32Z: Recurred when the GitHub API returned its standard
+  documentation link alongside a read-only environment lookup failure despite
+  a bounded field selector. The response contained no credential, token,
+  database value, account identifier, protected row, or environment details.
+  Later diagnostics suppress raw provider error bodies and return only status
+  categories.
