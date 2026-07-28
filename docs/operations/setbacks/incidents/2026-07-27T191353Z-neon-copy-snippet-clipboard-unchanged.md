@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T19:13:53Z
-- **Last observed:** 2026-07-27T20:25:14Z
-- **Phase/task:** Phase B restore Task 4 live retry
+- **Last observed:** 2026-07-28T13:56:06Z
+- **Phase/task:** Preview database role probe Task 2 live resume
 - **Environment:** Signed-in Neon connection modal
 - **Version/commit:** `9bbc4be`
 
@@ -67,3 +67,9 @@ browser memory. Only fixed shape booleans and length were returned.
   provider control left the system clipboard without a valid connection token;
   no clipboard content was printed. A user-like visible select-and-copy action
   is used for the shell transfer instead.
+- 2026-07-28T13:56:06Z: Recurred after the overnight live-role-probe resume.
+  The exact expected application role was selected, but the unique provider
+  Copy control produced an empty browser-control clipboard. No URL was emitted
+  and no Cloudflare mutation occurred. Recovery uses one uniquely
+  shape-validated dialog element and an opaque in-memory transfer without
+  returning its value.
