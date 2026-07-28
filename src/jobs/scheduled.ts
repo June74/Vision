@@ -18,6 +18,8 @@ import {
   createNeonBackupSnapshotSource,
 } from "../data/backup/neon-adapter";
 import { createR2BackupObjectStore } from "../data/backup/r2-object-store";
+import { createR2RestoreAttemptStore } from "../data/backup/r2-restore-attempt-store";
+import { createTemporaryPreviewClearAdapter } from "../data/backup/temporary-preview-clear-adapter";
 import { CalendarClient } from "../integrations/google-calendar/calendar-client";
 import {
   GoogleOAuthClient,
@@ -42,6 +44,7 @@ import {
   runTemporaryPreviewRestore,
   TEMPORARY_PREVIEW_RESTORE_CRON,
   type TemporaryPreviewRestoreDependencies,
+  type TemporaryRestoreEvidence,
 } from "./temporary-preview-restore";
 
 /** Existing near-real-time repair/renewal cadence. */
@@ -90,6 +93,19 @@ export async function runScheduledRecovery(
 ): Promise<void> {
   await dependencies.create(now);
   await dependencies.purge(now);
+}
+
+/** Emits only owner evidence; a non-owner invocation remains completely silent. */
+export function emitTemporaryRestoreEvidence(
+  evidence: TemporaryRestoreEvidence | null,
+  write: (entry: {
+    readonly action: "backup.restore";
+    readonly evidence: TemporaryRestoreEvidence;
+  }) => void = console.info,
+): boolean {
+  if (evidence === null) return false;
+  write({ action: "backup.restore", evidence });
+  return true;
 }
 
 /** Injected maintenance functions keep the scheduler free of event-fetching capability. */
@@ -198,7 +214,8 @@ export async function scheduled(
         },
         await createProductionTemporaryRestoreDependencies(environment),
       );
-      console.info({ action: "backup.restore", evidence });
+      if (evidence === null) return;
+      emitTemporaryRestoreEvidence(evidence);
       if (evidence.outcome !== "succeeded") {
         throw new Error("Temporary preview restore failed.");
       }
@@ -219,6 +236,7 @@ async function createProductionTemporaryRestoreDependencies(
     backupEnvironment.BACKUP_KEY_VERSION,
   );
   const store = createR2BackupObjectStore(environment.BACKUP_BUCKET);
+  const attemptStore = createR2RestoreAttemptStore(environment.BACKUP_BUCKET);
   const googleSubject =
     GoogleAuthEnvSchema.shape.GOOGLE_ALLOWED_SUB.parse(
       environment.GOOGLE_ALLOWED_SUB,
@@ -226,6 +244,13 @@ async function createProductionTemporaryRestoreDependencies(
   return {
     store,
     backupKey,
+    attemptStore,
+    /** Clears only after the job has validated the backup and claimed the fence. */
+    clearTarget: (targetDatabaseUrl, targetId, rowCounts) =>
+      createTemporaryPreviewClearAdapter(
+        targetDatabaseUrl,
+        targetId,
+      ).clear(rowCounts),
     /** Creates only an independently attested disposable preview target. */
     createTarget: async (targetDatabaseUrl, targetId) =>
       createNeonBackupRestoreTarget(targetDatabaseUrl, {

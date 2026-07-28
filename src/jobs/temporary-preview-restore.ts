@@ -7,10 +7,13 @@ import {
 } from "../data/backup/export-backup";
 import {
   BackupRestorePromotionError,
-  importBackup,
+  importPreparedBackup,
+  prepareBackupImport,
   type RestoreReport,
 } from "../data/backup/import-backup";
 import type { ManagedBackupRestoreTarget } from "../data/backup/neon-adapter";
+import type { RestoreAttemptStore } from "../data/backup/r2-restore-attempt-store";
+import type { TemporaryPreviewClearResult } from "../data/backup/temporary-preview-clear-adapter";
 import { validateBackupReferences } from "../domain/backup/schema-contract";
 import {
   BACKUP_TABLES,
@@ -63,6 +66,16 @@ export interface TemporaryRestoreEvidence {
 export interface TemporaryPreviewRestoreDependencies {
   readonly store: BackupObjectStore;
   readonly backupKey: BackupEncryptionKey;
+  readonly attemptStore: RestoreAttemptStore;
+  readonly clearTarget: (
+    databaseUrl: string,
+    targetId: string,
+    rowCounts: BackupRowCounts,
+  ) => Promise<TemporaryPreviewClearResult>;
+  /** Test seam proving the exact prepared token crosses the one-shot fence. */
+  readonly prepareImport?: typeof prepareBackupImport;
+  /** Test seam proving restore consumes the same module-issued preparation. */
+  readonly importPrepared?: typeof importPreparedBackup;
   readonly createTarget: (
     databaseUrl: string,
     targetId: string,
@@ -84,12 +97,12 @@ interface SelectedBackupCandidate {
 export async function runTemporaryPreviewRestore(
   environment: unknown,
   dependencies: TemporaryPreviewRestoreDependencies,
-): Promise<TemporaryRestoreEvidence> {
+): Promise<TemporaryRestoreEvidence | null> {
   let parsed: ReturnType<typeof TemporaryRestoreEnvSchema.parse>;
   try {
     parsed = TemporaryRestoreEnvSchema.parse(environment);
   } catch {
-    return failedEvidence("restore_configuration_invalid");
+    return null;
   }
 
   let candidate: SelectedBackupCandidate;
@@ -99,7 +112,7 @@ export async function runTemporaryPreviewRestore(
       dependencies.backupKey.keyVersion,
     );
   } catch {
-    return failedEvidence("restore_candidate_invalid");
+    return null;
   }
 
   let verifiedBackup: Awaited<ReturnType<typeof readVerifiedStoredBackup>>;
@@ -111,7 +124,37 @@ export async function runTemporaryPreviewRestore(
       dependencies.backupKey,
     );
   } catch {
-    return failedEvidence("restore_object_verification_failed");
+    return null;
+  }
+
+  let prepared: Awaited<ReturnType<typeof prepareBackupImport>>;
+  try {
+    prepared = await (dependencies.prepareImport ?? prepareBackupImport)(
+      verifiedBackup.encrypted,
+      dependencies.backupKey,
+    );
+  } catch {
+    return null;
+  }
+
+  let ownsAttempt = false;
+  try {
+    ownsAttempt = await dependencies.attemptStore.claimOnce(
+      parsed.PREVIEW_RESTORE_TARGET_ID,
+    );
+  } catch {
+    return null;
+  }
+  if (!ownsAttempt) return null;
+
+  try {
+    await dependencies.clearTarget(
+      parsed.PREVIEW_RESTORE_DATABASE_URL,
+      parsed.PREVIEW_RESTORE_TARGET_ID,
+      prepared.rowCounts,
+    );
+  } catch {
+    return failedEvidence("restore_target_attestation_failed");
   }
 
   let managedTarget: ManagedBackupRestoreTarget;
@@ -128,9 +171,8 @@ export async function runTemporaryPreviewRestore(
   let importFailure: TemporaryRestoreFailureCategory | undefined;
   let closeFailed = false;
   try {
-    report = await importBackup(
-      verifiedBackup.encrypted,
-      dependencies.backupKey,
+    report = await (dependencies.importPrepared ?? importPreparedBackup)(
+      prepared,
       managedTarget.target,
       {
         replaceDisposableTarget: false,

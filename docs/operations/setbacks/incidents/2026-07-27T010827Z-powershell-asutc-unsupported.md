@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:08:27Z
-- **Last observed:** 2026-07-27T20:46:34Z
+- **Last observed:** 2026-07-28T00:25:50Z
 - **Phase/task:** Phase B setback logging
 - **Environment:** Local Windows worktree
 - **Version/commit:** `22c5dc0`
@@ -42,3 +42,7 @@ The replacement returned a valid UTC timestamp.
   on the failed timestamp. The correction used
   `(Get-Date).ToUniversalTime().ToString(...)`, which returned a valid UTC
   timestamp.
+- **2026-07-28T00:25:50Z:** The unsupported flag was used again while preparing
+  Task 2 implementation setback timestamps. No mutation depended on the failed
+  timestamp. The documented `[DateTime]::UtcNow.ToString(...)` correction
+  immediately returned a valid UTC timestamp.

@@ -18,8 +18,12 @@ Builds Google maintenance capability only for the 15-minute cron.
 Builds backup capability only for the daily recovery cron.
 
 ## `temporaryRestore`
-Builds preview-only restore capability, logs only the closed restore evidence,
-and reports failure with one fixed message.
+Builds preview-only restore capability. A non-owner logs nothing; the owner logs
+only the existing closed restore evidence and reports failure with one fixed message.
+
+## `emitTemporaryRestoreEvidence`
+Returns without output for `null`; otherwise preserves the exact
+`{ action: "backup.restore", evidence }` log shape.
 
 ## `runScheduledCalendarMaintenance`
 Runs expired rebuild cleanup, queues repair, still attempts renewal if either fails, and reports a failure afterward.
@@ -30,8 +34,11 @@ Stores a safe credential failure before the scheduler reports it.
 ## `scheduled`
 Connects Cloudflare scheduled events to exact cron routing.
 ## `createProductionTemporaryRestoreDependencies`
-Builds only the R2, unchanged backup-key, disposable preview-target, and
-owner-scoped readable-event dependencies needed by the temporary restore.
+Builds only the R2 backup reader, opaque attempt store, unchanged backup key,
+serializable clear, disposable preview target, and owner-scoped readable-event
+dependencies needed by the temporary restore.
+## `clearTarget`
+Creates the max-one clear adapter only after the job owns the attempt fence.
 ## `createTarget`
 Connects only to the temporary target URL and requires its independent preview
 identity.

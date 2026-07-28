@@ -19,9 +19,13 @@ Lazily constructs and executes only the existing calendar maintenance dependenci
 Lazily constructs and executes only backup and retention dependencies.
 
 ## `temporaryRestore`
-Lazily runs the injected preview restore engine, emits exactly the
-`backup.restore` action plus closed evidence, and throws only a fixed
-value-free failure.
+Lazily runs the injected preview restore engine. It returns silently for a
+non-owner, emits exactly the `backup.restore` action plus closed evidence for
+the owner, and throws only a fixed value-free failure.
+
+## `emitTemporaryRestoreEvidence`
+Treats `null` as an explicit silent non-owner outcome. For owner evidence it
+preserves the exact allowlisted action/evidence object and returns `true`.
 
 ## `runScheduledCalendarMaintenance`
 Runs projection cleanup and repair before renewal, isolates all three operations, and reports a failure only after every maintenance path has been attempted.
@@ -32,10 +36,14 @@ Routes typed OAuth failure through the generation-safe maintenance checkpoint tr
 ## `scheduled`
 Uses Cloudflare's scheduled time and exact cron string for capability-separated dispatch.
 ## `createProductionTemporaryRestoreDependencies`
-Imports the unchanged backup key, binds R2, and exposes target-only adapter
-callbacks. It validates the fixed owner subject independently and never passes
-the normal application database URL into restore creation, snapshot read-back,
-or diagnostic read-back.
+Imports the unchanged backup key, binds the backup reader and disjoint opaque
+attempt store to R2, and exposes target-only adapter callbacks. It validates
+the fixed owner subject independently and never passes the normal application
+database URL into clear, restore creation, snapshot read-back, or diagnostic
+read-back.
+## `clearTarget`
+Constructs `Pool({ max: 1 })` only after `claimOnce` returns true, runs the
+prepared-count clear, and closes the pool before importer target construction.
 ## `createTarget`
 Constructs the interactive Neon adapter with the operator-known target ID,
 preview environment, and disposable flag so the database-owned schema-9

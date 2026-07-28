@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:30:35.2961897Z
-- **Last observed:** 2026-07-27T23:34:27.6431391Z
+- **Last observed:** 2026-07-28T00:52:25.6785004Z
 - **Phase/task:** Listener-first restore retry Task 2
 - **Environment:** Local Phase B worktree under the managed sandbox
 - **Version/commit:** `ca11c6c`
@@ -90,3 +90,9 @@ commit `4420f6d`.
   immutable-candidate check. Git returned matching local and remote candidate
   commits, and the focused test command passed all 7 tests. No configuration
   workaround or provider action was attempted.
+- 2026-07-28T00:25:50.5676199Z: Recurred during the Task 2 implementation
+  preflight status check. Git returned the expected commit and worktree state;
+  no configuration workaround or provider action was attempted.
+- 2026-07-28T00:52:25.6785004Z: Recurred during the final Task 2 changed-file
+  inventory. Git returned the complete worktree status and diff inventory; no
+  configuration workaround or provider action was attempted.

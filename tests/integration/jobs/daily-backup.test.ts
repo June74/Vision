@@ -23,6 +23,7 @@ import {
 import {
   CALENDAR_MAINTENANCE_CRON,
   DAILY_BACKUP_CRON,
+  emitTemporaryRestoreEvidence,
   runScheduledJob,
   runScheduledRecovery,
 } from "../../../src/jobs/scheduled";
@@ -269,6 +270,23 @@ describe("daily encrypted backup job", () => {
     expect(dependencies.maintenance).not.toHaveBeenCalled();
     expect(dependencies.recovery).not.toHaveBeenCalled();
     expect(dependencies.temporaryRestore).not.toHaveBeenCalled();
+  });
+
+  it("emits nothing for a non-owner and preserves the exact owner evidence log contract", () => {
+    const write = vi.fn();
+    expect(emitTemporaryRestoreEvidence(null, write)).toBe(false);
+    expect(write).not.toHaveBeenCalled();
+
+    const evidence = {
+      evidenceType: "vision.preview-restore/v1" as const,
+      outcome: "succeeded" as const,
+      category: "none" as const,
+    };
+    expect(emitTemporaryRestoreEvidence(evidence, write)).toBe(true);
+    expect(write).toHaveBeenCalledWith({
+      action: "backup.restore",
+      evidence,
+    });
   });
 
   it("finishes and verifies the daily backup before starting retention", async () => {

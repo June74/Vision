@@ -1,16 +1,23 @@
 # `src/data/backup/import-backup.ts`
 
-Restore follows a validation-before-write boundary: authenticate the AES-GCM envelope; validate manifest version and
-key agreement; verify plaintext SHA-256; parse canonical NDJSON; verify complete row counts and references; and only
-then enter the target transaction. The target is locked before its identity, revision, disposability, schema, and
-emptiness are used for policy. A non-empty target additionally requires the replace flag plus exact environment and
-target-ID assertions. Staging, database-side inspection, a second unchanged-target assertion, and promotion all remain
-inside that same target-owned transaction.
+Restore now exposes the validation-before-capability boundary explicitly. Authentication, AES-GCM decryption,
+manifest and key agreement, plaintext SHA-256, canonical NDJSON decoding, all 29 row counts, and references complete
+before a module-issued frozen preparation exists. Its protected snapshot remains in a private `WeakMap`; the public
+token exposes only safe manifest facts and carries no target capability.
+
+## `prepareBackupImport`
+
+Performs every cryptographic and logical gate, then binds the owned snapshot to the exact frozen preparation token.
+
+## `importPreparedBackup`
+
+Rejects forged preparations, retrieves the privately retained snapshot, and runs the existing lock, policy, staging,
+database inspection, unchanged-target assertion, and promotion transaction. A non-empty target still requires the
+existing exact replacement assertion.
 
 ## `importBackup`
 
-Sequences every fail-closed gate before `transaction.stage`. It compares database-side staged counts and reference
-status before promotion and returns only format, time, counts, checksum, target ID, and replacement status.
+Compatibility wrapper that calls `prepareBackupImport` followed by `importPreparedBackup`.
 
 ## `validateSnapshotReferences`
 

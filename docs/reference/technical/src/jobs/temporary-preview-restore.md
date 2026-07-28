@@ -1,19 +1,21 @@
 # `src/jobs/temporary-preview-restore.ts`
 
 Implements the injected preview-only restore engine. Concrete provider construction remains outside this module so
-tests and the temporary Worker can supply narrow storage, restore-target, snapshot-read, and event-count boundaries.
+tests and the temporary Worker can supply narrow storage, atomic attempt, serializable clear, restore-target,
+snapshot-read, and event-count boundaries.
 
 ## `runTemporaryPreviewRestore`
 
 Strictly parses only the temporary preview bindings, selects the sole newest admitted candidate across complete
-pagination, and runs the shared stored-backup verifier before opening the target. It invokes the shared importer with
-replacement disabled and the preview assertion, always closes the managed restore pool, and never returns the
-selected storage identity or target identity.
+pagination, runs stored-object verification, and creates the module-issued prepared import before claiming or
+opening the target. Every pre-claim rejection returns `null`. It then atomically claims the opaque attempt; a false
+or uncertain claim also returns `null`. All of those paths make no database call and emit no log. The owner clears
+through the prepared 29-key counts and imports that exact prepared token with replacement disabled.
 
 After promotion, it obtains an independent migration-9 snapshot, derives all 29 counts, validates cross-table
 references, canonically re-encodes and hashes the snapshot, and requires equality with the import report. It also
 requires a nonnegative safe-integer event count and a false replacement result before emitting closed success
-evidence.
+evidence. Only the owner can return a post-claim failure.
 
 ## `selectBackupCandidate`
 

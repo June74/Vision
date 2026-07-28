@@ -22,6 +22,12 @@ import type {
   BackupRestoreTransaction,
   RestoreTargetDescription,
 } from "../../../src/data/backup/import-backup";
+import {
+  importPreparedBackup,
+  prepareBackupImport,
+  type ImportBackupOptions,
+  type PreparedBackupImport,
+} from "../../../src/data/backup/import-backup";
 import type { ManagedBackupRestoreTarget } from "../../../src/data/backup/neon-adapter";
 import {
   BACKUP_FORMAT_V1,
@@ -68,6 +74,8 @@ interface RestoreFixture {
   readonly objectKey: string;
   readonly state: MutableTargetState;
   readonly createTarget: ReturnType<typeof vi.fn>;
+  readonly claimOnce: ReturnType<typeof vi.fn>;
+  readonly clearTarget: ReturnType<typeof vi.fn>;
   readonly close: Mock<() => Promise<void>>;
   readonly privateSentinel: string;
 }
@@ -256,11 +264,46 @@ async function restoreFixture(options?: {
   }
 
   const state: MutableTargetState = {
-    snapshot: cloneSnapshot(options?.target ?? emptySnapshot()),
+    snapshot: cloneSnapshot(options?.target ?? source),
     attestationFailure: false,
     ordinaryImportFailure: false,
     promotionFailure: false,
   };
+  const claimOnce = vi.fn(async (targetId: string) => {
+    expect(targetId).toBe(TARGET_ID);
+    return true;
+  });
+  const clearTarget = vi.fn(
+    async (
+      databaseUrl: string,
+      targetId: string,
+      rowCounts: ReturnType<typeof countSnapshotRows>,
+    ) => {
+      expect(databaseUrl).toBe(DATABASE_URL);
+      expect(targetId).toBe(TARGET_ID);
+      if (state.attestationFailure) {
+        throw new Error(
+          `${PRIVATE_SENTINEL} synthetic target attestation failure`,
+        );
+      }
+      if (
+        JSON.stringify(rowCounts) !==
+        JSON.stringify(countSnapshotRows(state.snapshot))
+      ) {
+        throw new Error(
+          `${PRIVATE_SENTINEL} synthetic prepared count mismatch`,
+        );
+      }
+      state.snapshot = emptySnapshot();
+      return {
+        cleared: true as const,
+        authoritativeTableCount: 29 as const,
+        totalRows: 0 as const,
+        nonemptyTables: 0 as const,
+        eventRows: 0 as const,
+      };
+    },
+  );
   const close = vi.fn(async () => undefined);
   const createTarget = vi.fn(async (databaseUrl: string, targetId: string) => {
     const databaseBindingMatches = databaseUrl === DATABASE_URL;
@@ -273,6 +316,8 @@ async function restoreFixture(options?: {
   const dependencies: TemporaryPreviewRestoreDependencies = {
     store,
     backupKey: key,
+    attemptStore: { claimOnce },
+    clearTarget,
     createTarget,
     async readTargetSnapshot(databaseUrl) {
       const databaseBindingMatches = databaseUrl === DATABASE_URL;
@@ -301,6 +346,8 @@ async function restoreFixture(options?: {
     objectKey,
     state,
     createTarget,
+    claimOnce,
+    clearTarget,
     close,
     privateSentinel: PRIVATE_SENTINEL,
   };
@@ -323,7 +370,7 @@ async function reencryptMutatedPayload(
 }
 
 describe("temporary preview restore", () => {
-  it("returns value-free configuration failure evidence before storage access", async () => {
+  it("returns no record for configuration failure before a claim can exist", async () => {
     const fixture = await restoreFixture();
     const result = await runTemporaryPreviewRestore(
       {
@@ -333,12 +380,11 @@ describe("temporary preview restore", () => {
       fixture.dependencies,
     );
 
-    expect(result).toEqual({
-      evidenceType: "vision.preview-restore/v1",
-      outcome: "failed",
-      category: "restore_configuration_invalid",
-    });
+    expect(result).toBeNull();
     expect(fixture.store.listCalls).toHaveLength(0);
+    expect(fixture.claimOnce).not.toHaveBeenCalled();
+    expect(fixture.clearTarget).not.toHaveBeenCalled();
+    expect(fixture.createTarget).not.toHaveBeenCalled();
     expectPrivateValuesAbsent(JSON.stringify(result), [
       fixture.privateSentinel,
     ]);
@@ -377,11 +423,12 @@ describe("temporary preview restore", () => {
       fixture.dependencies,
     );
 
-    expect(result.outcome).toBe("failed");
-    expect(result.category).toMatch(/^restore_/u);
+    expect(result).toBeNull();
     expectPrivateValuesAbsent(JSON.stringify(result), [
       fixture.privateSentinel,
     ]);
+    expect(fixture.claimOnce).not.toHaveBeenCalled();
+    expect(fixture.clearTarget).not.toHaveBeenCalled();
     expect(fixture.createTarget).not.toHaveBeenCalled();
   });
 
@@ -439,17 +486,16 @@ describe("temporary preview restore", () => {
       fixture.dependencies,
     );
 
-    expect(result).toMatchObject({
-      outcome: "failed",
-      category: "restore_object_verification_failed",
-    });
+    expect(result).toBeNull();
     expect(fixture.createTarget).not.toHaveBeenCalled();
+    expect(fixture.claimOnce).not.toHaveBeenCalled();
+    expect(fixture.clearTarget).not.toHaveBeenCalled();
     expectPrivateValuesAbsent(JSON.stringify(result), [
       fixture.privateSentinel,
     ]);
   });
 
-  it("fails closed on independent target attestation mismatch and releases the pool", async () => {
+  it("fails closed on target-clear attestation mismatch before opening the importer pool", async () => {
     const fixture = await restoreFixture();
     fixture.state.attestationFailure = true;
 
@@ -462,12 +508,14 @@ describe("temporary preview restore", () => {
       outcome: "failed",
       category: "restore_target_attestation_failed",
     });
-    expect(fixture.close).toHaveBeenCalledOnce();
+    expect(fixture.claimOnce).toHaveBeenCalledOnce();
+    expect(fixture.clearTarget).toHaveBeenCalledOnce();
+    expect(fixture.createTarget).not.toHaveBeenCalled();
+    expect(fixture.close).not.toHaveBeenCalled();
   });
 
-  it("forbids replacement of a non-empty target and releases the pool", async () => {
+  it("clears only a target whose counts exactly match the prepared backup before restoring", async () => {
     const nonEmpty = sourceSnapshot();
-    const expectedDigest = await snapshotDigest(nonEmpty);
     const fixture = await restoreFixture({ target: nonEmpty });
 
     await expect(
@@ -475,14 +523,39 @@ describe("temporary preview restore", () => {
         fixture.environment,
         fixture.dependencies,
       ),
-    ).resolves.toMatchObject({
-      outcome: "failed",
-      category: "restore_target_not_empty",
-    });
-    const targetRemainedUnchanged =
-      (await snapshotDigest(fixture.state.snapshot)) === expectedDigest;
-    expect(targetRemainedUnchanged).toBe(true);
+    ).resolves.toMatchObject({ outcome: "succeeded", targetWasEmpty: true });
+    expect(fixture.claimOnce).toHaveBeenCalledOnce();
+    expect(fixture.clearTarget).toHaveBeenCalledWith(
+      DATABASE_URL,
+      TARGET_ID,
+      countSnapshotRows(nonEmpty),
+    );
+    expect(fixture.createTarget).toHaveBeenCalledOnce();
     expect(fixture.close).toHaveBeenCalledOnce();
+  });
+
+  it("burns the owned attempt and returns a closed failure when prepared counts do not match the target", async () => {
+    const fixture = await restoreFixture({ target: emptySnapshot() });
+
+    const result = await runTemporaryPreviewRestore(
+      fixture.environment,
+      fixture.dependencies,
+    );
+
+    expect(result).toEqual({
+      evidenceType: "vision.preview-restore/v1",
+      outcome: "failed",
+      category: "restore_target_attestation_failed",
+    });
+    expect(fixture.claimOnce).toHaveBeenCalledOnce();
+    expect(fixture.clearTarget).toHaveBeenCalledOnce();
+    expect(fixture.createTarget).not.toHaveBeenCalled();
+    expect(fixture.close).not.toHaveBeenCalled();
+    expectPrivateValuesAbsent(JSON.stringify(result), [
+      fixture.privateSentinel,
+      TARGET_ID,
+      fixture.objectKey,
+    ]);
   });
 
   it("returns promotion failure only after the target transaction rolls back", async () => {
@@ -544,6 +617,7 @@ describe("temporary preview restore", () => {
       eventCount: 1,
       replacedExisting: false,
     });
+    if (!result) throw new Error("Expected owner restore evidence.");
     expect(Object.keys(result.rowCounts ?? {})).toHaveLength(
       BACKUP_TABLES.length,
     );
@@ -553,12 +627,50 @@ describe("temporary preview restore", () => {
         (prefix) => prefix === BACKUP_OBJECT_PREFIX,
       ),
     ).toBe(true);
+    expect(fixture.claimOnce).toHaveBeenCalledOnce();
+    expect(fixture.clearTarget).toHaveBeenCalledOnce();
     expect(fixture.close).toHaveBeenCalledOnce();
     expectPrivateValuesAbsent(JSON.stringify(result), [
       fixture.privateSentinel,
       TARGET_ID,
       fixture.objectKey,
     ]);
+  });
+
+  it("restores the exact prepared object that was fully validated before the fence", async () => {
+    const fixture = await restoreFixture();
+    let preparedBeforeFence: PreparedBackupImport | undefined;
+    const prepareImport = vi.fn(
+      async (
+        encrypted: EncryptedBackup,
+        key: BackupEncryptionKey,
+      ) => {
+        preparedBeforeFence = await prepareBackupImport(encrypted, key);
+        return preparedBeforeFence;
+      },
+    );
+    const importPrepared = vi.fn(
+      async (
+        prepared: PreparedBackupImport,
+        target: BackupRestoreTarget,
+        options?: ImportBackupOptions,
+      ) => {
+        expect(prepared).toBe(preparedBeforeFence);
+        return importPreparedBackup(prepared, target, options);
+      },
+    );
+
+    await expect(
+      runTemporaryPreviewRestore(fixture.environment, {
+        ...fixture.dependencies,
+        prepareImport,
+        importPrepared,
+      }),
+    ).resolves.toMatchObject({ outcome: "succeeded" });
+
+    expect(prepareImport).toHaveBeenCalledOnce();
+    expect(fixture.claimOnce).toHaveBeenCalledOnce();
+    expect(importPrepared).toHaveBeenCalledOnce();
   });
 
   it("rejects a read-back row-count mismatch", async () => {
@@ -645,8 +757,14 @@ describe("temporary preview restore", () => {
     });
   });
 
-  it("cannot replace restored data on a repeated invocation", async () => {
+  it("makes a delayed post-restore invocation a non-owner with zero additional database work", async () => {
     const fixture = await restoreFixture();
+    let claimed = false;
+    fixture.claimOnce.mockImplementation(async () => {
+      if (claimed) return false;
+      claimed = true;
+      return true;
+    });
 
     await expect(
       runTemporaryPreviewRestore(
@@ -662,16 +780,71 @@ describe("temporary preview restore", () => {
         fixture.environment,
         fixture.dependencies,
       ),
-    ).resolves.toMatchObject({
-      outcome: "failed",
-      category: "restore_target_not_empty",
-    });
+    ).resolves.toBeNull();
 
     const repeatedRestoreLeftTargetUnchanged =
       (await snapshotDigest(fixture.state.snapshot)) ===
       afterFirstRestoreDigest;
     expect(repeatedRestoreLeftTargetUnchanged).toBe(true);
-    expect(fixture.close).toHaveBeenCalledTimes(2);
+    expect(fixture.claimOnce).toHaveBeenCalledTimes(2);
+    expect(fixture.clearTarget).toHaveBeenCalledOnce();
+    expect(fixture.createTarget).toHaveBeenCalledOnce();
+    expect(fixture.close).toHaveBeenCalledOnce();
+  });
+
+  it("allows exactly one concurrent claimant to clear, restore, and return evidence", async () => {
+    const fixture = await restoreFixture();
+    let claimed = false;
+    fixture.claimOnce.mockImplementation(async () => {
+      await Promise.resolve();
+      if (claimed) return false;
+      claimed = true;
+      return true;
+    });
+
+    const results = await Promise.all([
+      runTemporaryPreviewRestore(
+        fixture.environment,
+        fixture.dependencies,
+      ),
+      runTemporaryPreviewRestore(
+        fixture.environment,
+        fixture.dependencies,
+      ),
+    ]);
+
+    expect(results.filter((result) => result === null)).toHaveLength(1);
+    expect(
+      results.filter((result) => result?.outcome === "succeeded"),
+    ).toHaveLength(1);
+    expect(fixture.clearTarget).toHaveBeenCalledOnce();
+    expect(fixture.createTarget).toHaveBeenCalledOnce();
+    expect(fixture.close).toHaveBeenCalledOnce();
+  });
+
+  it("returns no record and performs no database work when the opaque claim cannot be resolved", async () => {
+    const fixture = await restoreFixture();
+    fixture.claimOnce.mockRejectedValue(
+      new Error(
+        `${fixture.privateSentinel} ${TARGET_ID} ${fixture.objectKey}`,
+      ),
+    );
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const result = await runTemporaryPreviewRestore(
+      fixture.environment,
+      fixture.dependencies,
+    );
+
+    expect(result).toBeNull();
+    expect(fixture.clearTarget).not.toHaveBeenCalled();
+    expect(fixture.createTarget).not.toHaveBeenCalled();
+    expect(fixture.close).not.toHaveBeenCalled();
+    expect(info).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+    info.mockRestore();
+    error.mockRestore();
   });
 
   it("rejects negative, fractional, and unsafe event counts", async () => {

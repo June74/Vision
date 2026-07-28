@@ -82,6 +82,16 @@ export interface ImportBackupOptions {
   readonly assertedTargetId?: string;
 }
 
+/** Immutable validation result that carries no database or target capability. */
+export interface PreparedBackupImport {
+  readonly format: BackupManifestV1["format"];
+  readonly createdAt: string;
+  readonly schemaVersion: typeof BACKUP_SCHEMA_VERSION;
+  readonly keyVersion: number;
+  readonly rowCounts: BackupRowCounts;
+  readonly plaintextSha256: string;
+}
+
 /** Safe restore evidence returned after successful promotion. */
 export interface RestoreReport {
   readonly format: BackupManifestV1["format"];
@@ -101,13 +111,22 @@ export class BackupRestorePromotionError extends Error {
   }
 }
 
-/** Restores only after cryptographic, logical, and transaction-locked policy validation. */
-export async function importBackup(
+interface PreparedBackupState {
+  readonly manifest: BackupManifestV1;
+  readonly snapshot: BackupSnapshotV1;
+}
+
+/** Keeps validated protected rows private to this module and bound to the exact token. */
+const preparedBackupStates = new WeakMap<
+  PreparedBackupImport,
+  PreparedBackupState
+>();
+
+/** Authenticates, decodes, and logically validates a backup without any target capability. */
+export async function prepareBackupImport(
   encrypted: EncryptedBackup,
   backupKey: BackupEncryptionKey,
-  target: BackupRestoreTarget,
-  options: ImportBackupOptions = {},
-): Promise<RestoreReport> {
+): Promise<PreparedBackupImport> {
   const plaintext = await decryptBackupEnvelope(encrypted, backupKey);
   const payload = parseBackupPayload(plaintext);
   const manifest = validateBackupManifest(payload.manifest);
@@ -128,6 +147,29 @@ export async function importBackup(
   );
   validateSnapshotReferences(snapshot);
 
+  const prepared = Object.freeze({
+    format: manifest.format,
+    createdAt: manifest.createdAt,
+    schemaVersion: manifest.schemaVersion,
+    keyVersion: manifest.keyVersion,
+    rowCounts: manifest.rowCounts,
+    plaintextSha256: manifest.plaintextSha256,
+  });
+  preparedBackupStates.set(prepared, Object.freeze({ manifest, snapshot }));
+  return prepared;
+}
+
+/** Restores one exact module-issued preparation through the target-owned transaction. */
+export async function importPreparedBackup(
+  prepared: PreparedBackupImport,
+  target: BackupRestoreTarget,
+  options: ImportBackupOptions = {},
+): Promise<RestoreReport> {
+  const state = preparedBackupStates.get(prepared);
+  if (!state) {
+    throw new Error("Prepared backup import is invalid.");
+  }
+  const { manifest, snapshot } = state;
   const targetResult = await target.transaction(async (transaction) => {
     const description = snapshotTargetDescription(
       await transaction.lockTargetForRestore(),
@@ -176,14 +218,25 @@ export async function importBackup(
   });
 
   return Object.freeze({
-    format: manifest.format,
-    createdAt: manifest.createdAt,
-    schemaVersion: manifest.schemaVersion,
-    rowCounts: manifest.rowCounts,
-    plaintextSha256: manifest.plaintextSha256,
+    format: prepared.format,
+    createdAt: prepared.createdAt,
+    schemaVersion: prepared.schemaVersion,
+    rowCounts: prepared.rowCounts,
+    plaintextSha256: prepared.plaintextSha256,
     targetId: targetResult.description.targetId,
     replacedExisting: targetResult.replaceExisting,
   });
+}
+
+/** Compatibility wrapper that preserves the existing validate-then-import contract. */
+export async function importBackup(
+  encrypted: EncryptedBackup,
+  backupKey: BackupEncryptionKey,
+  target: BackupRestoreTarget,
+  options: ImportBackupOptions = {},
+): Promise<RestoreReport> {
+  const prepared = await prepareBackupImport(encrypted, backupKey);
+  return importPreparedBackup(prepared, target, options);
 }
 
 /** Verifies every migration-9 database reference before target staging. */

@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:08:16.577518Z
-- **Last observed:** 2026-07-27T04:41:28Z
-- **Phase/task:** Phase B restore Task 3
+- **Last observed:** 2026-07-28T00:47:15.5405322Z
+- **Phase/task:** Phase B repository inspection
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `1dff60e`
 
@@ -100,3 +100,8 @@ read.
   other bounded reads completed; no source, provider, or private state changed.
   The environment schema was then resolved from the exact import path, and the
   existing incident was updated directly.
+- 2026-07-28T00:47:15.5405322Z: Recurred during listener-first restore Task 2
+  when two conventional documentation-checker filenames were included beside
+  the real package script. The read-only probe identified
+  `scripts/validate-doc-coverage.ts`; no file or provider state changed, and
+  subsequent inspection uses that exact confirmed path.

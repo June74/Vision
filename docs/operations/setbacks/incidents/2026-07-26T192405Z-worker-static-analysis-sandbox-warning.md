@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:24:05.647183Z
-- **Last observed:** 2026-07-27T21:10:21Z
-- **Phase/task:** Phase B restore Task 3 verification
+- **Last observed:** 2026-07-28T01:00:14.2508518Z
+- **Phase/task:** Listener-first restore retry Task 2 verification
 - **Environment:** Local managed sandbox Worker test pool
-- **Version/commit:** `codex/phase-b-foundation`
+- **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`
 
 ## Symptom
 
@@ -52,8 +52,9 @@ process continued and returned a successful exit.
 
 ## Verification and related work
 
-Latest full gate result: 617 unit/integration passed with one skip, 179 contract
-passed, 75 Worker passed, and the overall command exited zero.
+Latest full gate result: 694 unit/integration passed with one skip, 179 contract
+passed, 75 Worker passed, and the overall command exited zero after build,
+documentation, typecheck, and security validation also passed.
 
 ## Recurrence history
 
@@ -86,3 +87,9 @@ passed, 75 Worker passed, and the overall command exited zero.
 - 2026-07-27T21:10:21Z: The listener-first execution baseline repeated the
   same sandbox-only analyzer warning and passed all 75 Worker assertions; the
   complete check exited zero.
+- 2026-07-28T01:00:14.2508518Z: Listener-first restore retry Task 2
+  verification repeated the same sandbox-only analyzer warning. The complete
+  repository check exited zero: 694 unit/integration tests passed with one
+  skip, 179 contract tests passed, 75 Worker tests passed, and build,
+  documentation, typecheck, and security validation passed. No provider state
+  or private data was affected.

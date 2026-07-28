@@ -34,6 +34,30 @@ Safe-tail observers use `vision-preview-observer`; deployment, verification, and
 Runs in the same category cancel one another. Different categories may overlap.
 Do not deploy if the observer never becomes active.
 
+## Fenced one-shot candidate
+
+Before any target access, the temporary job verifies the stored encrypted
+object and completes authentication, decryption, checksum, all 29 manifest
+counts, canonical archive, and reference validation. It then claims one opaque
+R2 marker under `restore-attempts/v1/`, outside `backups/v1/`. Pre-claim
+rejections are silent. Only the claim owner may open the disposable target or
+emit restore evidence; concurrent, delayed, and post-restore non-owners perform
+zero database work and log nothing.
+
+The owner uses one retained max-one pool client and one serializable
+transaction. It requires `current_user=vision_app`, locks the exact
+database-owned attestation and all 29 authoritative tables, rereads unchanged
+attestation, and matches every prepared manifest count plus the safe
+29-table/51-row/13-non-empty/zero-event aggregate. It deletes in reverse
+dependency order, requires every count to be zero and the attestation still
+unchanged, then restores the same prepared backup. Existing
+`vision.preview-restore/v1` evidence is emitted only after independent count,
+checksum, reference, and readable-event verification.
+
+The attempt is burned on any owner failure and is not retried automatically.
+The marker remains until the destructive runtime is inactive. The backup
+encryption key remains unchanged at key version 1.
+
 ## Local migration preflight
 
 Before any live schema change, the exact numbered migration chain was exercised

@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-07-27T21:10:21Z
-- **Phase/task:** Phase B deployment diagnostics
+- **Last observed:** 2026-07-28T01:00:14.2508518Z
+- **Phase/task:** Listener-first restore retry Task 2 verification
 - **Environment:** Local managed sandbox
-- **Version/commit:** `codex/phase-b-foundation`
+- **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`
 
 ## Symptom
 
@@ -49,7 +49,10 @@ The build completed, but the sandbox denied the optional Wrangler log write.
 ## Verification and related work
 
 The follow-up build and preview validator both exited zero without the log-path
-warning.
+warning. The latest recurrence was warning-only: the complete repository check
+exited zero with 694 unit/integration tests passed and one skipped, 179 contract
+tests passed, 75 Worker tests passed, and build, documentation, typecheck, and
+security validation passed.
 
 ## Recurrence history
 
@@ -84,3 +87,9 @@ warning.
 - 2026-07-27T21:10:21Z: Recurred during the listener-first execution baseline
   after the workspace-local diagnostic setting was omitted. Worker tests,
   build, documentation, and security gates all completed successfully.
+- 2026-07-28T01:00:14.2508518Z: Recurred during listener-first restore retry
+  Task 2 verification after the workspace-local diagnostic setting was omitted.
+  The complete repository check exited zero: 694 unit/integration tests passed
+  with one skip, 179 contract tests passed, 75 Worker tests passed, and build,
+  documentation, typecheck, and security validation passed. No provider state
+  or private data was affected.

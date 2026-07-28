@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createBackupEncryptionKey,
   serializeEncryptedBackup,
+  type BackupEncryptionKey,
 } from "../../../src/crypto/backup-envelope";
 import {
   decodeBase64Url,
@@ -16,6 +17,10 @@ import type {
   BackupRestoreTarget,
   BackupRestoreTransaction,
   RestoreTargetDescription,
+} from "../../../src/data/backup/import-backup";
+import {
+  importPreparedBackup,
+  prepareBackupImport,
 } from "../../../src/data/backup/import-backup";
 import {
   BACKUP_FORMAT_V1,
@@ -136,6 +141,7 @@ async function fixture(nonempty = false) {
   }));
   return {
     raw,
+    backupKey: key,
     encrypted,
     databaseUrl,
     environment,
@@ -162,6 +168,78 @@ function baseArguments(): string[] {
 }
 
 describe("preview-only backup restore command", () => {
+  it("prepares and validates a backup before target access, then imports that exact immutable preparation", async () => {
+    const test = await fixture();
+    const transactionCalls = vi.fn();
+    const target: BackupRestoreTarget = {
+      async transaction<T>(
+        operation: (transaction: BackupRestoreTransaction) => Promise<T>,
+      ): Promise<T> {
+        transactionCalls();
+        const targetTransaction: BackupRestoreTransaction = {
+          async lockTargetForRestore() {
+            return {
+              targetId: "neon_branch_preview_1",
+              environment: "preview",
+              disposable: true,
+              schemaVersion: BACKUP_SCHEMA_VERSION,
+              revision: "revision-1",
+              rowCounts: countSnapshotRows(emptySnapshot()),
+            };
+          },
+          async stage(snapshot) {
+            expect(countSnapshotRows(snapshot)).toEqual(prepared.rowCounts);
+            return { opaqueId: "prepared-stage" };
+          },
+          async inspectStage() {
+            return {
+              rowCounts: prepared.rowCounts,
+              referencesValid: true,
+            };
+          },
+          async assertTargetUnchanged() {},
+          async promote() {},
+        };
+        return operation(targetTransaction);
+      },
+    };
+
+    const prepared = await prepareBackupImport(
+      test.encrypted,
+      test.backupKey,
+    );
+
+    expect(Object.isFrozen(prepared)).toBe(true);
+    expect(Object.isFrozen(prepared.rowCounts)).toBe(true);
+    expect(Object.keys(prepared)).not.toContain("target");
+    expect(Object.keys(prepared)).not.toContain("snapshot");
+    expect(transactionCalls).not.toHaveBeenCalled();
+
+    await expect(
+      importPreparedBackup(prepared, target),
+    ).resolves.toMatchObject({
+      rowCounts: prepared.rowCounts,
+      replacedExisting: false,
+    });
+    expect(transactionCalls).toHaveBeenCalledOnce();
+  });
+
+  it("rejects authentication failure during preparation without any target capability", async () => {
+    const test = await fixture();
+    const wrongKey: BackupEncryptionKey = createBackupEncryptionKey(
+      await crypto.subtle.generateKey(
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt", "decrypt"],
+      ),
+      test.backupKey.keyVersion,
+    );
+
+    await expect(
+      prepareBackupImport(test.encrypted, wrongKey),
+    ).rejects.toThrow();
+  });
+
   it("maps Cloudflare object metadata and native SHA-256 into the shared reader contract", async () => {
     const restoreModule = await import("../../../scripts/restore-backup");
     const createReader = Reflect.get(
