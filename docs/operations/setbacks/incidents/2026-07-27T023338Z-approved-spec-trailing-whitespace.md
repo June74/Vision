@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T02:33:38Z
-- **Last observed:** 2026-07-27T20:46:34Z
-- **Phase/task:** Phase B restore implementation plan
+- **Last observed:** 2026-07-28T15:14:01Z
+- **Phase/task:** Phase B acceptance instrumentation design
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `6fdb9cb`
 
@@ -58,3 +58,7 @@ whitespace gate.
   metadata hard-break pattern. The whitespace gate caught three affected
   header lines before staging. The spaces were replaced with blank-line
   paragraph separation; no runtime or provider state changed.
+- 2026-07-28T15:14:01Z: The approved acceptance-instrumentation specification
+  repeated the Markdown hard-break pattern on three metadata lines. The staged
+  whitespace gate stopped the commit; the spaces were replaced with blank-line
+  paragraph separation before retry. No runtime or provider state changed.

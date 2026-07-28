@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:47:00Z
-- **Last observed:** 2026-07-28T14:07:00Z
-- **Phase/task:** Preview database role probe Task 2 report verification
+- **Last observed:** 2026-07-28T15:13:03Z
+- **Phase/task:** Phase B acceptance instrumentation design self-review
 - **Environment:** Local worktree
 - **Version/commit:** `50569e6`
 
@@ -68,3 +68,15 @@ At 2026-07-27T01:50Z, the repository's `docs:check` script and
   heading match and an unsupported Git exclude-file path. The first run made no
   acceptance claim. Exact safe-field checks and a supported null path replaced
   both assumptions; no provider or tracked-source state changed.
+- 2026-07-28T15:11:28Z: The acceptance-design self-review counted only list
+  items ending in semicolons, so the correctly period-terminated final scenario
+  was omitted and six values were reported as five. The spec itself was
+  unchanged; the verifier is rerun with both valid terminators accepted.
+- 2026-07-28T15:12:05Z: The next self-review used a contiguous substring for
+  a sentence that wraps across a Markdown line break, so the provider-simulation
+  distinction was incorrectly reported absent. The spec already contained the
+  requirement; a whitespace-tolerant expression replaces the brittle check.
+- 2026-07-28T15:13:03Z: The first whitespace-tolerant retry placed the flexible
+  boundary between the wrong words and again reported false. A direct
+  cross-line expression using the actual line break location returned exactly
+  one match; no spec content or external state changed during either check.

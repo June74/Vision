@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:30:35.2961897Z
-- **Last observed:** 2026-07-28T14:54:48Z
+- **Last observed:** 2026-07-28T15:05:48Z
 - **Phase/task:** Phase B completion resume preflight
 - **Environment:** Local Phase B worktree under the managed sandbox
 - **Version/commit:** Staged Task 1 patch based on `59e6a02`
@@ -137,3 +137,8 @@ commit `4420f6d`.
   command separately confirmed a clean tracked worktree, clean index, and
   matching local and remote commits before the warning appeared; no workaround
   or mutation was attempted.
+- 2026-07-28T15:05:48Z: Recurred during the approved acceptance-design
+  preflight. The command separately confirmed a clean tracked worktree, the
+  expected branch, matching local and remote commits, and absence of the new
+  design file before the warning appeared; no workaround or external mutation
+  was attempted.
