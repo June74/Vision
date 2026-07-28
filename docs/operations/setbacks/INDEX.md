@@ -2,6 +2,7 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
+| [SB-20260728-225816-plan-task-heading-level-assumed](incidents/2026-07-28T225816Z-plan-task-heading-level-assumed.md) | closed | 2026-07-28T22:58:16.6425100Z | Phase B acceptance instrumentation Task 4 handoff | Plan task heading level was assumed |
 | [SB-20260728-222326-privilege-attestation-omitted-table-presence-gate](incidents/2026-07-28T222326Z-privilege-attestation-omitted-table-presence-gate.md) | closed | 2026-07-28T22:27:05.2738294Z | Phase B acceptance instrumentation Task 3 live privilege manifest | Privilege attestation omitted the table-presence gate |
 | [SB-20260728-195744-usage-reference-coverage-missing](incidents/2026-07-28T195744Z-usage-reference-coverage-missing.md) | closed | 2026-07-28T22:48:04.8196042Z | Phase B acceptance instrumentation Task 2 documentation gate | Usage modules lacked mirrored reference coverage |
 | [SB-20260728-195422-usage-source-test-fixture-types](incidents/2026-07-28T195422Z-usage-source-test-fixture-types.md) | closed | 2026-07-28T21:08:42.5183444Z | Phase B acceptance instrumentation Task 3 typecheck | Usage source test fixtures mismatched runtime types |
