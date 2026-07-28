@@ -2,6 +2,7 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
+| [SB-20260728-144926-powershell-exclusion-expression-parse](incidents/2026-07-28T144926Z-powershell-exclusion-expression-parse.md) | closed | 2026-07-28T14:49:26Z | Phase B temporary cleanup boundary audit | PowerShell exclusion expression did not parse |
 | [SB-20260728-142700-subagent-audit-finalization-delayed](incidents/2026-07-28T142700Z-subagent-audit-finalization-delayed.md) | closed | 2026-07-28T14:27:00Z | Preview database role probe architecture audits | Audit finalization was delayed |
 | [SB-20260728-142000-powershell-range-shape-error](incidents/2026-07-28T142000Z-powershell-range-shape-error.md) | closed | 2026-07-28T14:20:00Z | CI secret-handoff architecture audit | PowerShell source range had the wrong shape |
 | [SB-20260728-141900-neon-show-password-blocked-by-browser-policy](incidents/2026-07-28T141900Z-neon-show-password-blocked-by-browser-policy.md) | contained | 2026-07-28T14:19:00Z | Preview database role probe opaque-transfer audit | Browser policy blocked Neon password reveal |
@@ -149,7 +150,7 @@
 | [SB-20260727-030812-restore-promotion-overclassification](incidents/2026-07-27T030812Z-restore-promotion-overclassification.md) | closed | 2026-07-27T03:12:26.5130820Z | Phase B restore Task 1 fix wave | Unexpected importer errors were classified as promotion failures |
 | [SB-20260727-033811-restore-target-async-boundary](incidents/2026-07-27T033811Z-restore-target-async-boundary.md) | closed | 2026-07-27T03:39:49Z | Phase B restore Task 2 | Restore target factory omitted async wrapper |
 | [SB-20260727-034029-safe-tail-reference-paths-omitted](incidents/2026-07-27T034029Z-safe-tail-reference-paths-omitted.md) | closed | 2026-07-28T02:21:26.5488258Z | Preview database role probe Task 1 full gate | Safe-tail reference updates were omitted |
-| [SB-20260727-035801-provider-url-source-output](incidents/2026-07-27T035801Z-provider-url-source-output.md) | closed | 2026-07-28T14:36:07Z | Phase B completion requirement audit | Provider URL entered command output |
+| [SB-20260727-035801-provider-url-source-output](incidents/2026-07-27T035801Z-provider-url-source-output.md) | closed | 2026-07-28T14:49:26Z | Phase B temporary cleanup boundary audit | Provider URL entered command output |
 | [SB-20260727-040624-task3-security-scope-omitted](incidents/2026-07-27T040624Z-task3-security-scope-omitted.md) | closed | 2026-07-27T04:45:35Z | Phase B restore Task 3 | Task 3 plan omitted required security-boundary files |
 | [SB-20260727-040213-git-line-ending-normalization](incidents/2026-07-27T040213Z-git-line-ending-normalization.md) | closed | 2026-07-28T14:35:22Z | Phase B completion resume setback verification | Git reported line-ending normalization |
 | [SB-20260727-040409-task3-pre-edit-run-interrupted](incidents/2026-07-27T040409Z-task3-pre-edit-run-interrupted.md) | closed | 2026-07-27T04:04:09Z | Phase B restore Task 3 | Task 3 pre-edit run was interrupted |
@@ -162,7 +163,7 @@
 | [SB-20260727-173757-safe-tail-log-framing-mismatch](incidents/2026-07-27T173757Z-safe-tail-log-framing-mismatch.md) | contained | 2026-07-27T17:37:57Z | Phase B restore Task 4 | Restore evidence was missing from safe-tail |
 | [SB-20260727-173951-normal-restore-baseline-misidentified](incidents/2026-07-27T173951Z-normal-restore-baseline-misidentified.md) | closed | 2026-07-27T17:42:12Z | Phase B restore Task 4 fail-closed rollback | Normal restore baseline was misidentified |
 | [SB-20260727-205420-guessed-source-search-path](incidents/2026-07-27T205420Z-guessed-source-search-path.md) | closed | 2026-07-28T02:36:34.6558608Z | Preview database role probe Task 1 independent review | Source search included a nonexistent path |
-| [SB-20260727-211305-git-worktree-ownership-rejected](incidents/2026-07-27T211305Z-git-worktree-ownership-rejected.md) | closed | 2026-07-27T21:15:49Z | Listener-first restore retry Task 1 | Git rejected linked-worktree ownership |
+| [SB-20260727-211305-git-worktree-ownership-rejected](incidents/2026-07-27T211305Z-git-worktree-ownership-rejected.md) | closed | 2026-07-28T14:49:26Z | Phase B temporary cleanup boundary audit | Git rejected linked-worktree ownership |
 | [SB-20260727-211305-tool-result-shape-assumption](incidents/2026-07-27T211305Z-tool-result-shape-assumption.md) | closed | 2026-07-27T21:13:05Z | Listener-first restore retry Task 1 | Tool-result wrapper was assumed incorrectly |
 | [SB-20260727-234430-provider-project-row-button-not-navigation](incidents/2026-07-27T234430Z-provider-project-row-button-not-navigation.md) | closed | 2026-07-27T23:45:55.6630209Z | Listener-first restore retry Task 2 | Provider project row button was not navigation |
 

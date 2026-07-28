@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T21:13:05Z
-- **Last observed:** 2026-07-27T21:15:49Z
-- **Phase/task:** Listener-first restore retry Task 1
+- **Last observed:** 2026-07-28T14:49:26Z
+- **Phase/task:** Phase B temporary cleanup boundary audit
 - **Environment:** Managed local sandbox, linked worktree
 - **Version/commit:** Not inspected; Git metadata access was rejected first.
 
@@ -66,3 +66,7 @@ configuration was changed.
 - 2026-07-27T21:15:49Z: The controller supplied an approved command-scoped
   safe-directory override for this exact worktree. Git metadata reads and the
   whitespace check then succeeded; the incident is closed.
+- 2026-07-28T14:49:26Z: Recurred during the read-only cleanup-boundary audit.
+  The first Git read stopped at the ownership check; the audit then used the
+  existing command-scoped safe-directory boundary and completed without a
+  persistent Git configuration change, tracked-file edit, or provider action.
