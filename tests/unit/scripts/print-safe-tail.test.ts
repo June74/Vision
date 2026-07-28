@@ -85,6 +85,42 @@ function maintenanceTail(evidence: unknown): string {
   });
 }
 
+/** Builds one exact temporary foundation-probe success result. */
+function foundationSuccess(): unknown {
+  return {
+    evidenceType: "vision.phase-b-foundation-probe/v1",
+    outcome: "succeeded",
+    category: "none",
+    roleMatches: true,
+    schemaMatches: true,
+    privilegesMatch: true,
+    publicGrantCount: 0,
+    identityViolations: 0,
+    domainViolations: 0,
+    privacyViolations: 0,
+    provenanceViolations: 0,
+    referenceViolations: 0,
+    checkpointViolations: 0,
+    protectedStorageMatches: true,
+    sentinelStatus: "passed",
+    backupContractMatches: true,
+    databaseBytes: 1,
+    r2ObjectCount: 1,
+    r2Bytes: 1,
+  };
+}
+
+/** Wraps one foundation result in the future one-minute candidate shape. */
+function foundationTail(evidence: unknown): string {
+  return scheduledTail([
+    {
+      message: [
+        { action: "acceptance.phase-b-foundation", evidence },
+      ],
+    },
+  ]);
+}
+
 describe("print-safe-tail", () => {
   it("keeps default mode backward compatible by emitting recovery evidence first", async () => {
     await expect(
@@ -177,6 +213,34 @@ describe("print-safe-tail", () => {
     });
   });
 
+  it("emits only foundation evidence in foundation-probe-only mode", async () => {
+    const result = await runPrintSafeTail(
+      ["--foundation-probe-only"],
+      [
+        restoreTail(restoreFailure()),
+        roleProbeTail(roleProbeSuccess()),
+        maintenanceTail(maintenanceSuccess()),
+        foundationTail(foundationSuccess()),
+      ],
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual(foundationSuccess());
+  });
+
+  it("emits the fixed fallback when foundation-probe-only mode sees no foundation result", async () => {
+    await expect(
+      runPrintSafeTail(
+        ["--foundation-probe-only"],
+        [restoreTail(restoreFailure()), roleProbeTail(roleProbeSuccess())],
+      ),
+    ).resolves.toEqual({
+      exitCode: 0,
+      stdout:
+        '{"category":"no_scheduled_event","cron":"none","outcome":"unknown"}\n',
+    });
+  });
+
   it("rejects unknown arguments without emitting recovery evidence", async () => {
     await expect(
       runPrintSafeTail(["--unrecognized"], [scheduledTail()]),
@@ -203,6 +267,15 @@ describe("print-safe-tail", () => {
       runPrintSafeTail(
         ["--calendar-maintenance-only", "--restore-only"],
         [maintenanceTail(maintenanceSuccess())],
+      ),
+    ).resolves.toEqual({ exitCode: 1, stdout: "" });
+  });
+
+  it("rejects combined foundation and recovery observer modes", async () => {
+    await expect(
+      runPrintSafeTail(
+        ["--foundation-probe-only", "--role-probe-only"],
+        [foundationTail(foundationSuccess())],
       ),
     ).resolves.toEqual({ exitCode: 1, stdout: "" });
   });

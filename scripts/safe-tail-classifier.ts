@@ -9,6 +9,13 @@ import type {
   TemporaryPreviewRoleProbeEvidence,
   TemporaryPreviewRoleProbeFailureCategory,
 } from "../src/jobs/temporary-preview-role-probe";
+import {
+  createPhaseBFoundationProbeEvidence,
+  PHASE_B_FOUNDATION_PROBE_ACTION,
+  type PhaseBFoundationProbeCategory,
+  type PhaseBFoundationProbeEvidence,
+  type PhaseBFoundationProbeMeasurements,
+} from "../src/jobs/phase-b-foundation-probe";
 
 /** Closed, privacy-safe recovery evidence emitted from one Wrangler JSON tail line. */
 export interface SafeTailEvidence {
@@ -38,7 +45,8 @@ export type SafeTailResult =
   | SafeTailEvidence
   | CalendarMaintenanceEvidence
   | TemporaryRestoreEvidence
-  | TemporaryPreviewRoleProbeEvidence;
+  | TemporaryPreviewRoleProbeEvidence
+  | PhaseBFoundationProbeEvidence;
 
 const FAILURE_MARKERS = Object.freeze([
   ["Backup creation failed.", "backup_creation_failed"],
@@ -101,6 +109,44 @@ const CALENDAR_MAINTENANCE_KEYS = Object.freeze([
   "renewalOutcome",
   "repairOutcome",
 ] as const);
+const PHASE_B_FOUNDATION_KEYS = Object.freeze([
+  "backupContractMatches",
+  "category",
+  "checkpointViolations",
+  "databaseBytes",
+  "domainViolations",
+  "evidenceType",
+  "identityViolations",
+  "outcome",
+  "privacyViolations",
+  "privilegesMatch",
+  "protectedStorageMatches",
+  "provenanceViolations",
+  "publicGrantCount",
+  "r2Bytes",
+  "r2ObjectCount",
+  "referenceViolations",
+  "roleMatches",
+  "schemaMatches",
+  "sentinelStatus",
+] as const);
+const PHASE_B_FOUNDATION_SOURCE_CATEGORIES = Object.freeze([
+  "configuration_invalid",
+  "database_unavailable",
+  "r2_unavailable",
+] as const satisfies readonly PhaseBFoundationProbeCategory[]);
+const PHASE_B_FOUNDATION_INTEGER_KEYS = Object.freeze([
+  "publicGrantCount",
+  "identityViolations",
+  "domainViolations",
+  "privacyViolations",
+  "provenanceViolations",
+  "referenceViolations",
+  "checkpointViolations",
+  "databaseBytes",
+  "r2ObjectCount",
+  "r2Bytes",
+] as const satisfies readonly (keyof PhaseBFoundationProbeMeasurements)[]);
 const MAX_TAIL_EVENT_BYTES = 1_048_576;
 const CALENDAR_MAINTENANCE_CRON = "*/15 * * * *";
 
@@ -157,6 +203,12 @@ export function classifySafeTailLine(line: string): SafeTailResult | null {
         : null;
   if (!cron) return null;
 
+  const foundation = locatePhaseBFoundationProbeEvidence(tail.logs);
+  if (foundation.evidence) {
+    return cron === "temporary_recovery" ? foundation.evidence : null;
+  }
+  if (foundation.seen) return null;
+
   const roleProbe = locateTemporaryPreviewRoleProbeEvidence(tail.logs);
   if (roleProbe.evidence) {
     return cron === "temporary_recovery" ? roleProbe.evidence : null;
@@ -178,6 +230,88 @@ export function classifySafeTailLine(line: string): SafeTailResult | null {
     cron,
     outcome,
   });
+}
+
+/** Reconstructs one exact closed foundation result and rejects value drift. */
+export function classifyPhaseBFoundationProbeEvidence(
+  candidate: unknown,
+): PhaseBFoundationProbeEvidence | null {
+  const evidence = snapshotOwnEnumerableData(candidate);
+  if (
+    !evidence ||
+    !hasExactKeys(evidence, PHASE_B_FOUNDATION_KEYS) ||
+    evidence.evidenceType !== "vision.phase-b-foundation-probe/v1" ||
+    typeof evidence.roleMatches !== "boolean" ||
+    typeof evidence.schemaMatches !== "boolean" ||
+    typeof evidence.privilegesMatch !== "boolean" ||
+    typeof evidence.protectedStorageMatches !== "boolean" ||
+    typeof evidence.backupContractMatches !== "boolean" ||
+    (evidence.sentinelStatus !== "passed" &&
+      evidence.sentinelStatus !== "failed" &&
+      evidence.sentinelStatus !== "not_tested") ||
+    PHASE_B_FOUNDATION_INTEGER_KEYS.some(
+      (key) =>
+        typeof evidence[key] !== "number" ||
+        !Number.isSafeInteger(evidence[key]) ||
+        (evidence[key] as number) < 0,
+    )
+  ) {
+    return null;
+  }
+  const measurements: PhaseBFoundationProbeMeasurements = {
+    roleMatches: evidence.roleMatches,
+    schemaMatches: evidence.schemaMatches,
+    privilegesMatch: evidence.privilegesMatch,
+    publicGrantCount: evidence.publicGrantCount as number,
+    identityViolations: evidence.identityViolations as number,
+    domainViolations: evidence.domainViolations as number,
+    privacyViolations: evidence.privacyViolations as number,
+    provenanceViolations: evidence.provenanceViolations as number,
+    referenceViolations: evidence.referenceViolations as number,
+    checkpointViolations: evidence.checkpointViolations as number,
+    protectedStorageMatches: evidence.protectedStorageMatches,
+    sentinelStatus: evidence.sentinelStatus,
+    backupContractMatches: evidence.backupContractMatches,
+    databaseBytes: evidence.databaseBytes as number,
+    r2ObjectCount: evidence.r2ObjectCount as number,
+    r2Bytes: evidence.r2Bytes as number,
+  };
+  let reconstructed: PhaseBFoundationProbeEvidence;
+  const sourceCategory = evidence.category as
+    | (typeof PHASE_B_FOUNDATION_SOURCE_CATEGORIES)[number]
+    | undefined;
+  if (
+    sourceCategory !== undefined &&
+    PHASE_B_FOUNDATION_SOURCE_CATEGORIES.includes(sourceCategory) &&
+    evidence.outcome === "failed" &&
+    isUnavailableFoundationMeasurements(measurements)
+  ) {
+    reconstructed = {
+      evidenceType: "vision.phase-b-foundation-probe/v1",
+      outcome: "failed",
+      category: sourceCategory,
+      ...measurements,
+    };
+  } else if (
+    evidence.category === "numeric_bound_exceeded" &&
+    evidence.outcome === "failed"
+  ) {
+    reconstructed = {
+      evidenceType: "vision.phase-b-foundation-probe/v1",
+      outcome: "failed",
+      category: "numeric_bound_exceeded",
+      ...measurements,
+    };
+  } else {
+    reconstructed = createPhaseBFoundationProbeEvidence(measurements);
+    if (
+      evidence.category !== reconstructed.category ||
+      evidence.outcome !== reconstructed.outcome
+    ) {
+      return null;
+    }
+  }
+  return Object.freeze({ ...reconstructed });
 }
 
 /** Reconstructs one coherent exact permanent maintenance result. */
@@ -414,6 +548,61 @@ function locateTemporaryPreviewRoleProbeEvidence(candidate: unknown): {
   return { seen, evidence: null };
 }
 
+/** Requires exactly one valid foundation terminal and rejects every mixed terminal. */
+function locatePhaseBFoundationProbeEvidence(candidate: unknown): {
+  readonly seen: boolean;
+  readonly evidence: PhaseBFoundationProbeEvidence | null;
+} {
+  if (!Array.isArray(candidate)) return { seen: false, evidence: null };
+  let seen = false;
+  let valid: PhaseBFoundationProbeEvidence | null = null;
+  let invalid = false;
+  for (const logCandidate of candidate) {
+    const log = snapshotOwnEnumerableData(logCandidate);
+    if (!log || !Array.isArray(log.message)) continue;
+    for (const messageCandidate of log.message) {
+      const message = snapshotOwnEnumerableData(messageCandidate);
+      if (!message) continue;
+      const evidenceLike = snapshotOwnEnumerableData(message.evidence);
+      const foundationLike =
+        evidenceLike?.evidenceType ===
+        "vision.phase-b-foundation-probe/v1";
+      const otherTerminal =
+        message.action === "calendar.maintenance" ||
+        message.action === "backup.restore" ||
+        message.action === "backup.restore-role-probe" ||
+        evidenceLike?.evidenceType === "vision.calendar-maintenance/v1" ||
+        evidenceLike?.evidenceType === "vision.preview-restore/v1" ||
+        evidenceLike?.evidenceType === "vision.preview-role-probe/v1";
+      if (foundationLike || message.action === PHASE_B_FOUNDATION_PROBE_ACTION) {
+        if (seen) invalid = true;
+        seen = true;
+        if (
+          message.action !== PHASE_B_FOUNDATION_PROBE_ACTION ||
+          !hasExactKeys(message, ["action", "evidence"] as const)
+        ) {
+          invalid = true;
+          continue;
+        }
+        const evidence = classifyPhaseBFoundationProbeEvidence(
+          message.evidence,
+        );
+        if (!evidence || valid) {
+          invalid = true;
+          continue;
+        }
+        valid = evidence;
+      } else if (otherTerminal) {
+        invalid = true;
+      }
+    }
+  }
+  return {
+    seen,
+    evidence: seen && !invalid ? valid : null,
+  };
+}
+
 /** Requires exactly one valid maintenance terminal record and no mixed terminal record. */
 function locateCalendarMaintenanceEvidence(candidate: unknown): {
   readonly seen: boolean;
@@ -435,8 +624,11 @@ function locateCalendarMaintenanceEvidence(candidate: unknown): {
       const mixedTerminal =
         message.action === "backup.restore" ||
         message.action === "backup.restore-role-probe" ||
+        message.action === PHASE_B_FOUNDATION_PROBE_ACTION ||
         evidenceLike?.evidenceType === "vision.preview-restore/v1" ||
-        evidenceLike?.evidenceType === "vision.preview-role-probe/v1";
+        evidenceLike?.evidenceType === "vision.preview-role-probe/v1" ||
+        evidenceLike?.evidenceType ===
+          "vision.phase-b-foundation-probe/v1";
       if (mixedTerminal) invalid = true;
       if (message.action !== "calendar.maintenance") {
         if (maintenanceLike) {
@@ -463,6 +655,30 @@ function locateCalendarMaintenanceEvidence(candidate: unknown): {
     seen,
     evidence: seen && !invalid ? valid : null,
   };
+}
+
+/** Recognizes the one canonical source-unavailable measurement shape. */
+function isUnavailableFoundationMeasurements(
+  measurements: PhaseBFoundationProbeMeasurements,
+): boolean {
+  return (
+    !measurements.roleMatches &&
+    !measurements.schemaMatches &&
+    !measurements.privilegesMatch &&
+    measurements.publicGrantCount === 0 &&
+    measurements.identityViolations === 0 &&
+    measurements.domainViolations === 0 &&
+    measurements.privacyViolations === 0 &&
+    measurements.provenanceViolations === 0 &&
+    measurements.referenceViolations === 0 &&
+    measurements.checkpointViolations === 0 &&
+    !measurements.protectedStorageMatches &&
+    measurements.sentinelStatus === "not_tested" &&
+    !measurements.backupContractMatches &&
+    measurements.databaseBytes === 0 &&
+    measurements.r2ObjectCount === 0 &&
+    measurements.r2Bytes === 0
+  );
 }
 
 /** Reconstructs all and only the authoritative nonnegative row counts. */

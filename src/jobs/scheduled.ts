@@ -63,6 +63,11 @@ export interface ScheduledJobDependencies {
   readonly maintenance: (now: Date) => Promise<void>;
   readonly recovery: (now: Date) => Promise<void>;
   readonly temporaryRoleProbe: (now: Date) => Promise<void>;
+  /**
+   * Typed candidate boundary only. Task 6 owns its future generated selector
+   * and one-minute routing; normal committed schedules never dispatch it.
+   */
+  readonly foundationProbe: (now: Date) => Promise<void>;
 }
 
 /** Recovery operations kept separate so retention can run only after verified creation. */
@@ -238,6 +243,10 @@ export async function scheduled(
       if (evidence.outcome !== "succeeded") {
         throw new Error("Temporary preview role probe failed.");
       }
+    },
+    /** Remains unreachable until Task 6 adds the generated candidate selector. */
+    foundationProbe: async () => {
+      throw new Error("Phase B foundation probe candidate is not configured.");
     },
   });
 }

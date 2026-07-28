@@ -5,6 +5,7 @@ import { createSafeTailAccumulator } from "./safe-tail-classifier";
 const RESTORE_ONLY_ARGUMENT = "--restore-only";
 const ROLE_PROBE_ONLY_ARGUMENT = "--role-probe-only";
 const CALENDAR_MAINTENANCE_ONLY_ARGUMENT = "--calendar-maintenance-only";
+const FOUNDATION_PROBE_ONLY_ARGUMENT = "--foundation-probe-only";
 const noArguments = process.argv.length === 2;
 const restoreOnly =
   process.argv.length === 3 && process.argv[2] === RESTORE_ONLY_ARGUMENT;
@@ -14,11 +15,15 @@ const roleProbeOnly =
 const calendarMaintenanceOnly =
   process.argv.length === 3 &&
   process.argv[2] === CALENDAR_MAINTENANCE_ONLY_ARGUMENT;
+const foundationProbeOnly =
+  process.argv.length === 3 &&
+  process.argv[2] === FOUNDATION_PROBE_ONLY_ARGUMENT;
 if (
   !noArguments &&
   !restoreOnly &&
   !roleProbeOnly &&
-  !calendarMaintenanceOnly
+  !calendarMaintenanceOnly &&
+  !foundationProbeOnly
 ) {
   process.exit(1);
 }
@@ -42,7 +47,11 @@ lines.on("line", (line) => {
         evidence.evidenceType !== "vision.preview-role-probe/v1")) ||
     (calendarMaintenanceOnly &&
       (!("evidenceType" in evidence) ||
-        evidence.evidenceType !== "vision.calendar-maintenance/v1"))
+        evidence.evidenceType !== "vision.calendar-maintenance/v1")) ||
+    (foundationProbeOnly &&
+      (!("evidenceType" in evidence) ||
+        evidence.evidenceType !==
+          "vision.phase-b-foundation-probe/v1"))
   ) {
     return;
   }

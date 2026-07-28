@@ -3,7 +3,8 @@
 The scheduled entry point routes exact cron expressions to isolated
 Google-maintenance, encrypted-recovery, and temporary preview role-probe
 capability sets. The temporary branch receives only the preview environment
-marker and temporary connection binding.
+marker and temporary connection binding. A typed foundation-probe boundary is
+present for Task 6, but no committed cron dispatches it.
 
 ## `runScheduledJob`
 Matches only the three configured cron expressions and rejects any unexpected
@@ -22,6 +23,11 @@ Lazily constructs and executes only backup and retention dependencies.
 Lazily runs the injected preview role-probe job, emits exactly the
 `backup.restore-role-probe` action plus closed evidence, and throws only a
 fixed value-free failure after failed evidence is emitted.
+
+## `foundationProbe`
+
+Preserves dependency typing for the future generated candidate while every
+existing scheduler selector leaves it unreachable.
 
 ## `emitTemporaryPreviewRoleProbeEvidence`
 Writes only the exact allowlisted action/evidence object.

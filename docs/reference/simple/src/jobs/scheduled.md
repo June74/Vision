@@ -2,7 +2,8 @@
 
 Routes the 15-minute Google maintenance schedule, daily encrypted recovery
 schedule, and temporary preview role-probe schedule without mixing their
-credentials or database targets.
+credentials or database targets. It also carries an injected foundation-probe
+candidate boundary that is deliberately not routed until Task 6.
 
 ## `runScheduledJob`
 Calls only the function belonging to one of the three exact configured cron
@@ -20,6 +21,11 @@ Builds backup capability only for the daily recovery cron.
 ## `temporaryRoleProbe`
 Builds only the preview read adapter, logs the fixed role-probe evidence, and
 reports failure with one fixed message.
+
+## `foundationProbe`
+
+Defines the typed candidate boundary but remains unreachable from every
+committed cron.
 
 ## `emitTemporaryPreviewRoleProbeEvidence`
 Preserves the exact

@@ -230,11 +230,12 @@ describe("daily encrypted backup job", () => {
     ).toThrow(/distinct/i);
   });
 
-  it("dispatches maintenance, recovery, and the temporary role probe by exact cron", async () => {
+  it("dispatches only existing crons and leaves the foundation boundary unrouted", async () => {
     const dependencies = {
       maintenance: vi.fn(async () => undefined),
       recovery: vi.fn(async () => undefined),
       temporaryRoleProbe: vi.fn(async () => undefined),
+      foundationProbe: vi.fn(async () => undefined),
     };
 
     expect(DAILY_BACKUP_CRON).toBe("5 6 * * *");
@@ -246,12 +247,14 @@ describe("daily encrypted backup job", () => {
     expect(dependencies.maintenance).toHaveBeenCalledWith(NOW);
     expect(dependencies.recovery).not.toHaveBeenCalled();
     expect(dependencies.temporaryRoleProbe).not.toHaveBeenCalled();
+    expect(dependencies.foundationProbe).not.toHaveBeenCalled();
 
     vi.clearAllMocks();
     await runScheduledJob(DAILY_BACKUP_CRON, NOW, dependencies);
     expect(dependencies.recovery).toHaveBeenCalledWith(NOW);
     expect(dependencies.maintenance).not.toHaveBeenCalled();
     expect(dependencies.temporaryRoleProbe).not.toHaveBeenCalled();
+    expect(dependencies.foundationProbe).not.toHaveBeenCalled();
 
     vi.clearAllMocks();
     await runScheduledJob(
@@ -262,6 +265,7 @@ describe("daily encrypted backup job", () => {
     expect(dependencies.temporaryRoleProbe).toHaveBeenCalledOnce();
     expect(dependencies.maintenance).not.toHaveBeenCalled();
     expect(dependencies.recovery).not.toHaveBeenCalled();
+    expect(dependencies.foundationProbe).not.toHaveBeenCalled();
 
     vi.clearAllMocks();
     await expect(
@@ -270,6 +274,7 @@ describe("daily encrypted backup job", () => {
     expect(dependencies.maintenance).not.toHaveBeenCalled();
     expect(dependencies.recovery).not.toHaveBeenCalled();
     expect(dependencies.temporaryRoleProbe).not.toHaveBeenCalled();
+    expect(dependencies.foundationProbe).not.toHaveBeenCalled();
   });
 
   it("preserves the exact value-free role-probe evidence log contract", () => {

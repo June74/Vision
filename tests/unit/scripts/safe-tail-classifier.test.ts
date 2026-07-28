@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyCalendarMaintenanceEvidence,
+  classifyPhaseBFoundationProbeEvidence,
   classifySafeTailLine,
   classifyTemporaryPreviewRoleProbeEvidence,
   classifyTemporaryRestoreEvidence,
@@ -13,6 +14,7 @@ import type {
 } from "../../../src/jobs/temporary-preview-restore";
 import type { CalendarMaintenanceEvidence } from "../../../src/jobs/calendar-maintenance-evidence";
 import type { TemporaryPreviewRoleProbeEvidence } from "../../../src/jobs/temporary-preview-role-probe";
+import type { PhaseBFoundationProbeEvidence } from "../../../src/jobs/phase-b-foundation-probe";
 
 const FAILURE_CATEGORIES: readonly TemporaryRestoreFailureCategory[] = [
   "restore_configuration_invalid",
@@ -110,6 +112,46 @@ function maintenanceTail(
   cron = "*/15 * * * *",
   records: readonly unknown[] = [
     { action: "calendar.maintenance", evidence },
+  ],
+): string {
+  return JSON.stringify({
+    outcome: "ok",
+    event: { cron },
+    logs: records.map((record) => ({ message: [record] })),
+  });
+}
+
+/** Builds one exact temporary foundation-probe result. */
+function foundationEvidence(): PhaseBFoundationProbeEvidence {
+  return {
+    evidenceType: "vision.phase-b-foundation-probe/v1",
+    outcome: "succeeded",
+    category: "none",
+    roleMatches: true,
+    schemaMatches: true,
+    privilegesMatch: true,
+    publicGrantCount: 0,
+    identityViolations: 0,
+    domainViolations: 0,
+    privacyViolations: 0,
+    provenanceViolations: 0,
+    referenceViolations: 0,
+    checkpointViolations: 0,
+    protectedStorageMatches: true,
+    sentinelStatus: "passed",
+    backupContractMatches: true,
+    databaseBytes: 1,
+    r2ObjectCount: 1,
+    r2Bytes: 1,
+  };
+}
+
+/** Wraps one foundation record in its future one-minute candidate tail. */
+function foundationTail(
+  evidence: unknown,
+  cron = "* * * * *",
+  records: readonly unknown[] = [
+    { action: "acceptance.phase-b-foundation", evidence },
   ],
 ): string {
   return JSON.stringify({
@@ -674,5 +716,87 @@ describe("safe Cloudflare tail classification", () => {
     expect(getterCalls).toBe(0);
     expect(classifyTemporaryPreviewRoleProbeEvidence(symbol)).toBeNull();
     expect(classifyTemporaryPreviewRoleProbeEvidence(prototype)).toBeNull();
+  });
+
+  it("reconstructs the exact foundation evidence without preserving its source object", () => {
+    const evidence = foundationEvidence();
+    const direct = classifyPhaseBFoundationProbeEvidence(evidence);
+    const classified = classifySafeTailLine(foundationTail(evidence));
+
+    expect(direct).toEqual(evidence);
+    expect(direct).not.toBe(evidence);
+    expect(classified).toEqual(evidence);
+    expect(Object.keys(classified ?? {}).sort()).toEqual(
+      Object.keys(evidence).sort(),
+    );
+  });
+
+  it("rejects incoherent, hostile, extra-key, and raw-error foundation evidence", () => {
+    const success = foundationEvidence();
+    let getterCalls = 0;
+    const accessor = {
+      ...success,
+      get databaseBytes() {
+        getterCalls += 1;
+        return 1;
+      },
+    };
+    const prototype = Object.assign(Object.create({ inherited: true }), success);
+    const symbol = { ...success, [Symbol("private")]: true };
+    for (const candidate of [
+      { ...success, extra: true },
+      { ...success, roleMatches: false },
+      { ...success, outcome: "failed" },
+      { ...success, category: "private_provider_error" },
+      { ...success, providerError: "private_provider_detail" },
+      { ...success, databaseBytes: -1 },
+      { ...success, r2ObjectCount: 1.5 },
+    ]) {
+      expect(classifyPhaseBFoundationProbeEvidence(candidate)).toBeNull();
+      expect(classifySafeTailLine(foundationTail(candidate))).toBeNull();
+    }
+    for (const candidate of [accessor, prototype, symbol]) {
+      expect(classifyPhaseBFoundationProbeEvidence(candidate)).toBeNull();
+    }
+    expect(getterCalls).toBe(0);
+  });
+
+  it("rejects foundation evidence on wrong cron, duplicate, mixed, or wrong-action records", () => {
+    const foundation = foundationEvidence();
+    const role: TemporaryPreviewRoleProbeEvidence = {
+      evidenceType: "vision.preview-role-probe/v1",
+      outcome: "succeeded",
+      category: "none",
+      roleMatches: true,
+    };
+
+    expect(
+      classifySafeTailLine(
+        foundationTail(foundation, "*/15 * * * *"),
+      ),
+    ).toBeNull();
+    expect(
+      classifySafeTailLine(
+        foundationTail(foundation, "* * * * *", [
+          { action: "wrong.action", evidence: foundation },
+        ]),
+      ),
+    ).toBeNull();
+    expect(
+      classifySafeTailLine(
+        foundationTail(foundation, "* * * * *", [
+          { action: "acceptance.phase-b-foundation", evidence: foundation },
+          { action: "acceptance.phase-b-foundation", evidence: foundation },
+        ]),
+      ),
+    ).toBeNull();
+    expect(
+      classifySafeTailLine(
+        foundationTail(foundation, "* * * * *", [
+          { action: "acceptance.phase-b-foundation", evidence: foundation },
+          { action: "backup.restore-role-probe", evidence: role },
+        ]),
+      ),
+    ).toBeNull();
   });
 });
