@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:47:00Z
-- **Last observed:** 2026-07-27T01:49:37Z
-- **Phase/task:** Phase B fresh verification handoff
+- **Last observed:** 2026-07-28T14:07:00Z
+- **Phase/task:** Preview database role probe Task 2 report verification
 - **Environment:** Local worktree
 - **Version/commit:** `50569e6`
 
@@ -56,3 +56,15 @@ deployment state changed, and no private value was exposed.
 
 At 2026-07-27T01:50Z, the repository's `docs:check` script and
 `git diff --check` both passed.
+
+## Recurrence history
+
+- 2026-07-28T14:00:00Z: A credential-path documentation search included the
+  guessed filename `docs/operations/backup-restore.md`; the repository uses
+  `docs/operations/backup-and-restore.md`. The read-only search stopped with no
+  provider, source, or private-data change. Discovering the directory contents
+  supplied the exact path before retry.
+- 2026-07-28T14:07:00Z: A combined ignored-report gate used a brittle exact
+  heading match and an unsupported Git exclude-file path. The first run made no
+  acceptance claim. Exact safe-field checks and a supported null path replaced
+  both assumptions; no provider or tracked-source state changed.

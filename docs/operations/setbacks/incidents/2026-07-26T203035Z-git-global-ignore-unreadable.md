@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:30:35.2961897Z
-- **Last observed:** 2026-07-28T02:36:34.6558608Z
-- **Phase/task:** Preview database role probe Task 1 independent review
+- **Last observed:** 2026-07-28T14:08:00Z
+- **Phase/task:** Preview database role probe Task 2 final reporting
 - **Environment:** Local Phase B worktree under the managed sandbox
 - **Version/commit:** Staged Task 1 patch based on `59e6a02`
 
@@ -109,3 +109,10 @@ commit `4420f6d`.
   review. Git returned the requested inventory and diff successfully. The
   reviewer approved the staged implementation with zero Critical or Important
   findings; no provider or runtime mutation occurred.
+- 2026-07-28T13:58:00Z: Recurred during a final short-status check. Git exited
+  zero and returned no changed paths, but the warning-bearing result was not
+  accepted as fresh clean proof; the controller's independent clean
+  attribution was used.
+- 2026-07-28T14:08:00Z: Recurred during the ignored-report acceptance gate.
+  A supported null exclude-file override then returned the tracked-state result
+  without changing repository or provider state.

@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T19:26:06Z
-- **Last observed:** 2026-07-27T19:26:06Z
-- **Phase/task:** Phase B restore Task 4 live retry
+- **Last observed:** 2026-07-28T14:04:00Z
+- **Phase/task:** Preview database role probe Task 2 final transfer test
 - **Environment:** Cloudflare preview dashboard
 - **Version/commit:** `9bbc4be`
 
@@ -38,3 +38,12 @@ The mismatch delayed selecting the required Secret type.
 The effective control was uniquely identified as a combobox. Its portal-backed
 Secret option was identified through the option/listbox ancestry, clicked once,
 and the combobox then reported `Secret`.
+
+## Recurrence history
+
+- 2026-07-28T14:04:00Z: The resumed Worker editor again exposed visible `Text`
+  without the same accessible button name. A bounded editor button map located
+  the type selector before interaction. When opened, a global exact-text
+  Secret locator included hidden duplicates; the one visible semantic option
+  was scoped by role and selected once. No value had been pasted and no
+  provider mutation occurred.
