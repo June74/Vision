@@ -3,7 +3,7 @@
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
 | [SB-20260728-144926-powershell-exclusion-expression-parse](incidents/2026-07-28T144926Z-powershell-exclusion-expression-parse.md) | closed | 2026-07-28T14:49:26Z | Phase B temporary cleanup boundary audit | PowerShell exclusion expression did not parse |
-| [SB-20260728-142700-subagent-audit-finalization-delayed](incidents/2026-07-28T142700Z-subagent-audit-finalization-delayed.md) | closed | 2026-07-28T14:27:00Z | Preview database role probe architecture audits | Audit finalization was delayed |
+| [SB-20260728-142700-subagent-audit-finalization-delayed](incidents/2026-07-28T142700Z-subagent-audit-finalization-delayed.md) | closed | 2026-07-28T14:58:01Z | Phase B acceptance instrumentation architecture audit | Audit finalization was delayed |
 | [SB-20260728-142000-powershell-range-shape-error](incidents/2026-07-28T142000Z-powershell-range-shape-error.md) | closed | 2026-07-28T14:20:00Z | CI secret-handoff architecture audit | PowerShell source range had the wrong shape |
 | [SB-20260728-141900-neon-show-password-blocked-by-browser-policy](incidents/2026-07-28T141900Z-neon-show-password-blocked-by-browser-policy.md) | contained | 2026-07-28T14:19:00Z | Preview database role probe opaque-transfer audit | Browser policy blocked Neon password reveal |
 | [SB-20260728-140600-neon-copy-pasted-different-role-url](incidents/2026-07-28T140600Z-neon-copy-pasted-different-role-url.md) | contained | 2026-07-28T14:06:00Z | Preview database role probe Task 2 final transfer test | Neon Copy pasted a different-role URL |
@@ -72,7 +72,7 @@
 | [SB-20260726-190208-assumed-wrangler-config-path](incidents/2026-07-26T190208Z-assumed-wrangler-config-path.md) | closed | 2026-07-26T19:02:08.702614Z | Phase B release operations | Conventional Wrangler config path was assumed |
 | [SB-20260726-190339-git-worktree-lock-permission](incidents/2026-07-26T190339Z-git-worktree-lock-permission.md) | closed | 2026-07-28T14:37:16Z | Phase B completion resume setback preservation | Git worktree lock creation was denied |
 | [SB-20260726-190417-setback-row-timestamp-assumption](incidents/2026-07-26T190417Z-setback-row-timestamp-assumption.md) | closed | 2026-07-26T19:49:20.5044351Z | Phase B release operations | Setback row timestamp was assumed |
-| [SB-20260726-203035-git-global-ignore-unreadable](incidents/2026-07-26T203035Z-git-global-ignore-unreadable.md) | closed | 2026-07-28T14:44:32Z | Phase B completion resume preflight | Git global ignore file was unreadable |
+| [SB-20260726-203035-git-global-ignore-unreadable](incidents/2026-07-26T203035Z-git-global-ignore-unreadable.md) | closed | 2026-07-28T14:54:48Z | Phase B completion resume preflight | Git global ignore file was unreadable |
 | [SB-20260726-203035-powershell-utc-flag-unsupported](incidents/2026-07-26T203035Z-powershell-utc-flag-unsupported.md) | closed | 2026-07-26T23:54:52Z | Phase B release operations | PowerShell UTC flag was unsupported |
 | [SB-20260726-190637-unbounded-backup-code-inspection](incidents/2026-07-26T190637Z-unbounded-backup-code-inspection.md) | closed | 2026-07-27T03:08:11.5689988Z | Phase B restore Task 1 fix wave | Backup source inspection was too broad |
 | [SB-20260726-190816-assumed-progress-document-paths](incidents/2026-07-26T190816Z-assumed-progress-document-paths.md) | closed | 2026-07-28T14:34:48Z | Phase B completion resume verification discovery | Repository paths were assumed |

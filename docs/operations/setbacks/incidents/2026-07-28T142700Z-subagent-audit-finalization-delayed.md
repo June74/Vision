@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T14:21:00Z
-- **Last observed:** 2026-07-28T14:27:00Z
-- **Phase/task:** Preview database role probe architecture audits
+- **Last observed:** 2026-07-28T14:58:01Z
+- **Phase/task:** Phase B acceptance instrumentation architecture audit
 - **Environment:** Local subagent coordination
 - **Version/commit:** `386b7d3`
 
@@ -53,3 +53,14 @@ the bounded interval.
 ## Verification and related work
 
 Both ignored audit report files now exist and contain safe conclusions.
+
+## Recurrence history
+
+- 2026-07-28T14:21:00Z: First observed during the role-probe architecture
+  audits and closed after report-only redispatch.
+- 2026-07-28T14:58:01Z: Recurred when the acceptance-instrumentation
+  architecture worker remained active through repeated bounded waits, a
+  finalize message, interruption, and report-only redispatch without creating
+  its report. The worker was stopped; the controller proceeds from two
+  completed audits and its independently confirmed live call-path trace. No
+  repository or provider state changed.
