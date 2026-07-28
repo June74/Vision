@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:47:00Z
-- **Last observed:** 2026-07-28T19:21:34Z
-- **Phase/task:** Phase B acceptance instrumentation Task 1 review-package verification
+- **Last observed:** 2026-07-28T19:37:57Z
+- **Phase/task:** Phase B acceptance instrumentation Task 2 handoff
 - **Environment:** Local worktree
 - **Version/commit:** `50569e6`
 
@@ -84,3 +84,8 @@ At 2026-07-27T01:50Z, the repository's `docs:check` script and
   to end immediately before a line feed and therefore reported zero sections
   for a valid Windows CRLF file. Direct inspection confirmed the sections; a
   carriage-return-tolerant expression verifies the package before review.
+- 2026-07-28T19:37:57Z: The Task 2 brief verifier assumed the heading ended
+  after the task number and expected global threshold values inside a
+  task-only extraction. Direct inspection confirmed the correct section. The
+  ignored brief receives an explicit binding-values preface and is verified
+  against the actual full heading.
