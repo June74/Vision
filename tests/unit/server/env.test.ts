@@ -34,6 +34,9 @@ describe("RuntimeEnvSchema", () => {
         VISION_ENV: "preview",
         DATABASE_URL: "postgresql://vision_app:secret@db.example.test/vision",
         KEY_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        DATABASE_USAGE_WARNING_BYTES: "400000000",
+        R2_USAGE_WARNING_BYTES: "8000000000",
+        R2_USAGE_WARNING_OBJECTS: "100",
       }),
     ).toMatchObject({ VISION_ENV: "preview" });
   });
@@ -55,6 +58,9 @@ describe("RuntimeEnvSchema", () => {
     const environment = {
       VISION_ENV: "production",
       DATABASE_URL: "postgresql://vision_app:secret@db.example.test/vision",
+      DATABASE_USAGE_WARNING_BYTES: "400000000",
+      R2_USAGE_WARNING_BYTES: "8000000000",
+      R2_USAGE_WARNING_OBJECTS: "100",
     };
 
     const finalCharacters = new Set<string>();
@@ -95,6 +101,9 @@ describe("RuntimeEnvSchema", () => {
       VISION_ENV: "preview",
       DATABASE_URL: "postgresql://vision_app:secret@db.example.test/vision",
       KEY_ENCRYPTION_KEY: encodeBase64Url(new Uint8Array(32)),
+      DATABASE_USAGE_WARNING_BYTES: "400000000",
+      R2_USAGE_WARNING_BYTES: "8000000000",
+      R2_USAGE_WARNING_OBJECTS: "100",
     };
     const backupKey = encodeBase64Url(new Uint8Array(32).fill(1));
 
@@ -117,6 +126,36 @@ describe("RuntimeEnvSchema", () => {
         BACKUP_KEY_VERSION: "1",
       }),
     ).toMatchObject({ BACKUP_KEY_VERSION: 1 });
+  });
+
+  it("requires positive safe storage thresholds in preview and production", () => {
+    const runtime = {
+      VISION_ENV: "production",
+      DATABASE_URL: "postgresql://vision_app:secret@db.example.test/vision",
+      KEY_ENCRYPTION_KEY: encodeBase64Url(new Uint8Array(32)),
+      DATABASE_USAGE_WARNING_BYTES: "400000000",
+      R2_USAGE_WARNING_BYTES: "8000000000",
+      R2_USAGE_WARNING_OBJECTS: "100",
+    };
+
+    expect(RuntimeEnvSchema.parse(runtime)).toMatchObject({
+      DATABASE_USAGE_WARNING_BYTES: 400_000_000,
+      R2_USAGE_WARNING_BYTES: 8_000_000_000,
+      R2_USAGE_WARNING_OBJECTS: 100,
+    });
+    for (const environment of [
+      { ...runtime, DATABASE_USAGE_WARNING_BYTES: undefined },
+      { ...runtime, R2_USAGE_WARNING_BYTES: "0" },
+      { ...runtime, R2_USAGE_WARNING_OBJECTS: "1.5" },
+      {
+        ...runtime,
+        DATABASE_USAGE_WARNING_BYTES: String(Number.MAX_SAFE_INTEGER + 1),
+      },
+    ]) {
+      expect(() => RuntimeEnvSchema.parse(environment)).toThrow(
+        /usage warning thresholds/iu,
+      );
+    }
   });
 });
 

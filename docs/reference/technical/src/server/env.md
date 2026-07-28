@@ -89,6 +89,14 @@ Validates the exact server-only OpenAI adapter binding pair. The base URL must b
 
 Validates the hard limit as exactly 950 cents and requires non-negative integer per-million-token rates plus positive routine, optional, and complex worst-case reservations. Values are injected because provider prices are not assumed by source code.
 
+## `parseUsageWarningThresholds`
+
+**Signature:** `(environment: unknown) => UsageWarningThresholds`
+
+Parses all three required server-only storage threshold bindings into an
+immutable domain-shaped record. Each value must be a positive safe integer;
+the helper performs no provider call and returns no binding names to clients.
+
 ## `parseBackupEnvironment`
 
 Validates `BACKUP_ENCRYPTION_KEY` as a canonical 32-byte base64url secret, coerces `BACKUP_KEY_VERSION` to a positive

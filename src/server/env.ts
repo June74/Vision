@@ -103,6 +103,13 @@ const aiMonthlyHardLimitSchema = z.coerce
     message:
       "AI_MONTHLY_HARD_LIMIT_CENTS must remain 950 and match the Cloudflare AI Gateway barrier.",
   });
+const usageWarningThresholdSchema = z.coerce.number().refine(
+  (value) => Number.isSafeInteger(value) && value > 0,
+  {
+    message:
+      "Storage usage warning thresholds must be positive safe integers.",
+  },
+);
 
 /** Validates only the server-side configuration needed by the OpenAI adapter. */
 export const OpenAiEnvSchema = z
@@ -216,8 +223,23 @@ export const RuntimeEnvSchema = z
     AI_ROUTINE_WORST_CASE_CENTS: injectedPositiveCentsSchema.optional(),
     AI_OPTIONAL_WORST_CASE_CENTS: injectedPositiveCentsSchema.optional(),
     AI_COMPLEX_WORST_CASE_CENTS: injectedPositiveCentsSchema.optional(),
+    DATABASE_USAGE_WARNING_BYTES: usageWarningThresholdSchema.optional(),
+    R2_USAGE_WARNING_BYTES: usageWarningThresholdSchema.optional(),
+    R2_USAGE_WARNING_OBJECTS: usageWarningThresholdSchema.optional(),
   })
   .superRefine((environment, context) => {
+    if (
+      environment.VISION_ENV !== "local" &&
+      (environment.DATABASE_USAGE_WARNING_BYTES === undefined ||
+        environment.R2_USAGE_WARNING_BYTES === undefined ||
+        environment.R2_USAGE_WARNING_OBJECTS === undefined)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "Storage usage warning thresholds are required in preview and production.",
+      });
+    }
     if (
       (environment.BACKUP_ENCRYPTION_KEY === undefined) !==
       (environment.BACKUP_KEY_VERSION === undefined)
@@ -315,6 +337,26 @@ export function parseAiBudgetEnvironment(
   environment: unknown,
 ): z.infer<typeof AiBudgetEnvSchema> {
   return AiBudgetEnvSchema.parse(environment);
+}
+
+/** Validates the complete server-only storage warning threshold contract. */
+export function parseUsageWarningThresholds(environment: unknown): {
+  readonly databaseBytes: number;
+  readonly r2Bytes: number;
+  readonly r2ObjectCount: number;
+} {
+  const parsed = z
+    .object({
+      DATABASE_USAGE_WARNING_BYTES: usageWarningThresholdSchema,
+      R2_USAGE_WARNING_BYTES: usageWarningThresholdSchema,
+      R2_USAGE_WARNING_OBJECTS: usageWarningThresholdSchema,
+    })
+    .parse(environment);
+  return Object.freeze({
+    databaseBytes: parsed.DATABASE_USAGE_WARNING_BYTES,
+    r2Bytes: parsed.R2_USAGE_WARNING_BYTES,
+    r2ObjectCount: parsed.R2_USAGE_WARNING_OBJECTS,
+  });
 }
 
 /** Validates and owns only the backup-specific secret and version fields. */

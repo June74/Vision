@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T02:32:27Z
-- **Last observed:** 2026-07-28T18:56:39.1904429Z
-- **Phase/task:** Phase B acceptance instrumentation Task 1 typecheck
+- **Last observed:** 2026-07-28T19:51:22.5993220Z
+- **Phase/task:** Phase B acceptance instrumentation Task 2 implementation
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `6fdb9cb`
 
@@ -82,3 +82,7 @@ The retry must modify only the intended plan paragraph and pass
   instead of the index row's shorter title. It was also rejected atomically.
   Minimal exact row-specific hunks succeeded; no source, workflow, provider,
   or private state changed in either failed attempt.
+- 2026-07-28T19:51:22.5993220Z: Recurred when a bulk test migration supplied
+  more identical replacement hunks than the file contained. The first patch
+  and an index-title retry were rejected atomically. Bounded searches then
+  supplied the exact fixture count and current index title.

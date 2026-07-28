@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T14:21:00Z
-- **Last observed:** 2026-07-28T19:13:06.4702636Z
-- **Phase/task:** Phase B acceptance instrumentation Task 1 review
+- **Last observed:** 2026-07-28T20:06:55.3056988Z
+- **Phase/task:** Phase B acceptance instrumentation Task 2 review
 - **Environment:** Local subagent coordination
 - **Version/commit:** `386b7d3`
 
@@ -76,3 +76,9 @@ Both ignored audit report files now exist and contain safe conclusions.
   TDD, self-review, focused gates, and the complete repository gate were
   already complete; the controller retains a separate exact-diff review step.
   No repository, workflow, provider, or private state changed.
+- 2026-07-28T20:06:55.3056988Z: Recurred when the extra read-only Task 2
+  reviewer remained active after repeated bounded waits and a priority-final
+  request. It was interrupted and asked for an immediate partial verdict.
+  Local TDD, privacy review, generated-preview validation, and the complete
+  repository gate had already passed; the controller retains the authoritative
+  exact-diff review. No repository, provider, or private state changed.

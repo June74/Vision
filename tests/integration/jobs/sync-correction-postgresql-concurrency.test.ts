@@ -340,7 +340,12 @@ describe("synchronization and category correction on multi-session PostgreSQL", 
           correctionDatabase,
           keyProvider,
           createTestEventRepositoryAccess(OWNER_ID),
-          { databaseUsageWarning: false, r2UsageWarning: false },
+          {
+            readUsageWarnings: async () => ({
+              databaseUsageWarning: false,
+              r2UsageWarning: false,
+            }),
+          },
         );
         correctionPromise = diagnosticRepository.correctCategory(
           EVENT_ID,

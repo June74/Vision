@@ -3,6 +3,7 @@ import type { Context, Hono } from "hono";
 import { z } from "zod";
 import { createWrappedKeyProvider } from "../../crypto/key-provider";
 import { createDb } from "../../data/db";
+import { createUsageWarningSource } from "../../data/usage-warning-source";
 import {
   createDiagnosticRepository,
   type DiagnosticEvent,
@@ -22,6 +23,7 @@ import {
 import { createAiEventRepositoryAccess } from "../authorization/event-content-authorization";
 import {
   parseVisionKeyEncryptionKey,
+  parseUsageWarningThresholds,
   type Env,
 } from "../env";
 import { throwVisionError, VisionError } from "../errors";
@@ -188,6 +190,14 @@ export async function createProductionDiagnosticDependencies(
     new DrizzleWrappedDataKeyStore(database),
     1,
   );
+  if (!environment.BACKUP_BUCKET) {
+    throw new Error("Diagnostic storage measurement is unavailable.");
+  }
+  const usageWarningSource = createUsageWarningSource(
+    database,
+    environment.BACKUP_BUCKET,
+    parseUsageWarningThresholds(environment),
+  );
   return {
     /** Reads wall-clock time independently for authentication and health freshness. */
     now: () => new Date(),
@@ -201,11 +211,7 @@ export async function createProductionDiagnosticDependencies(
         database,
         keyProvider,
         createAiEventRepositoryAccess(ownerId),
-        {
-          // Provider usage telemetry is wired during the release monitoring task.
-          databaseUsageWarning: false,
-          r2UsageWarning: false,
-        },
+        usageWarningSource,
       );
     },
   };

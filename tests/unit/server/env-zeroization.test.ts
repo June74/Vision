@@ -21,6 +21,25 @@ afterEach(() => {
 });
 
 describe("KEY_ENCRYPTION_KEY validation buffer hygiene", () => {
+  it("keeps storage warning threshold validation independent of secret decoding", () => {
+    const decoded = Uint8Array.from({ length: 32 }, () => 0x7a);
+    const fillSpy = vi.spyOn(decoded, "fill");
+    decoderControl.decoded = decoded;
+
+    const result = RuntimeEnvSchema.safeParse({
+      VISION_ENV: "production",
+      DATABASE_URL: "postgresql://vision_app:synthetic@db.example.test/vision",
+      KEY_ENCRYPTION_KEY: canonicalRootKey,
+      DATABASE_USAGE_WARNING_BYTES: "400000000",
+      R2_USAGE_WARNING_BYTES: "8000000000",
+      R2_USAGE_WARNING_OBJECTS: "100",
+    });
+
+    expect(result.success).toBe(true);
+    expect(fillSpy).toHaveBeenCalledOnce();
+    expect(decoded).toEqual(new Uint8Array(32));
+  });
+
   it("clears the controlled decoded buffer after successful validation", () => {
     const decoded = Uint8Array.from({ length: 32 }, () => 0x7a);
     const fillSpy = vi.spyOn(decoded, "fill");

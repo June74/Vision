@@ -55,8 +55,11 @@ describe("client secret-bundle boundary", () => {
     expect(CLIENT_FORBIDDEN_BINDING_NAMES).toContain("OPENAI_API_KEY");
     expect(RUNTIME_CLIENT_FORBIDDEN_BINDING_NAMES).toEqual(
       expect.arrayContaining([
+        "DATABASE_USAGE_WARNING_BYTES",
         "PREVIEW_RESTORE_DATABASE_URL",
         "PREVIEW_RESTORE_TARGET_ID",
+        "R2_USAGE_WARNING_BYTES",
+        "R2_USAGE_WARNING_OBJECTS",
       ]),
     );
   });

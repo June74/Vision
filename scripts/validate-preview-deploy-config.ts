@@ -73,6 +73,9 @@ export function validatePreviewDeployConfig(candidate: unknown): void {
     vars.VISION_ENV !== "preview" ||
     vars.AI_MONTHLY_HARD_LIMIT_CENTS !== "950" ||
     vars.BACKUP_KEY_VERSION !== "1" ||
+    vars.DATABASE_USAGE_WARNING_BYTES !== "400000000" ||
+    vars.R2_USAGE_WARNING_BYTES !== "8000000000" ||
+    vars.R2_USAGE_WARNING_OBJECTS !== "100" ||
     vars.GOOGLE_REDIRECT_URI !==
       "https://vision-preview.june74.workers.dev/api/auth/google/callback" ||
     Object.hasOwn(vars, "BACKUP_ENCRYPTION_KEY") ||

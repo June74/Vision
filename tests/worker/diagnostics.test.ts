@@ -47,7 +47,13 @@ function sessionDependencies(authenticated = true) {
   };
 }
 
-function createDiagnosticHarness(options: { authenticated?: boolean } = {}) {
+function createDiagnosticHarness(
+  options: {
+    authenticated?: boolean;
+    databaseUsageWarning?: boolean;
+    r2UsageWarning?: boolean;
+  } = {},
+) {
   const repository: DiagnosticRepositoryPort = {
     readFoundationFacts: vi.fn<DiagnosticRepositoryPort["readFoundationFacts"]>(
       async () =>
@@ -60,8 +66,8 @@ function createDiagnosticHarness(options: { authenticated?: boolean } = {}) {
           failedJobCount: 0,
           channelExpiresAt: new Date(NOW.getTime() + 48 * 60 * 60_000),
           databaseAvailable: true,
-          databaseUsageWarning: false,
-          r2UsageWarning: false,
+          databaseUsageWarning: options.databaseUsageWarning ?? false,
+          r2UsageWarning: options.r2UsageWarning ?? false,
           aiMonthlyCents: 950,
           safeErrorCode: null,
           refreshTokenEnvelope: "must-not-leak",
@@ -147,6 +153,32 @@ describe("Vision Worker diagnostic routes", () => {
     expect(repositoryForOwner).not.toHaveBeenCalled();
   });
 
+  it("maps production diagnostic initialization failure to the constant safe boundary", async () => {
+    const logger = vi.fn();
+    const app = createApp({
+      createRequestId: () => "req_diagnostic_init",
+      logger,
+    });
+
+    const response = await app.fetch(
+      request("/api/diagnostics/status"),
+      {} as Env,
+    );
+    const serialized = JSON.stringify(await response.json());
+
+    expect(response.status).toBe(503);
+    expect(JSON.parse(serialized)).toEqual({
+      error: {
+        code: "DIAGNOSTICS_UNAVAILABLE",
+        message: "Foundation diagnostics are temporarily unavailable.",
+        requestId: "req_diagnostic_init",
+      },
+    });
+    expect(serialized).not.toMatch(
+      /DATABASE_URL|BACKUP_BUCKET|R2_USAGE|credential|provider/iu,
+    );
+  });
+
   it("returns timestamped safe health facts without repository extras", async () => {
     const { app } = createDiagnosticHarness();
 
@@ -176,6 +208,42 @@ describe("Vision Worker diagnostic routes", () => {
         warningCodes: ["AI_BUDGET_STOPPED"],
       },
     });
+  });
+
+  it("preserves the exact public shape when measured storage warnings are actionable", async () => {
+    const { app } = createDiagnosticHarness({
+      databaseUsageWarning: true,
+      r2UsageWarning: true,
+    });
+
+    const response = await app.fetch(
+      request("/api/diagnostics/status"),
+      {} as Env,
+    );
+    const payload = await response.json() as {
+      status: Record<string, unknown>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(payload.status.databaseUsageWarning).toBe(true);
+    expect(payload.status.r2UsageWarning).toBe(true);
+    expect(Object.keys(payload.status).sort()).toEqual([
+      "aiMonthlyCents",
+      "aiSpendTier",
+      "authorizationState",
+      "channelExpiresAt",
+      "databaseUsageWarning",
+      "failedJobCount",
+      "lastSuccessfulSyncAt",
+      "oldestJobDelayMs",
+      "oldestQueuedJobAt",
+      "queueRetryCount",
+      "r2UsageWarning",
+      "safeErrorCode",
+      "state",
+      "syncDelayMs",
+      "warningCodes",
+    ]);
   });
 
   it("uses one freshness timestamp for repository facts and health classification", async () => {

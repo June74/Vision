@@ -26,6 +26,27 @@ $9.50, leaving more than $10 of the personal budget for unexpected
 managed-service usage. Phase B is not cost-accepted until one harmless live
 category request and fixed-shape aggregate usage evidence pass.
 
+## Authenticated storage warnings
+
+The owner-only diagnostics status now measures storage instead of injecting
+static warning flags:
+
+- PostgreSQL uses the read-only
+  `pg_database_size(current_database())` aggregate and warns at or above
+  400,000,000 bytes.
+- R2 lists only the fixed `backups/v1/` namespace in bounded pages, sums only
+  admitted integer object sizes, and warns at or above 8,000,000,000 bytes or
+  100 admitted objects.
+- Database and R2 measurements fail independently. A failed or malformed
+  measurement makes that service's warning actionable while preserving the
+  other service's successful result.
+- Object keys, cursors, metadata, raw provider errors, URLs, credentials, and
+  calendar content never enter the diagnostics response or logs.
+
+The three approved thresholds are required positive safe-integer server
+bindings in preview and production. Deployment validation pins their exact
+values, and the client bundle scanner rejects their binding names.
+
 ## Deterministic AI protections
 
 - Warning mode begins at 800 cents.

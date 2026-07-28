@@ -26,6 +26,7 @@ import {
 import { createSyncRepository } from "../../../src/data/repositories/sync-repository";
 import { ProviderOrderKeySchema } from "../../../src/domain/events/event";
 import type { ProviderEventChange } from "../../../src/domain/sync/change";
+import type { UsageWarnings } from "../../../src/domain/operations/usage-warnings";
 import { createTestEventRepositoryAccess } from "../../../src/server/authorization/test-event-content-authorization";
 
 const NOW = new Date("2026-07-25T17:00:00.000Z");
@@ -58,6 +59,17 @@ const migrationNames = [
 
 let postgres: PGlite;
 let database: VisionDatabase;
+
+function usageWarningSource(
+  warnings: UsageWarnings = {
+    databaseUsageWarning: false,
+    r2UsageWarning: false,
+  },
+) {
+  return {
+    readUsageWarnings: async () => Object.freeze({ ...warnings }),
+  };
+}
 
 beforeEach(async () => {
   postgres = new PGlite();
@@ -249,13 +261,13 @@ describe("diagnostic repository", () => {
       database,
       keyProvider,
       createTestEventRepositoryAccess(OWNER_ID),
-      { databaseUsageWarning: false, r2UsageWarning: false },
+      usageWarningSource(),
     );
     const wrongOwner = createDiagnosticRepository(
       database,
       keyProvider,
       createTestEventRepositoryAccess(OTHER_OWNER_ID),
-      { databaseUsageWarning: false, r2UsageWarning: false },
+      usageWarningSource(),
     );
 
     await expect(repository.listEvents()).resolves.toEqual([
@@ -280,7 +292,7 @@ describe("diagnostic repository", () => {
       database,
       keyProvider,
       createTestEventRepositoryAccess(OWNER_ID),
-      { databaseUsageWarning: false, r2UsageWarning: false },
+      usageWarningSource(),
     );
     const before = await postgres.query<{
       provider: string;
@@ -456,7 +468,7 @@ describe("diagnostic repository", () => {
       database,
       keyProvider,
       createTestEventRepositoryAccess(OWNER_ID),
-      { databaseUsageWarning: false, r2UsageWarning: false },
+      usageWarningSource(),
     );
 
     await expect(
@@ -541,7 +553,7 @@ describe("diagnostic repository", () => {
       database,
       failingProvider,
       createTestEventRepositoryAccess(OWNER_ID),
-      { databaseUsageWarning: false, r2UsageWarning: false },
+      usageWarningSource(),
     );
     const before = await postgres.query(
       `select
@@ -613,7 +625,7 @@ describe("diagnostic repository", () => {
       database,
       keyProvider,
       createTestEventRepositoryAccess(OWNER_ID),
-      { databaseUsageWarning: false, r2UsageWarning: false },
+      usageWarningSource(),
     );
     await expect(
       diagnosticRepository.correctCategory(EVENT_ID, "school", NOW),
@@ -660,7 +672,7 @@ describe("diagnostic repository", () => {
       database,
       correctionBarrier.provider,
       createTestEventRepositoryAccess(OWNER_ID),
-      { databaseUsageWarning: false, r2UsageWarning: false },
+      usageWarningSource(),
     );
     const correctionPromise = diagnosticRepository.correctCategory(
       EVENT_ID,
@@ -751,13 +763,13 @@ describe("diagnostic repository", () => {
       database,
       schoolBarrier.provider,
       createTestEventRepositoryAccess(OWNER_ID),
-      { databaseUsageWarning: false, r2UsageWarning: false },
+      usageWarningSource(),
     );
     const personalRepository = createDiagnosticRepository(
       database,
       personalBarrier.provider,
       createTestEventRepositoryAccess(OWNER_ID),
-      { databaseUsageWarning: false, r2UsageWarning: false },
+      usageWarningSource(),
     );
     const schoolPromise = schoolRepository.correctCategory(
       EVENT_ID,
@@ -836,7 +848,7 @@ describe("diagnostic repository", () => {
       database,
       keyProvider,
       createTestEventRepositoryAccess(OTHER_OWNER_ID),
-      { databaseUsageWarning: false, r2UsageWarning: false },
+      usageWarningSource(),
     );
 
     await expect(
@@ -876,7 +888,7 @@ describe("diagnostic repository", () => {
         OWNER_ID,
         (request) => request.privacy !== "restricted",
       ),
-      { databaseUsageWarning: false, r2UsageWarning: false },
+      usageWarningSource(),
     );
 
     await expect(repository.listEvents()).resolves.toEqual([]);
@@ -892,7 +904,7 @@ describe("diagnostic repository", () => {
           authenticatedOwnerId: OWNER_ID,
           authorize: () => undefined,
         } as never,
-        { databaseUsageWarning: false, r2UsageWarning: false },
+        usageWarningSource(),
       ),
     ).toThrow("Invalid diagnostic repository scope.");
   });
@@ -1013,7 +1025,10 @@ describe("diagnostic repository", () => {
       database,
       keyProvider,
       createTestEventRepositoryAccess(OWNER_ID),
-      { databaseUsageWarning: true, r2UsageWarning: false },
+      usageWarningSource({
+        databaseUsageWarning: true,
+        r2UsageWarning: false,
+      }),
     );
 
     await expect(repository.readFoundationFacts(NOW)).resolves.toEqual({

@@ -19,6 +19,7 @@ import type {
   DiagnosticSafeErrorCode,
   FoundationHealthFacts,
 } from "../../domain/operations/health";
+import type { UsageWarningSource } from "../../domain/operations/usage-warnings";
 import {
   isVerifiedEventRepositoryAccess,
   matchesEventContentAuthorizationDecision,
@@ -58,12 +59,6 @@ export interface DiagnosticRepositoryPort {
     domain: "school" | "work" | "personal",
     assignedAt: Date,
   ): Promise<DiagnosticCategoryCorrection | undefined>;
-}
-
-/** Usage warnings supplied by release monitoring without exposing provider metrics. */
-export interface DiagnosticUsageWarnings {
-  readonly databaseUsageWarning: boolean;
-  readonly r2UsageWarning: boolean;
 }
 
 type DatabaseRow = Record<string, unknown>;
@@ -163,7 +158,7 @@ class DiagnosticRepository implements DiagnosticRepositoryPort {
     private readonly database: VisionDatabase,
     private readonly keyProvider: KeyProvider,
     private readonly access: VerifiedEventRepositoryAccess,
-    private readonly usageWarnings: DiagnosticUsageWarnings,
+    private readonly usageWarningSource: UsageWarningSource,
   ) {
     this.ownerId = access.authenticatedOwnerId;
   }
@@ -261,6 +256,7 @@ class DiagnosticRepository implements DiagnosticRepositoryPort {
     `);
     const row = result.rows[0];
     if (!row) throw new Error("Diagnostic facts were unavailable.");
+    const usageWarnings = await this.usageWarningSource.readUsageWarnings();
     return {
       authorizationState: decodeEnum(
         row.authorizationState,
@@ -276,8 +272,8 @@ class DiagnosticRepository implements DiagnosticRepositoryPort {
       failedJobCount: decodeNonnegativeInteger(row.failedJobCount),
       channelExpiresAt: decodeNullableDate(row.channelExpiresAt),
       databaseAvailable: true,
-      databaseUsageWarning: this.usageWarnings.databaseUsageWarning,
-      r2UsageWarning: this.usageWarnings.r2UsageWarning,
+      databaseUsageWarning: usageWarnings.databaseUsageWarning,
+      r2UsageWarning: usageWarnings.r2UsageWarning,
       aiMonthlyCents: decodeNonnegativeInteger(row.aiMonthlyCents),
       safeErrorCode:
         row.safeErrorCode === null || row.safeErrorCode === undefined
@@ -1083,12 +1079,12 @@ export function createDiagnosticRepository(
   database: VisionDatabase,
   keyProvider: KeyProvider,
   access: VerifiedEventRepositoryAccess,
-  usageWarnings: DiagnosticUsageWarnings,
+  usageWarningSource: UsageWarningSource,
 ): DiagnosticRepositoryPort {
   if (
     !isVerifiedEventRepositoryAccess(access) ||
-    typeof usageWarnings.databaseUsageWarning !== "boolean" ||
-    typeof usageWarnings.r2UsageWarning !== "boolean"
+    !usageWarningSource ||
+    typeof usageWarningSource.readUsageWarnings !== "function"
   ) {
     throw new Error("Invalid diagnostic repository scope.");
   }
@@ -1096,7 +1092,7 @@ export function createDiagnosticRepository(
     database,
     keyProvider,
     access,
-    Object.freeze({ ...usageWarnings }),
+    usageWarningSource,
   );
 }
 

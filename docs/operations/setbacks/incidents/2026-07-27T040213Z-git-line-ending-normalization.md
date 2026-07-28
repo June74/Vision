@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T04:02:13Z
-- **Last observed:** 2026-07-28T19:17:56.2271846Z
-- **Phase/task:** Phase B acceptance instrumentation Task 1 staging
+- **Last observed:** 2026-07-28T19:59:44.7378306Z
+- **Phase/task:** Phase B acceptance instrumentation Task 2 self-review
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `4420f6d`
 
@@ -109,3 +109,7 @@ this incident was recorded.
   through the approved linked-worktree metadata boundary. All explicit paths
   were staged; the warnings remained expected Windows normalization metadata
   and no formatting rewrite or external action occurred.
+- 2026-07-28T19:59:44.7378306Z: Recurred during the Task 2 read-only diff and
+  whitespace review. `git diff --check` exited zero; warnings remained limited
+  to expected Windows normalization metadata, and no formatting rewrite or
+  external action occurred.

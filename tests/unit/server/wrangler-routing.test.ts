@@ -94,6 +94,11 @@ describe("Cloudflare asset routing", () => {
     for (const environment of ["preview", "production"] as const) {
       expect(config.env?.[environment].queues).toEqual(config.queues);
       expect(config.env?.[environment].vars?.BACKUP_KEY_VERSION).toBe("1");
+      expect(config.env?.[environment].vars).toMatchObject({
+        DATABASE_USAGE_WARNING_BYTES: "400000000",
+        R2_USAGE_WARNING_BYTES: "8000000000",
+        R2_USAGE_WARNING_OBJECTS: "100",
+      });
       expect(config.env?.[environment].vars).not.toHaveProperty(
         "BACKUP_ENCRYPTION_KEY",
       );
@@ -147,6 +152,9 @@ describe("Cloudflare asset routing", () => {
           VISION_ENV: "preview",
           AI_MONTHLY_HARD_LIMIT_CENTS: "950",
           BACKUP_KEY_VERSION: "1",
+          DATABASE_USAGE_WARNING_BYTES: "400000000",
+          R2_USAGE_WARNING_BYTES: "8000000000",
+          R2_USAGE_WARNING_OBJECTS: "100",
           GOOGLE_REDIRECT_URI:
             "https://vision-preview.june74.workers.dev/api/auth/google/callback",
         },
@@ -178,6 +186,55 @@ describe("Cloudflare asset routing", () => {
         ],
       }),
     ).not.toThrow();
+    for (const invalidThresholds of [
+      { DATABASE_USAGE_WARNING_BYTES: undefined },
+      { DATABASE_USAGE_WARNING_BYTES: "399999999" },
+      { R2_USAGE_WARNING_BYTES: "7999999999" },
+      { R2_USAGE_WARNING_OBJECTS: "99" },
+    ]) {
+      expect(() =>
+        validate({
+          targetEnvironment: "preview",
+          vars: {
+            VISION_ENV: "preview",
+            AI_MONTHLY_HARD_LIMIT_CENTS: "950",
+            BACKUP_KEY_VERSION: "1",
+            DATABASE_USAGE_WARNING_BYTES: "400000000",
+            R2_USAGE_WARNING_BYTES: "8000000000",
+            R2_USAGE_WARNING_OBJECTS: "100",
+            GOOGLE_REDIRECT_URI:
+              "https://vision-preview.june74.workers.dev/api/auth/google/callback",
+            ...invalidThresholds,
+          },
+          queues: {
+            producers: [
+              {
+                binding: "CALENDAR_SYNC_QUEUE",
+                queue: "vision-calendar-sync",
+              },
+            ],
+            consumers: [
+              {
+                queue: "vision-calendar-sync",
+                max_batch_size: 10,
+                max_batch_timeout: 5,
+                max_retries: 5,
+                max_concurrency: 1,
+              },
+            ],
+          },
+          triggers: {
+            crons: ["*/15 * * * *", "5 6 * * *", "* * * * *"],
+          },
+          r2_buckets: [
+            {
+              binding: "BACKUP_BUCKET",
+              bucket_name: "vision-preview-backups",
+            },
+          ],
+        }),
+      ).toThrow(/preview deployment configuration/i);
+    }
     for (const crons of [
       ["*/15 * * * *", "5 6 * * *"],
       ["*/15 * * * *", "5 6 * * *", "0 * * * *"],

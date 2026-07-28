@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-07-28T19:15:35.3439513Z
-- **Phase/task:** Phase B acceptance instrumentation Task 1 final gate
+- **Last observed:** 2026-07-28T20:03:59.2816903Z
+- **Phase/task:** Phase B acceptance instrumentation Task 2 full gate
 - **Environment:** Local managed sandbox
 - **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`
 
@@ -114,3 +114,14 @@ security validation passed.
   tests and the build passed. The complete gate again exited zero with 755
   unit/integration tests, one intentional skip, 179 contract tests,
   documentation, typecheck, build, and security validation passing.
+- 2026-07-28T19:53:23.7015526Z: Recurred during the Task 2 focused Worker
+  gate because the task-local diagnostic setting was omitted. All 11
+  diagnostics assertions passed. The user-profile log write and static export
+  analysis were sandbox-limited; the follow-up restores local XDG and Wrangler
+  directories before accepting the result.
+- 2026-07-28T20:03:59.2816903Z: The Task 2 complete gate used task-local
+  Wrangler logging, so no log-write error recurred. Static export analysis
+  remained sandbox-limited. The gate exited zero with 791 unit/integration
+  tests passed and one intentional skip, 179 contract tests passed, 77 Worker
+  tests passed, and typecheck, documentation, build, and security validation
+  passing.

@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:08:27Z
-- **Last observed:** 2026-07-28T18:47:00.4534017Z
-- **Phase/task:** Phase B acceptance instrumentation Task 1 RED
+- **Last observed:** 2026-07-28T19:45:53.3444547Z
+- **Phase/task:** Phase B acceptance instrumentation Task 2 RED
 - **Environment:** Local Windows worktree
 - **Version/commit:** `22c5dc0`
 
@@ -44,3 +44,8 @@ declared unit-test script.
   the local command shim exists. No test ran and no project or provider state
   changed. The correction uses the repository's declared `test:unit` script
   with the same focused file arguments.
+- 2026-07-28T19:45:53.3444547Z: Recurred when the Task 2 brief's exact
+  `pnpm.cmd exec vitest` command could not resolve the executable. No test ran
+  and no project or provider state changed. The correction again uses the
+  repository's declared `test:unit` script with the same focused unit-project
+  file arguments.

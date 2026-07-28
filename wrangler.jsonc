@@ -30,7 +30,10 @@
   "vars": {
     "VISION_ENV": "local",
     "AI_MONTHLY_HARD_LIMIT_CENTS": "950",
-    "BACKUP_KEY_VERSION": "1"
+    "BACKUP_KEY_VERSION": "1",
+    "DATABASE_USAGE_WARNING_BYTES": "400000000",
+    "R2_USAGE_WARNING_BYTES": "8000000000",
+    "R2_USAGE_WARNING_OBJECTS": "100"
   },
   "env": {
     "preview": {
@@ -64,6 +67,9 @@
         "VISION_ENV": "preview",
         "AI_MONTHLY_HARD_LIMIT_CENTS": "950",
         "BACKUP_KEY_VERSION": "1",
+        "DATABASE_USAGE_WARNING_BYTES": "400000000",
+        "R2_USAGE_WARNING_BYTES": "8000000000",
+        "R2_USAGE_WARNING_OBJECTS": "100",
         "GOOGLE_REDIRECT_URI": "https://vision-preview.june74.workers.dev/api/auth/google/callback"
       }
     },
@@ -97,7 +103,10 @@
       "vars": {
         "VISION_ENV": "production",
         "AI_MONTHLY_HARD_LIMIT_CENTS": "950",
-        "BACKUP_KEY_VERSION": "1"
+        "BACKUP_KEY_VERSION": "1",
+        "DATABASE_USAGE_WARNING_BYTES": "400000000",
+        "R2_USAGE_WARNING_BYTES": "8000000000",
+        "R2_USAGE_WARNING_OBJECTS": "100"
       }
     }
   }
