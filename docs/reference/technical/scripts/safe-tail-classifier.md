@@ -1,5 +1,10 @@
 # `scripts/safe-tail-classifier.ts`
 
+## `classifyPhaseBAiUsageEvidence`
+Reconstructs the exact AI record rather than tail data.
+## `locatePhaseBAiUsageEvidence`
+Requires one unmixed terminal record.
+
 Provides the closed, privacy-safe projection used for normal calendar
 maintenance, live scheduled recovery, temporary restore, and temporary
 role-probe or Phase B foundation acceptance. It incrementally parses

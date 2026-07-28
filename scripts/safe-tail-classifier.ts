@@ -16,6 +16,11 @@ import {
   type PhaseBFoundationProbeEvidence,
   type PhaseBFoundationProbeMeasurements,
 } from "../src/jobs/phase-b-foundation-probe";
+import {
+  createPhaseBAiUsageEvidence,
+  PHASE_B_AI_USAGE_ACTION,
+  type PhaseBAiUsageEvidence,
+} from "../src/jobs/phase-b-ai-usage-evidence";
 
 /** Closed, privacy-safe recovery evidence emitted from one Wrangler JSON tail line. */
 export interface SafeTailEvidence {
@@ -46,7 +51,8 @@ export type SafeTailResult =
   | CalendarMaintenanceEvidence
   | TemporaryRestoreEvidence
   | TemporaryPreviewRoleProbeEvidence
-  | PhaseBFoundationProbeEvidence;
+  | PhaseBFoundationProbeEvidence
+  | PhaseBAiUsageEvidence;
 
 const FAILURE_MARKERS = Object.freeze([
   ["Backup creation failed.", "backup_creation_failed"],
@@ -149,6 +155,7 @@ const PHASE_B_FOUNDATION_INTEGER_KEYS = Object.freeze([
 ] as const satisfies readonly (keyof PhaseBFoundationProbeMeasurements)[]);
 const MAX_TAIL_EVENT_BYTES = 1_048_576;
 const CALENDAR_MAINTENANCE_CRON = "*/15 * * * *";
+const AI_USAGE_KEYS = Object.freeze(["category","evidenceType","gatewayLimitMatches","hardStopCents","monthlyCents","nonAiAvailable","optionalStopCents","outcome","spendTier","warningCents"] as const);
 
 /** Incrementally assembles Wrangler's pretty-printed JSON without emitting it. */
 export function createSafeTailAccumulator(): {
@@ -209,6 +216,10 @@ export function classifySafeTailLine(line: string): SafeTailResult | null {
   }
   if (foundation.seen) return null;
 
+  const aiUsage = locatePhaseBAiUsageEvidence(tail.logs);
+  if (aiUsage.evidence) return cron === "temporary_recovery" ? aiUsage.evidence : null;
+  if (aiUsage.seen) return null;
+
   const roleProbe = locateTemporaryPreviewRoleProbeEvidence(tail.logs);
   if (roleProbe.evidence) {
     return cron === "temporary_recovery" ? roleProbe.evidence : null;
@@ -230,6 +241,14 @@ export function classifySafeTailLine(line: string): SafeTailResult | null {
     cron,
     outcome,
   });
+}
+
+/** Reconstructs one exact AI-usage terminal record without copying tail-controlled data. */
+export function classifyPhaseBAiUsageEvidence(candidate: unknown): PhaseBAiUsageEvidence | null {
+  const evidence = snapshotOwnEnumerableData(candidate);
+  if (!evidence || !hasExactKeys(evidence, AI_USAGE_KEYS) || evidence.evidenceType !== "vision.ai-usage/v1" || typeof evidence.monthlyCents !== "number" || typeof evidence.gatewayLimitMatches !== "boolean" || typeof evidence.nonAiAvailable !== "boolean") return null;
+  const reconstructed = createPhaseBAiUsageEvidence({ monthlyCents: evidence.monthlyCents, gatewayLimitMatches: evidence.gatewayLimitMatches, nonAiAvailable: evidence.nonAiAvailable });
+  return evidence.category === reconstructed.category && evidence.outcome === reconstructed.outcome && evidence.warningCents === reconstructed.warningCents && evidence.optionalStopCents === reconstructed.optionalStopCents && evidence.hardStopCents === reconstructed.hardStopCents && evidence.spendTier === reconstructed.spendTier && evidence.monthlyCents === reconstructed.monthlyCents ? reconstructed : null;
 }
 
 /** Reconstructs one exact closed foundation result and rejects value drift. */
@@ -604,6 +623,24 @@ function locatePhaseBFoundationProbeEvidence(candidate: unknown): {
     seen,
     evidence: seen && !invalid ? valid : null,
   };
+}
+
+/** Requires one exact AI terminal and rejects duplicate or mixed terminal records. */
+function locatePhaseBAiUsageEvidence(candidate: unknown): { readonly seen: boolean; readonly evidence: PhaseBAiUsageEvidence | null } {
+  if (!Array.isArray(candidate)) return { seen: false, evidence: null };
+  let seen = false; let invalid = false; let valid: PhaseBAiUsageEvidence | null = null;
+  for (const logCandidate of candidate) {
+    const log = snapshotOwnEnumerableData(logCandidate); if (!log || !Array.isArray(log.message)) continue;
+    for (const messageCandidate of log.message) {
+      const message = snapshotOwnEnumerableData(messageCandidate); if (!message) continue;
+      const evidenceLike = snapshotOwnEnumerableData(message.evidence);
+      if (message.action === PHASE_B_AI_USAGE_ACTION || evidenceLike?.evidenceType === "vision.ai-usage/v1") {
+        if (seen || message.action !== PHASE_B_AI_USAGE_ACTION || !hasExactKeys(message,["action","evidence"])) invalid = true;
+        seen = true; const evidence = classifyPhaseBAiUsageEvidence(message.evidence); if (!evidence || valid) invalid = true; else valid = evidence;
+      } else if (message.action === "calendar.maintenance" || message.action === "backup.restore" || message.action === "backup.restore-role-probe" || message.action === PHASE_B_FOUNDATION_PROBE_ACTION) invalid = true;
+    }
+  }
+  return { seen, evidence: seen && !invalid ? valid : null };
 }
 
 /** Requires exactly one valid maintenance terminal record and no mixed terminal record. */

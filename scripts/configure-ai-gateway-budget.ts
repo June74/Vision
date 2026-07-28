@@ -229,6 +229,37 @@ export async function configureAiGatewayBudget(
   return createBudgetEvidence();
 }
 
+/** Reads and verifies the exact Gateway barrier without issuing any mutation request. */
+export async function verifyAiGatewayBudget(
+  credentials: GatewayCredentials,
+  fetchImplementation: typeof fetch = fetch,
+): Promise<AiGatewayBudgetEvidence> {
+  if (
+    !/^[a-f0-9]{32}$/iu.test(credentials.accountId) ||
+    !/^[\x21-\x7e]{20,512}$/u.test(credentials.apiToken)
+  ) {
+    throw new Error("AI Gateway budget configuration is invalid.");
+  }
+  const listEndpoint = `https://api.cloudflare.com/client/v4/accounts/${credentials.accountId}/ai-gateway/gateways`;
+  const headers = Object.freeze({ authorization: `Bearer ${credentials.apiToken}`, "content-type": "application/json" });
+  const currentResponse = await fetchImplementation(listEndpoint, { headers });
+  if (currentResponse.status === 401 || currentResponse.status === 403) { await currentResponse.body?.cancel(); throw new Error("AI Gateway lookup authorization failed."); }
+  if (currentResponse.status === 404) { await currentResponse.body?.cancel(); throw new Error("AI Gateway was not found."); }
+  const current: unknown = await currentResponse.json();
+  if (!currentResponse.ok || !isRecord(current) || current.success !== true || !Array.isArray(current.result)) throw new Error("AI Gateway lookup failed.");
+  if (current.result.length === 0) throw new Error("AI Gateway list was empty.");
+  const matches = current.result.filter((gateway): gateway is Record<string, unknown> => isRecord(gateway) && typeof gateway.id === "string" && gateway.id.length >= 1 && gateway.id.length <= 64 && (gateway.id === AI_GATEWAY_APPROVED_ID_OR_NAME || gateway.name === AI_GATEWAY_APPROVED_ID_OR_NAME));
+  if (matches.length === 0) throw new Error("AI Gateway identity did not match.");
+  if (matches.length !== 1) throw new Error("AI Gateway lookup failed.");
+  const response = await fetchImplementation(`${listEndpoint}/${encodeURIComponent(matches[0]!.id as string)}`, { headers });
+  if (response.status === 401 || response.status === 403) { await response.body?.cancel(); throw new Error("AI Gateway lookup authorization failed."); }
+  if (response.status === 404) { await response.body?.cancel(); throw new Error("AI Gateway was not found."); }
+  const detail: unknown = await response.json();
+  if (!response.ok || !isRecord(detail) || detail.success !== true || !isRecord(detail.result)) throw new Error("AI Gateway lookup failed.");
+  if (!hasExactSpendLimit(detail.result)) throw new Error("AI Gateway budget verification failed.");
+  return createBudgetEvidence();
+}
+
 /** Executes the preview operator action while emitting only allowlisted evidence. */
 async function main(): Promise<void> {
   try {

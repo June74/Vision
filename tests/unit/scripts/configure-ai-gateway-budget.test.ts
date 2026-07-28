@@ -4,9 +4,23 @@ import {
   AI_GATEWAY_WINDOW_SECONDS,
   classifyAiGatewayBudgetError,
   configureAiGatewayBudget,
+  verifyAiGatewayBudget,
 } from "../../../scripts/configure-ai-gateway-budget";
 
 describe("preview AI Gateway budget configuration", () => {
+  it("verifies the exact rule with list and detail reads only", async () => {
+    const fetchImplementation = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ success: true, result: [{ id: "vision-preview" }] }))
+      .mockResolvedValueOnce(Response.json({
+        success: true,
+        result: { spend_limits: { enabled: true, rules: [{ enabled: true, limit: 9.5, limitType: "cost", technique: "fixed", window: 2_592_000 }] } },
+      }));
+
+    await expect(verifyAiGatewayBudget({ accountId: "a".repeat(32), apiToken: "private-token-that-is-never-returned" }, fetchImplementation)).resolves.toMatchObject({ configured: true });
+    expect(fetchImplementation).toHaveBeenCalledTimes(2);
+    expect(fetchImplementation.mock.calls.map((call) => call[1]?.method ?? "GET")).toEqual(["GET", "GET"]);
+  });
   it("applies and verifies one global fixed 30-day $9.50 cost rule", async () => {
     const fetchImplementation = vi
       .fn<typeof fetch>()

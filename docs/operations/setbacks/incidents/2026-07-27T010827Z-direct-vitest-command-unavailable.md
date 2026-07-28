@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:08:27Z
-- **Last observed:** 2026-07-28T22:28:37.0398177Z
-- **Phase/task:** Phase B acceptance instrumentation Task 3 RED
+- **Last observed:** 2026-07-28T23:02:59.5413784Z
+- **Phase/task:** Phase B acceptance instrumentation Task 4 RED
 - **Environment:** Local Windows worktree
 - **Version/commit:** `22c5dc0`
 
@@ -59,3 +59,7 @@ declared unit-test script.
   validator. The validator did not run, no attestation values were printed,
   and no file or external state changed. The retry uses a repository-declared
   script boundary.
+- 2026-07-28T23:02:59.5413784Z: Recurred for the Task 4 brief's exact
+  `pnpm.cmd exec vitest` command. No test ran and no project or provider state
+  changed. The corrected command uses `pnpm.cmd test:unit` with the same
+  focused file arguments.

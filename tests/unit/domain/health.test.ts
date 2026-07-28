@@ -4,6 +4,7 @@ import {
   FOUNDATION_HEALTH_THRESHOLDS,
   type FoundationHealthFacts,
 } from "../../../src/domain/operations/health";
+import { classifyAiSpendTier } from "../../../src/domain/budget/ai-budget";
 
 const NOW = new Date("2026-07-25T17:00:00.000Z");
 
@@ -30,6 +31,12 @@ function facts(
 }
 
 describe("calculateFoundationHealth", () => {
+  it("uses the shared AI spend tier classifier", () => {
+    expect(classifyAiSpendTier(950)).toBe("stopped");
+    expect(calculateFoundationHealth(facts({ aiMonthlyCents: 950 }), NOW).aiSpendTier).toBe(
+      classifyAiSpendTier(950),
+    );
+  });
   it("reports healthy with explicit freshness ages and no warning codes", () => {
     expect(calculateFoundationHealth(facts(), NOW)).toEqual({
       state: "Healthy",

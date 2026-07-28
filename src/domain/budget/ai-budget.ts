@@ -22,6 +22,19 @@ export const AI_WARNING_CENTS = 800;
 export const AI_OPTIONAL_STOP_CENTS = 900;
 /** Stops every new AI request. */
 export const AI_HARD_STOP_CENTS = 950;
+
+/** Maps an admitted aggregate monthly total to the exact safe display tier. */
+export function classifyAiSpendTier(
+  monthlyCents: number,
+): "normal" | "warning" | "optional_stopped" | "stopped" {
+  if (!Number.isSafeInteger(monthlyCents) || monthlyCents < 0) {
+    throw new Error("Invalid AI spend tier.");
+  }
+  if (monthlyCents >= AI_HARD_STOP_CENTS) return "stopped";
+  if (monthlyCents >= AI_OPTIONAL_STOP_CENTS) return "optional_stopped";
+  if (monthlyCents >= AI_WARNING_CENTS) return "warning";
+  return "normal";
+}
 const CHICAGO_MONTH_FORMATTER = new Intl.DateTimeFormat("en-US", {
   timeZone: "America/Chicago",
   year: "numeric",

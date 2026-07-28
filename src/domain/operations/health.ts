@@ -1,8 +1,6 @@
 /** Calculates privacy-safe foundation health from timestamped operational facts. */
 import {
-  AI_HARD_STOP_CENTS,
-  AI_OPTIONAL_STOP_CENTS,
-  AI_WARNING_CENTS,
+  classifyAiSpendTier,
 } from "../budget/ai-budget";
 
 /** Four user-visible operational states ordered by recovery urgency. */
@@ -191,7 +189,7 @@ export function calculateFoundationHealth(
     delayed = true;
   }
 
-  const aiSpendTier = classifyAiSpend(facts.aiMonthlyCents);
+  const aiSpendTier = classifyAiSpendTier(facts.aiMonthlyCents);
   if (aiSpendTier === "warning") warnings.push("AI_BUDGET_WARNING");
   if (aiSpendTier === "optional_stopped") {
     warnings.push("AI_OPTIONAL_STOPPED");
@@ -213,13 +211,6 @@ export function calculateFoundationHealth(
   });
 }
 
-/** Maps exact monthly cent boundaries to a display-only availability tier. */
-function classifyAiSpend(monthlyCents: number): AiSpendTier {
-  if (monthlyCents >= AI_HARD_STOP_CENTS) return "stopped";
-  if (monthlyCents >= AI_OPTIONAL_STOP_CENTS) return "optional_stopped";
-  if (monthlyCents >= AI_WARNING_CENTS) return "warning";
-  return "normal";
-}
 
 /** Rejects malformed or future operational facts instead of emitting false health. */
 function validateFoundationHealthFacts(

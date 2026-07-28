@@ -1,5 +1,8 @@
 # configure-ai-gateway-budget
 
+## `verifyAiGatewayBudget`
+Reads and verifies the approved rule without changing it.
+
 Applies Vision's approved preview AI budget directly to the existing
 Cloudflare AI Gateway. The rule is global, fixed, $9.50, and 30 days. The
 command prints only whether that exact rule was returned.

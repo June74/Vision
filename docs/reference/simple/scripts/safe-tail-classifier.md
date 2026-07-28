@@ -1,5 +1,10 @@
 # safe-tail-classifier
 
+## `classifyPhaseBAiUsageEvidence`
+Accepts one exact AI evidence record.
+## `locatePhaseBAiUsageEvidence`
+Rejects duplicate or mixed terminal records.
+
 Turns a Cloudflare scheduled-event log into a tiny recovery result, the exact
 five-field normal maintenance result, the exact closed temporary-restore
 evidence object, the exact four-field temporary role-probe evidence object, or

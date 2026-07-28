@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T20:54:20Z
-- **Last observed:** 2026-07-28T20:25:01.9701018Z
-- **Phase/task:** Phase B acceptance instrumentation Task 3 context resolution
+- **Last observed:** 2026-07-28T23:00:48.3221588Z
+- **Phase/task:** Phase B acceptance instrumentation Task 4 implementation
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `d27859e`
 
@@ -69,3 +69,7 @@ continues using discovered files only.
   when a read-only event-source search guessed an outdated `src/domain/calendar`
   directory. No file or external state changed. `git ls-files` then supplied
   the exact current event and Google Calendar paths.
+- 2026-07-28T23:00:48.3221588Z: Recurred when a compound read-only inspection
+  guessed two obsolete reference paths and then recursively searched dependency
+  directories while looking for a helper. No file or external state changed.
+  Subsequent inspection uses the tracked-file inventory and explicit paths only.

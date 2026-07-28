@@ -1,10 +1,28 @@
 import { describe, expect, it } from "vitest";
 import {
+  classifyAiSpendTier,
   evaluateAiBudget,
   getChicagoBudgetMonth,
 } from "../../../src/domain/budget/ai-budget";
 
 describe("AI budget policy", () => {
+  it.each([
+    [799, "normal"],
+    [800, "warning"],
+    [899, "warning"],
+    [900, "optional_stopped"],
+    [949, "optional_stopped"],
+    [950, "stopped"],
+  ] as const)("classifies the exact evidence tier at %i cents", (cents, tier) => {
+    expect(classifyAiSpendTier(cents)).toBe(tier);
+  });
+
+  it.each([-1, Number.NaN, 1.5, Number.MAX_SAFE_INTEGER + 1])(
+    "rejects invalid evidence tier cents %s",
+    (cents) => {
+      expect(() => classifyAiSpendTier(cents)).toThrow("Invalid AI spend tier.");
+    },
+  );
   it.each([
     [0, "routine", true, "normal", false, true],
     [799, "routine", true, "normal", false, true],

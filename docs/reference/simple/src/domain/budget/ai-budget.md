@@ -1,5 +1,8 @@
 # `src/domain/budget/ai-budget.ts`
 
+## `classifyAiSpendTier`
+Maps safe monthly cents to the shared status tier.
+
 This module applies Vision's exact personal AI limits.
 
 ## `evaluateAiBudget`

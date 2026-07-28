@@ -1,5 +1,8 @@
 # `scripts/configure-ai-gateway-budget.ts`
 
+## `verifyAiGatewayBudget`
+Uses only list and detail reads for the exact enabled global rule.
+
 Provides the one-shot preview operator boundary for the Cloudflare AI Gateway
 spend limit. It validates protected environment credentials, requires the
 existing `vision-preview` gateway, sends only `spend_limits`, and verifies the

@@ -6,6 +6,7 @@ const RESTORE_ONLY_ARGUMENT = "--restore-only";
 const ROLE_PROBE_ONLY_ARGUMENT = "--role-probe-only";
 const CALENDAR_MAINTENANCE_ONLY_ARGUMENT = "--calendar-maintenance-only";
 const FOUNDATION_PROBE_ONLY_ARGUMENT = "--foundation-probe-only";
+const AI_USAGE_ONLY_ARGUMENT = "--ai-usage-only";
 const noArguments = process.argv.length === 2;
 const restoreOnly =
   process.argv.length === 3 && process.argv[2] === RESTORE_ONLY_ARGUMENT;
@@ -18,12 +19,14 @@ const calendarMaintenanceOnly =
 const foundationProbeOnly =
   process.argv.length === 3 &&
   process.argv[2] === FOUNDATION_PROBE_ONLY_ARGUMENT;
+const aiUsageOnly = process.argv.length === 3 && process.argv[2] === AI_USAGE_ONLY_ARGUMENT;
 if (
   !noArguments &&
   !restoreOnly &&
   !roleProbeOnly &&
   !calendarMaintenanceOnly &&
-  !foundationProbeOnly
+  !foundationProbeOnly &&
+  !aiUsageOnly
 ) {
   process.exit(1);
 }
@@ -51,7 +54,8 @@ lines.on("line", (line) => {
     (foundationProbeOnly &&
       (!("evidenceType" in evidence) ||
         evidence.evidenceType !==
-          "vision.phase-b-foundation-probe/v1"))
+          "vision.phase-b-foundation-probe/v1")) ||
+    (aiUsageOnly && (!("evidenceType" in evidence) || evidence.evidenceType !== "vision.ai-usage/v1"))
   ) {
     return;
   }

@@ -1,5 +1,8 @@
 # `src/domain/budget/ai-budget.ts`
 
+## `classifyAiSpendTier`
+Provides the single validated health and evidence tier mapping.
+
 This pure module owns the private-pilot thresholds: warning and Luna-only at 800 cents, optional stop at 900, and hard stop at 950. Complex/Terra eligibility exists only below 800. Invalid amounts and request classes fail closed. Month keys use a fixed `Intl.DateTimeFormat` for America/Chicago rather than process-local timezone state.
 
 ## `evaluateAiBudget`

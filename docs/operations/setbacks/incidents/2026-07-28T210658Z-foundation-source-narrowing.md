@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T21:06:58.4530984Z
-- **Last observed:** 2026-07-28T21:06:58.4530984Z
-- **Phase/task:** Phase B acceptance instrumentation Task 3 typecheck
+- **Last observed:** 2026-07-28T23:08:08.6433836Z
+- **Phase/task:** Phase B acceptance instrumentation Task 4 typecheck
 - **Environment:** Local Windows worktree
 - **Version/commit:** `36f9df2` plus uncommitted Task 3 implementation
 
@@ -58,3 +58,16 @@ The corrected boundaries are covered by the next focused and typecheck runs.
 ## Recurrence history
 
 - 2026-07-28T21:06:58.4530984Z: First observed and corrected.
+- 2026-07-28T23:06:22.7949733Z: Recurred when the new aggregate reader passed
+  a parameter object to the typed Drizzle execute boundary, which accepts one
+  interpolated statement. No provider or private state changed. The query is
+  corrected to bind owner and month through the SQL template before rerunning
+  typecheck.
+- 2026-07-28T23:07:12.0417017Z: The next typecheck found a test mock inferred
+  with an empty call tuple and an import pointed at a non-exporting module. No
+  runtime or provider state changed. The test reads the mock call through an
+  explicit unknown tuple and imports the shared classifier from its source.
+- 2026-07-28T23:08:08.6433836Z: Focused GREEN exposed a test that stringified
+  Drizzle's internal query object instead of asserting the source's aggregate
+  result. No runtime or provider state changed. The test now verifies the
+  observed aggregate-only shape and one query invocation.
