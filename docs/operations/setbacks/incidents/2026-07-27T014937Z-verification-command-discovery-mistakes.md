@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:47:00Z
-- **Last observed:** 2026-07-28T15:13:03Z
-- **Phase/task:** Phase B acceptance instrumentation design self-review
+- **Last observed:** 2026-07-28T19:21:34Z
+- **Phase/task:** Phase B acceptance instrumentation Task 1 review-package verification
 - **Environment:** Local worktree
 - **Version/commit:** `50569e6`
 
@@ -80,3 +80,7 @@ At 2026-07-27T01:50Z, the repository's `docs:check` script and
   boundary between the wrong words and again reported false. A direct
   cross-line expression using the actual line break location returned exactly
   one match; no spec content or external state changed during either check.
+- 2026-07-28T19:21:34Z: The Task 1 review-package verifier required headings
+  to end immediately before a line feed and therefore reported zero sections
+  for a valid Windows CRLF file. Direct inspection confirmed the sections; a
+  carriage-return-tolerant expression verifies the package before review.
