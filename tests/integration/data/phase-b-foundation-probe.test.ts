@@ -185,6 +185,26 @@ describe("Phase B foundation probe source", () => {
     expect(list).not.toHaveBeenCalled();
   });
 
+  it("rejects a manifest for any schema other than the fixed application schema before I/O", () => {
+    const connect = vi.fn();
+    const list = vi.fn();
+
+    expect(() =>
+      createPhaseBFoundationProbeSource({
+        pool: { connect, end: vi.fn() },
+        bucket: { list, get: vi.fn() },
+        privilegeManifest: {
+          ...syntheticManifestForAdapterOnly(),
+          schema: "search_path_shadow",
+        },
+        ownerId: OWNER_ID,
+        decryptControlledTitle: vi.fn(),
+      }),
+    ).toThrow("Phase B foundation probe configuration is invalid.");
+    expect(connect).not.toHaveBeenCalled();
+    expect(list).not.toHaveBeenCalled();
+  });
+
   it("returns only admitted aggregates through one retained client and bounded R2 reads", async () => {
     const run = await harness();
     const expectedR2Bytes = (await validBackupObject()).object.size;
@@ -253,6 +273,31 @@ describe("Phase B foundation probe source", () => {
       new Date("2026-07-28T19:45:00.000Z"),
       new Date("2026-07-28T20:01:00.000Z"),
     ]);
+    for (const [relation, aggregateUses, sentinelUses] of [
+      ["nodes", 7, 1],
+      ["edges", 2, 0],
+      ["events", 1, 1],
+      ["sync_checkpoints", 1, 0],
+    ] as const) {
+      expect(
+        aggregateCall[0].match(
+          new RegExp(`\\bpublic\\.${relation}\\b`, "gu"),
+        ),
+      ).toHaveLength(aggregateUses);
+      expect(
+        sentinelCall[0].match(
+          new RegExp(`\\bpublic\\.${relation}\\b`, "gu"),
+        ) ?? [],
+      ).toHaveLength(sentinelUses);
+      expect(
+        `${aggregateCall[0]}\n${sentinelCall[0]}`,
+      ).not.toMatch(
+        new RegExp(
+          `\\b(?:from|join)\\s+(?!public\\.)${relation}\\b`,
+          "iu",
+        ),
+      );
+    }
   });
 
   it("passes every schema, owner, privilege, and grant expectation to the aggregate query", async () => {
@@ -317,7 +362,7 @@ describe("Phase B foundation probe source", () => {
     expect(run.decryptControlledTitle).not.toHaveBeenCalled();
   });
 
-  it("decrypts only one eligible title and clears its mutable plaintext in finally", async () => {
+  it("keeps protected storage matched when raw title bytes omit the marker and clears plaintext", async () => {
     const plaintext = new TextEncoder().encode(
       PHASE_B_FOUNDATION_SENTINEL_MARKER,
     );
@@ -336,8 +381,41 @@ describe("Phase B foundation probe source", () => {
     const result = await run.source.read(OBSERVED_AT);
 
     expect(result.sentinelStatus).toBe("passed");
+    expect(result.protectedStorageMatches).toBe(true);
     expect(run.decryptControlledTitle).toHaveBeenCalledOnce();
     expect([...plaintext].every((value) => value === 0)).toBe(true);
+  });
+
+  it("fails protected storage when raw title bytes contain the marker and still clears plaintext", async () => {
+    const marker = new TextEncoder().encode(
+      PHASE_B_FOUNDATION_SENTINEL_MARKER,
+    );
+    const titleEnvelope = new Uint8Array(marker.byteLength + 2);
+    titleEnvelope.set(marker, 1);
+    const plaintext = new TextEncoder().encode(
+      PHASE_B_FOUNDATION_SENTINEL_MARKER,
+    );
+    const run = await harness({
+      sentinelRows: [
+        {
+          node_id: "one",
+          owner_id: OWNER_ID,
+          domain: "personal",
+          title_envelope: titleEnvelope,
+        },
+      ],
+      decryptControlledTitle: async () => plaintext,
+    });
+
+    const result = await run.source.read(OBSERVED_AT);
+
+    expect(result.sentinelStatus).toBe("passed");
+    expect(result.protectedStorageMatches).toBe(false);
+    expect(run.decryptControlledTitle).toHaveBeenCalledOnce();
+    expect([...plaintext].every((value) => value === 0)).toBe(true);
+    expect(JSON.stringify(result)).not.toContain(
+      PHASE_B_FOUNDATION_SENTINEL_MARKER,
+    );
   });
 
   it("clears controlled plaintext when comparison fails", async () => {

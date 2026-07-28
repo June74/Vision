@@ -42,13 +42,15 @@ Copies the encrypted body into a byte array for closed local validation.
 ## `createPhaseBFoundationProbeSource`
 
 Requires a complete attested manifest, owner, pool, bucket, and controlled
-title decryptor before constructing the frozen source.
+title decryptor before constructing the frozen source. The admitted manifest
+schema must equal the fixed production application schema.
 
 ## `read`
 
 Uses one client for the aggregate and sentinel queries, cleans up in `finally`,
-then performs bounded encrypted-backup validation and returns only admitted
-measurements.
+reads every application relation through a static schema qualifier independent
+of `search_path`, then performs bounded encrypted-backup validation and returns
+only admitted measurements.
 
 ## `schemaColumnExpectations`
 
@@ -72,9 +74,10 @@ integer cells before reconstructing closed measurements.
 
 ## `evaluateSentinel`
 
-Requires exactly one eligible candidate, decrypts only its title, compares
-mutable bytes to the fixed marker, and clears both plaintext buffers in
-`finally`.
+Requires exactly one eligible candidate, proves the admitted raw title
+envelope omits the fixed marker bytes, decrypts only its title, compares
+mutable plaintext bytes to the marker, returns only booleans, and clears both
+application-controlled plaintext buffers in `finally`.
 
 ## `decodeSentinelCandidate`
 

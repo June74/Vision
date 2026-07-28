@@ -117,6 +117,38 @@ describe("Phase B foundation probe job", () => {
     expect(JSON.stringify(evidence)).not.toContain(String(rejected));
   });
 
+  it("emits a sanitized zero when numeric failure otherwise contains positive counts", () => {
+    const evidence = createPhaseBFoundationProbeEvidence(
+      measurements({
+        publicGrantCount: 1,
+        identityViolations: -1,
+        domainViolations: 1,
+        privacyViolations: 1,
+        provenanceViolations: 1,
+        referenceViolations: 1,
+        checkpointViolations: 1,
+        databaseBytes: 1,
+        r2ObjectCount: 1,
+        r2Bytes: 1,
+      }),
+    );
+
+    expect(evidence).toMatchObject({
+      outcome: "failed",
+      category: "numeric_bound_exceeded",
+      publicGrantCount: 1,
+      identityViolations: 0,
+      domainViolations: 1,
+      privacyViolations: 1,
+      provenanceViolations: 1,
+      referenceViolations: 1,
+      checkpointViolations: 1,
+      databaseBytes: 1,
+      r2ObjectCount: 1,
+      r2Bytes: 1,
+    });
+  });
+
   it("rejects non-preview or non-exact configuration before source access", async () => {
     const read = vi.fn(async () => measurements());
 

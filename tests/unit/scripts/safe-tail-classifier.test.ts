@@ -761,6 +761,39 @@ describe("safe Cloudflare tail classification", () => {
     expect(getterCalls).toBe(0);
   });
 
+  it("accepts only numeric-bound evidence containing a possible sanitized zero", () => {
+    const impossible = {
+      ...foundationEvidence(),
+      outcome: "failed" as const,
+      category: "numeric_bound_exceeded" as const,
+      publicGrantCount: 1,
+      identityViolations: 1,
+      domainViolations: 1,
+      privacyViolations: 1,
+      provenanceViolations: 1,
+      referenceViolations: 1,
+      checkpointViolations: 1,
+      databaseBytes: 1,
+      r2ObjectCount: 1,
+      r2Bytes: 1,
+    };
+    const possible = {
+      ...impossible,
+      identityViolations: 0,
+    };
+
+    expect(
+      classifyPhaseBFoundationProbeEvidence(impossible),
+    ).toBeNull();
+    expect(classifySafeTailLine(foundationTail(impossible))).toBeNull();
+    expect(classifyPhaseBFoundationProbeEvidence(possible)).toEqual(
+      possible,
+    );
+    expect(classifySafeTailLine(foundationTail(possible))).toEqual(
+      possible,
+    );
+  });
+
   it("rejects foundation evidence on wrong cron, duplicate, mixed, or wrong-action records", () => {
     const foundation = foundationEvidence();
     const role: TemporaryPreviewRoleProbeEvidence = {

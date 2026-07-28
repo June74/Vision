@@ -32,7 +32,8 @@ then returns a new plain value-free object.
 ## `classifyPhaseBFoundationProbeEvidence`
 
 Accepts only the exact foundation keys, safe counts, and coherent terminal
-combinations, then reconstructs a new privacy-safe object.
+combinations. Numeric-bound evidence must contain at least one possible
+sanitized zero. The classifier reconstructs a new privacy-safe object.
 
 ## `classifyTemporaryRestoreEvidence`
 

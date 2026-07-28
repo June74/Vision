@@ -37,11 +37,13 @@ Reads the one required-date encrypted backup candidate.
 
 ## `createPhaseBFoundationProbeSource`
 
-Rejects incomplete configuration before any database or R2 access.
+Rejects incomplete configuration or a non-production application schema
+before any database or R2 access.
 
 ## `read`
 
-Collects one aggregate-only observation and closes all retained resources.
+Collects one aggregate-only observation from statically schema-qualified
+application relations and closes all retained resources.
 
 ## `schemaColumnExpectations`
 
@@ -61,7 +63,8 @@ Admits one database result containing only booleans and safe counts.
 
 ## `evaluateSentinel`
 
-Treats zero, multiple, or malformed candidates as `not_tested`.
+Treats zero, multiple, or malformed candidates as `not_tested`. For one
+candidate it returns only title status and raw-marker absence booleans.
 
 ## `decodeSentinelCandidate`
 

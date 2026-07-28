@@ -294,7 +294,10 @@ export function classifyPhaseBFoundationProbeEvidence(
     };
   } else if (
     evidence.category === "numeric_bound_exceeded" &&
-    evidence.outcome === "failed"
+    evidence.outcome === "failed" &&
+    PHASE_B_FOUNDATION_INTEGER_KEYS.some(
+      (key) => measurements[key] === 0,
+    )
   ) {
     reconstructed = {
       evidenceType: "vision.phase-b-foundation-probe/v1",

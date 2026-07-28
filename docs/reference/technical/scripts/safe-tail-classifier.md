@@ -40,7 +40,9 @@ plain frozen object in that key order.
 
 Snapshots the exact 19 keys, admits all counts as nonnegative safe integers,
 validates success, semantic-failure, numeric-failure, and unavailable-source
-coherence, and reconstructs a new frozen object in canonical key order.
+coherence, and reconstructs a new frozen object in canonical key order. A
+numeric-bound record requires at least one zero numeric field, because every
+shape the producer can emit for an invalid input sanitizes that field to zero.
 
 ## `classifyTemporaryRestoreEvidence`
 

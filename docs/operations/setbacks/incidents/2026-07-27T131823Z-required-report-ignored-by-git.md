@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T13:18:23Z
-- **Last observed:** 2026-07-27T13:18:23Z
+- **Last observed:** 2026-07-28T21:43:15.6799232Z
 - **Phase/task:** Phase B restore Task 4 tail correction
 - **Environment:** Local repository staging
 - **Version/commit:** Task report bookkeeping commit `3257771`
@@ -46,3 +46,12 @@ Stage the task-report path without an explicit force option.
 ## Verification and related work
 
 - The required report was force-staged and committed in `3257771`.
+
+## Recurrence history
+
+- 2026-07-28T21:43:15.6799232Z: Task 3 review-fix staging named the ignored
+  handoff report alongside tracked source, tests, references, and setback
+  records. Git returned the ignored-path category after staging the tracked
+  paths. The controller clarified that current SDD reports remain local
+  scratch artifacts; the report is left present but excluded from the fix
+  commit. No source, provider, or private state changed.

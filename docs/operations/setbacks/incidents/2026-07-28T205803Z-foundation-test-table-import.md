@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T20:58:03.3203968Z
-- **Last observed:** 2026-07-28T21:05:39.3430100Z
+- **Last observed:** 2026-07-28T21:38:48.5999933Z
 - **Phase/task:** Phase B acceptance instrumentation Task 3 expanded RED
 - **Environment:** Local Windows worktree
 - **Version/commit:** `36f9df2` plus uncommitted Task 3 tests
@@ -66,3 +66,8 @@ The corrected fixture is included in the next focused Task 3 run.
   JSON serialization normalized hostile object descriptors. The assertions
   were corrected to test the intended boundaries; production and provider
   state remained unchanged.
+- 2026-07-28T21:38:48.5999933Z: The Task 3 review-fix RED assertion
+  undercounted repeated `nodes` relation uses in the aggregate query. The
+  intentional RED still exposed every requested missing behavior; the static
+  occurrence expectation is corrected against the query structure before
+  GREEN implementation. No production or external state changed.

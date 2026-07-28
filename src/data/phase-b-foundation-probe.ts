@@ -24,6 +24,7 @@ const SOURCE_ERROR = "Phase B foundation probe source failed.";
 const R2_PAGE_LIMIT = 100;
 const R2_PAGE_CAP = 100;
 const R2_OBJECT_CAP = 10_000;
+const PHASE_B_FOUNDATION_APPLICATION_SCHEMA = "public";
 const SENTINEL_PAST_WINDOW_MILLISECONDS = 15 * 60 * 1_000;
 const SENTINEL_FUTURE_WINDOW_MILLISECONDS = 60 * 1_000;
 const SHA256_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
@@ -285,7 +286,7 @@ select
   ) as public_grant_count,
   (
     select count(*)
-    from nodes
+    from public.nodes
     where owner_id = $6::text
       and (
         owner_id = ''
@@ -296,7 +297,7 @@ select
   ) as identity_violations,
   (
     select count(*)
-    from nodes
+    from public.nodes
     where owner_id = $6::text
       and (
         domain not in ('school', 'work', 'personal', 'unresolved')
@@ -306,11 +307,11 @@ select
   ) as domain_violations,
   (
     select count(*)
-    from edges edge
-    inner join nodes source
+    from public.edges edge
+    inner join public.nodes source
       on source.id = edge.source_node_id
      and source.owner_id = edge.owner_id
-    inner join nodes destination
+    inner join public.nodes destination
       on destination.id = edge.destination_node_id
      and destination.owner_id = edge.owner_id
     where edge.owner_id = $6::text
@@ -334,8 +335,8 @@ select
   ) as privacy_violations,
   (
     select count(*)
-    from nodes node
-    left join events event
+    from public.nodes node
+    left join public.events event
       on event.node_id = node.id
      and event.owner_id = node.owner_id
     where node.owner_id = $6::text
@@ -353,12 +354,12 @@ select
   ) as provenance_violations,
   (
     select count(*)
-    from edges edge
-    left join nodes source
+    from public.edges edge
+    left join public.nodes source
       on source.id = edge.source_node_id
      and source.owner_id = edge.owner_id
      and source.node_type = edge.source_node_type
-    left join nodes destination
+    left join public.nodes destination
       on destination.id = edge.destination_node_id
      and destination.owner_id = edge.owner_id
      and destination.node_type = edge.destination_node_type
@@ -367,7 +368,7 @@ select
   ) as reference_violations,
   (
     select count(*)
-    from sync_checkpoints checkpoint
+    from public.sync_checkpoints checkpoint
     where checkpoint.owner_id = $6::text
       and (
         checkpoint.provider <> 'google-calendar'
@@ -418,8 +419,8 @@ select
   node.owner_id,
   node.domain,
   event.title_envelope
-from nodes node
-inner join events event
+from public.nodes node
+inner join public.events event
   on event.node_id = node.id
  and event.owner_id = node.owner_id
  and event.provider = 'google-calendar'
@@ -502,6 +503,8 @@ export function createPhaseBFoundationProbeSource(
 ): PhaseBFoundationProbeSource {
   if (
     !isCompletePhaseBPrivilegeManifest(input.privilegeManifest) ||
+    input.privilegeManifest.schema !==
+      PHASE_B_FOUNDATION_APPLICATION_SCHEMA ||
     !isNonemptyText(input.ownerId) ||
     typeof input.pool?.connect !== "function" ||
     typeof input.pool?.end !== "function" ||
@@ -556,13 +559,18 @@ export function createPhaseBFoundationProbeSource(
             new Date(observedTime + SENTINEL_FUTURE_WINDOW_MILLISECONDS),
           ],
         );
+        const aggregates = decodeAggregateRow(aggregateResult.rows);
+        const sentinel = await evaluateSentinel(
+          sentinelResult.rows,
+          ownerId,
+          input.decryptControlledTitle,
+        );
         database = {
-          ...decodeAggregateRow(aggregateResult.rows),
-          sentinelStatus: await evaluateSentinel(
-            sentinelResult.rows,
-            ownerId,
-            input.decryptControlledTitle,
-          ),
+          ...aggregates,
+          protectedStorageMatches:
+            aggregates.protectedStorageMatches &&
+            sentinel.rawMarkerAbsent,
+          sentinelStatus: sentinel.status,
         };
       } catch (error) {
         databaseFailure =
@@ -703,30 +711,51 @@ function decodeAggregateRow(
   };
 }
 
-/** Runs only the unique controlled title comparison and clears both byte buffers. */
+/**
+ * Checks raw marker absence, compares only the controlled title, and clears
+ * both application-controlled plaintext buffers.
+ */
 async function evaluateSentinel(
   rows: readonly SentinelRow[],
   ownerId: string,
   decryptControlledTitle: (
     candidate: PhaseBFoundationProbeSentinelCandidate,
   ) => Promise<Uint8Array>,
-): Promise<"passed" | "failed" | "not_tested"> {
-  if (rows.length !== 1) return "not_tested";
+): Promise<{
+  readonly status: "passed" | "failed" | "not_tested";
+  readonly rawMarkerAbsent: boolean;
+}> {
+  if (rows.length !== 1) {
+    return { status: "not_tested", rawMarkerAbsent: true };
+  }
   const row = rows[0]!;
-  if (row.title_envelope === null) return "not_tested";
+  if (row.title_envelope === null) {
+    return { status: "not_tested", rawMarkerAbsent: true };
+  }
   const candidate = decodeSentinelCandidate(row, ownerId);
-  if (!candidate) return "not_tested";
+  if (!candidate) {
+    return { status: "not_tested", rawMarkerAbsent: true };
+  }
 
   const expected = new TextEncoder().encode(
     PHASE_B_FOUNDATION_SENTINEL_MARKER,
   );
   let plaintext: Uint8Array | undefined;
+  const rawMarkerAbsent = !containsBytes(
+    candidate.titleEnvelope,
+    expected,
+  );
   try {
     plaintext = await decryptControlledTitle(candidate);
-    if (!(plaintext instanceof Uint8Array)) return "failed";
-    return equalBytes(plaintext, expected) ? "passed" : "failed";
+    if (!(plaintext instanceof Uint8Array)) {
+      return { status: "failed", rawMarkerAbsent };
+    }
+    return {
+      status: equalBytes(plaintext, expected) ? "passed" : "failed",
+      rawMarkerAbsent,
+    };
   } catch {
-    return "failed";
+    return { status: "failed", rawMarkerAbsent };
   } finally {
     plaintext?.fill(0);
     expected.fill(0);
