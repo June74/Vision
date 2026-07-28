@@ -268,4 +268,85 @@ describe("scheduled calendar maintenance evidence", () => {
     });
     expect(Object.keys(evidence ?? {}).sort()).toEqual(EVIDENCE_KEYS);
   });
+
+  it("propagates the original writer failure after successful maintenance", async () => {
+    const writerFailure = { safe: "writer" };
+    const writeEvidence = vi.fn(() => {
+      throw writerFailure;
+    });
+
+    await expect(
+      runScheduledCalendarMaintenance(NOW, {
+        cleanupProjectionRebuilds: async () => 0,
+        repair: async () => "reserved",
+        renew: async () => "completed",
+        writeEvidence,
+      }),
+    ).rejects.toBe(writerFailure);
+
+    expect(writeEvidence).toHaveBeenCalledOnce();
+    expect(writeEvidence).toHaveBeenCalledWith({
+      action: "calendar.maintenance",
+      evidence: {
+        evidenceType: "vision.calendar-maintenance/v1",
+        outcome: "succeeded",
+        category: "none",
+        repairOutcome: "reserved",
+        renewalOutcome: "completed",
+      },
+    });
+  });
+
+  it.each([
+    {
+      name: "cleanup",
+      cleanupFailure: { safe: "cleanup" },
+      repairFailure: { safe: "repair" },
+      renewalFailure: { safe: "renewal" },
+      expectedFailure: "cleanupFailure",
+    },
+    {
+      name: "repair",
+      repairFailure: { safe: "repair" },
+      renewalFailure: { safe: "renewal" },
+      expectedFailure: "repairFailure",
+    },
+    {
+      name: "renewal",
+      renewalFailure: { safe: "renewal" },
+      expectedFailure: "renewalFailure",
+    },
+  ] as const)(
+    "preserves the original $name failure when the writer also fails",
+    async (scenario) => {
+      const failures = scenario as typeof scenario & {
+        readonly cleanupFailure?: object;
+        readonly repairFailure?: object;
+        readonly renewalFailure?: object;
+      };
+      const writerFailure = { safe: "writer" };
+      const writeEvidence = vi.fn(() => {
+        throw writerFailure;
+      });
+
+      const execution = runScheduledCalendarMaintenance(NOW, {
+        cleanupProjectionRebuilds: async () => {
+          if (failures.cleanupFailure) throw failures.cleanupFailure;
+          return 0;
+        },
+        repair: async () => {
+          if (failures.repairFailure) throw failures.repairFailure;
+          return "no_work";
+        },
+        renew: async () => {
+          if (failures.renewalFailure) throw failures.renewalFailure;
+          return "no_work";
+        },
+        writeEvidence,
+      });
+
+      await expect(execution).rejects.toBe(scenario[scenario.expectedFailure]);
+      expect(writeEvidence).toHaveBeenCalledOnce();
+    },
+  );
 });

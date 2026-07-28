@@ -190,10 +190,16 @@ export async function runScheduledCalendarMaintenance(
       : repairOutcome,
     renewalFailure !== undefined ? "failed" : renewalOutcome,
   );
-  emitCalendarMaintenanceEvidence(evidence, dependencies.writeEvidence);
+  let writerFailure: unknown;
+  try {
+    emitCalendarMaintenanceEvidence(evidence, dependencies.writeEvidence);
+  } catch (error) {
+    writerFailure = error;
+  }
   if (cleanupFailure !== undefined) throw cleanupFailure;
   if (repairFailure !== undefined) throw repairFailure;
   if (renewalFailure !== undefined) throw renewalFailure;
+  if (writerFailure !== undefined) throw writerFailure;
 }
 
 /** Cloudflare scheduled entry point routing maintenance and recovery by exact cron expression. */

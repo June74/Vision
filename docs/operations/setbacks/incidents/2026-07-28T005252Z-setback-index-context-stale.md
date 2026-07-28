@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T00:52:52.8805934Z
-- **Last observed:** 2026-07-28T03:14:00Z
-- **Phase/task:** Preview database role probe Task 2 reporting
+- **Last observed:** 2026-07-28T19:31:19Z
+- **Phase/task:** Calendar maintenance evidence Task 1 review fix reporting
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `7d2f9f6`
 
@@ -66,3 +66,8 @@ is indexed once.
   stale summary line and was rejected atomically. Fresh report context and
   smaller section patches completed the safe report without touching tracked
   source or provider state.
+- 2026-07-28T19:31:19Z: The ignored acceptance report append used a wrapped
+  end-of-file anchor and was rejected atomically. Fresh tail inspection
+  confirmed no partial report change; the append was retried against the exact
+  final line. No source, provider, private-data, or controller-owned setback
+  content was changed by the failed patch.
