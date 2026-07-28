@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T02:32:27Z
-- **Last observed:** 2026-07-27T19:17:18Z
-- **Phase/task:** Phase B restore Task 3
+- **Last observed:** 2026-07-28T00:22:02.8212591Z
+- **Phase/task:** Listener-first restore retry clear-job planning
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `6fdb9cb`
 
@@ -67,3 +67,10 @@ The retry must modify only the intended plan paragraph and pass
 - 2026-07-27T19:17:18Z: Recurred when a locator-limitation recurrence used an
   outdated sentence fragment. The patch was rejected atomically; the retry
   copied the exact current tail before applying once.
+- 2026-07-28T00:21:07.6543342Z: Recurred when a large plan amendment copied a
+  rendered encoding artifact instead of the exact dash stored in the file.
+  The patch was rejected atomically and no plan content changed. The retry uses
+  smaller hunks with short ASCII anchors read directly from the current file.
+- 2026-07-28T00:22:02.8212591Z: The next small hunk still used the rendered
+  artifact because the default PowerShell decoder was reused. It was rejected
+  atomically. The exact UTF-8 lines were then read explicitly before retrying.

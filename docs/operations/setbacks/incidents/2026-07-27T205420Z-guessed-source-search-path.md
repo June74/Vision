@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T20:54:20Z
-- **Last observed:** 2026-07-27T20:54:20Z
-- **Phase/task:** Listener-first restore retry implementation planning
+- **Last observed:** 2026-07-28T00:12:55.4064136Z
+- **Phase/task:** Listener-first restore retry clear-job design
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `e6240ce`
 
@@ -37,3 +37,12 @@ state changed.
 
 Closure is immediate because the failed operation was read-only. Planning
 continues using discovered files only.
+
+## Recurrence history
+
+- 2026-07-27T20:54:20Z: First observed and closed after repository discovery.
+- 2026-07-28T00:12:55.4064136Z: Recurred when a read-only attestation search
+  assumed a conventional `drizzle` migration directory that does not exist in
+  this worktree. The search stopped without changing any file or provider
+  state. Migration SQL is discovered from the repository file list before the
+  search is retried.

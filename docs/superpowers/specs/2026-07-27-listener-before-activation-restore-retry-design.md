@@ -1,7 +1,6 @@
 # Listener-Before-Activation Preview Restore Retry Design
 
-**Status:** Approved approach and execution-method amendment; amended
-written-spec review pending
+**Status:** Approved one-shot Worker recovery; implementation pending
 
 **Approved by:** Project owner
 
@@ -49,7 +48,7 @@ The GitHub workflows will use conditional concurrency groups:
 This permits the read-only observer and the reviewed restore deployment to run
 at the same time without allowing two preview mutations to overlap.
 
-## Approved In-Memory Clear Amendment
+## Approved One-Shot Worker Recovery
 
 The Neon SQL editor is retired for the disposable-target clear. Its history
 proved that a reviewed 4,166-character transaction was submitted only
@@ -58,44 +57,52 @@ characters. No additional editor workaround is permitted. The target remained
 unchanged at 29 authoritative tables, 51 total authoritative rows, 13 non-empty
 tables, and zero event rows.
 
-The clear instead uses one temporary Node-backed process and the repository's
-installed `@neondatabase/serverless` `Pool`, matching the existing production
-restore adapter:
+The approved temporary Node-backed process also failed closed before SQL
+because its network boundary could not reach Neon. Chrome renderer injection is
+not supported for database writes, and a shell or clipboard bridge remains
+prohibited.
 
-1. In the signed-in Neon control, privately select the retained disposable
-   branch and the `vision_app` role.
-2. Read the connection value directly from that signed-in browser surface into
-   a process-local variable in the same temporary Node-backed session.
-3. Never send that value through the clipboard, filesystem, shell environment,
-   command arguments, persistent tool storage, console, returned tool text,
-   screenshots, documentation, or chat.
-4. Open a single pool connection and submit the reviewed clear on that retained
-   session as one serializable transaction. The SQL itself verifies
-   `current_user`, the attestation, the exact 29-table set, the current
-   51-row/13-non-empty/zero-event precondition, table locks, reverse-order
-   deletes, the zero-row result, and the unchanged attestation.
-5. Commit only if every assertion succeeds. Any exception requires rollback,
-   connection release, pool closure, and no retry until the setback is logged
-   and diagnosed.
-6. Run a separate read-only aggregate verification against the same privately
-   selected target. Return only the fixed safe fields: attestation status,
-   authoritative table count, total row count, non-empty table count, and event
-   row count.
-7. Release the connection, close the pool, remove live references to the
-   connection value, and reset the temporary Node kernel after success or
-   failure. JavaScript strings cannot be guaranteed to be physically zeroized,
-   so the enforceable boundary is no persistence, no output, shortest practical
-   lifetime, and process reset.
+The clear and restore therefore run together in one reviewed, preview-only
+Cloudflare scheduled invocation. No HTTP route or public endpoint is added:
 
-No temporary helper file, shell script, environment variable, database URL
-argument, deployment, Worker secret change, branch deletion, or backup-key
-change is authorized by this amendment.
+1. Recreate only the two already-approved temporary Worker secrets directly
+   through signed-in provider controls. The database connection stays within
+   the provider/Worker secret boundary and never enters GitHub.
+2. Before claiming or touching the database, select, authenticate, decrypt, and
+   logically validate the exact backup candidate.
+3. Atomically claim one opaque R2 attempt marker outside the `backups/v1/`
+   namespace. Only the claimant may open the disposable target. A non-owner
+   performs no database call and emits no observer-accepted record.
+4. On one `Pool({ max: 1 })` client, begin a serializable transaction, require
+   `current_user=vision_app`, validate and lock the exact attestation, lock all
+   29 authoritative tables, and require every per-table count to match the
+   already-validated backup manifest as well as the safe
+   29-table/51-row/13-non-empty/zero-event aggregate.
+5. Delete only the 29 authoritative tables in reverse dependency order, require
+   29 tables and zero rows, and require the attestation to remain unchanged.
+   Commit only if every assertion succeeds.
+6. Restore the already-validated candidate into the now-empty target through
+   the existing transaction-locked importer. Do not relist or silently select a
+   different object.
+7. Run the existing independent read-back, checksum, reference, and readable
+   event verification. Emit exactly one allowlisted
+   `vision.preview-restore/v1` result only after the restore succeeds.
+8. Keep the R2 attempt marker while any destructive candidate can run. After
+   the immutable normal Worker is restored, the one-minute schedule is absent,
+   and both temporary secrets are absent, delete the sole opaque marker through
+   the signed-in R2 control without returning its key.
+
+The attempt marker is a safety fence, not restore evidence. It prevents a
+delayed old one-minute invocation from clearing the newly restored
+29-table/51-row target again. If the owner crashes after claiming the marker,
+the attempt is intentionally burned, automatic retry is prohibited, and the
+disposable branch is retained for diagnosis.
 
 ## Alternatives Not Selected
 
-1. **Write durable restore evidence to R2 or PostgreSQL.** This would add new
-   persistent state, retention rules, credentials, and cleanup work solely for
-   acceptance evidence.
+1. **Write durable restore evidence to R2 or PostgreSQL.** The opaque R2
+   one-shot fence is not evidence and stores no result. Durable acceptance
+   evidence would add unnecessary retention and privacy surface.
 2. **Accept the database state as proof.** The atomic importer and target state
    strongly support success, but they do not meet the explicit safe-record
    acceptance requirement.
@@ -107,6 +114,11 @@ change is authorized by this amendment.
 5. **Bridge the connection through a file, clipboard, shell environment, or
    command argument.** Each option creates an unnecessary persistence or output
    path for a credential.
+6. **Inject the Neon driver into the signed-in dashboard renderer.** The
+   browser-control evaluation boundary is read-only, the provider page is not a
+   trusted secret-execution context, and renderer cleanup cannot be proven.
+7. **Use only the 29/51/13/0 aggregate as a retry gate.** A successful restore
+   can recreate the same aggregate, so an old invocation could clear it again.
 
 ## Safety Invariants
 
@@ -121,15 +133,23 @@ change is authorized by this amendment.
   existing value-safe aggregate inspection before clearing.
 - Clearing occurs in one serializable database transaction and covers only the
   29 authoritative application tables on the attested disposable target.
-- The private connection value exists only in one temporary Node-backed
-  process. It is never persisted or emitted, and the process is reset after use.
+- The private connection value exists only as a masked Cloudflare Worker
+  secret. It never enters GitHub, commands, local files, clipboard output,
+  logs, documentation, screenshots, or chat.
+- Backup authentication, decryption, manifest validation, checksum validation,
+  row-count validation, and reference validation finish before the one-shot
+  fence is claimed or the database is opened.
+- Exactly one invocation may claim the opaque R2 fence. Every non-owner exits
+  before database access and emits no accepted restore evidence.
+- The locked pre-clear state must match the validated backup's complete
+  per-table manifest and the safe 29/51/13/0 aggregate.
 - Deletion order must respect foreign-key dependencies, or use an equivalent
   transaction-safe operation already supported by the target database.
 - The transaction must roll back on any statement, count, or attestation
   failure.
 - After clearing, every authoritative table must be empty and the target
-  attestation must still pass. Otherwise the procedure stops before secrets are
-  recreated or any Worker is deployed.
+  attestation must still pass before the same owning invocation restores the
+  already-validated backup candidate.
 - Secret values, database identifiers, provider-private URLs, object keys, and
   personal data never appear in logs, documentation, commits, or chat output.
 - The safe-tail workflow must be in its
@@ -152,44 +172,43 @@ change is authorized by this amendment.
 1. Implement and test the conditional workflow concurrency change.
 2. Independently review the exact workflow change, then commit and push the
    reviewed head.
-3. In the signed-in provider control, privately select the retained disposable
-   target and `vision_app` role.
-4. Transfer its connection value directly into one temporary Node-backed
-   process without clipboard, filesystem, shell environment, command argument,
-   persistent storage, or output.
-5. Re-attest and record only the safe 29-table/51-row/13-non-empty/zero-event
-   aggregate, then clear the target in one serializable retained-session
-   transaction.
-6. Independently re-attest, verify 29 tables and zero rows, close all driver
-   resources, remove live credential references, and reset the temporary
-   process.
-7. Recreate only the two temporary restore secrets. Log their names and
+3. Implement, test, independently review, commit, and push the temporary
+   one-shot clear-and-restore candidate and its R2 claim boundary.
+4. Recreate only the two temporary restore secrets. Log their names and
    create/delete actions without values.
-8. Dispatch the safe-tail workflow.
-9. Poll workflow state until the allowlisted evidence-listener step is actively
+5. Dispatch the restore-only safe-tail workflow.
+6. Poll workflow state until the allowlisted evidence-listener step is actively
    running. If it does not become active within the bounded wait, stop without
    deploying.
-10. Deploy the exact independently reviewed temporary restore candidate.
-11. Accept only one exact-schema `vision.preview-restore/v1` success record from
+7. Deploy the exact independently reviewed one-shot candidate.
+8. Permit only the R2 fence owner to validate the backup, clear the attested
+   target, restore the same prepared backup, and run independent read-back.
+9. Accept only one exact-schema `vision.preview-restore/v1` success record from
     the already-running observer.
-12. Restore the normal preview Worker from its immutable normal reference.
-13. Delete both temporary restore secrets and verify they are absent.
-14. Independently verify the normal health response and schedules, including
+10. Restore the normal preview Worker from its immutable normal reference.
+11. Delete both temporary restore secrets and verify they are absent.
+12. Independently verify the normal health response and schedules, including
     absence of the temporary one-minute restore schedule.
-15. Remove temporary restore code, configuration, and tests in a cleanup
+13. Delete the sole opaque R2 attempt marker through the signed-in provider
+    control without returning its key.
+14. Remove temporary restore code, configuration, and tests in a cleanup
     commit; run the complete Phase B verification and independent review; then
     deploy the reviewed normal result.
-16. Permanently delete the disposable Neon branch only after the success
+15. Permanently delete the disposable Neon branch only after the success
     evidence and all preceding cleanup checks pass.
-17. Update the restore evidence, credential-change log, setback log, and Phase B
+16. Update the restore evidence, credential-change log, setback log, and Phase B
     handoff documentation without private values.
 
 ## Failure Handling
 
-- **Private acquisition, target attestation, driver connection, or clearing
-  fails:** roll back when a transaction exists, close the client and pool,
-  remove live credential references, reset the temporary process, and stop
-  before secret creation or deployment. Retain the branch.
+- **Backup validation fails before the fence:** emit only a closed failure,
+  perform no database call, and retain the branch.
+- **Fence is already owned:** emit no accepted record and perform no database
+  call.
+- **Fence owner fails during clear or restore:** roll back the active
+  transaction, close the client and pool, burn the attempt without automatic
+  retry, restore the normal Worker, delete the temporary secrets, and retain the
+  branch.
 - **Observer does not reach the active listener step:** cancel or allow the
   observer to expire; do not deploy. Delete any temporary secrets and retain the
   branch.
@@ -223,9 +242,13 @@ The implementation must prove:
 - Target-clear logic fails closed on attestation, table-set, transaction, or
   post-clear count mismatches.
 - The clear uses one retained `Pool` client for the complete serializable
-  transaction, followed by an independent read-only verification.
-- No connection value reaches disk, clipboard, shell state, persistent tool
-  storage, logs, returned tool text, screenshots, documentation, or chat.
+  transaction, and restore uses the same already-validated backup candidate.
+- An atomic R2 create-if-absent test proves exactly one owner; concurrent,
+  delayed, and post-restore invocations perform no database work.
+- The locked target must match every validated backup-manifest table count, not
+  only aggregate totals.
+- No connection value or R2 marker key reaches GitHub, disk, shell state, logs,
+  returned tool text, screenshots, documentation, or chat.
 - Secret and diagnostic output remains value-free.
 - TypeScript, unit, contract, Worker, documentation, production build, security,
   and end-to-end checks pass.

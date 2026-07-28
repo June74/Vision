@@ -9,11 +9,13 @@ restore surface, and permanently delete only the attested disposable target.
 **Architecture:** GitHub Actions assigns safe-tail observers and preview
 mutations to separate conditional concurrency groups so the allowlisted
 listener can be active before deployment. The retained disposable target is
-re-attested and emptied through one temporary in-memory Neon driver session and
-one serializable retained-connection transaction, then the existing reviewed
-temporary restore Worker runs once. Success is followed by normal rollback,
-secret removal, cleanup code, verification, and branch deletion; every other
-result retains the branch.
+handled by one temporary preview-only scheduled invocation. That invocation
+validates the backup, atomically claims one opaque R2 attempt fence, clears only
+the attested target in one serializable retained-session transaction, restores
+the same prepared backup, and emits the existing allowlisted success record
+only after independent read-back. Success is followed by normal rollback,
+secret and marker removal, cleanup code, verification, and branch deletion;
+every other result retains the branch.
 
 **Tech Stack:** GitHub Actions, TypeScript, Vitest, Cloudflare Workers and
 Wrangler, Neon PostgreSQL, R2, pnpm, PowerShell.
@@ -29,11 +31,17 @@ Wrangler, Neon PostgreSQL, R2, pnpm, PowerShell.
 - Secret values, database identifiers, provider-private URLs, object keys,
   personal data, and protected rows never enter commands, logs, commits,
   documentation, screenshots, or chat.
-- The disposable connection value exists only in one temporary Node-backed
-  process. It never enters the clipboard, filesystem, shell environment,
-  command arguments, persistent tool storage, console, or returned tool text.
-- The temporary Node process releases the database client, closes its pool,
-  removes live credential references, and resets after success or failure.
+- The disposable connection value exists only as a masked Cloudflare Worker
+  secret. It never enters GitHub, commands, local files, logs, documentation,
+  screenshots, or chat.
+- Backup authentication, decryption, checksums, manifest counts, and references
+  must validate before the one-shot fence is claimed or the target is opened.
+- Exactly one invocation may own the opaque R2 create-if-absent fence. Every
+  non-owner performs zero database calls and emits no observer-accepted record.
+- The fence stays outside `backups/v1/`, its key is never returned, and it
+  remains until the destructive runtime is inactive.
+- The locked target must match all 29 prepared-backup table counts plus the safe
+  51-row/13-non-empty/zero-event aggregate before deletion.
 - Safe-tail must be actively running its
   `Print only allowlisted scheduled evidence` step before restore deployment.
 - Safe-tail retains `--restore-only`, a 16-minute observation window, and an
@@ -68,7 +76,13 @@ Wrangler, Neon PostgreSQL, R2, pnpm, PowerShell.
   failures and recurrences.
 - `src/jobs/temporary-preview-restore.ts` and
   `tests/integration/jobs/temporary-preview-restore.test.ts` — temporary
-  restore job and its test suite; deleted after success.
+  one-shot clear-and-restore job and its test suite; deleted after success.
+- `src/data/backup/temporary-preview-clear-adapter.ts` and its integration
+  tests — temporary serializable clear boundary; deleted after success.
+- `src/data/backup/import-backup.ts` — prepared-backup split so full validation
+  completes before the R2 fence and the exact prepared object is restored.
+- `src/data/backup/r2-restore-attempt-store.ts` — temporary atomic claim-only
+  fence outside the backup namespace; deleted after success.
 - `src/jobs/scheduled.ts`, `src/server/env.ts`, `wrangler.jsonc`, and
   `scripts/validate-preview-deploy-config.ts` — temporary runtime routing,
   bindings, and cron; restored to the normal two-cron surface after success.
@@ -211,7 +225,253 @@ before the target is touched.
 
 ---
 
-### Task 2: Re-attest and empty only the disposable restore target
+### Task 2: Implement the fenced one-shot clear-and-restore candidate
+
+**Files:**
+- Create: `src/data/backup/temporary-preview-clear-adapter.ts`
+- Create: `src/data/backup/r2-restore-attempt-store.ts`
+- Create: `tests/integration/backup/temporary-preview-clear-adapter.test.ts`
+- Create: `tests/integration/backup/r2-restore-attempt-store.test.ts`
+- Modify: `src/data/backup/import-backup.ts`
+- Modify: `src/jobs/temporary-preview-restore.ts`
+- Modify: `src/jobs/scheduled.ts`
+- Modify: `tests/integration/backup/restore-command.test.ts`
+- Modify: `tests/integration/jobs/temporary-preview-restore.test.ts`
+- Modify: `tests/integration/jobs/daily-backup.test.ts`
+- Modify: `docs/operations/restore-drill.md`
+- Modify generated simple and technical references for changed source files.
+
+**Interfaces:**
+- Consumes: the two existing temporary Worker secret bindings, the preview R2
+  bucket, the exact prepared backup, and the database-owned disposable-target
+  attestation.
+- Produces: either no observer record for a non-owner, or one existing
+  `vision.preview-restore/v1` success/failure record from the sole fence owner.
+- No public HTTP route is added.
+
+- [ ] **Step 1: Add failing prepared-backup boundary tests**
+
+Refactor the importer contract test-first:
+
+```ts
+const prepared = await prepareBackupImport(encrypted, backupKey);
+const report = await importPreparedBackup(prepared, target, options);
+```
+
+`prepareBackupImport` authenticates and decrypts the envelope, validates the
+manifest/key version/checksum, decodes the canonical archive, requires all 29
+manifest counts, and validates references. It returns an immutable prepared
+object with no target capability. `importBackup` remains a compatibility wrapper
+that calls both functions.
+
+Tests require malformed/authentication/checksum/count/reference failures before
+any target transaction call and prove that the prepared object used after the
+fence is the same object passed to import.
+
+- [ ] **Step 2: Add failing atomic R2 fence tests**
+
+Define a narrow port:
+
+```ts
+export interface RestoreAttemptStore {
+  claimOnce(targetId: string): Promise<boolean>;
+}
+```
+
+The production R2 adapter derives an opaque SHA-256 key under
+`restore-attempts/v1/` and uses conditional create-if-absent. Require two
+concurrent claims to produce exactly one `true`; the loser performs no database
+work. The key, target ID, object identity, and provider result never enter
+evidence, errors, or logs. The prefix remains disjoint from `backups/v1/` and
+backup retention/listing.
+
+- [ ] **Step 3: Add failing serializable clear-adapter tests**
+
+The adapter accepts the prepared backup row counts plus the exact target
+identity. Tests require this order on one retained client:
+
+```text
+begin isolation level serializable
+current_user=vision_app
+one exact attestation row locked
+all 29 authoritative tables locked in canonical order
+attestation re-read unchanged
+all 29 counts equal prepared manifest
+safe aggregate equals 29/51/13/0
+reverse-order deletes
+all 29 counts equal zero
+attestation re-read unchanged
+commit
+```
+
+Any wrong role, attestation mismatch, table/count mismatch, nonzero event
+count, lock/delete/postcondition/commit failure, or serialization error rolls
+back. Client release and pool closure occur on every path. No target ID,
+revision, database value, URL, row, or raw error appears in the returned closed
+result.
+
+- [ ] **Step 4: Implement the prepared importer, R2 fence, and clear adapter**
+
+Use the repository-installed `@neondatabase/serverless` `Pool` with `max: 1`.
+Reuse `BACKUP_TABLES`, `BACKUP_SCHEMA_MIGRATION_SHA256`, canonical quoted-table
+construction, attestation validation, and dependency-safe reverse deletion.
+Do not change database privileges or the attestation row.
+
+- [ ] **Step 5: Convert the temporary restore job into one fenced invocation**
+
+The exact order is:
+
+```text
+parse preview-only environment
+select one newest validated backup object
+verify stored encrypted object
+prepare and fully validate backup
+claim R2 fence
+if non-owner: return null with no database/log action
+clear exact target using prepared per-table counts
+restore the same prepared backup into the empty target
+independent snapshot/checksum/reference/event read-back
+return existing exact vision.preview-restore/v1 evidence
+```
+
+Only the owner may return a closed failure. A marker-owner crash burns the
+attempt; the one-minute job never retries automatically.
+
+- [ ] **Step 6: Wire only the scheduled preview runtime**
+
+`src/jobs/scheduled.ts` constructs the R2 attempt store, clear adapter, restore
+target, and independent read-back from server-only bindings. When the job
+returns `null`, it emits nothing and exits normally. When the owner returns
+evidence, retain the exact existing:
+
+```ts
+console.info({ action: "backup.restore", evidence });
+```
+
+Do not add or modify HTTP routing. Preserve the existing one-minute preview cron
+and normal production schedules.
+
+- [ ] **Step 7: Run focused verification**
+
+Run:
+
+```powershell
+pnpm.cmd test:unit tests/integration/backup/restore-command.test.ts tests/integration/backup/temporary-preview-clear-adapter.test.ts tests/integration/backup/r2-restore-attempt-store.test.ts tests/integration/jobs/temporary-preview-restore.test.ts tests/integration/jobs/daily-backup.test.ts
+pnpm.cmd test:unit tests/unit/scripts/print-safe-tail.test.ts tests/unit/scripts/safe-tail-classifier.test.ts tests/unit/ci/workflows.test.ts tests/unit/server/wrangler-routing.test.ts
+pnpm.cmd typecheck
+pnpm.cmd docs:check
+pnpm.cmd security:scan
+git diff --check
+```
+
+Require all tests pass and a privacy scan proves private sentinels and marker
+keys are absent from evidence and logs.
+
+- [ ] **Step 8: Commit, push, and independently review**
+
+Commit only the reviewed implementation, tests, documentation, and value-safe
+setback records. Require independent specification and safety review with zero
+Critical and zero Important findings. Any finding is fixed test-first and
+re-reviewed before provider action.
+
+---
+
+### Task 3: Run the listener-first fenced restore and return to normal
+
+**Files:**
+- Modify after confirmed actions: `docs/operations/credential-change-log.md`
+- Modify on success: `docs/operations/restore-drill.md`
+- Modify on success: `docs/operations/phase-b-evidence.md`
+- Modify on any setback: `docs/operations/setbacks/INDEX.md` and one exact
+  incident.
+
+**Interfaces:**
+- Consumes: the exact reviewed Task 2 commit, two temporary Worker secrets,
+  preview R2, the retained disposable target, and unchanged backup key version
+  1.
+- Produces: exactly one accepted `vision.preview-restore/v1` success, normal
+  Worker restoration, absent temporary secrets/cron, and deletion of the sole
+  opaque R2 fence without returning its key.
+
+- [ ] **Step 1: Reconfirm the live candidate**
+
+Require a clean worktree, equal local/remote commit, focused tests green, and
+independent review accepted. Retain only the public commit SHA.
+
+- [ ] **Step 2: Recreate only the two temporary secrets**
+
+Through signed-in provider controls, recreate:
+
+```text
+PREVIEW_RESTORE_DATABASE_URL
+PREVIEW_RESTORE_TARGET_ID
+```
+
+Use the already-approved direct provider-control flow. Never print, inspect,
+save locally, place in GitHub, or put either value in command arguments. Verify
+only their names and type `Secret`; add value-free `created` log rows.
+
+- [ ] **Step 3: Start and prove the restore-only observer**
+
+Dispatch the safe-tail workflow for the reviewed Task 2 commit with
+`safe_tail=true` and `configure_ai_budget=false`. Continue only when
+`Print only allowlisted scheduled evidence` is actively `in_progress`. Preserve
+the 16-minute observation and 18-minute job limits.
+
+- [ ] **Step 4: Deploy the exact one-shot candidate**
+
+Only while the observer remains active, dispatch the preview mutation workflow
+for the exact reviewed Task 2 commit. Prove observer/mutation overlap, exact
+commit attribution, and successful verify/build/config/deploy jobs.
+
+- [ ] **Step 5: Accept exactly one restore record**
+
+Accept only one exact allowlisted object:
+
+```text
+evidenceType=vision.preview-restore/v1
+outcome=succeeded
+category=none
+format=vision-backup/v1
+schemaVersion=9
+keyVersion=1
+authoritativeTableCount=29
+checksumMatches=true
+referencesValid=true
+targetWasEmpty=true
+eventListReadable=true
+replacedExisting=false
+```
+
+Require all 29 nonnegative row counts and a nonnegative event count. No result,
+owner failure, malformed result, duplicate result, or ambiguity enters
+fail-closed rollback with no automatic retry.
+
+- [ ] **Step 6: Restore normal runtime and remove secrets**
+
+Deploy immutable normal ref `40872a5`. Require successful exact attribution,
+normal health schema, maintenance and daily backup crons present, temporary
+one-minute cron absent, and then permanently delete only the two temporary
+restore secrets. Confirm `BACKUP_ENCRYPTION_KEY` remains key version 1 and
+unchanged.
+
+- [ ] **Step 7: Delete only the opaque attempt marker**
+
+After the destructive runtime is proven inactive and both temporary secrets are
+absent, use the signed-in R2 control to select the
+`restore-attempts/v1/` namespace. Require exactly one marker created by this
+attempt, delete it without returning its key or object identity, and verify the
+namespace is empty. Never delete any `backups/v1/` object.
+
+- [ ] **Step 8: Record safe evidence**
+
+Update the credential log, restore drill, Phase B evidence, and any setback
+records using only safe booleans, counts, schema version, key version, and
+public commit attribution.
+
+---
+
+### Superseded Task 2: Browser/editor clear path — do not execute
 
 **Files:**
 - Modify after confirmed provider actions:
@@ -452,7 +712,7 @@ required controls.
 
 ---
 
-### Task 3: Capture the restore with the listener already active
+### Superseded Task 3: Separate clear/deploy path — do not execute
 
 **Files:**
 - Modify: `docs/operations/credential-change-log.md`
@@ -611,6 +871,10 @@ containment. Do not begin branch deletion.
 ### Task 4: Remove the temporary runtime and deploy the reviewed cleanup
 
 **Files:**
+- Delete: `src/data/backup/temporary-preview-clear-adapter.ts`
+- Delete: `src/data/backup/r2-restore-attempt-store.ts`
+- Delete: `tests/integration/backup/temporary-preview-clear-adapter.test.ts`
+- Delete: `tests/integration/backup/r2-restore-attempt-store.test.ts`
 - Delete: `src/jobs/temporary-preview-restore.ts`
 - Delete: `tests/integration/jobs/temporary-preview-restore.test.ts`
 - Delete: `docs/reference/simple/src/jobs/temporary-preview-restore.md`
@@ -709,8 +973,9 @@ schema, restore-only argument, and restore classifier are still present.
 
 - [ ] **Step 3: Remove the temporary scheduled job and bindings**
 
-Delete the temporary job module and its integration/reference files. Restore
-the scheduler to:
+Delete the temporary clear adapter, R2 attempt store, temporary job module, and
+their integration/reference files. Preserve the permanent prepared-backup
+importer API and its tests. Restore the scheduler to:
 
 ```ts
 export interface ScheduledJobDependencies {
@@ -780,6 +1045,8 @@ docs/reference/technical/scripts/restore-backup.md
 ```
 
 Those are the permanent offline restore path, not the temporary Worker path.
+Also verify the `restore-attempts/v1/` R2 namespace is empty without returning
+any object key; do not inspect or delete `backups/v1/`.
 
 - [ ] **Step 6: Run the complete cleanup verification**
 

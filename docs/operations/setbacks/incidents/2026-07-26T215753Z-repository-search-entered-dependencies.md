@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T21:57:53Z
-- **Last observed:** 2026-07-26T21:57:53Z
-- **Phase/task:** Phase B live migration verification
+- **Last observed:** 2026-07-28T00:13:27.8191132Z
+- **Phase/task:** Listener-first restore retry clear-job design
 - **Environment:** Local PowerShell worktree
 - **Version/commit:** `6a14659`
 
@@ -56,3 +56,11 @@ bounded.
 ## Recurrence history
 
 - 2026-07-26T21:57:53Z: First occurrence.
+- 2026-07-28T00:12Z: A read-only design-review search again entered
+  `node_modules` and timed out before the reviewer narrowed it to the exact
+  known declaration path. No private output or state change occurred.
+- 2026-07-28T00:13:27.8191132Z: The controller then used an unrestricted
+  recursive file enumeration while discovering migration SQL. It completed
+  quickly but crossed the local Wrangler state directory, violating the
+  established bounded-search rule. The discovered repository migration path is
+  now used explicitly; no file or provider state changed.
