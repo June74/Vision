@@ -3,7 +3,8 @@
 Renews expiring Google notification channels without interrupting a still-valid old channel.
 
 ## `renewExpiringChannels`
-Renews every eligible connected calendar.
+Renews every eligible connected calendar. Returns `completed` when renewal or
+deferred channel cleanup was selected and `no_work` otherwise.
 ## `renewOne`
 Pre-registers, watches, activates, stops, and retires in safe order.
 ## `assertDate`

@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T04:02:13Z
-- **Last observed:** 2026-07-28T14:35:22Z
-- **Phase/task:** Phase B completion resume setback verification
+- **Last observed:** 2026-07-28T19:17:56.2271846Z
+- **Phase/task:** Phase B acceptance instrumentation Task 1 staging
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `4420f6d`
 
@@ -96,3 +96,16 @@ this incident was recorded.
   records. `pnpm docs:check` and `git diff --check` both exited zero; no
   formatting rewrite, provider action, or private-data operation was
   performed.
+- 2026-07-28T19:04:20.7909464Z: Recurred during Task 1 self-review after
+  `git diff --check` exited zero. The warnings were limited to expected Windows
+  normalization metadata for edited text files; no broad formatting rewrite,
+  provider action, or private-data operation was performed.
+- 2026-07-28T19:16:29.0511425Z: Recurred during the Task 1 final whitespace
+  check. Suppressing the known warning stream made the combined PowerShell
+  invocation report a nonzero status without a diff error. The ordinary
+  `git diff --check` rerun exited zero and reported only expected Windows
+  normalization metadata; no formatting rewrite or external action occurred.
+- 2026-07-28T19:17:56.2271846Z: Recurred during successful Task 1 staging
+  through the approved linked-worktree metadata boundary. All explicit paths
+  were staged; the warnings remained expected Windows normalization metadata
+  and no formatting rewrite or external action occurred.

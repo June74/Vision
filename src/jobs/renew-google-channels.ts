@@ -1,4 +1,5 @@
 /** Renews Google Calendar notification channels without creating a verification race. */
+import type { CalendarMaintenanceRenewalOutcome } from "./calendar-maintenance-evidence";
 
 /** Exact active channel needed to stop only the superseded provider resource. */
 export interface ActiveGoogleChannel {
@@ -89,11 +90,17 @@ export interface ChannelLifecycleDependencies {
   ) => Promise<Uint8Array>;
 }
 
+/** Value-free terminal outcome for one renewal and deferred-cleanup selection pass. */
+export type RenewExpiringChannelsOutcome = Exclude<
+  CalendarMaintenanceRenewalOutcome,
+  "failed"
+>;
+
 /** Renews every eligible channel while retaining the old valid channel until replacement activation. */
 export async function renewExpiringChannels(
   now: Date,
   dependencies: ChannelLifecycleDependencies,
-): Promise<void> {
+): Promise<RenewExpiringChannelsOutcome> {
   assertDate(now);
   const candidates = await dependencies.repository.listRenewalCandidates(now);
   let firstFailure: unknown;
@@ -119,6 +126,9 @@ export async function renewExpiringChannels(
     }
   }
   if (firstFailure !== undefined) throw firstFailure;
+  return candidates.length > 0 || superseded.length > 0
+    ? "completed"
+    : "no_work";
 }
 
 /** Executes one pre-register/watch/activate/stop/retire state machine. */

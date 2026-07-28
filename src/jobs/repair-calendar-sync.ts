@@ -1,5 +1,6 @@
 /** Reserves deterministic scheduled-repair work and sends only opaque queue messages. */
 import type { ReserveWebhookJobResult } from "../data/repositories/job-repository";
+import type { CalendarMaintenanceRepairOutcome } from "./calendar-maintenance-evidence";
 import type { CalendarSyncMessage } from "./queue-message";
 
 const REPAIR_INTERVAL_MS = 15 * 60_000;
@@ -39,15 +40,23 @@ export interface RepairDependencies {
   readonly queue: RepairQueue;
 }
 
+/** Value-free terminal outcome for one scheduled repair selection pass. */
+export type RepairCalendarSyncOutcome = Exclude<
+  CalendarMaintenanceRepairOutcome,
+  "failed"
+>;
+
 /** Enqueues one deduplicated repair for every calendar stale at this schedule boundary. */
 export async function repairCalendarSync(
   now: Date,
   dependencies: RepairDependencies,
-): Promise<void> {
+): Promise<RepairCalendarSyncOutcome> {
   assertDate(now);
+  let reservedWork = false;
   const bootstrapped = await dependencies.repository.bootstrapConnectedCalendars(now);
   for (const initial of bootstrapped) {
     if (!initial.shouldEnqueue) continue;
+    reservedWork = true;
     await dependencies.queue.send(initial.message);
     await dependencies.repository.markEnqueued(initial.message.jobId, now);
   }
@@ -61,9 +70,11 @@ export async function repairCalendarSync(
     });
     const reserved = await dependencies.repository.reserveRepairJob(message, now);
     if (!reserved.shouldEnqueue) continue;
+    reservedWork = true;
     await dependencies.queue.send(reserved.message);
     await dependencies.repository.markEnqueued(reserved.message.jobId, now);
   }
+  return reservedWork ? "reserved" : "no_work";
 }
 
 /** Derives a stable idempotency key for one calendar/checkpoint/15-minute slot. */

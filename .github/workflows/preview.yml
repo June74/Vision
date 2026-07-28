@@ -110,6 +110,8 @@ jobs:
     timeout-minutes: 18
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
@@ -125,7 +127,7 @@ jobs:
         run: |
           set +o pipefail
           timeout 16m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |
-            pnpm exec tsx scripts/print-safe-tail.ts --role-probe-only
+            pnpm exec tsx scripts/print-safe-tail.ts --calendar-maintenance-only
 
   configure_gateway:
     name: Configure approved AI Gateway budget

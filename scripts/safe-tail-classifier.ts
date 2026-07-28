@@ -1,5 +1,6 @@
 /** Parses only closed recovery and temporary-restore evidence from Wrangler JSON. */
 import { BACKUP_TABLES } from "../src/domain/backup/manifest";
+import type { CalendarMaintenanceEvidence } from "../src/jobs/calendar-maintenance-evidence";
 import type {
   TemporaryRestoreEvidence,
   TemporaryRestoreFailureCategory,
@@ -35,6 +36,7 @@ export interface SafeTailEvidence {
 /** The only evidence objects that the safe tail may emit. */
 export type SafeTailResult =
   | SafeTailEvidence
+  | CalendarMaintenanceEvidence
   | TemporaryRestoreEvidence
   | TemporaryPreviewRoleProbeEvidence;
 
@@ -92,7 +94,15 @@ const ROLE_PROBE_KEYS = Object.freeze([
   "outcome",
   "roleMatches",
 ] as const);
+const CALENDAR_MAINTENANCE_KEYS = Object.freeze([
+  "category",
+  "evidenceType",
+  "outcome",
+  "renewalOutcome",
+  "repairOutcome",
+] as const);
 const MAX_TAIL_EVENT_BYTES = 1_048_576;
+const CALENDAR_MAINTENANCE_CRON = "*/15 * * * *";
 
 /** Incrementally assembles Wrangler's pretty-printed JSON without emitting it. */
 export function createSafeTailAccumulator(): {
@@ -132,6 +142,13 @@ export function classifySafeTailLine(line: string): SafeTailResult | null {
   const tail = snapshotOwnEnumerableData(candidate);
   const event = snapshotOwnEnumerableData(tail?.event);
   if (!tail || !event) return null;
+  const maintenance = locateCalendarMaintenanceEvidence(tail.logs);
+  if (maintenance.seen) {
+    return event.cron === CALENDAR_MAINTENANCE_CRON
+      ? maintenance.evidence
+      : null;
+  }
+  if (event.cron === CALENDAR_MAINTENANCE_CRON) return null;
   const cron =
     event.cron === "* * * * *"
       ? "temporary_recovery"
@@ -160,6 +177,62 @@ export function classifySafeTailLine(line: string): SafeTailResult | null {
       (outcome === "ok" ? "none" : "unknown_failure"),
     cron,
     outcome,
+  });
+}
+
+/** Reconstructs one coherent exact permanent maintenance result. */
+export function classifyCalendarMaintenanceEvidence(
+  candidate: unknown,
+): CalendarMaintenanceEvidence | null {
+  const evidence = snapshotOwnEnumerableData(candidate);
+  if (
+    !evidence ||
+    !hasExactKeys(evidence, CALENDAR_MAINTENANCE_KEYS) ||
+    evidence.evidenceType !== "vision.calendar-maintenance/v1"
+  ) {
+    return null;
+  }
+  const repairOutcome = evidence.repairOutcome;
+  const renewalOutcome = evidence.renewalOutcome;
+  if (
+    repairOutcome !== "reserved" &&
+    repairOutcome !== "no_work" &&
+    repairOutcome !== "failed"
+  ) {
+    return null;
+  }
+  if (
+    renewalOutcome !== "completed" &&
+    renewalOutcome !== "no_work" &&
+    renewalOutcome !== "failed"
+  ) {
+    return null;
+  }
+  const repairFailed = repairOutcome === "failed";
+  const renewalFailed = renewalOutcome === "failed";
+  const expectedOutcome = repairFailed || renewalFailed
+    ? "failed"
+    : "succeeded";
+  const expectedCategory: CalendarMaintenanceEvidence["category"] =
+    repairFailed && renewalFailed
+      ? "repair_and_renewal_failed"
+      : repairFailed
+        ? "repair_failed"
+        : renewalFailed
+          ? "renewal_failed"
+          : "none";
+  if (
+    evidence.outcome !== expectedOutcome ||
+    evidence.category !== expectedCategory
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    category: expectedCategory,
+    evidenceType: "vision.calendar-maintenance/v1",
+    outcome: expectedOutcome,
+    renewalOutcome,
+    repairOutcome,
   });
 }
 
@@ -341,6 +414,57 @@ function locateTemporaryPreviewRoleProbeEvidence(candidate: unknown): {
   return { seen, evidence: null };
 }
 
+/** Requires exactly one valid maintenance terminal record and no mixed terminal record. */
+function locateCalendarMaintenanceEvidence(candidate: unknown): {
+  readonly seen: boolean;
+  readonly evidence: CalendarMaintenanceEvidence | null;
+} {
+  if (!Array.isArray(candidate)) return { seen: false, evidence: null };
+  let seen = false;
+  let valid: CalendarMaintenanceEvidence | null = null;
+  let invalid = false;
+  for (const logCandidate of candidate) {
+    const log = snapshotOwnEnumerableData(logCandidate);
+    if (!log || !Array.isArray(log.message)) continue;
+    for (const messageCandidate of log.message) {
+      const message = snapshotOwnEnumerableData(messageCandidate);
+      if (!message) continue;
+      const evidenceLike = snapshotOwnEnumerableData(message.evidence);
+      const maintenanceLike =
+        evidenceLike?.evidenceType === "vision.calendar-maintenance/v1";
+      const mixedTerminal =
+        message.action === "backup.restore" ||
+        message.action === "backup.restore-role-probe" ||
+        evidenceLike?.evidenceType === "vision.preview-restore/v1" ||
+        evidenceLike?.evidenceType === "vision.preview-role-probe/v1";
+      if (mixedTerminal) invalid = true;
+      if (message.action !== "calendar.maintenance") {
+        if (maintenanceLike) {
+          seen = true;
+          invalid = true;
+        }
+        continue;
+      }
+      if (seen) invalid = true;
+      seen = true;
+      if (!hasExactKeys(message, ["action", "evidence"] as const)) {
+        invalid = true;
+        continue;
+      }
+      const evidence = classifyCalendarMaintenanceEvidence(message.evidence);
+      if (!evidence || valid) {
+        invalid = true;
+        continue;
+      }
+      valid = evidence;
+    }
+  }
+  return {
+    seen,
+    evidence: seen && !invalid ? valid : null,
+  };
+}
+
 /** Reconstructs all and only the authoritative nonnegative row counts. */
 function classifyRestoreRowCounts(
   candidate: unknown,
@@ -398,8 +522,13 @@ function snapshotOwnEnumerableData(
   const snapshot: Record<string, unknown> = Object.create(null);
   for (const key of Reflect.ownKeys(value)) {
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (!descriptor?.enumerable) continue;
-    if (typeof key !== "string" || !("value" in descriptor)) return null;
+    if (
+      !descriptor?.enumerable ||
+      typeof key !== "string" ||
+      !("value" in descriptor)
+    ) {
+      return null;
+    }
     snapshot[key] = descriptor.value;
   }
   return snapshot;

@@ -130,6 +130,7 @@ describe("adversarial calendar maintenance", () => {
         },
         repair: async () => {
           order.push("repair");
+          return "no_work";
         },
         renew: async () => {
           order.push("renew");
@@ -676,14 +677,14 @@ describe("adversarial calendar maintenance", () => {
 
       await expect(
         runScheduledCalendarMaintenance(NOW, {
-          repair: vi.fn(async () => undefined),
+          repair: vi.fn(async () => "no_work" as const),
           renew: () =>
             resolveScheduledGoogleAccessToken({
               googleSubject: "subject-1",
               tokens,
               refreshAccessToken,
               now: () => NOW,
-            }).then(() => undefined),
+            }).then(() => "no_work" as const),
           recordCredentialFailure: (error, now) =>
             repository.recordCredentialFailure(error, now),
         }),

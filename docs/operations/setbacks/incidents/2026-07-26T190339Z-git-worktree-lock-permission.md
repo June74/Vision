@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:03:39.626332Z
-- **Last observed:** 2026-07-28T14:37:16Z
-- **Phase/task:** Phase B completion resume setback preservation
+- **Last observed:** 2026-07-28T19:17:15.0700713Z
+- **Phase/task:** Phase B acceptance instrumentation Task 1 staging
 - **Environment:** Local linked worktree under the managed sandbox
 - **Version/commit:** `f7778b8`
 
@@ -52,7 +52,9 @@ permission was granted.
 
 ## Verification and related work
 
-The retry completed successfully and produced commit `f7778b8`.
+The Task 1 retry staged the complete explicit source, test, script, workflow,
+reference, operational-evidence, and setback path set through the approved
+metadata boundary. Earlier related work produced commit `f7778b8`.
 
 ## Recurrence history
 
@@ -103,3 +105,8 @@ The retry completed successfully and produced commit `f7778b8`.
   stopped before creating the linked-worktree index lock; no index write or
   commit occurred. The expanded exact safe path set is retried through the
   established metadata-permission boundary.
+- 2026-07-28T19:17:15.0700713Z: Recurred while staging the complete verified
+  Task 1 path set. Git stopped before creating the linked-worktree index lock;
+  the following chained read-only commands saw an empty staged diff, so no
+  file was partially staged or committed. The same scoped path set is retried
+  through the established metadata-permission boundary.

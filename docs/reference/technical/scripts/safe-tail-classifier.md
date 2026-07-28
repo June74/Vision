@@ -1,9 +1,10 @@
 # `scripts/safe-tail-classifier.ts`
 
-Provides the closed, privacy-safe projection used for live scheduled recovery,
-temporary restore, and temporary role-probe acceptance. It incrementally
-parses Wrangler's pretty JSON, caps buffered input at one MiB, recognizes only
-approved crons, and emits no provider-controlled fields.
+Provides the closed, privacy-safe projection used for normal calendar
+maintenance, live scheduled recovery, temporary restore, and temporary
+role-probe acceptance. It incrementally parses Wrangler's pretty JSON, caps
+buffered input at one MiB, recognizes only approved crons, and emits no
+provider-controlled fields.
 
 ## `createSafeTailAccumulator`
 
@@ -13,15 +14,21 @@ or after the one-MiB safety cap.
 ## `push`
 
 Adds one raw line, returns `null` for incomplete or irrelevant input, and
-returns one closed recovery, restore, or role-probe result only for a complete
-recognized event.
+returns one closed maintenance, recovery, restore, or role-probe result only
+for a complete recognized event.
 
 ## `classifySafeTailLine`
 
-Parses one JSON value, requires a recognized scheduled cron, returns an exact
-accepted role-probe or restore record before legacy recovery classification,
-maps known fixed backup messages to allowlisted categories, and otherwise uses
-`unknown_failure`.
+Parses one JSON value, requires a recognized scheduled cron, accepts permanent
+maintenance evidence only on `*/15 * * * *`, returns exact accepted terminal
+records before legacy recovery classification, maps known fixed backup
+messages to allowlisted categories, and otherwise uses `unknown_failure`.
+
+## `classifyCalendarMaintenanceEvidence`
+
+Requires exactly `category`, `evidenceType`, `outcome`, `renewalOutcome`, and
+`repairOutcome`; validates all nine coherent terminal combinations; and
+reconstructs a new plain frozen object in that key order.
 
 ## `classifyTemporaryPreviewRoleProbeEvidence`
 
@@ -52,6 +59,12 @@ Walks only the first log message, recognizes
 wrong-action role-probe-shaped evidence as seen but rejected so provider text
 cannot fall through into generic output.
 
+## `locateCalendarMaintenanceEvidence`
+
+Scans terminal log records without retaining raw lines, requires exactly one
+valid `calendar.maintenance` action, and rejects wrong actions, duplicates,
+mixed restore or role-probe terminals, malformed evidence, and extra fields.
+
 ## `classifyRestoreRowCounts`
 
 Requires exactly the 29 authoritative migration-9 table names and a
@@ -67,7 +80,8 @@ only with fixed recovery markers and never stringifying the full event.
 
 Uses property descriptors to copy only own enumerable data properties from a
 plain or null-prototype object into an internal snapshot without invoking
-accessors or accepting enumerable symbols.
+accessors. Symbols, accessors, non-enumerable own properties, and custom
+prototypes reject the whole candidate.
 
 ## `hasExactKeys`
 

@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T19:36:21Z
-- **Last observed:** 2026-07-27T19:36:21Z
-- **Phase/task:** Phase B restore Task 4 diagnosis
+- **Last observed:** 2026-07-28T19:03:00.1892549Z
+- **Phase/task:** Phase B acceptance instrumentation Task 1 full gate
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `9bbc4be`
 
@@ -34,3 +34,10 @@ delayed.
 
 The exact indexed file was found and read successfully, and the recurrence was
 recorded there.
+
+## Recurrence history
+
+- 2026-07-28T19:03:00.1892549Z: Recurred when the known Wrangler-log incident
+  path was typed without the index row's literal `Z`. The indexed path was
+  then copied verbatim and read successfully. No implementation, runtime,
+  provider, or private state changed.

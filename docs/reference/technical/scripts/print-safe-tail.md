@@ -6,7 +6,9 @@ after the first allowlisted scheduled-event classification. The fixed
 `vision.preview-restore/v1` evidence, ignoring recovery classifications while
 the stream remains open. The fixed `--role-probe-only` option accepts only
 reconstructed `vision.preview-role-probe/v1` evidence and ignores both recovery
-and restore results. If no accepted result arrives before input closes, it
-emits a fixed closed-vocabulary result. Raw input is never written to standard
-output. Every argument vector other than no option or one exact fixed option
-exits nonzero without output.
+and restore results. The fixed `--calendar-maintenance-only` option accepts
+only reconstructed `vision.calendar-maintenance/v1` evidence from the normal
+15-minute cron. If no accepted result arrives before input closes, it emits a
+fixed closed-vocabulary result. Raw input is never written to standard output.
+Every argument vector other than no option or one exact fixed option exits
+nonzero without output.

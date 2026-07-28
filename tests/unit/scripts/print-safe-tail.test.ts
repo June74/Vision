@@ -65,6 +65,26 @@ function roleProbeTail(evidence: unknown): string {
   ]);
 }
 
+/** Builds one exact permanent maintenance success result. */
+function maintenanceSuccess(): unknown {
+  return {
+    evidenceType: "vision.calendar-maintenance/v1",
+    outcome: "succeeded",
+    category: "none",
+    repairOutcome: "reserved",
+    renewalOutcome: "completed",
+  };
+}
+
+/** Wraps one permanent maintenance result in the normal maintenance cron. */
+function maintenanceTail(evidence: unknown): string {
+  return JSON.stringify({
+    outcome: "ok",
+    event: { cron: "*/15 * * * *" },
+    logs: [{ message: [{ action: "calendar.maintenance", evidence }] }],
+  });
+}
+
 describe("print-safe-tail", () => {
   it("keeps default mode backward compatible by emitting recovery evidence first", async () => {
     await expect(
@@ -126,6 +146,37 @@ describe("print-safe-tail", () => {
     });
   });
 
+  it("emits only permanent maintenance evidence in calendar-maintenance-only mode", async () => {
+    await expect(
+      runPrintSafeTail(
+        ["--calendar-maintenance-only"],
+        [
+          scheduledTail(),
+          restoreTail(restoreFailure()),
+          roleProbeTail(roleProbeSuccess()),
+          maintenanceTail(maintenanceSuccess()),
+        ],
+      ),
+    ).resolves.toEqual({
+      exitCode: 0,
+      stdout:
+        '{"category":"none","evidenceType":"vision.calendar-maintenance/v1","outcome":"succeeded","renewalOutcome":"completed","repairOutcome":"reserved"}\n',
+    });
+  });
+
+  it("emits the fixed fallback when calendar-maintenance-only mode sees no maintenance result", async () => {
+    await expect(
+      runPrintSafeTail(
+        ["--calendar-maintenance-only"],
+        [scheduledTail(), restoreTail(restoreFailure())],
+      ),
+    ).resolves.toEqual({
+      exitCode: 0,
+      stdout:
+        '{"category":"no_scheduled_event","cron":"none","outcome":"unknown"}\n',
+    });
+  });
+
   it("rejects unknown arguments without emitting recovery evidence", async () => {
     await expect(
       runPrintSafeTail(["--unrecognized"], [scheduledTail()]),
@@ -143,6 +194,15 @@ describe("print-safe-tail", () => {
       runPrintSafeTail(
         ["--restore-only", "--role-probe-only"],
         [roleProbeTail(roleProbeSuccess())],
+      ),
+    ).resolves.toEqual({ exitCode: 1, stdout: "" });
+  });
+
+  it("rejects combined maintenance and recovery observer modes", async () => {
+    await expect(
+      runPrintSafeTail(
+        ["--calendar-maintenance-only", "--restore-only"],
+        [maintenanceTail(maintenanceSuccess())],
       ),
     ).resolves.toEqual({ exitCode: 1, stdout: "" });
   });

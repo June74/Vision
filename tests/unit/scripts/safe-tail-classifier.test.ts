@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  classifyCalendarMaintenanceEvidence,
   classifySafeTailLine,
   classifyTemporaryPreviewRoleProbeEvidence,
   classifyTemporaryRestoreEvidence,
@@ -10,6 +11,7 @@ import type {
   TemporaryRestoreEvidence,
   TemporaryRestoreFailureCategory,
 } from "../../../src/jobs/temporary-preview-restore";
+import type { CalendarMaintenanceEvidence } from "../../../src/jobs/calendar-maintenance-evidence";
 import type { TemporaryPreviewRoleProbeEvidence } from "../../../src/jobs/temporary-preview-role-probe";
 
 const FAILURE_CATEGORIES: readonly TemporaryRestoreFailureCategory[] = [
@@ -79,7 +81,194 @@ function roleProbeTail(
   });
 }
 
+/** Builds one exact permanent maintenance result. */
+function maintenanceEvidence(
+  repairOutcome: CalendarMaintenanceEvidence["repairOutcome"] = "reserved",
+  renewalOutcome: CalendarMaintenanceEvidence["renewalOutcome"] = "completed",
+): CalendarMaintenanceEvidence {
+  const repairFailed = repairOutcome === "failed";
+  const renewalFailed = renewalOutcome === "failed";
+  return {
+    evidenceType: "vision.calendar-maintenance/v1",
+    outcome: repairFailed || renewalFailed ? "failed" : "succeeded",
+    category:
+      repairFailed && renewalFailed
+        ? "repair_and_renewal_failed"
+        : repairFailed
+          ? "repair_failed"
+          : renewalFailed
+            ? "renewal_failed"
+            : "none",
+    repairOutcome,
+    renewalOutcome,
+  };
+}
+
+/** Wraps permanent maintenance evidence in the scheduled tail shape. */
+function maintenanceTail(
+  evidence: unknown,
+  cron = "*/15 * * * *",
+  records: readonly unknown[] = [
+    { action: "calendar.maintenance", evidence },
+  ],
+): string {
+  return JSON.stringify({
+    outcome: "ok",
+    event: { cron },
+    logs: records.map((record) => ({ message: [record] })),
+  });
+}
+
 describe("safe Cloudflare tail classification", () => {
+  it.each([
+    ["reserved", "completed"],
+    ["reserved", "no_work"],
+    ["no_work", "completed"],
+    ["no_work", "no_work"],
+    ["failed", "completed"],
+    ["failed", "no_work"],
+    ["reserved", "failed"],
+    ["no_work", "failed"],
+    ["failed", "failed"],
+  ] as const)(
+    "reconstructs one exact five-key maintenance result for %s/%s",
+    (repairOutcome, renewalOutcome) => {
+      const evidence = maintenanceEvidence(repairOutcome, renewalOutcome);
+      const classified = classifyCalendarMaintenanceEvidence(evidence);
+
+      expect(classified).toEqual(evidence);
+      expect(classified).not.toBe(evidence);
+      expect(Object.keys(classified ?? {})).toEqual([
+        "category",
+        "evidenceType",
+        "outcome",
+        "renewalOutcome",
+        "repairOutcome",
+      ]);
+      expect(classifySafeTailLine(maintenanceTail(evidence))).toEqual(evidence);
+    },
+  );
+
+  it("rejects missing, extra, raw-error, and incoherent maintenance fields", () => {
+    const success = maintenanceEvidence();
+    const rejected = [
+      { ...success, extra: true },
+      { ...success, error: "raw provider error" },
+      {
+        evidenceType: success.evidenceType,
+        outcome: success.outcome,
+        category: success.category,
+        repairOutcome: success.repairOutcome,
+      },
+      { ...success, outcome: "failed" },
+      { ...success, category: "repair_failed" },
+      { ...success, repairOutcome: "failed" },
+      { ...success, renewalOutcome: "failed" },
+      { ...success, category: "private_provider_failure" },
+      { ...success, repairOutcome: "unknown" },
+      { ...success, renewalOutcome: "unknown" },
+    ];
+
+    for (const candidate of rejected) {
+      expect(classifyCalendarMaintenanceEvidence(candidate)).toBeNull();
+      expect(classifySafeTailLine(maintenanceTail(candidate))).toBeNull();
+    }
+    expect(
+      classifySafeTailLine(
+        maintenanceTail(success, "*/15 * * * *", [
+          {
+            action: "calendar.maintenance",
+            evidence: success,
+            error: "raw provider error",
+          },
+        ]),
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects maintenance accessors, symbols, hidden keys, and non-plain prototypes without invoking them", () => {
+    let getterCalls = 0;
+    const accessor = {
+      evidenceType: "vision.calendar-maintenance/v1",
+      outcome: "succeeded",
+      category: "none",
+      get repairOutcome() {
+        getterCalls += 1;
+        return "reserved";
+      },
+      renewalOutcome: "completed",
+    };
+    const symbol = {
+      ...maintenanceEvidence(),
+      [Symbol("private")]: true,
+    };
+    const hidden = { ...maintenanceEvidence() };
+    Object.defineProperty(hidden, "private", {
+      enumerable: false,
+      value: true,
+    });
+    const prototype = Object.assign(Object.create({ inherited: true }), {
+      ...maintenanceEvidence(),
+    });
+
+    expect(classifyCalendarMaintenanceEvidence(accessor)).toBeNull();
+    expect(getterCalls).toBe(0);
+    expect(classifyCalendarMaintenanceEvidence(symbol)).toBeNull();
+    expect(classifyCalendarMaintenanceEvidence(hidden)).toBeNull();
+    expect(classifyCalendarMaintenanceEvidence(prototype)).toBeNull();
+  });
+
+  it("rejects maintenance evidence on wrong crons and duplicate or mixed terminal records", () => {
+    const maintenance = maintenanceEvidence();
+    const roleProbe = {
+      action: "backup.restore-role-probe",
+      evidence: {
+        evidenceType: "vision.preview-role-probe/v1",
+        outcome: "succeeded",
+        category: "none",
+        roleMatches: true,
+      },
+    };
+
+    expect(
+      classifySafeTailLine(maintenanceTail(maintenance, "* * * * *")),
+    ).toBeNull();
+    expect(
+      classifySafeTailLine(maintenanceTail(maintenance, "5 6 * * *")),
+    ).toBeNull();
+    expect(
+      classifySafeTailLine(
+        maintenanceTail(maintenance, "*/15 * * * *", [
+          { action: "calendar.maintenance", evidence: maintenance },
+          { action: "calendar.maintenance", evidence: maintenance },
+        ]),
+      ),
+    ).toBeNull();
+    expect(
+      classifySafeTailLine(
+        maintenanceTail(maintenance, "*/15 * * * *", [
+          { action: "calendar.maintenance", evidence: maintenance },
+          roleProbe,
+        ]),
+      ),
+    ).toBeNull();
+    expect(
+      classifySafeTailLine(
+        maintenanceTail(maintenance, "*/15 * * * *", [
+          roleProbe,
+          { action: "calendar.maintenance", evidence: maintenance },
+        ]),
+      ),
+    ).toBeNull();
+    expect(
+      classifySafeTailLine(
+        maintenanceTail(maintenance, "*/15 * * * *", [
+          { action: "calendar.other", evidence: maintenance },
+        ]),
+      ),
+    ).toBeNull();
+  });
+
   it("returns only allowlisted recovery evidence", () => {
     const raw = JSON.stringify({
       outcome: "exception",

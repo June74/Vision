@@ -26,7 +26,9 @@ Preserves the exact
 `{ action: "backup.restore-role-probe", evidence }` log shape.
 
 ## `runScheduledCalendarMaintenance`
-Runs expired rebuild cleanup, queues repair, still attempts renewal if either fails, and reports a failure afterward.
+Runs expired rebuild cleanup, queues repair, still attempts renewal if either
+fails, emits one fixed five-field maintenance result, and then reports the
+original failure in cleanup, repair, renewal order.
 ## `cleanupProjectionRebuilds`
 Removes expired encrypted rebuild staging before Google credentials are needed.
 ## `recordCredentialFailure`

@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T05:20:25Z
-- **Last observed:** 2026-07-28T02:01:36.2087445Z
-- **Phase/task:** Preview database role probe Task 1
+- **Last observed:** 2026-07-28T18:43:28.7660518Z
+- **Phase/task:** Phase B acceptance instrumentation Task 1 discovery
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `80e8c3e`
 
@@ -76,3 +76,7 @@ link now resolves to this existing incident.
   path was invoked while recording the skill-root setback. The established
   incident and index formats were used directly; no provider, repository
   runtime, or private state changed.
+- 2026-07-28T18:43:28.7660518Z: Recurred when the repository-relative helper
+  path was inspected before resolving the maintained helper under the setback
+  skill root. The skill-root helper then created the required incident. No
+  source, runtime, provider, or private state changed.

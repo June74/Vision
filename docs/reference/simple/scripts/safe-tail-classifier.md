@@ -1,8 +1,8 @@
 # safe-tail-classifier
 
 Turns a Cloudflare scheduled-event log into a tiny recovery result, the exact
-closed temporary-restore evidence object, or the exact four-field temporary
-role-probe evidence object.
+five-field normal maintenance result, the exact closed temporary-restore
+evidence object, or the exact four-field temporary role-probe evidence object.
 
 ## `createSafeTailAccumulator`
 
@@ -14,9 +14,14 @@ Accepts one line and returns a safe result only after one complete event exists.
 
 ## `classifySafeTailLine`
 
-Recognizes only the temporary or normal backup schedules, returns exact
-role-probe or restore evidence first, and otherwise maps known backup failures
-to fixed names.
+Recognizes only the exact maintenance or recovery schedules, returns an exact
+maintenance, role-probe, or restore result, and otherwise maps known backup
+failures to fixed names.
+
+## `classifyCalendarMaintenanceEvidence`
+
+Accepts only the five exact maintenance keys and coherent repair, renewal,
+category, and outcome combinations.
 
 ## `classifyTemporaryPreviewRoleProbeEvidence`
 
@@ -42,6 +47,11 @@ Checks only the first message in each log entry for the exact role-probe
 action, and blocks generic fallback for malformed or wrongly labeled
 role-probe-shaped records.
 
+## `locateCalendarMaintenanceEvidence`
+
+Requires one valid maintenance terminal record and rejects duplicate, mixed,
+malformed, or wrongly labeled terminal records.
+
 ## `classifyRestoreRowCounts`
 
 Requires one nonnegative safe count for every migration-9 backup table.
@@ -54,7 +64,7 @@ tail event.
 ## `snapshotOwnEnumerableData`
 
 Copies only an object's own enumerable data properties without running
-getters.
+getters, and rejects symbols, accessors, hidden keys, and custom prototypes.
 
 ## `hasExactKeys`
 

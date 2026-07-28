@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-07-28T14:43:50Z
-- **Phase/task:** Phase B completion resume full gate
+- **Last observed:** 2026-07-28T19:15:35.3439513Z
+- **Phase/task:** Phase B acceptance instrumentation Task 1 final gate
 - **Environment:** Local managed sandbox
 - **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`
 
@@ -102,3 +102,15 @@ security validation passed.
   zero after 720 unit/integration tests passed with one intentional skip, 179
   contract tests passed, 75 Worker tests passed, and documentation, build, and
   security validation passed.
+- 2026-07-28T19:03:00.1892549Z: Recurred during the Task 1 complete repository
+  gate. The command exited zero after 755 unit/integration tests passed with
+  one intentional skip, 179 contract tests passed, 75 Worker tests passed, and
+  typecheck, documentation, build, and security validation passed. The
+  optional user-profile log write and static export analysis remained
+  sandbox-limited; generated artifacts and all executable gates were valid.
+- 2026-07-28T19:15:35.3439513Z: The final Task 1 gate routed Wrangler's
+  optional log to a task-local temporary path, eliminating the log-write
+  error. Static export analysis remained sandbox-limited, while all 75 Worker
+  tests and the build passed. The complete gate again exited zero with 755
+  unit/integration tests, one intentional skip, 179 contract tests,
+  documentation, typecheck, build, and security validation passing.

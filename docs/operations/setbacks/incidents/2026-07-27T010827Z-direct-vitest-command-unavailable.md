@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:08:27Z
-- **Last observed:** 2026-07-27T01:41:39Z
-- **Phase/task:** Phase B AI Gateway update diagnostics
+- **Last observed:** 2026-07-28T18:47:00.4534017Z
+- **Phase/task:** Phase B acceptance instrumentation Task 1 RED
 - **Environment:** Local Windows worktree
 - **Version/commit:** `22c5dc0`
 
@@ -39,3 +39,8 @@ declared unit-test script.
 - 2026-07-27T01:41:39Z: Recurred during the clean-room integration-only
   rerun when `pnpm exec vitest` bypassed the declared script. No test ran; the
   corrected command uses `pnpm.cmd test:unit tests/integration`.
+- 2026-07-28T18:47:00.4534017Z: Recurred when the Task 1 brief's exact
+  `pnpm.cmd exec vitest` command could not resolve the executable even though
+  the local command shim exists. No test ran and no project or provider state
+  changed. The correction uses the repository's declared `test:unit` script
+  with the same focused file arguments.

@@ -27,7 +27,11 @@ fixed value-free failure after failed evidence is emitted.
 Writes only the exact allowlisted action/evidence object.
 
 ## `runScheduledCalendarMaintenance`
-Runs projection cleanup and repair before renewal, isolates all three operations, and reports a failure only after every maintenance path has been attempted.
+Runs projection cleanup and repair before renewal, isolates all three
+operations, reconstructs and emits exactly one closed maintenance record, and
+rethrows only after every maintenance path has been attempted. Cleanup failure
+maps to the repair side without extending the five-key evidence schema;
+throwing still prefers cleanup, then repair, then renewal.
 ## `cleanupProjectionRebuilds`
 Invokes the owner-scoped database-only projection retention boundary before credential-dependent renewal; it never fetches events or reads OAuth tokens.
 ## `recordCredentialFailure`

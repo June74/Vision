@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T19:40:36Z
-- **Last observed:** 2026-07-28T02:18:06.4385089Z
-- **Phase/task:** Preview database role probe Task 1 full gate
+- **Last observed:** 2026-07-28T18:59:51.5634846Z
+- **Phase/task:** Phase B acceptance instrumentation Task 1 full gate
 - **Environment:** Local and GitHub Actions verification
 - **Version/commit:** `9bbc4be`
 
@@ -55,3 +55,10 @@ found no value leak.
   unit tests passed; no provider, browser, network, commit, push, or private
   state was involved. The matching workflow assertion is updated before the
   complete gate is rerun.
+- 2026-07-28T18:59:51.5634846Z: Recurred when the focused workflow policy
+  test was updated for permanent maintenance observation but the older
+  cross-cutting routing assertion still required role-probe-only observation.
+  TypeScript and 754 other unit tests passed, with one intentional skip; no
+  workflow run, provider, network, commit, or private state was involved. The
+  matching assertion now requires `--calendar-maintenance-only` before the
+  focused boundary and complete gate are rerun.

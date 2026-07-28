@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:08:27Z
-- **Last observed:** 2026-07-28T02:50:34Z
-- **Phase/task:** Preview database role probe Task 2 monitoring
+- **Last observed:** 2026-07-28T18:43:28.7660518Z
+- **Phase/task:** Phase B acceptance instrumentation Task 1 discovery
 - **Environment:** Local Windows worktree
 - **Version/commit:** `0f08fc1`
 
@@ -53,6 +53,11 @@ The replacement returned a valid UTC timestamp.
   UTC timestamp.
 - **2026-07-28T02:50:34Z:** The unsupported flag was used again while checking
   the safe live report's modification time. The file metadata check completed,
+  no mutation depended on the failed timestamp, and the documented
+  `[DateTime]::UtcNow.ToString(...)` correction immediately returned a valid
+  UTC timestamp.
+- **2026-07-28T18:43:28.7660518Z:** The unsupported flag was used again while
+  checking the new ripgrep incident timestamp. The incident lookup completed,
   no mutation depended on the failed timestamp, and the documented
   `[DateTime]::UtcNow.ToString(...)` correction immediately returned a valid
   UTC timestamp.

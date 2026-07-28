@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T02:32:27Z
-- **Last observed:** 2026-07-28T00:22:02.8212591Z
-- **Phase/task:** Listener-first restore retry clear-job planning
+- **Last observed:** 2026-07-28T18:56:39.1904429Z
+- **Phase/task:** Phase B acceptance instrumentation Task 1 typecheck
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `6fdb9cb`
 
@@ -74,3 +74,11 @@ The retry must modify only the intended plan paragraph and pass
 - 2026-07-28T00:22:02.8212591Z: The next small hunk still used the rendered
   artifact because the default PowerShell decoder was reused. It was rejected
   atomically. The exact UTF-8 lines were then read explicitly before retrying.
+- 2026-07-28T18:56:00.0725316Z: Recurred when the setback index patch used a
+  rounded timestamp instead of the helper's exact generated timestamp. The
+  combined patch was rejected atomically; exact current lines were read before
+  the retry.
+- 2026-07-28T18:56:39.1904429Z: The retry then used the incident heading
+  instead of the index row's shorter title. It was also rejected atomically.
+  Minimal exact row-specific hunks succeeded; no source, workflow, provider,
+  or private state changed in either failed attempt.

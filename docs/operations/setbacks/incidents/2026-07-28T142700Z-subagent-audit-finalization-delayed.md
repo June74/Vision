@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T14:21:00Z
-- **Last observed:** 2026-07-28T18:38:44Z
-- **Phase/task:** Phase B acceptance instrumentation plan final review
+- **Last observed:** 2026-07-28T19:13:06.4702636Z
+- **Phase/task:** Phase B acceptance instrumentation Task 1 review
 - **Environment:** Local subagent coordination
 - **Version/commit:** `386b7d3`
 
@@ -70,3 +70,9 @@ Both ignored audit report files now exist and contain safe conclusions.
   earlier three planning maps, local structural checks, documentation check,
   and migration-diff check had already passed. No repository or provider state
   changed.
+- 2026-07-28T19:13:06.4702636Z: Recurred when the read-only Task 1 reviewer
+  remained active after repeated bounded waits and an explicit finalize
+  request without returning a verdict. It was stopped before commit. Local
+  TDD, self-review, focused gates, and the complete repository gate were
+  already complete; the controller retains a separate exact-diff review step.
+  No repository, workflow, provider, or private state changed.

@@ -79,8 +79,9 @@ describe("Google channel renewal", () => {
       return true;
     });
 
-    await renewExpiringChannels(NOW, deps);
+    const result = await renewExpiringChannels(NOW, deps);
 
+    expect(result).toBe("completed");
     expect(order).toEqual([
       "pre-register",
       "watch",
@@ -195,8 +196,9 @@ describe("Google channel renewal", () => {
       },
     });
 
-    await renewExpiringChannels(NOW, deps);
+    const result = await renewExpiringChannels(NOW, deps);
 
+    expect(result).toBe("completed");
     expect(deps.provider.stop).toHaveBeenCalledWith({
       channelId: "superseded-channel",
       resourceId: "superseded-resource",
@@ -205,6 +207,16 @@ describe("Google channel renewal", () => {
       "superseded-row",
       NOW,
     );
+  });
+
+  it("reports no work when no renewal or deferred cleanup is selected", async () => {
+    const deps = dependencies();
+    vi.mocked(deps.repository.listRenewalCandidates).mockResolvedValue([]);
+
+    await expect(renewExpiringChannels(NOW, deps)).resolves.toBe("no_work");
+
+    expect(deps.provider.watch).not.toHaveBeenCalled();
+    expect(deps.provider.stop).not.toHaveBeenCalled();
   });
 
   it("continues remaining calendars before reporting an unexpected candidate failure", async () => {

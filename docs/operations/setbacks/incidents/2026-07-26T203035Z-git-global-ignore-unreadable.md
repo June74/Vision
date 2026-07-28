@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:30:35.2961897Z
-- **Last observed:** 2026-07-28T18:35:01Z
-- **Phase/task:** Phase B acceptance instrumentation plan pre-commit
+- **Last observed:** 2026-07-28T19:17:15.0700713Z
+- **Phase/task:** Phase B acceptance instrumentation Task 1 staging
 - **Environment:** Local Phase B worktree under the managed sandbox
 - **Version/commit:** Staged Task 1 patch based on `59e6a02`
 
@@ -145,4 +145,16 @@ commit `4420f6d`.
 - 2026-07-28T18:35:01Z: Recurred during the implementation-plan status and
   ignore check. Git returned the two modified setback files and the new plan
   path before the known warning. No workaround, provider action, or unrelated
+  repository mutation was attempted.
+- 2026-07-28T18:47:00.4534017Z: Recurred during the Task 1 dependency-linkage
+  status check. Git returned the complete changed-file list before the known
+  warning. No workaround, provider action, or unrelated repository mutation
+  was attempted.
+- 2026-07-28T19:04:20.7909464Z: Recurred during the Task 1 explicit tracked
+  and untracked inventory. Git returned the complete inventory before the
+  known warning. No workaround, provider action, or unrelated repository
+  mutation was attempted.
+- 2026-07-28T19:17:15.0700713Z: Recurred during the post-denial staged
+  inventory. Git returned the requested empty index state before the known
+  warning. No configuration workaround, provider action, or unrelated
   repository mutation was attempted.

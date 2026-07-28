@@ -237,11 +237,20 @@ describe("preview live diagnostics policy", () => {
     );
     expect(preview).not.toContain("group: vision-preview\n");
     expect(tailJob).toContain("timeout-minutes: 18");
+    expect(tailJob).toContain(
+      "uses: actions/checkout@v5\n" +
+        "        with:\n" +
+        "          ref: ${{ inputs.ref }}",
+    );
+    expect(tailJob).not.toContain("wrangler deploy");
+    expect(tailJob).not.toContain("gateway:configure:preview");
+    expect(tailJob).not.toContain("actions/upload-artifact");
     expect(tailStep).toContain(
       "timeout 16m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |\n" +
-        "            pnpm exec tsx scripts/print-safe-tail.ts --role-probe-only",
+        "            pnpm exec tsx scripts/print-safe-tail.ts --calendar-maintenance-only",
     );
     expect(tailStep).not.toContain("--restore-only");
+    expect(tailStep).not.toContain("--role-probe-only");
     expect(tailStep).toContain("--format json 2>/dev/null");
     expect(tailStep).toContain(
       "CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}",

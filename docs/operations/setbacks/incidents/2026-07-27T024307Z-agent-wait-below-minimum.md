@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T02:43:07Z
-- **Last observed:** 2026-07-27T02:43:07Z
-- **Phase/task:** Phase B restore orchestration
+- **Last observed:** 2026-07-28T19:07:42.8433532Z
+- **Phase/task:** Phase B acceptance instrumentation Task 1 review
 - **Environment:** Codex agent coordination
 - **Version/commit:** `574ea0a`
 
@@ -53,3 +53,7 @@ A valid ten-second wait completed normally.
 ## Recurrence history
 
 - 2026-07-27T02:43:07Z: First observed and corrected.
+- 2026-07-28T19:07:42.8433532Z: Recurred while checking the independent Task 1
+  reviewer. The one-second wait was rejected immediately; the reviewer
+  remained active and no subagent, file, provider, or runtime state changed.
+  Subsequent waits use the documented minimum or longer.

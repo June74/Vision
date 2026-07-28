@@ -26,9 +26,22 @@ import {
   type Env,
 } from "../server/env";
 import { createDailyBackup } from "./create-daily-backup";
+import {
+  createCalendarMaintenanceEvidence,
+  emitCalendarMaintenanceEvidence,
+  type CalendarMaintenanceEvidenceEntry,
+  type CalendarMaintenanceRenewalOutcome,
+  type CalendarMaintenanceRepairOutcome,
+} from "./calendar-maintenance-evidence";
 import { purgeExpiredBackups } from "./purge-expired-backups";
-import { renewExpiringChannels } from "./renew-google-channels";
-import { repairCalendarSync } from "./repair-calendar-sync";
+import {
+  renewExpiringChannels,
+  type RenewExpiringChannelsOutcome,
+} from "./renew-google-channels";
+import {
+  repairCalendarSync,
+  type RepairCalendarSyncOutcome,
+} from "./repair-calendar-sync";
 import {
   classifyGoogleRefreshError,
 } from "./queue-consumer";
@@ -103,8 +116,8 @@ export function emitTemporaryPreviewRoleProbeEvidence(
 export interface ScheduledCalendarMaintenanceDependencies {
   /** Removes only expired nonactivated rebuild staging; it never reads provider events or OAuth credentials. */
   readonly cleanupProjectionRebuilds?: (now: Date) => Promise<number>;
-  readonly renew: (now: Date) => Promise<void>;
-  readonly repair: (now: Date) => Promise<void>;
+  readonly renew: (now: Date) => Promise<RenewExpiringChannelsOutcome>;
+  readonly repair: (now: Date) => Promise<RepairCalendarSyncOutcome>;
   /** Persists typed OAuth failure against only the maintained checkpoint generation. */
   readonly recordCredentialFailure?: (
     failure: SyncCalendarError,
@@ -112,6 +125,8 @@ export interface ScheduledCalendarMaintenanceDependencies {
   ) => Promise<boolean>;
   /** Clears only a scheduler-owned retry marker after credentials recover. */
   readonly clearCredentialRetry?: (now: Date) => Promise<boolean>;
+  /** Replaceable write seam; the coordinator still constructs the fixed action. */
+  readonly writeEvidence?: (entry: CalendarMaintenanceEvidenceEntry) => void;
 }
 
 /** Narrow credential boundary used by production renewal and adversarial tests. */
@@ -141,18 +156,20 @@ export async function runScheduledCalendarMaintenance(
   let cleanupFailure: unknown;
   let repairFailure: unknown;
   let renewalFailure: unknown;
+  let repairOutcome: CalendarMaintenanceRepairOutcome = "no_work";
+  let renewalOutcome: CalendarMaintenanceRenewalOutcome = "no_work";
   try {
     await dependencies.cleanupProjectionRebuilds?.(now);
   } catch (error) {
     cleanupFailure = error;
   }
   try {
-    await dependencies.repair(now);
+    repairOutcome = await dependencies.repair(now);
   } catch (error) {
     repairFailure = error;
   }
   try {
-    await dependencies.renew(now);
+    renewalOutcome = await dependencies.renew(now);
     await dependencies.clearCredentialRetry?.(now);
   } catch (error) {
     renewalFailure = error;
@@ -167,6 +184,13 @@ export async function runScheduledCalendarMaintenance(
       }
     }
   }
+  const evidence = createCalendarMaintenanceEvidence(
+    cleanupFailure !== undefined || repairFailure !== undefined
+      ? "failed"
+      : repairOutcome,
+    renewalFailure !== undefined ? "failed" : renewalOutcome,
+  );
+  emitCalendarMaintenanceEvidence(evidence, dependencies.writeEvidence);
   if (cleanupFailure !== undefined) throw cleanupFailure;
   if (repairFailure !== undefined) throw repairFailure;
   if (renewalFailure !== undefined) throw renewalFailure;
@@ -312,7 +336,7 @@ async function createProductionScheduledCalendarMaintenanceDependencies(
         auth.GOOGLE_ALLOWED_SUB,
         fetch.bind(globalThis),
       );
-      await renewExpiringChannels(now, {
+      return renewExpiringChannels(now, {
         repository,
         provider: {
           /** Creates one exact Google event-watch channel. */

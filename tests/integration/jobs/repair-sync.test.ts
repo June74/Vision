@@ -41,8 +41,9 @@ describe("scheduled calendar repair", () => {
   it("repairs a missed notification on the first eligible 15-minute run", async () => {
     const deps = dependencies();
 
-    await repairCalendarSync(NOW, deps);
+    const result = await repairCalendarSync(NOW, deps);
 
+    expect(result).toBe("reserved");
     expect(deps.queue.send).toHaveBeenCalledWith({
       jobId: expect.stringMatching(/^repair_[A-Za-z0-9_-]{43}$/u),
       ownerId: STALE.ownerId,
@@ -74,21 +75,35 @@ describe("scheduled calendar repair", () => {
         shouldEnqueue: false,
       });
 
-    await repairCalendarSync(NOW, deps);
-    await repairCalendarSync(NOW, deps);
+    const first = await repairCalendarSync(NOW, deps);
+    const second = await repairCalendarSync(NOW, deps);
 
+    expect(first).toBe("reserved");
+    expect(second).toBe("no_work");
     expect(deps.queue.send).toHaveBeenCalledOnce();
+  });
+
+  it("reports no work when no bootstrap or stale candidate is selected", async () => {
+    const deps = dependencies();
+    vi.mocked(deps.repository.listRepairCandidates).mockResolvedValue([]);
+
+    await expect(repairCalendarSync(NOW, deps)).resolves.toBe("no_work");
+
+    expect(deps.queue.send).not.toHaveBeenCalled();
+    expect(deps.repository.markEnqueued).not.toHaveBeenCalled();
   });
 
   it("runs renewal and repair without fetching calendar events in the scheduler", async () => {
     const order: string[] = [];
-    const renew = vi.fn(async () => undefined);
-    const repair = vi.fn(async () => undefined);
+    const renew = vi.fn(async () => "no_work" as const);
+    const repair = vi.fn(async () => "no_work" as const);
     renew.mockImplementation(async () => {
       order.push("renew");
+      return "no_work";
     });
     repair.mockImplementation(async () => {
       order.push("repair");
+      return "no_work";
     });
 
     await runScheduledCalendarMaintenance(NOW, { renew, repair });
@@ -99,7 +114,7 @@ describe("scheduled calendar repair", () => {
   });
 
   it("does not let credential or renewal failure suppress durable repair", async () => {
-    const repair = vi.fn(async () => undefined);
+    const repair = vi.fn(async () => "no_work" as const);
 
     await expect(
       runScheduledCalendarMaintenance(NOW, {
@@ -114,7 +129,7 @@ describe("scheduled calendar repair", () => {
   });
 
   it("still attempts renewal but preserves a durable repair failure", async () => {
-    const renew = vi.fn(async () => undefined);
+    const renew = vi.fn(async () => "no_work" as const);
     const failure = new Error("safe synthetic queue failure");
 
     await expect(
@@ -139,7 +154,7 @@ describe("scheduled calendar repair", () => {
     async (failure) => {
       const recordCredentialFailure = vi.fn(async () => true);
       const schedulerDependencies = {
-        repair: vi.fn(async () => undefined),
+        repair: vi.fn(async () => "no_work" as const),
         renew: vi.fn(async () => {
           throw failure;
         }),
@@ -157,8 +172,8 @@ describe("scheduled calendar repair", () => {
   it("clears only a scheduler-owned credential retry marker after renewal succeeds", async () => {
     const clearCredentialRetry = vi.fn(async () => true);
     const schedulerDependencies = {
-      repair: vi.fn(async () => undefined),
-      renew: vi.fn(async () => undefined),
+      repair: vi.fn(async () => "no_work" as const),
+      renew: vi.fn(async () => "no_work" as const),
       clearCredentialRetry,
     };
 
