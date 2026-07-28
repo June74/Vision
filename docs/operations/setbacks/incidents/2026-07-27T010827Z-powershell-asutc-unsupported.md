@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:08:27Z
-- **Last observed:** 2026-07-28T00:25:50Z
-- **Phase/task:** Phase B setback logging
+- **Last observed:** 2026-07-28T01:13:37.0861005Z
+- **Phase/task:** Listener-first restore retry Task 3 handoff
 - **Environment:** Local Windows worktree
-- **Version/commit:** `22c5dc0`
+- **Version/commit:** `0f08fc1`
 
 ## Symptom
 
@@ -46,3 +46,8 @@ The replacement returned a valid UTC timestamp.
   Task 2 implementation setback timestamps. No mutation depended on the failed
   timestamp. The documented `[DateTime]::UtcNow.ToString(...)` correction
   immediately returned a valid UTC timestamp.
+- **2026-07-28T01:13:37.0861005Z:** The unsupported flag was used again while
+  recording the Task 3 handoff setback. The read-only index search completed,
+  no mutation depended on the failed timestamp, and the documented
+  `[DateTime]::UtcNow.ToString(...)` correction immediately returned a valid
+  UTC timestamp.

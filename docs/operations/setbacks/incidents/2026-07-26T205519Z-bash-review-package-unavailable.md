@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:55:19.3868194Z
-- **Last observed:** 2026-07-27T21:10:55Z
-- **Phase/task:** Recovery Task 3 independent review
+- **Last observed:** 2026-07-28T01:13:37.0861005Z
+- **Phase/task:** Listener-first restore retry Task 3 handoff
 - **Environment:** Local Windows PowerShell
-- **Version/commit:** `9620e06`
+- **Version/commit:** `0f08fc1`
 
 ## Symptom
 
@@ -33,8 +33,10 @@ script ran.
 
 ## Cause classification
 
-- **Confirmed cause:** The available Bash executable could not use its required
-  Windows logon context.
+- **Confirmed cause:** The Bash-based skill helper is not reliably available
+  in this Windows session. Earlier attempts found an unusable executable or
+  missing Unix utilities; the latest bounded lookup found no Bash executable
+  on `PATH`.
 - **Hypotheses:** None.
 - **Rejected hypotheses:** The Git range and helper path were both resolved.
 - **Known exclusions:** No repository or provider state changed.
@@ -69,3 +71,7 @@ The PowerShell fallback produced a 36,835-byte package for
 - 2026-07-27T21:10:55Z: Recurred when the Task 1 brief helper could not launch
   `bash.exe` because the Windows logon session was unavailable. No artifact or
   repository mutation occurred. Deterministic PowerShell extraction is used.
+- 2026-07-28T01:13:37.0861005Z: Recurred before the Task 3 handoff when a
+  bounded executable lookup found no Bash executable on `PATH`. No artifact,
+  provider action, or repository mutation occurred. The exact approved plan
+  section is passed directly to the subagent instead.
