@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:55:19.3868194Z
-- **Last observed:** 2026-07-28T18:40:34Z
+- **Last observed:** 2026-07-28T22:51:02.2002810Z
 - **Phase/task:** Phase B acceptance instrumentation Task 1 handoff
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** `0f08fc1`
@@ -79,3 +79,7 @@ The PowerShell fallback produced a 36,835-byte package for
   through the discovered Git Bash executable but its `awk` dependency was
   unavailable. No source or provider state changed. The exact Task 1 section
   is extracted with the already verified deterministic PowerShell fallback.
+- 2026-07-28T22:51:02.2002810Z: Recurred when generating the final Task 3
+  review package; `bash.exe` could not start because the Windows logon session
+  was unavailable. No artifact or repository state changed. The documented
+  typed-list PowerShell fallback is used.
