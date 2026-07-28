@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T02:43:07Z
-- **Last observed:** 2026-07-28T19:07:42.8433532Z
+- **Last observed:** 2026-07-28T22:28:02.5459525Z
 - **Phase/task:** Phase B acceptance instrumentation Task 1 review
 - **Environment:** Codex agent coordination
 - **Version/commit:** `574ea0a`
@@ -57,3 +57,6 @@ A valid ten-second wait completed normally.
   reviewer. The one-second wait was rejected immediately; the reviewer
   remained active and no subagent, file, provider, or runtime state changed.
   Subsequent waits use the documented minimum or longer.
+- 2026-07-28T22:28:02.5459525Z: Recurred while checking the resumed Task 3
+  implementer. The one-second wait was rejected immediately, no state changed,
+  and subsequent waits use at least the documented ten-second minimum.

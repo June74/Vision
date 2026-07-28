@@ -35,13 +35,205 @@ export interface PhaseBPrivilegeManifest {
   readonly tables: readonly PhaseBTablePrivilegeExpectation[];
 }
 
-/**
- * Live-attested values are intentionally absent until supplied by the
- * controller. Do not infer them from repository call sites.
- */
-export const PHASE_B_PRIVILEGE_MANIFEST:
-  | PhaseBPrivilegeManifest
-  | undefined = undefined;
+/** Freezes one explicit table entry after applying its closed compile-time type. */
+function freezeAttestedTable(
+  table: PhaseBTablePrivilegeExpectation,
+): Readonly<PhaseBTablePrivilegeExpectation> {
+  return Object.freeze(table);
+}
+
+/** Freezes the explicit entries while preserving their closed compile-time type. */
+function freezeAttestedTables(
+  tables: readonly PhaseBTablePrivilegeExpectation[],
+): readonly PhaseBTablePrivilegeExpectation[] {
+  return Object.freeze(tables);
+}
+
+/** Exact immutable privilege facts from the reviewed live attestation. */
+export const PHASE_B_PRIVILEGE_MANIFEST: PhaseBPrivilegeManifest =
+  Object.freeze({
+    role: "vision_app",
+    schema: "public",
+    schemaOwner: "pg_database_owner",
+    schemaPrivileges: Object.freeze(["USAGE"]),
+    schemaGrantOptions: Object.freeze([]),
+    tables: freezeAttestedTables([
+      freezeAttestedTable({
+        table: "data_key_state",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "wrapped_data_keys",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "oauth_admission_windows",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "oauth_transactions",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "auth_sessions",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "google_oauth_tokens",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "calendar_setup_states",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "calendar_setup_candidates",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "vision_calendar_connections",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "nodes",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "events",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "event_sync_payloads",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "node_annotations",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "node_category_assignments",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "edges",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "audit_events",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "operation_ledger",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "calendar_create_snapshots",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "recoverable_deletions",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "sync_checkpoints",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "sync_channels",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "calendar_sync_maintenance",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "calendar_sync_jobs",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "sync_runs",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "projection_rebuild_generations",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "projection_rebuild_changes",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "ai_usage_months",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "ai_usage_reservations",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+      freezeAttestedTable({
+        table: "ai_usage_ledger",
+        owner: "neondb_owner",
+        privileges: Object.freeze(["DELETE", "INSERT", "SELECT", "UPDATE"]),
+        grantOptions: Object.freeze([]),
+      }),
+    ]),
+  } satisfies PhaseBPrivilegeManifest);
 
 const SCHEMA_PRIVILEGE_ORDER = ["CREATE", "USAGE"] as const;
 const TABLE_PRIVILEGE_ORDER = [

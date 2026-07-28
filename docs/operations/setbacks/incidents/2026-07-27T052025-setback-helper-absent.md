@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T05:20:25Z
-- **Last observed:** 2026-07-28T20:19:03.8827218Z
+- **Last observed:** 2026-07-28T22:38:36.2933763Z
 - **Phase/task:** Phase B acceptance instrumentation Task 3 instruction discovery
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `80e8c3e`
@@ -84,3 +84,7 @@ link now resolves to this existing incident.
   path was inspected before resolving the maintained helper under the setback
   skill root. The established incident and index formats were used directly;
   no source, runtime, provider, or private state changed.
+- 2026-07-28T22:38:36.2933763Z: Recurred when the repository-relative helper
+  was invoked before the maintained skill-root helper. The skill-root helper
+  then created the required compile-gate incident; no provider or private
+  state changed.

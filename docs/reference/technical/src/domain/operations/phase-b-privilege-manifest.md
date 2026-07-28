@@ -1,8 +1,18 @@
 # `src/domain/operations/phase-b-privilege-manifest.ts`
 
 Defines the strict migration-9 PostgreSQL privilege contract. The exported
-production value is deliberately `undefined` until the controller provides
-live-attested schema ownership and all 29 table expectations.
+production value encodes the exact controller-reviewed live attestation as a
+deeply frozen schema and ordered 29-table expectation.
+
+## `freezeAttestedTable`
+
+Contextually types one explicit table literal as a
+`PhaseBTablePrivilegeExpectation` before freezing it, preserving literal
+validation without a boundary assertion.
+
+## `freezeAttestedTables`
+
+Freezes and returns the already typed ordered table collection.
 
 ## `isCompletePhaseBPrivilegeManifest`
 

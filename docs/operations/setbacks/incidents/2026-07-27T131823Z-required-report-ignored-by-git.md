@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T13:18:23Z
-- **Last observed:** 2026-07-28T21:43:15.6799232Z
+- **Last observed:** 2026-07-28T22:49:25.1060844Z
 - **Phase/task:** Phase B restore Task 4 tail correction
 - **Environment:** Local repository staging
 - **Version/commit:** Task report bookkeeping commit `3257771`
@@ -55,3 +55,8 @@ Stage the task-report path without an explicit force option.
   paths. The controller clarified that current SDD reports remain local
   scratch artifacts; the report is left present but excluded from the fix
   commit. No source, provider, or private state changed.
+- 2026-07-28T22:49:25.1060844Z: Task 3 final staging again returned the
+  ignored-path category after the controller explicitly required the tracked
+  report in the final commit. Git nevertheless staged the already tracked
+  report and every other named path; the ignored live-attestation artifact
+  remained unstaged and unchanged.

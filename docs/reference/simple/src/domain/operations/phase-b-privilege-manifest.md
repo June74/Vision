@@ -1,8 +1,16 @@
 # `src/domain/operations/phase-b-privilege-manifest.ts`
 
 Defines the closed shape for controller-attested Phase B database privileges.
-The production manifest intentionally remains unavailable until live
-attestation supplies every value.
+The production manifest contains the exact reviewed live attestation and is
+deeply frozen so its schema and table facts cannot be changed at runtime.
+
+## `freezeAttestedTable`
+
+Applies the closed table contract and freezes one explicit table entry.
+
+## `freezeAttestedTables`
+
+Freezes the complete ordered table collection.
 
 ## `isCompletePhaseBPrivilegeManifest`
 

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T19:36:21Z
-- **Last observed:** 2026-07-28T19:03:00.1892549Z
+- **Last observed:** 2026-07-28T22:38:36.2933763Z
 - **Phase/task:** Phase B acceptance instrumentation Task 1 full gate
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `9bbc4be`
@@ -41,3 +41,7 @@ recorded there.
   path was typed without the index row's literal `Z`. The indexed path was
   then copied verbatim and read successfully. No implementation, runtime,
   provider, or private state changed.
+- 2026-07-28T22:38:36.2933763Z: Recurred in the opposite direction when the
+  helper-absence incident path was reconstructed with a `Z` not present in its
+  historical filename. The exact directory entry was then copied and read;
+  no implementation, provider, or private state changed.

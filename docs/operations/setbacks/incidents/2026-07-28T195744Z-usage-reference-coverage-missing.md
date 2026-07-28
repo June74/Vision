@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T19:57:44.5965075Z
-- **Last observed:** 2026-07-28T19:57:44.5965075Z
+- **Last observed:** 2026-07-28T22:48:04.8196042Z
 - **Phase/task:** Phase B acceptance instrumentation Task 2 documentation gate
 - **Environment:** Local Phase B worktree
 - **Version/commit:** Task 2 patch based on `429124f`
@@ -55,3 +55,7 @@ Rerun `pnpm.cmd docs:check`.
 ## Recurrence history
 
 - 2026-07-28T19:57:44.5965075Z: First observed and contained.
+- 2026-07-28T22:48:04.8196042Z: Recurred when two typed privilege-freeze
+  helpers were added during Task 3 review without mirrored reference headings.
+  Both simple and technical headings were added; no runtime, provider, or
+  private state changed.

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:47:00Z
-- **Last observed:** 2026-07-28T21:48:52.1911717Z
+- **Last observed:** 2026-07-28T22:31:58.1347046Z
 - **Phase/task:** Phase B acceptance instrumentation Task 3 test design
 - **Environment:** Local worktree
 - **Version/commit:** `50569e6`
@@ -116,3 +116,16 @@ At 2026-07-27T01:50Z, the repository's `docs:check` script and
   commands were local and read-only, exposed no private data, and changed no
   product state. The corrected verifier anchors `^## Important$`, and UTC
   timestamps use `[DateTime]::UtcNow`.
+- 2026-07-28T22:29:38.3038924Z: An inline `tsx` attestation validator lost
+  string quotes across the PowerShell-to-CMD boundary and failed during
+  parsing. No attestation values were printed and no file or external state
+  changed. The retry uses native PowerShell object validation and safe summary
+  output.
+- 2026-07-28T22:31:00.8488530Z: A harmless nested-shell return-shape probe
+  constructed an invalid PowerShell string and stopped at parsing. It
+  contained no attestation data and changed no state. The retry uses a fixed
+  literal command before any closed-data patch orchestration.
+- 2026-07-28T22:31:58.1347046Z: The first closed patch orchestration did not
+  recognize the nested shell response wrapper and stopped before applying any
+  edit. No manifest value was emitted and the attestation remained unchanged.
+  The retry inspects only response keys and types before parsing internally.

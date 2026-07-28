@@ -1,4 +1,4 @@
-Status: DONE_WITH_CONCERNS
+Status: DONE
 
 ## Checkpoints
 
@@ -29,7 +29,7 @@ Status: DONE_WITH_CONCERNS
   max-one client lifecycle, bounded R2 listing and backup envelope validation,
   numeric admission, deterministic evidence categories, hostile safe-tail
   shapes, mixed/duplicate records, and foundation-only output mode.
-- Final implementation checkpoint: the privilege manifest is isolated in
+- Initial implementation checkpoint: the privilege manifest is isolated in
   `src/domain/operations/phase-b-privilege-manifest.ts` and its production
   value remains deliberately `undefined`. Source construction rejects it
   before database or R2 access until the controller supplies a complete
@@ -66,13 +66,14 @@ Status: DONE_WITH_CONCERNS
   provenance checks include calendar identity, event identity, and provider
   revision; the required date uses the intrinsic ISO conversion.
 
-## Remaining context
+## Historical controller-gated context (superseded)
 
-- Exact deployed privilege facts have not been supplied. They cannot be
-  inferred from repository call sites, so the production manifest remains
-  unavailable and no live privilege-success claim is made.
-- Independent database/security review should use the committed diff after
-  the controller supplies or separately attests the privilege contract.
+- Before the live-attestation resolution below, exact deployed privilege facts
+  had not been supplied. They could not be inferred from repository call sites,
+  so the production manifest was unavailable and no live privilege-success
+  claim was made.
+- Independent database/security review was deferred until the controller
+  supplied and separately attested the privilege contract.
 
 ## Independent-review fix wave
 
@@ -119,9 +120,47 @@ Status: DONE_WITH_CONCERNS
 - `git diff --check` passed. Migration and
   `src/domain/operations/phase-b-privilege-manifest.ts` diffs are empty.
 
-## Remaining concern after review fixes
+## Historical remaining concern after review fixes (resolved)
 
-- The sole remaining concern is the controller-gated live privilege contract.
-  `PHASE_B_PRIVILEGE_MANIFEST` remains deliberately unavailable, so source
-  construction still rejects before I/O and no live privilege-success claim
-  is made.
+- At that checkpoint, the sole remaining concern was the controller-gated live
+  privilege contract. `PHASE_B_PRIVILEGE_MANIFEST` was deliberately
+  unavailable, so source construction rejected before I/O and no live
+  privilege-success claim was made.
+
+## Live privilege attestation resolution
+
+- The corrected controller attestation passed the closed structural checks:
+  the application role matched, all 29 required tables were present, every
+  table used the same non-application owner, `PUBLIC` had zero table grants,
+  and the complete attestation was structurally valid.
+- Strict RED:
+  `pnpm.cmd test:unit
+  tests/unit/domain/phase-b-privilege-manifest.test.ts` failed exactly one of
+  nine tests because the production manifest was still unavailable; the other
+  eight manifest tests passed.
+- Production GREEN: the exact reviewed attestation is encoded explicitly in
+  `PHASE_B_PRIVILEGE_MANIFEST`, including the ordered 29-table contract. The
+  manifest, nested table objects, privilege arrays, and grant-option arrays
+  are frozen at runtime, with direct deep-immutability coverage. No attested
+  value was inferred or normalized.
+- Exact-manifest GREEN: the same focused manifest command initially passed one
+  file and all 9 tests; the settled suite passes 10 manifest tests after adding
+  direct deep-immutability coverage.
+- Final Task 3 regression:
+  `pnpm.cmd test:unit tests/unit/domain/phase-b-privilege-manifest.test.ts
+  tests/integration/data/phase-b-foundation-probe.test.ts
+  tests/integration/jobs/phase-b-foundation-probe.test.ts
+  tests/unit/scripts/safe-tail-classifier.test.ts
+  tests/unit/scripts/print-safe-tail.test.ts
+  tests/integration/jobs/daily-backup.test.ts` passed 6 files and 120 tests.
+- Required gates passed on the settled source: `pnpm.cmd typecheck`,
+  `pnpm.cmd docs:check`, `pnpm.cmd security:scan`, `git diff --check`, and an
+  empty migration diff.
+- The initial compile gate identified TypeScript widening inside nested frozen
+  literals. Typed freeze helpers now preserve the closed table contract, and
+  the complete literal uses `satisfies PhaseBPrivilegeManifest`; no type
+  assertion or attested-value change was required.
+- Independent read-only re-review found no remaining Critical, Important, or
+  Minor issue after the typed-freeze and historical-report corrections.
+- The live attestation file was read only and left unchanged. The prior
+  controller-gated concern is resolved; no remaining Task 3 concern is known.
