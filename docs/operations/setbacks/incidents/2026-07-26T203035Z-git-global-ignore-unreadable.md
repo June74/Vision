@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:30:35.2961897Z
-- **Last observed:** 2026-07-28T14:08:00Z
-- **Phase/task:** Preview database role probe Task 2 final reporting
+- **Last observed:** 2026-07-28T14:35:22Z
+- **Phase/task:** Phase B completion resume preflight
 - **Environment:** Local Phase B worktree under the managed sandbox
 - **Version/commit:** Staged Task 1 patch based on `59e6a02`
 
@@ -116,3 +116,15 @@ commit `4420f6d`.
 - 2026-07-28T14:08:00Z: Recurred during the ignored-report acceptance gate.
   A supported null exclude-file override then returned the tracked-state result
   without changing repository or provider state.
+- 2026-07-28T14:32:43Z: Recurred during the Phase B completion resume
+  preflight. Git returned the requested branch, commit, worktree, and plan
+  state with exit code zero; no configuration workaround, repository mutation,
+  or provider action was attempted.
+- 2026-07-28T14:33:13Z: The controller mistakenly retried the already-rejected
+  Windows `NUL` excludes-file workaround while seeking a warning-free status
+  check. Git failed before reading repository state; no file or provider state
+  changed. Future checks must accept the ordinary successful result and
+  classify only the known trailing warning.
+- 2026-07-28T14:35:22Z: Recurred during the resumed setback diff and status
+  checks. Both requested Git operations exited successfully and returned their
+  requested results; no workaround or external action was attempted.

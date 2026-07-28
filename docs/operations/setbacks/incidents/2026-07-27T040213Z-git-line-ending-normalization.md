@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T04:02:13Z
-- **Last observed:** 2026-07-28T02:26:35.1058775Z
-- **Phase/task:** Preview database role probe Task 1 self-review
+- **Last observed:** 2026-07-28T14:35:22Z
+- **Phase/task:** Phase B completion resume setback verification
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `4420f6d`
 
@@ -92,3 +92,7 @@ this incident was recorded.
   changed-file and privacy review. The complete repository gate and
   `git diff --check` exited zero; no formatting rewrite, provider action, or
   private-data operation was performed.
+- 2026-07-28T14:35:22Z: Recurred during verification of the resumed setback
+  records. `pnpm docs:check` and `git diff --check` both exited zero; no
+  formatting rewrite, provider action, or private-data operation was
+  performed.

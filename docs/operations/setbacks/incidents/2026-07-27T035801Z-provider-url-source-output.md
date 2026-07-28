@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T03:58:01Z
-- **Last observed:** 2026-07-27T17:29:26Z
-- **Phase/task:** Phase B restore Tasks 3-4
+- **Last observed:** 2026-07-28T14:36:07Z
+- **Phase/task:** Phase B completion requirement audit
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `1d6ad12`
 
@@ -88,3 +88,9 @@ interfaces without emitting URL contents.
   value, or protected row. Remaining GitHub operations must suppress default
   output and return only run number, commit, status, conclusion, and safe
   deployment identifiers.
+- 2026-07-28T14:36:07Z: Recurred when a read-only audit subagent inspected an
+  older memory excerpt that contained the public preview address. The value
+  appeared only in private tool output and was not a callback URL, credential,
+  token, account identifier, database value, or protected row. The agent was
+  instructed to stop memory inspection, use repository-relative sources only,
+  and verify its report contains no URL or provider identifier.

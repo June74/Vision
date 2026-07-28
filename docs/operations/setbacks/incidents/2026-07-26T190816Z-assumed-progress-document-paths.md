@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:08:16.577518Z
-- **Last observed:** 2026-07-28T00:47:15.5405322Z
-- **Phase/task:** Phase B repository inspection
+- **Last observed:** 2026-07-28T14:34:48Z
+- **Phase/task:** Phase B completion resume verification discovery
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `1dff60e`
 
@@ -105,3 +105,7 @@ read.
   the real package script. The read-only probe identified
   `scripts/validate-doc-coverage.ts`; no file or provider state changed, and
   subsequent inspection uses that exact confirmed path.
+- 2026-07-28T14:34:48Z: Recurred when the controller guessed that the setback
+  folder contained a conventional `README.md` while discovering its validation
+  command. The package script lookup had already confirmed `pnpm docs:check`;
+  the absent-file read changed no repository or provider state.
