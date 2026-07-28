@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:16:44.091309Z
-- **Last observed:** 2026-07-28T01:20:44.6624354Z
-- **Phase/task:** Listener-first restore retry Task 3 Step 1
+- **Last observed:** 2026-07-28T14:18:00Z
+- **Phase/task:** CI secret-handoff architecture audit
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** `7d2f9f6`; reviewed candidate `0f08fc1`
 
@@ -71,5 +71,8 @@ files with 59 passing tests.
   target both existed; the failure was pnpm command resolution, not a stale
   installation. The repository-local wrapper ran the exact five focused files
   with 59 passing tests. No provider mutation occurred.
+- 2026-07-28T14:18:00Z: Recurred during a read-only CI capability audit when
+  `pnpm exec` did not resolve the installed Wrangler binary. The local wrapper
+  remained present, and no provider or repository mutation was attempted.
 
 The repository-local wrapper then ran the focused suite with 8 passing tests.

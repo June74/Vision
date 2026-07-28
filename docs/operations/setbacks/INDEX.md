@@ -2,6 +2,9 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
+| [SB-20260728-142700-subagent-audit-finalization-delayed](incidents/2026-07-28T142700Z-subagent-audit-finalization-delayed.md) | closed | 2026-07-28T14:27:00Z | Preview database role probe architecture audits | Audit finalization was delayed |
+| [SB-20260728-142000-powershell-range-shape-error](incidents/2026-07-28T142000Z-powershell-range-shape-error.md) | closed | 2026-07-28T14:20:00Z | CI secret-handoff architecture audit | PowerShell source range had the wrong shape |
+| [SB-20260728-141900-neon-show-password-blocked-by-browser-policy](incidents/2026-07-28T141900Z-neon-show-password-blocked-by-browser-policy.md) | contained | 2026-07-28T14:19:00Z | Preview database role probe opaque-transfer audit | Browser policy blocked Neon password reveal |
 | [SB-20260728-140600-neon-copy-pasted-different-role-url](incidents/2026-07-28T140600Z-neon-copy-pasted-different-role-url.md) | contained | 2026-07-28T14:06:00Z | Preview database role probe Task 2 final transfer test | Neon Copy pasted a different-role URL |
 | [SB-20260728-135800-live-report-future-estimated-timestamp](incidents/2026-07-28T135800Z-live-report-future-estimated-timestamp.md) | closed | 2026-07-28T13:58:00Z | Preview database role probe Task 2 reporting | Live report used a future estimated timestamp |
 | [SB-20260728-135700-browser-escape-closed-neon-dialog](incidents/2026-07-28T135700Z-browser-escape-closed-neon-dialog.md) | closed | 2026-07-28T13:57:00Z | Preview database role probe Task 2 opaque transfer | Escape closed the Neon connection dialog |
@@ -76,7 +79,7 @@
 | [SB-20260726-191141-wrangler-log-path-sandbox-warning](incidents/2026-07-26T191141Z-wrangler-log-path-sandbox-warning.md) | closed | 2026-07-28T02:21:26.5488258Z | Preview database role probe Task 1 full gate | Wrangler log path was blocked by sandbox |
 | [SB-20260726-191141-generated-config-nesting-assumption](incidents/2026-07-26T191141Z-generated-config-nesting-assumption.md) | closed | 2026-07-26T19:19:40.5249114Z | Phase B deployment diagnostics | Generated Wrangler config nesting was assumed |
 | [SB-20260726-191224-wrangler-dry-run-probe-failed](incidents/2026-07-26T191224Z-wrangler-dry-run-probe-failed.md) | closed | 2026-07-26T19:19:40.5249114Z | Phase B deployment diagnostics | Wrangler dry-run diagnostic failed |
-| [SB-20260726-191644-pnpm-exec-local-binary-resolution](incidents/2026-07-26T191644Z-pnpm-exec-local-binary-resolution.md) | closed | 2026-07-28T01:20:44.6624354Z | Listener-first restore retry Task 3 Step 1 | pnpm exec did not resolve local binary |
+| [SB-20260726-191644-pnpm-exec-local-binary-resolution](incidents/2026-07-26T191644Z-pnpm-exec-local-binary-resolution.md) | closed | 2026-07-28T14:18:00Z | CI secret-handoff architecture audit | pnpm exec did not resolve local binary |
 | [SB-20260726-191644-powershell-local-command-call-operator](incidents/2026-07-26T191644Z-powershell-local-command-call-operator.md) | closed | 2026-07-26T19:19:40.5249114Z | Phase B deployment fix tests | PowerShell call operator was omitted |
 | [SB-20260726-191656-callback-url-in-test-diff](incidents/2026-07-26T191656Z-callback-url-in-test-diff.md) | closed | 2026-07-26T19:19:40.5249114Z | Phase B deployment fix tests | Callback URL appeared in test failure diff |
 | [SB-20260726-192405-worker-static-analysis-sandbox-warning](incidents/2026-07-26T192405Z-worker-static-analysis-sandbox-warning.md) | closed | 2026-07-28T02:21:26.5488258Z | Preview database role probe Task 1 full gate | Worker static analysis hit sandbox boundary |
