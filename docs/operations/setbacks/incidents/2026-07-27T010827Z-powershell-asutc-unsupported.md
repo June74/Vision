@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:08:27Z
-- **Last observed:** 2026-07-28T01:13:37.0861005Z
-- **Phase/task:** Listener-first restore retry Task 3 handoff
+- **Last observed:** 2026-07-28T02:50:34Z
+- **Phase/task:** Preview database role probe Task 2 monitoring
 - **Environment:** Local Windows worktree
 - **Version/commit:** `0f08fc1`
 
@@ -48,6 +48,11 @@ The replacement returned a valid UTC timestamp.
   immediately returned a valid UTC timestamp.
 - **2026-07-28T01:13:37.0861005Z:** The unsupported flag was used again while
   recording the Task 3 handoff setback. The read-only index search completed,
+  no mutation depended on the failed timestamp, and the documented
+  `[DateTime]::UtcNow.ToString(...)` correction immediately returned a valid
+  UTC timestamp.
+- **2026-07-28T02:50:34Z:** The unsupported flag was used again while checking
+  the safe live report's modification time. The file metadata check completed,
   no mutation depended on the failed timestamp, and the documented
   `[DateTime]::UtcNow.ToString(...)` correction immediately returned a valid
   UTC timestamp.

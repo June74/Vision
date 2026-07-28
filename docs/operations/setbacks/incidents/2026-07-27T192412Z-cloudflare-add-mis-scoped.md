@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T19:24:12Z
-- **Last observed:** 2026-07-27T19:24:12Z
-- **Phase/task:** Phase B restore Task 4 live retry
+- **Last observed:** 2026-07-28T02:59:00Z
+- **Phase/task:** Preview database role probe Task 2 Step 2
 - **Environment:** Cloudflare preview dashboard
 - **Version/commit:** `9bbc4be`
 
@@ -39,3 +39,10 @@ explicitly.
 The Trigger events dialog was dismissed without submitting any action. The
 Variables and secrets control will be selected from its verified section-local
 header rather than by page-wide ordinal.
+
+## Recurrence history
+
+- 2026-07-28T02:59:00Z: An ambiguous account-level Settings control was opened
+  instead of the preview Worker settings route. Safe route classification
+  detected the mismatch before any form interaction. Navigation returned to
+  the verified Worker route and no provider state changed.

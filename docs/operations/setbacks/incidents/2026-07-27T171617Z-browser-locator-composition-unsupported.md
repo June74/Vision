@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T17:16:17Z
-- **Last observed:** 2026-07-28T01:44:16.5948330Z
-- **Phase/task:** Listener-first restore retry Task 3 Step 2
+- **Last observed:** 2026-07-28T03:01:00Z
+- **Phase/task:** Preview database role probe Task 2 Step 2
 - **Environment:** Signed-in disposable database provider dashboard
 - **Version/commit:** `7d2f9f6` with reviewed candidate `0f08fc1`
 
@@ -71,3 +71,7 @@ project and disposable branch rows and completed the bounded provider work.
   database-provider project locator. The browser rejected the nested locator
   before interaction. A simpler bounded text filter located the already-known
   project surface; no provider value or state changed.
+- 2026-07-28T03:01:00Z: Recurred while composing the Variables and Secrets
+  section with its heading locator. The operation failed before any click. A
+  bounded section-structure read identified one section-local Add control; no
+  secret or provider state changed.
