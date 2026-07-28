@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:30:35.2961897Z
-- **Last observed:** 2026-07-28T15:05:48Z
-- **Phase/task:** Phase B completion resume preflight
+- **Last observed:** 2026-07-28T18:35:01Z
+- **Phase/task:** Phase B acceptance instrumentation plan pre-commit
 - **Environment:** Local Phase B worktree under the managed sandbox
 - **Version/commit:** Staged Task 1 patch based on `59e6a02`
 
@@ -142,3 +142,7 @@ commit `4420f6d`.
   expected branch, matching local and remote commits, and absence of the new
   design file before the warning appeared; no workaround or external mutation
   was attempted.
+- 2026-07-28T18:35:01Z: Recurred during the implementation-plan status and
+  ignore check. Git returned the two modified setback files and the new plan
+  path before the known warning. No workaround, provider action, or unrelated
+  repository mutation was attempted.

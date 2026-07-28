@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T14:21:00Z
-- **Last observed:** 2026-07-28T14:58:01Z
-- **Phase/task:** Phase B acceptance instrumentation architecture audit
+- **Last observed:** 2026-07-28T18:38:44Z
+- **Phase/task:** Phase B acceptance instrumentation plan final review
 - **Environment:** Local subagent coordination
 - **Version/commit:** `386b7d3`
 
@@ -64,3 +64,9 @@ Both ignored audit report files now exist and contain safe conclusions.
   its report. The worker was stopped; the controller proceeds from two
   completed audits and its independently confirmed live call-path trace. No
   repository or provider state changed.
+- 2026-07-28T18:38:44Z: Recurred when three read-only final-plan reviewers
+  remained active after repeated bounded waits and concise finish messages
+  without producing their requested reports. They were stopped after the
+  earlier three planning maps, local structural checks, documentation check,
+  and migration-diff check had already passed. No repository or provider state
+  changed.

@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T20:54:20Z
-- **Last observed:** 2026-07-28T02:36:34.6558608Z
-- **Phase/task:** Preview database role probe Task 1 independent review
+- **Last observed:** 2026-07-28T16:05:00Z
+- **Phase/task:** Phase B acceptance instrumentation implementation planning
 - **Environment:** Local Phase B worktree
-- **Version/commit:** Staged Task 1 patch based on `59e6a02`
+- **Version/commit:** `d27859e`
 
 ## Symptom
 
@@ -55,3 +55,9 @@ continues using discovered files only.
   exist and a later discovery search entered dependency directories. Both
   searches were contained without mutation. The reviewer completed tracing
   from the tracked-file inventory and approved the exact staged implementation.
+- 2026-07-28T16:05:00Z: Recurred when a read-only planning command guessed
+  `0009_ai_usage_diagnostics.sql` after the migration inventory had already
+  shown the actual `0009_ai_usage_budget.sql` filename. No file or external
+  state changed. The correct file was then read from the discovered inventory;
+  future compound inspection commands must be assembled only from captured
+  inventory names.
