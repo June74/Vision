@@ -1,11 +1,11 @@
 # SB-20260727-201732-neon-result-grid-not-table-ancestor: Neon result header had no table ancestor
 
-- **Status:** closed
+- **Status:** contained
 - **First observed:** 2026-07-27T20:17:32Z
-- **Last observed:** 2026-07-27T20:28:07Z
-- **Phase/task:** Phase B restore Task 4 diagnosis
+- **Last observed:** 2026-07-28T01:44:16.5948330Z
+- **Phase/task:** Listener-first restore retry Task 3 Step 2 preflight
 - **Environment:** Neon SQL Editor result grid
-- **Version/commit:** normal runtime ref `40872a5`
+- **Version/commit:** `7d2f9f6` with reviewed candidate `0f08fc1`
 
 ## Symptom
 
@@ -39,3 +39,13 @@ query was run through the private direct database path and returned one exact
 validated row: all 29 authoritative tables were present, 13 were non-empty,
 the aggregate contained 51 rows, events contained zero rows, and the
 database-owned attestation remained valid.
+
+## Recurrence history
+
+- 2026-07-28T01:44:16.5948330Z: The Task 3 SELECT-only preflight returned one
+  result row and all expected headers, but the provider grid exposed extra
+  presentation cells. Header-aware mapping safely accepted the attestation,
+  29-table, 13-nonempty, and zero-event fields, while the current-role equality
+  was false and the total-row field was not safely accepted. The incident is
+  contained pending independent diagnosis; no query retry or provider
+  mutation occurred.

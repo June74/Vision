@@ -1,11 +1,11 @@
 # SB-20260727-213100-neon-role-selection-not-confirmed: Neon role selection was not confirmed
 
-- **Status:** closed
+- **Status:** contained
 - **First observed:** 2026-07-27T21:31:00.7824693Z
-- **Last observed:** 2026-07-27T21:58:42.4268852Z
-- **Phase/task:** Listener-first restore retry Task 2 execution
+- **Last observed:** 2026-07-28T01:44:16.5948330Z
+- **Phase/task:** Listener-first restore retry Task 3 Step 2
 - **Environment:** Signed-in Neon SQL Editor connection modal
-- **Version/commit:** `ca11c6c`
+- **Version/commit:** `7d2f9f6` with reviewed candidate `0f08fc1`
 
 ## Symptom
 
@@ -66,8 +66,8 @@ connection information, target identity, or provider URL was returned.
   persistence across one connection-context reopen before any future SQL.
 - **Owner:** Codex and project owner.
 - **Next diagnostic step:** In a separately authorized provider-operation
-  task, rerun the corrected fixed-shape role proof before staging the reviewed
-  SQL.
+  task, distinguish the selected UI option from the SQL Editor session's
+  database-owned `current_user` before creating any secret.
 
 ## Verification and related work
 
@@ -103,3 +103,11 @@ The modal was closed and the provider tab was finalized.
   `aria-selected=true`; activation closed the menu and three visible exact
   selected-value nodes confirmed the role. No selector was opened afterward.
   The incident remains closed.
+- 2026-07-28T01:44:16.5948330Z: The Task 3 preflight again found exactly one
+  visible role selector and exactly one `vision_app` option already marked
+  selected. Hidden comboboxes, dialog closure after Escape, and stale
+  close-control counts caused three contained read-only interaction failures.
+  A single SELECT-only database preflight then reported the database-owned
+  current-role equality as false. This contradicts the UI proof and reopens
+  the incident as contained. No secret, deployment, or database mutation
+  occurred.

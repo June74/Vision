@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T21:52:44.1939214Z
-- **Last observed:** 2026-07-26T21:58:19.6876526Z
-- **Phase/task:** Phase B live database migration
+- **Last observed:** 2026-07-28T01:44:16.5948330Z
+- **Phase/task:** Listener-first restore retry Task 3 Step 2 preflight
 - **Environment:** Signed-in Neon SQL editor
-- **Version/commit:** `6a14659`
+- **Version/commit:** `7d2f9f6` with reviewed candidate `0f08fc1`
 
 ## Symptom
 
@@ -78,3 +78,8 @@ with no mismatch marker.
 - 2026-07-26T21:52:44.1939214Z: First observed and contained before execution.
 - 2026-07-26T21:58:19.6876526Z: Closed after exact model-level hash and live
   post-migration schema verification.
+- 2026-07-28T01:44:16.5948330Z: Recurred on the shorter SELECT-only Task 3
+  preflight because the editor's immediate `textContent` omitted line-break
+  representation. Normalized visible `innerText` matched the prepared
+  3,188-character query exactly before the single read-only execution. No SQL
+  mutation or private output occurred.

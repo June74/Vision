@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T13:14:09Z
-- **Last observed:** 2026-07-27T13:14:09Z
-- **Phase/task:** Phase B restore Task 4 tail correction
+- **Last observed:** 2026-07-28T01:20:44.6624354Z
+- **Phase/task:** Listener-first restore retry Task 3 Step 1
 - **Environment:** Local Windows verification shell
-- **Version/commit:** Pending correction commit
+- **Version/commit:** `7d2f9f6`; reviewed candidate `0f08fc1`
 
 ## Symptom
 
@@ -46,3 +46,11 @@ Invoke the package-manager command through its PowerShell script wrapper in this
 ## Verification and related work
 
 - The Windows command shim passed the PowerShell policy boundary; local binary resolution is tracked separately.
+
+## Recurrence history
+
+- 2026-07-28T01:20:44.6624354Z: Recurred when Task 3 candidate
+  reconfirmation invoked the script-form package-manager launcher. PowerShell
+  rejected it before test startup. The repository-local Windows test wrapper
+  subsequently ran the exact five focused files with 59 passing tests. No
+  provider or private-data boundary was involved.

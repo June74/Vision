@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:30:35.2961897Z
-- **Last observed:** 2026-07-28T00:52:25.6785004Z
-- **Phase/task:** Listener-first restore retry Task 2
+- **Last observed:** 2026-07-28T01:20:44.6624354Z
+- **Phase/task:** Listener-first restore retry Task 3 Step 1
 - **Environment:** Local Phase B worktree under the managed sandbox
-- **Version/commit:** `ca11c6c`
+- **Version/commit:** `7d2f9f6`
 
 ## Symptom
 
@@ -96,3 +96,8 @@ commit `4420f6d`.
 - 2026-07-28T00:52:25.6785004Z: Recurred during the final Task 2 changed-file
   inventory. Git returned the complete worktree status and diff inventory; no
   configuration workaround or provider action was attempted.
+- 2026-07-28T01:20:44.6624354Z: Recurred during Task 3 candidate
+  reconfirmation. The ordinary status check had already returned a clean,
+  synchronized worktree; a repeated `NUL` excludes-file workaround was
+  rejected before the retry. No repository or provider mutation occurred, and
+  the unsupported workaround is not reused.

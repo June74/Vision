@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:16:44.091309Z
-- **Last observed:** 2026-07-27T19:41:30Z
-- **Phase/task:** Phase B deployment fix tests
+- **Last observed:** 2026-07-28T01:20:44.6624354Z
+- **Phase/task:** Listener-first restore retry Task 3 Step 1
 - **Environment:** Local Windows PowerShell
-- **Version/commit:** `codex/phase-b-foundation`
+- **Version/commit:** `7d2f9f6`; reviewed candidate `0f08fc1`
 
 ## Symptom
 
@@ -46,7 +46,8 @@ The package runner reported that the installed executable was not recognized.
 
 ## Verification and related work
 
-The focused test suite subsequently ran and passed 4/4.
+The latest repository-local wrapper retry ran the exact five Task 2 focused
+files with 59 passing tests.
 
 ## Recurrence history
 
@@ -65,5 +66,10 @@ The focused test suite subsequently ran and passed 4/4.
 - 2026-07-27T19:41:30Z: Recurred during the missed routing-test correction.
   No test process started; the retry uses
   `node_modules/.bin/vitest.cmd` directly.
+- 2026-07-28T01:20:44.6624354Z: Recurred during Task 3 candidate
+  reconfirmation. Inspection confirmed that the local executable and its
+  target both existed; the failure was pnpm command resolution, not a stale
+  installation. The repository-local wrapper ran the exact five focused files
+  with 59 passing tests. No provider mutation occurred.
 
 The repository-local wrapper then ran the focused suite with 8 passing tests.

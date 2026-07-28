@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T00:52:52.8805934Z
-- **Last observed:** 2026-07-28T00:52:52.8805934Z
-- **Phase/task:** Listener-first restore retry Task 2 reporting
+- **Last observed:** 2026-07-28T01:21:32.8180667Z
+- **Phase/task:** Listener-first restore retry Task 3 Step 1 reporting
 - **Environment:** Local Phase B worktree
-- **Version/commit:** `ff6a767`
+- **Version/commit:** `7d2f9f6`
 
 ## Symptom
 
@@ -50,3 +50,11 @@ yet received that earlier incident update.
 
 The index now matches the incident's latest observation and this safe incident
 is indexed once.
+
+## Recurrence history
+
+- 2026-07-28T01:21:32.8180667Z: A combined recurrence patch used a larger
+  stale context block for the local-binary incident and was rejected
+  atomically. Fresh numbered inspection confirmed no partial change, and the
+  incident files are patched separately from their exact current lines. No
+  source, provider, or private-data boundary was involved.

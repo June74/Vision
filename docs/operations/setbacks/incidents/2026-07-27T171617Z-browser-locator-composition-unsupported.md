@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T17:16:17Z
-- **Last observed:** 2026-07-27T19:16:40Z
-- **Phase/task:** Phase B restore Task 4
+- **Last observed:** 2026-07-28T01:44:16.5948330Z
+- **Phase/task:** Listener-first restore retry Task 3 Step 2
 - **Environment:** Signed-in disposable database provider dashboard
-- **Version/commit:** `80e8c3e` with reviewed candidate `41b05fd`
+- **Version/commit:** `7d2f9f6` with reviewed candidate `0f08fc1`
 
 ## Symptom
 
@@ -67,3 +67,7 @@ project and disposable branch rows and completed the bounded provider work.
 - 2026-07-27T19:16:40Z: Recurred while composing the variables-and-secrets
   section with its heading locator. No form opened and no value moved. The
   fresh visible-node section map replaced locator composition.
+- 2026-07-28T01:44:16.5948330Z: Recurred while composing the signed-in
+  database-provider project locator. The browser rejected the nested locator
+  before interaction. A simpler bounded text filter located the already-known
+  project surface; no provider value or state changed.
