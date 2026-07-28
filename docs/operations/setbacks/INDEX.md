@@ -142,7 +142,7 @@
 | [SB-20260727-013323-select-string-match-name-missing](incidents/2026-07-27T013323Z-select-string-match-name-missing.md) | closed | 2026-07-27T01:33:23Z | Phase B credential-log discovery | Select-String match had no Name property |
 | [SB-20260727-013704-pnpm-update-metadata-fetch-warning](incidents/2026-07-27T013704Z-pnpm-update-metadata-fetch-warning.md) | closed | 2026-07-27T04:49:11Z | Phase B restore Task 3 verification | pnpm update metadata fetch warned |
 | [SB-20260727-014333-security-scan-raced-build](incidents/2026-07-27T014333Z-security-scan-raced-build.md) | closed | 2026-07-27T01:43:33Z | Phase B clean-room verification | Security scan raced the production build |
-| [SB-20260727-014937-verification-command-discovery-mistakes](incidents/2026-07-27T014937Z-verification-command-discovery-mistakes.md) | closed | 2026-07-28T21:20:45.5557364Z | Phase B acceptance instrumentation Task 3 test design | Verification commands were guessed or searched too broadly |
+| [SB-20260727-014937-verification-command-discovery-mistakes](incidents/2026-07-27T014937Z-verification-command-discovery-mistakes.md) | closed | 2026-07-28T21:48:52.1911717Z | Phase B acceptance instrumentation Task 3 test design | Verification commands were guessed or searched too broadly |
 | [SB-20260727-015932-safe-workflow-watch-window-expired](incidents/2026-07-27T015932Z-safe-workflow-watch-window-expired.md) | closed | 2026-07-27T01:59:32Z | Phase B privacy-safe scheduled acceptance | Safe workflow outlived the local watch window |
 | [SB-20260727-023227-plan-patch-context-mismatch](incidents/2026-07-27T023227Z-plan-patch-context-mismatch.md) | closed | 2026-07-28T20:40:45.2724773Z | Phase B acceptance instrumentation Task 3 replacement brief | Patch context did not match current text |
 | [SB-20260727-023338-approved-spec-trailing-whitespace](incidents/2026-07-27T023338Z-approved-spec-trailing-whitespace.md) | closed | 2026-07-28T15:14:01Z | Phase B acceptance instrumentation design | Approved spec header had trailing whitespace |
@@ -179,6 +179,8 @@
 | [SB-20260728-205803-foundation-test-table-import](incidents/2026-07-28T205803Z-foundation-test-table-import.md) | closed | 2026-07-28T21:38:48.5999933Z | Phase B acceptance instrumentation Task 3 GREEN | Foundation test imported table contract from the wrong module |
 | [SB-20260728-210658-foundation-source-narrowing](incidents/2026-07-28T210658Z-foundation-source-narrowing.md) | closed | 2026-07-28T21:06:58.4530984Z | Phase B acceptance instrumentation Task 3 typecheck | Foundation source types were not narrowed at closed boundaries |
 | [SB-20260728-210339-controller-inspection-raced-task-3-edit](incidents/2026-07-28T210339Z-controller-inspection-raced-task-3-edit.md) | closed | 2026-07-28T21:03:39.942454Z | Phase B acceptance instrumentation Task 3 | Controller inspection raced Task 3 edit |
+| [SB-20260728-214956-powershell-markdown-backtick-escaped-ledger](incidents/2026-07-28T214956Z-powershell-markdown-backtick-escaped-ledger.md) | closed | 2026-07-28T21:49:56.608574Z | Phase B acceptance instrumentation Task 3 progress bookkeeping | PowerShell escaped Markdown backtick in ledger |
+| [SB-20260728-215115-read-only-reviewer-modified-setback-log](incidents/2026-07-28T215115Z-read-only-reviewer-modified-setback-log.md) | closed | 2026-07-28T21:51:15.406047Z | Phase B acceptance instrumentation Task 3 re-review | Read-only reviewer modified setback log |
 
 ## Legacy history
 

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:47:00Z
-- **Last observed:** 2026-07-28T21:20:45.5557364Z
+- **Last observed:** 2026-07-28T21:48:52.1911717Z
 - **Phase/task:** Phase B acceptance instrumentation Task 3 test design
 - **Environment:** Local worktree
 - **Version/commit:** `50569e6`
@@ -110,3 +110,9 @@ At 2026-07-27T01:50Z, the repository's `docs:check` script and
   schema filename before discovering the tracked path. The failed read was
   local and read-only. The review is constrained to paths returned by
   `git ls-files` before finalization.
+- 2026-07-28T21:48:52.1911717Z: The Task 3 re-review artifact verifier split
+  on the prose word `Important` instead of anchoring the Markdown heading, then
+  a timestamp helper reused the unsupported `Get-Date -AsUTC` flag. Both
+  commands were local and read-only, exposed no private data, and changed no
+  product state. The corrected verifier anchors `^## Important$`, and UTC
+  timestamps use `[DateTime]::UtcNow`.
