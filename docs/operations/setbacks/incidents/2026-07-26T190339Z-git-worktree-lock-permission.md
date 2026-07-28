@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:03:39.626332Z
-- **Last observed:** 2026-07-28T19:17:15.0700713Z
-- **Phase/task:** Phase B acceptance instrumentation Task 1 staging
+- **Last observed:** 2026-07-28T20:34:20.6673153Z
+- **Phase/task:** Phase B acceptance plan-review resolution staging
 - **Environment:** Local linked worktree under the managed sandbox
 - **Version/commit:** `f7778b8`
 
@@ -110,3 +110,8 @@ metadata boundary. Earlier related work produced commit `f7778b8`.
   the following chained read-only commands saw an empty staged diff, so no
   file was partially staged or committed. The same scoped path set is retried
   through the established metadata-permission boundary.
+- 2026-07-28T20:34:20.6673153Z: Recurred while staging only the validated
+  acceptance-plan review resolution. Git stopped before creating the linked
+  worktree index lock; no file was partially staged or committed. The same
+  explicit documentation path is retried through the established scoped
+  metadata-permission boundary.

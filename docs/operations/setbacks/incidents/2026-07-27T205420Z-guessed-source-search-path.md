@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T20:54:20Z
-- **Last observed:** 2026-07-28T16:05:00Z
-- **Phase/task:** Phase B acceptance instrumentation implementation planning
+- **Last observed:** 2026-07-28T20:25:01.9701018Z
+- **Phase/task:** Phase B acceptance instrumentation Task 3 context resolution
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `d27859e`
 
@@ -61,3 +61,11 @@ continues using discovered files only.
   state changed. The correct file was then read from the discovered inventory;
   future compound inspection commands must be assembled only from captured
   inventory names.
+- 2026-07-28T20:23:38.9800016Z: Recurred when a read-only privilege search
+  guessed a `drizzle` directory even though tracked migrations live under
+  `migrations/`. No file or external state changed. The tracked-file inventory
+  then confirmed the exact migration paths before retrying.
+- 2026-07-28T20:25:01.9701018Z: Recurred in the same context investigation
+  when a read-only event-source search guessed an outdated `src/domain/calendar`
+  directory. No file or external state changed. `git ls-files` then supplied
+  the exact current event and Google Calendar paths.

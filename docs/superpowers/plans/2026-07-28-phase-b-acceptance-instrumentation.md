@@ -20,7 +20,9 @@
 - Keep `BACKUP_ENCRYPTION_KEY` unchanged at version 1.
 - Never delete `backups/v1/`.
 - Normal preview and production must have exactly the 15-minute maintenance cron and daily backup cron.
-- Temporary acceptance is preview-only, one scenario per candidate, observer-first, one terminal record, then immediate normal rollback.
+- Temporary acceptance is preview-only, one scenario per candidate,
+  observer-first, one terminal record, then an immediate separately dispatched
+  normal rollback.
 - The strict scenario enum is exactly:
   `queue_delayed`, `job_failed`, `channel_expired`,
   `database_unavailable`, `r2_upload_failed`, `ai_stopped`.
@@ -32,6 +34,59 @@
 - The guarded workflow, not the Worker, verifies the Cloudflare AI Gateway limit and passes only a same-run non-secret boolean attestation.
 - Update both simple and technical reference documentation for every created or changed production file and named export.
 - Log every unexpected failure or incorrect hypothesis through the setback logger before continuing.
+
+## Binding Plan-Review Resolutions
+
+These decisions resolve the six Important findings recorded in
+`.superpowers/sdd/acceptance-plan-final-review.md` and govern Tasks 3-8:
+
+- The owner approved the three warning values above. The reviewed environment
+  name is `R2_USAGE_WARNING_OBJECTS` everywhere; the earlier
+  `R2_USAGE_WARNING_OBJECT_COUNT` map spelling is rejected.
+- Task 3 remains gated on a read-only attestation of the deployed `vision_app`
+  role. The production privilege manifest must record the exact effective
+  privileges and grant-option expectations for all 29 `BACKUP_TABLES`.
+  Implementers must not infer missing privileges from repository method names.
+- The foundation probe and AI usage evidence run as dedicated temporary
+  one-minute acceptance candidates. They are not substitutes for any of the
+  six fault records.
+- Every fault candidate emits exactly this record:
+
+```ts
+export interface TemporaryPreviewFaultEvidence {
+  readonly evidenceType: "vision.preview-fault/v1";
+  readonly scenario:
+    | "queue_delayed"
+    | "job_failed"
+    | "channel_expired"
+    | "database_unavailable"
+    | "r2_upload_failed"
+    | "ai_stopped";
+  readonly outcome: "succeeded" | "failed";
+  readonly category: "none" | "backup_storage_write_failed";
+}
+```
+
+- Only `r2_upload_failed` may use
+  `failed/backup_storage_write_failed`; the other five scenarios use
+  `succeeded/none`. The exact action is `acceptance.preview-fault`.
+- The generated AI-evidence candidate uses the client-forbidden, preview-only
+  binding `PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED="true"`. It is admitted
+  only with the AI-evidence candidate, only after the same workflow run's
+  read-only verifier proves one exact enabled, unscoped, rolling 30-day
+  950-cent Gateway rule. It is absent from committed normal configuration,
+  every fault candidate, the foundation candidate, and production.
+- A candidate run never claims automatic rollback. Before deployment, prepare
+  and validate the immutable normal artifact. After success or failure, the
+  operator dispatches the separately guarded rollback action immediately and
+  verifies health, authenticated diagnostics, exactly two normal schedules,
+  and absence of all one-minute/acceptance bindings before provider cleanup or
+  another candidate.
+- Task 8 is the executable post-acceptance cleanup. It removes every temporary
+  role-probe, fenced-restore, foundation-probe, AI-evidence, fault, workflow,
+  binding, and one-minute runtime surface from the post-acceptance head while
+  retaining permanent recovery tooling, maintenance evidence, measured usage
+  warnings, normal schedules, backup key version 1, and `backups/v1/`.
 
 ---
 
@@ -426,7 +481,13 @@ Expected RED: the source/job/shared tier/read-only verifier do not exist.
 - [ ] Do not return reservation, ledger, request, model, or token identifiers.
 - [ ] Use the same guarded workflow run to verify one exact enabled, unscoped,
   rolling 30-day 950-cent Gateway limit.
-- [ ] Pass only a generated non-secret true attestation to the temporary candidate.
+- [ ] Parse
+  `PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED="true"` only when
+  `VISION_ENV==="preview"` and the dedicated AI-evidence candidate is active;
+  classify it as client-forbidden and reject it everywhere else.
+- [ ] Have the generated candidate builder add that binding only after the
+  same workflow run's read-only verifier succeeds, then inject its admitted
+  boolean into `PhaseBAiUsageEvidenceDependencies.gatewayLimitMatches`.
 - [ ] Emit `unavailable`, `inconsistent`, or `limit_exceeded` without raw errors.
 - [ ] Prove deterministic status and calendar reads remain available at AI stop.
 - [ ] Reconstruct exact evidence in the classifier and reject hostile or duplicate
@@ -514,15 +575,17 @@ states cannot be selected.
 - [ ] Inject a constant preview test writer for `r2_upload_failed`.
 - [ ] Throw before any R2 `put` call or object mutation.
 - [ ] Preserve prior valid backups and never claim backup success.
-- [ ] Emit one exact `vision.preview-fault/v1` failed
-  `backup_storage_write_failed` record and then preserve scheduled failure.
-- [ ] For `job_failed`, `channel_expired`, and `database_unavailable`, emit one
-  exact successful content-free fault record.
-- [ ] Use the `queue_delayed` candidate's one terminal slot for the exact
-  foundation-probe record.
-- [ ] Use the `ai_stopped` candidate's one terminal slot for the exact AI-usage
-  record.
-- [ ] Thus every candidate deployment emits exactly one terminal record.
+- [ ] Emit exactly one `TemporaryPreviewFaultEvidence` record for every
+  scenario using action `acceptance.preview-fault`.
+- [ ] For `r2_upload_failed`, emit
+  `failed/backup_storage_write_failed`, then preserve the constant scheduled
+  failure.
+- [ ] For `queue_delayed`, `job_failed`, `channel_expired`,
+  `database_unavailable`, and `ai_stopped`, emit `succeeded/none`.
+- [ ] Keep foundation-probe and AI-usage evidence in their own dedicated
+  candidates; no fault candidate may emit either evidence type.
+- [ ] Reject wrong scenario/outcome/category combinations, mixed evidence,
+  and duplicate terminal records.
 
 Run:
 
@@ -567,11 +630,11 @@ git commit -m "feat: add guarded preview fault scenarios"
 
 ---
 
-## Task 6: Build the Guarded Candidate and Permanent Cleanup Contract
+## Task 6: Build the Guarded Candidates and Permanent Cleanup Contract
 
 **Files:**
 
-- Create: `scripts/prepare-preview-fault-deploy-config.ts`
+- Create: `scripts/prepare-preview-acceptance-deploy-config.ts`
 - Create: `tests/security/temporary-surface-cleanup.test.ts`
 - Modify: `wrangler.jsonc`
 - Modify: `scripts/validate-preview-deploy-config.ts`
@@ -590,19 +653,31 @@ git commit -m "feat: add guarded preview fault scenarios"
 
 - [ ] Assert committed normal local/preview/production config has two crons and
   no acceptance binding.
-- [ ] Build a generated preview artifact that adds exactly one strict scenario
-  and one one-minute cron.
-- [ ] Reject production, unknown/multiple scenario values, existing mutation,
-  missing normal crons, or a committed temporary binding.
-- [ ] Add exact workflow choices for observer, candidate deploy, and normal
-  rollback; make them mutually exclusive.
+- [ ] Build a generated preview artifact that adds exactly one acceptance
+  selector and one one-minute cron. The selector is either one strict
+  six-value fault scenario, `foundation_probe`, or `ai_usage`.
+- [ ] For `ai_usage` only, require and add
+  `PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED="true"`; reject that binding
+  for every other candidate.
+- [ ] Reject production, unknown/multiple selectors, existing mutation,
+  missing normal crons, a committed temporary binding, or more than one
+  terminal-evidence mode.
+- [ ] Add exact `acceptance_operation` workflow choices:
+  `none`, `observe`, `deploy_foundation`, `deploy_ai`, `deploy_fault`, and
+  `rollback`. Add a separate closed `fault_scenario` choice of `none` plus the
+  six exact scenarios. Enforce one valid combination and reject all others.
 - [ ] Preserve observer/mutation concurrency separation and 16/18-minute bounds.
 - [ ] Require observer proof before candidate deployment.
 - [ ] Deploy generated config at an immutable reviewed ref without `--var`.
 - [ ] Run the read-only Gateway verifier only for `ai_stopped`.
-- [ ] Restore the immutable normal Worker after every success or failure.
+- [ ] Also run the read-only Gateway verifier for the dedicated `ai_usage`
+  evidence candidate and compose only its successful same-run boolean into the
+  generated binding.
+- [ ] Implement rollback as a separately guarded, operator-dispatched mutation
+  action over the pre-validated immutable normal artifact. Do not claim an
+  automatic cross-run rollback.
 - [ ] Verify normal health, exactly two schedules, and absence of the temporary
-  binding/one-minute cron before advancing.
+  bindings/one-minute cron before provider cleanup or another candidate.
 
 Run:
 
@@ -652,7 +727,8 @@ explicit temporary files and no other reason.
 
 - [ ] Verify zero migration diff and zero new secret inventory.
 - [ ] Verify committed normal config is clean.
-- [ ] Verify candidate config can only be generated from the reviewed source.
+- [ ] Verify each candidate config can only be generated from the reviewed
+  source and has exactly one terminal evidence type.
 - [ ] Obtain independent workflow/security/cleanup review.
 - [ ] Fix and re-review all Critical or Important findings.
 - [ ] Commit:
@@ -748,16 +824,19 @@ The implementation session continues in this exact order:
 4. Run the already reviewed fenced restore; restore normal; remove its two
    temporary Worker secrets; then delete only the opaque restore-attempt marker.
 5. Ask the user to create one disposable event in the secondary Vision
-   calendar; capture the foundation probe through the `queue_delayed` candidate;
-   then ask the user to delete the event.
-6. Run `job_failed`, `channel_expired`, `database_unavailable`,
-   `r2_upload_failed`, and `ai_stopped` one candidate at a time, restoring and
-   verifying normal after every terminal record.
+   calendar; capture the dedicated foundation-probe candidate; dispatch and
+   verify normal rollback; only then ask the user to delete the event.
+6. Run `queue_delayed`, `job_failed`, `channel_expired`,
+   `database_unavailable`, `r2_upload_failed`, and `ai_stopped` one fault
+   candidate at a time, dispatching and verifying normal rollback after every
+   terminal record.
 7. Capture normal sync timing and missed-signal repair.
 8. Give the user current Google UI instructions for wrong-account denial,
    permission revocation, disconnected-state verification, and reconnection.
-9. Capture harmless AI and aggregate provider cost evidence.
-10. Implement the surgical cleanup from the post-acceptance head.
+9. Capture the dedicated AI-usage candidate, one separately approved harmless
+   AI request, and aggregate provider cost evidence; dispatch and verify normal
+   rollback before continuing.
+10. Execute Task 8's surgical cleanup from the post-acceptance head.
 11. Make `temporary-surface-cleanup.test.ts` GREEN, run the complete local gate,
     obtain independent review, push, deploy, and verify the clean normal Worker.
 12. Delete temporary Worker secrets only after normal runtime is verified.
@@ -765,6 +844,103 @@ The implementation session continues in this exact order:
     attested disposable branch, and require explicit confirmation at action time.
 14. Complete the Phase B evidence map, mark Phase B complete only when every
     separate gate passes, and prepare the Phase C handoff.
+
+## Task 8: Remove Temporary Acceptance Surfaces After Live Evidence
+
+**Files:**
+
+- Delete the temporary role-probe files listed in
+  `.superpowers/sdd/fault-cleanup-plan-map-report.md` under
+  `Delete current temporary role-probe surfaces`.
+- Delete the temporary fenced-restore Worker files listed in that report under
+  `Delete current temporary fenced-restore runtime surfaces`.
+- Delete the temporary foundation-probe and AI-evidence sources, tests,
+  scheduled dispatch, classifiers, generated bindings, and matching reference
+  files discovered by exact evidence-type search at the post-acceptance head.
+- Delete: `src/domain/operations/temporary-preview-fault.ts`
+- Delete: `src/jobs/temporary-preview-fault.ts`
+- Delete: `scripts/prepare-preview-acceptance-deploy-config.ts`
+- Delete their temporary-only tests and matching simple/technical references.
+- Modify: `src/server/api/diagnostic-routes.ts`
+- Modify: `src/server/env.ts`
+- Modify: `src/server/client-binding-boundary.ts`
+- Modify: `src/jobs/scheduled.ts`
+- Modify: `scripts/safe-tail-classifier.ts`
+- Modify: `scripts/print-safe-tail.ts`
+- Modify: `.github/workflows/preview.yml`
+- Modify: `wrangler.jsonc`
+- Modify: `scripts/validate-preview-deploy-config.ts`
+- Modify the associated unit, Worker, security, CI, and documentation tests.
+- Retain: `tests/security/temporary-surface-cleanup.test.ts`
+
+### Step 1: Prove the residue test is RED for temporary surfaces only
+
+- [ ] From the post-acceptance head, enumerate actual temporary paths with:
+
+```powershell
+git grep -l -I -e 'vision.phase-b-foundation-probe/v1' -e 'vision.ai-usage/v1' -e 'vision.preview-fault/v1' -e 'temporary-preview-role-probe' -e 'temporary-preview-restore' -e 'PREVIEW_ACCEPTANCE_' -- src tests scripts .github wrangler.jsonc docs/reference
+```
+
+- [ ] Run:
+
+```powershell
+pnpm.cmd exec vitest run --project unit tests/security/temporary-surface-cleanup.test.ts
+```
+
+Expected RED: it names only the reviewed temporary runtime/test/reference
+surfaces, bindings, workflow modes, or one-minute routing that still exist.
+
+### Step 2: Delete and surgically unwind only temporary code
+
+- [ ] Remove the enumerated temporary files and their dedicated tests/references.
+- [ ] Remove temporary parsing, injection, scheduled dispatch, evidence unions,
+  classifier modes, workflow operations, bindings, and one-minute routing from
+  shared files.
+- [ ] Preserve authentication, owner scope, exact diagnostic responses,
+  permanent maintenance evidence, bounded ordinary safe-tail framing, measured
+  database/R2 warnings, normal backup creation, prepared-backup import, offline
+  restore tooling, observer/mutation concurrency separation, bounded timeouts,
+  and the two normal crons.
+- [ ] Remove the two fenced-restore Worker secrets from active runtime schema,
+  workflow, generated config, and active secret inventory while preserving
+  operator-only offline restore variables and historical credential records.
+- [ ] Preserve backup key version 1 without reading or rotating the key.
+- [ ] Perform no R2 list, read, write, or delete operation; never delete
+  `backups/v1/`.
+
+### Step 3: Turn the permanent residue contract GREEN
+
+- [ ] Run:
+
+```powershell
+pnpm.cmd exec vitest run --project unit tests/security/temporary-surface-cleanup.test.ts tests/unit/server/wrangler-routing.test.ts tests/unit/ci/workflows.test.ts tests/unit/scripts/safe-tail-classifier.test.ts tests/unit/scripts/print-safe-tail.test.ts tests/security/secret-bundle.test.ts
+pnpm.cmd docs:check
+pnpm.cmd build
+pnpm.cmd security:scan
+pnpm.cmd test:e2e
+pnpm.cmd check
+```
+
+Expected GREEN: all commands pass; normal preview/production contain exactly
+the maintenance and daily-backup schedules and no temporary runtime surface.
+
+### Step 4: Independently review, commit, deploy, and verify cleanup
+
+- [ ] Obtain a fresh exact-diff security/release review with zero Critical and
+  zero Important findings.
+- [ ] Commit the post-acceptance cleanup:
+
+```powershell
+git add src tests scripts .github wrangler.jsonc docs
+git commit -m "chore: remove Phase B acceptance surfaces"
+```
+
+- [ ] Push and deploy the exact reviewed commit as the normal preview Worker.
+- [ ] Verify unauthenticated health, authenticated diagnostics/calendar,
+  exactly two schedules, and absence of all temporary bindings and Worker
+  secrets before deleting the opaque restore marker or disposable Neon branch.
+- [ ] Record only privacy-safe evidence in `docs/operations/phase-b-evidence.md`
+  and the credential-change log.
 
 ## Plan Self-Review Checklist
 
