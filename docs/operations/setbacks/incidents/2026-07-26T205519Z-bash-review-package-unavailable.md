@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:55:19.3868194Z
-- **Last observed:** 2026-07-28T01:13:37.0861005Z
-- **Phase/task:** Listener-first restore retry Task 3 handoff
+- **Last observed:** 2026-07-28T18:40:34Z
+- **Phase/task:** Phase B acceptance instrumentation Task 1 handoff
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** `0f08fc1`
 
@@ -75,3 +75,7 @@ The PowerShell fallback produced a 36,835-byte package for
   bounded executable lookup found no Bash executable on `PATH`. No artifact,
   provider action, or repository mutation occurred. The exact approved plan
   section is passed directly to the subagent instead.
+- 2026-07-28T18:40:34Z: Recurred when the required task-brief helper launched
+  through the discovered Git Bash executable but its `awk` dependency was
+  unavailable. No source or provider state changed. The exact Task 1 section
+  is extracted with the already verified deterministic PowerShell fallback.
