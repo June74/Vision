@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:06:37.768763Z
-- **Last observed:** 2026-07-27T03:08:11.5689988Z
+- **Last observed:** 2026-07-28T22:23:26.3813087Z
 - **Phase/task:** Phase B restore Task 1 fix wave
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `1dff60e`
@@ -68,3 +68,7 @@ exact index rows.
   broad include pattern and returned many repository paths. No dependency
   contents, provider data, or private values were emitted; subsequent reads
   returned to exact paths and bounded line ranges.
+- 2026-07-28T22:23:26.3813087Z: A recursive helper search traversed
+  `node_modules` and failed on a transient nested dependency path. No private
+  values were emitted. The correction used `git ls-files` with a narrow
+  pattern instead of filesystem recursion.
