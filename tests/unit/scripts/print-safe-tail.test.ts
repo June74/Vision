@@ -285,6 +285,27 @@ describe("print-safe-tail", () => {
     expect(JSON.parse(result.stdout)).toEqual(evidence);
   });
 
+  it("emits only one exact preview-fault record in preview-fault-only mode", async () => {
+    const evidence = {
+      evidenceType: "vision.preview-fault/v1",
+      scenario: "r2_upload_failed",
+      outcome: "failed",
+      category: "backup_storage_write_failed",
+    };
+    const result = await runPrintSafeTail(
+      ["--preview-fault-only"],
+      [
+        scheduledTail(),
+        scheduledTail([
+          { message: [{ action: "acceptance.preview-fault", evidence }] },
+        ]),
+      ],
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual(evidence);
+  });
+
   it("emits the fixed fallback when ai-usage-only mode sees no AI result", async () => {
     await expect(
       runPrintSafeTail(

@@ -3,6 +3,7 @@ import {
   classifyCalendarMaintenanceEvidence,
   classifyPhaseBFoundationProbeEvidence,
   classifyPhaseBAiUsageEvidence,
+  classifyTemporaryPreviewFaultEvidence,
   classifySafeTailLine,
   classifyTemporaryPreviewRoleProbeEvidence,
   classifyTemporaryRestoreEvidence,
@@ -20,6 +21,7 @@ import {
 } from "../../../src/jobs/phase-b-ai-usage-evidence";
 import type { TemporaryPreviewRoleProbeEvidence } from "../../../src/jobs/temporary-preview-role-probe";
 import type { PhaseBFoundationProbeEvidence } from "../../../src/jobs/phase-b-foundation-probe";
+import type { TemporaryPreviewFaultEvidence } from "../../../src/jobs/temporary-preview-fault";
 
 const FAILURE_CATEGORIES: readonly TemporaryRestoreFailureCategory[] = [
   "restore_configuration_invalid",
@@ -235,7 +237,68 @@ function aiUsageTail(
   });
 }
 
+function faultEvidence(
+  scenario: TemporaryPreviewFaultEvidence["scenario"] = "queue_delayed",
+): TemporaryPreviewFaultEvidence {
+  return scenario === "r2_upload_failed"
+    ? {
+        evidenceType: "vision.preview-fault/v1",
+        scenario,
+        outcome: "failed",
+        category: "backup_storage_write_failed",
+      }
+    : {
+        evidenceType: "vision.preview-fault/v1",
+        scenario,
+        outcome: "succeeded",
+        category: "none",
+      };
+}
+
+function faultTail(evidence: unknown, records: readonly unknown[] = [{ action: "acceptance.preview-fault", evidence }]): string {
+  return JSON.stringify({
+    event: { cron: "* * * * *" },
+    logs: [{ message: records }],
+  });
+}
+
 describe("safe Cloudflare tail classification", () => {
+  it.each([
+    "queue_delayed",
+    "job_failed",
+    "channel_expired",
+    "database_unavailable",
+    "r2_upload_failed",
+    "ai_stopped",
+  ] as const)("reconstructs only the canonical %s preview fault evidence", (scenario) => {
+    const evidence = faultEvidence(scenario);
+
+    expect(classifyTemporaryPreviewFaultEvidence(evidence)).toEqual(evidence);
+    expect(classifySafeTailLine(faultTail(evidence))).toEqual(evidence);
+  });
+
+  it("rejects invalid, duplicate, and mixed preview-fault terminal records", () => {
+    const evidence = faultEvidence();
+
+    expect(classifyTemporaryPreviewFaultEvidence({ ...evidence, outcome: "failed" })).toBeNull();
+    expect(
+      classifySafeTailLine(
+        faultTail(evidence, [
+          { action: "acceptance.preview-fault", evidence },
+          { action: "acceptance.preview-fault", evidence },
+        ]),
+      ),
+    ).toBeNull();
+    expect(
+      classifySafeTailLine(
+        faultTail(evidence, [
+          { action: "acceptance.preview-fault", evidence },
+          { action: "calendar.maintenance", evidence: maintenanceEvidence() },
+        ]),
+      ),
+    ).toBeNull();
+  });
+
   it("accepts every canonical AI evidence category without field drift", () => {
     for (const evidence of canonicalAiUsageEvidence()) {
       expect(classifyPhaseBAiUsageEvidence(evidence)).toEqual(evidence);

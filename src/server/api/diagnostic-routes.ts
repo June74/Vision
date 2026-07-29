@@ -12,6 +12,10 @@ import {
 import type { EncryptedSessionRepository } from "../../data/repositories/session-repository";
 import { DrizzleWrappedDataKeyStore } from "../../data/repositories/token-repository";
 import { calculateFoundationHealth } from "../../domain/operations/health";
+import {
+  applyTemporaryPreviewFaultOverlay,
+  parseTemporaryPreviewFaultScenario,
+} from "../../domain/operations/temporary-preview-fault";
 import { verifyCsrfToken } from "../auth/csrf";
 import { createProductionAuthDependencies } from "../auth/oauth-routes";
 import {
@@ -61,6 +65,7 @@ export function registerDiagnosticRoutes(
       : () => dependenciesOrResolver;
 
   app.get("/api/diagnostics/status", async (context) => {
+    const scenario = parseTemporaryPreviewFaultScenario(context.env);
     const dependencies = await resolveRouteDependencies(
       resolveDependencies,
       context,
@@ -70,24 +75,27 @@ export function registerDiagnosticRoutes(
     try {
       const observedAt = dependencies.now();
       const facts = await repository.readFoundationFacts(observedAt);
-      const health = calculateFoundationHealth(facts, observedAt);
+      const effectiveFacts = scenario
+        ? applyTemporaryPreviewFaultOverlay(scenario, facts, observedAt)
+        : facts;
+      const health = calculateFoundationHealth(effectiveFacts, observedAt);
       context.header("Cache-Control", "no-store");
       return context.json({
         status: {
           state: health.state,
-          authorizationState: facts.authorizationState,
-          lastSuccessfulSyncAt: facts.lastSuccessfulSyncAt?.toISOString() ?? null,
+          authorizationState: effectiveFacts.authorizationState,
+          lastSuccessfulSyncAt: effectiveFacts.lastSuccessfulSyncAt?.toISOString() ?? null,
           syncDelayMs: health.syncDelayMs,
-          oldestQueuedJobAt: facts.oldestQueuedJobAt?.toISOString() ?? null,
+          oldestQueuedJobAt: effectiveFacts.oldestQueuedJobAt?.toISOString() ?? null,
           oldestJobDelayMs: health.oldestJobDelayMs,
-          queueRetryCount: facts.queueRetryCount,
-          failedJobCount: facts.failedJobCount,
-          channelExpiresAt: facts.channelExpiresAt?.toISOString() ?? null,
+          queueRetryCount: effectiveFacts.queueRetryCount,
+          failedJobCount: effectiveFacts.failedJobCount,
+          channelExpiresAt: effectiveFacts.channelExpiresAt?.toISOString() ?? null,
           aiSpendTier: health.aiSpendTier,
-          aiMonthlyCents: facts.aiMonthlyCents,
-          databaseUsageWarning: facts.databaseUsageWarning,
-          r2UsageWarning: facts.r2UsageWarning,
-          safeErrorCode: facts.safeErrorCode,
+          aiMonthlyCents: effectiveFacts.aiMonthlyCents,
+          databaseUsageWarning: effectiveFacts.databaseUsageWarning,
+          r2UsageWarning: effectiveFacts.r2UsageWarning,
+          safeErrorCode: effectiveFacts.safeErrorCode,
           warningCodes: [...health.warningCodes],
         },
       });

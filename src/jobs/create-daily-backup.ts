@@ -70,6 +70,18 @@ export interface BackupObjectStore extends BackupObjectReader {
   delete(key: string): Promise<void>;
 }
 
+/** Narrow write boundary used by normal backup creation and the preview fault injection. */
+export interface BackupObjectWriter {
+  putIfAbsent(
+    key: string,
+    body: Uint8Array,
+    customMetadata: BackupObjectMetadata,
+    bodySha256: string,
+  ): Promise<boolean>;
+}
+
+/** Narrow write boundary used by normal backup creation and the preview fault injection. */
+
 /** Database boundary that owns one complete repeatable-read capture. */
 export interface BackupSnapshotSource {
   readConsistentSnapshot(): Promise<BackupSnapshotV1>;
@@ -78,6 +90,8 @@ export interface BackupSnapshotSource {
 /** Dependencies kept explicit for deterministic storage and race tests. */
 export interface CreateDailyBackupDependencies {
   readonly store: BackupObjectStore;
+  /** Defaults to the normal store writer; preview acceptance may replace only this boundary. */
+  readonly writer?: BackupObjectWriter;
   readonly snapshotSource: BackupSnapshotSource;
   readonly backupKey: BackupEncryptionKey;
 }
@@ -160,7 +174,7 @@ export async function createDailyBackup(
 
   let created: boolean;
   try {
-    created = await dependencies.store.putIfAbsent(
+    created = await (dependencies.writer ?? dependencies.store).putIfAbsent(
       objectKey,
       body,
       customMetadata,

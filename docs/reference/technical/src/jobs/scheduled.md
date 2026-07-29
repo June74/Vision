@@ -1,5 +1,15 @@
 # `src/jobs/scheduled.ts`
 
+## `createWithWriter`
+
+Carries the `BackupObjectWriter` substitution through normal snapshot and
+encryption setup without widening ordinary recovery behavior.
+
+## `runR2Upload`
+
+The temporary candidate creates recovery dependencies only after strict
+preview-scenario admission; its supplied writer fails before R2 `put`.
+
 The scheduled entry point routes exact cron expressions to isolated
 Google-maintenance, encrypted-recovery, and temporary preview role-probe
 capability sets. The temporary branch receives only the preview environment

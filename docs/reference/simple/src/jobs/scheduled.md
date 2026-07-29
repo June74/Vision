@@ -1,5 +1,15 @@
 # `src/jobs/scheduled.ts`
 
+## `createWithWriter`
+
+Lets the temporary preview upload check replace only the final storage writer;
+normal recovery keeps its ordinary writer.
+
+## `runR2Upload`
+
+Builds the normal backup path only after the preview fault binding has been
+accepted.
+
 Routes the 15-minute Google maintenance schedule, daily encrypted recovery
 schedule, and temporary preview role-probe schedule without mixing their
 credentials or database targets. It also carries an injected foundation-probe

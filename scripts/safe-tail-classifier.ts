@@ -21,6 +21,15 @@ import {
   PHASE_B_AI_USAGE_ACTION,
   type PhaseBAiUsageEvidence,
 } from "../src/jobs/phase-b-ai-usage-evidence";
+import {
+  createTemporaryPreviewFaultEvidence,
+  TEMPORARY_PREVIEW_FAULT_ACTION,
+  type TemporaryPreviewFaultEvidence,
+} from "../src/jobs/temporary-preview-fault";
+import {
+  TEMPORARY_PREVIEW_FAULT_SCENARIOS,
+  type TemporaryPreviewFaultScenario,
+} from "../src/domain/operations/temporary-preview-fault";
 
 /** Closed, privacy-safe recovery evidence emitted from one Wrangler JSON tail line. */
 export interface SafeTailEvidence {
@@ -52,7 +61,8 @@ export type SafeTailResult =
   | TemporaryRestoreEvidence
   | TemporaryPreviewRoleProbeEvidence
   | PhaseBFoundationProbeEvidence
-  | PhaseBAiUsageEvidence;
+  | PhaseBAiUsageEvidence
+  | TemporaryPreviewFaultEvidence;
 
 const FAILURE_MARKERS = Object.freeze([
   ["Backup creation failed.", "backup_creation_failed"],
@@ -168,6 +178,12 @@ const AI_USAGE_KEYS = Object.freeze([
   "tier",
   "warningAtCents",
 ] as const);
+const TEMPORARY_PREVIEW_FAULT_KEYS = Object.freeze([
+  "category",
+  "evidenceType",
+  "outcome",
+  "scenario",
+] as const);
 const TERMINAL_IDENTITIES = Object.freeze([
   {
     action: "calendar.maintenance",
@@ -193,6 +209,11 @@ const TERMINAL_IDENTITIES = Object.freeze([
     action: PHASE_B_AI_USAGE_ACTION,
     evidenceType: AI_USAGE_EVIDENCE_TYPE,
     kind: "phase_b_ai_usage",
+  },
+  {
+    action: TEMPORARY_PREVIEW_FAULT_ACTION,
+    evidenceType: "vision.preview-fault/v1",
+    kind: "temporary_preview_fault",
   },
 ] as const);
 type TerminalKind = (typeof TERMINAL_IDENTITIES)[number]["kind"];
@@ -257,6 +278,12 @@ export function classifySafeTailLine(line: string): SafeTailResult | null {
   }
   if (foundation.seen) return null;
 
+  const fault = locateTemporaryPreviewFaultEvidence(tail.logs);
+  if (fault.evidence) {
+    return cron === "temporary_recovery" ? fault.evidence : null;
+  }
+  if (fault.seen) return null;
+
   const aiUsage = locatePhaseBAiUsageEvidence(tail.logs);
   if (aiUsage.evidence) return cron === "temporary_recovery" ? aiUsage.evidence : null;
   if (aiUsage.seen) return null;
@@ -299,6 +326,33 @@ export function classifyPhaseBAiUsageEvidence(
     nonAiAvailable: evidence.nonAiAvailable,
   });
   return matchesPhaseBAiUsageEvidence(evidence, reconstructed)
+    ? reconstructed
+    : null;
+}
+
+/** Reconstructs the exact four-key preview-fault record without copying tail-controlled extras. */
+export function classifyTemporaryPreviewFaultEvidence(
+  candidate: unknown,
+): TemporaryPreviewFaultEvidence | null {
+  const evidence = snapshotOwnEnumerableData(candidate);
+  if (
+    !evidence ||
+    !hasExactKeys(evidence, TEMPORARY_PREVIEW_FAULT_KEYS) ||
+    evidence.evidenceType !== "vision.preview-fault/v1" ||
+    typeof evidence.scenario !== "string" ||
+    !TEMPORARY_PREVIEW_FAULT_SCENARIOS.includes(
+      evidence.scenario as TemporaryPreviewFaultScenario,
+    )
+  ) {
+    return null;
+  }
+  const reconstructed = createTemporaryPreviewFaultEvidence(
+    evidence.scenario as TemporaryPreviewFaultScenario,
+  );
+  return (
+    evidence.outcome === reconstructed.outcome &&
+    evidence.category === reconstructed.category
+  )
     ? reconstructed
     : null;
 }
@@ -834,6 +888,47 @@ function locatePhaseBAiUsageEvidence(candidate: unknown): {
     seen,
     evidence: seen && !invalid ? valid : null,
   };
+}
+
+/** Requires one exact preview-fault terminal and rejects duplicate or mixed records. */
+function locateTemporaryPreviewFaultEvidence(candidate: unknown): {
+  readonly seen: boolean;
+  readonly evidence: TemporaryPreviewFaultEvidence | null;
+} {
+  if (!Array.isArray(candidate)) return { seen: false, evidence: null };
+  let seen = false;
+  let invalid = false;
+  let valid: TemporaryPreviewFaultEvidence | null = null;
+  for (const logCandidate of candidate) {
+    const log = snapshotOwnEnumerableData(logCandidate);
+    if (!log || !Array.isArray(log.message)) continue;
+    for (const messageCandidate of log.message) {
+      const message = snapshotOwnEnumerableData(messageCandidate);
+      if (!message) continue;
+      if (!hasTerminalKind(message, "temporary_preview_fault")) {
+        if (hasOtherTerminalKind(message, "temporary_preview_fault")) {
+          invalid = true;
+        }
+        continue;
+      }
+      if (seen) invalid = true;
+      seen = true;
+      if (
+        message.action !== TEMPORARY_PREVIEW_FAULT_ACTION ||
+        !hasExactKeys(message, ["action", "evidence"] as const)
+      ) {
+        invalid = true;
+        continue;
+      }
+      const evidence = classifyTemporaryPreviewFaultEvidence(message.evidence);
+      if (!evidence || valid) {
+        invalid = true;
+        continue;
+      }
+      valid = evidence;
+    }
+  }
+  return { seen, evidence: seen && !invalid ? valid : null };
 }
 
 /** Requires exactly one valid maintenance terminal record and no mixed terminal record. */

@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:03:39.626332Z
-- **Last observed:** 2026-07-28T21:23:39.6303315Z
-- **Phase/task:** Phase B acceptance plan-review resolution staging
+- **Last observed:** 2026-07-29T03:45:00Z
+- **Phase/task:** Phase B acceptance instrumentation Task 5 staging
 - **Environment:** Local linked worktree under the managed sandbox
 - **Version/commit:** `f7778b8`
 
@@ -120,3 +120,7 @@ metadata boundary. Earlier related work produced commit `f7778b8`.
   linked-worktree index lock, so no file was partially staged. The identical
   path set is retried through the established scoped metadata-permission
   boundary.
+- 2026-07-29T03:45:00Z: Recurred while staging the verified Task 5 source,
+  tests, references, report, and setback records. Git stopped before creating
+  the linked-worktree index lock; no file was staged. The same explicit path
+  set requires the established scoped metadata-permission boundary.

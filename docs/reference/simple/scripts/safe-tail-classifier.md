@@ -1,142 +1,66 @@
-# safe-tail-classifier
+# `scripts/safe-tail-classifier.ts`
 
-## `classifyPhaseBAiUsageEvidence`
-
-Accepts one exact AI evidence record and rebuilds only canonical fixed fields.
-
-Turns a Cloudflare scheduled-event log into a tiny recovery result, the exact
-five-field normal maintenance result, the exact closed temporary-restore
-evidence object, the exact four-field temporary role-probe evidence object, or
-the exact 19-field Phase B foundation evidence object.
+Safely reduces scheduled Worker logs to closed evidence records without keeping raw provider-controlled lines.
 
 ## `createSafeTailAccumulator`
-
-Collects pretty-printed JSON one line at a time without showing it.
-
+Buffers one bounded JSON event.
 ## `push`
-
-Accepts one line and returns a safe result only after one complete event exists.
-
+Accepts one tail line and emits only a complete safe result.
 ## `classifySafeTailLine`
-
-Recognizes only the exact maintenance or recovery schedules, returns an exact
-maintenance, role-probe, or restore result, and otherwise maps known backup
-failures to fixed names. It rejects an event that contains more than one kind
-of terminal evidence before any locator can win by running first.
-
+Recognizes only approved schedules and terminal records.
+## `classifyPhaseBAiUsageEvidence`
+Rebuilds canonical AI evidence.
+## `classifyTemporaryPreviewFaultEvidence`
+Accepts only the exact four-key preview-fault mapping.
 ## `isPhaseBAiUsageEvidenceShape`
-
-Requires the exact AI key set and the primitive inputs needed for safe
-reconstruction.
-
+Checks the AI evidence shape.
 ## `isCanonicalUnavailableAiUsageEvidence`
-
-Recognizes only the producer's fixed zeroed unavailable record.
-
+Recognizes fixed unavailable AI evidence.
 ## `createUnavailableAiUsageEvidence`
-
-Builds a new unavailable AI record from fixed values rather than tail data.
-
+Builds fixed unavailable AI evidence.
 ## `matchesPhaseBAiUsageEvidence`
-
-Checks every derived AI category, outcome, threshold, tier, and amount against
-the canonical reconstruction.
-
-## `classifyCalendarMaintenanceEvidence`
-
-Accepts only the five exact maintenance keys and coherent repair, renewal,
-category, and outcome combinations.
-
-## `classifyTemporaryPreviewRoleProbeEvidence`
-
-Accepts only the exact four keys and valid success or failure combinations,
-then returns a new plain value-free object.
-
+Compares derived AI fields.
 ## `classifyPhaseBFoundationProbeEvidence`
-
-Accepts only the exact foundation keys, safe counts, and coherent terminal
-combinations. Numeric-bound evidence must contain at least one possible
-sanitized zero. The classifier reconstructs a new privacy-safe object.
-
+Rebuilds closed foundation evidence.
+## `classifyCalendarMaintenanceEvidence`
+Rebuilds closed maintenance evidence.
+## `classifyTemporaryPreviewRoleProbeEvidence`
+Rebuilds closed role-probe evidence.
 ## `classifyTemporaryRestoreEvidence`
-
-Accepts only the exact success or allowlisted failure shape and returns a new
-plain evidence object.
-
+Rebuilds closed restore evidence.
 ## `normalizeOutcome`
-
-Converts Cloudflare's outcome into Vision's small approved outcome list.
-
+Maps platform outcomes to the safe vocabulary.
 ## `locateTemporaryRestoreEvidence`
-
-Checks only the first message in each log entry for the exact restore record.
-
+Finds a restore terminal.
 ## `locateTemporaryPreviewRoleProbeEvidence`
-
-Checks only the first message in each log entry for the exact role-probe
-action, and blocks generic fallback for malformed or wrongly labeled
-role-probe-shaped records.
-
+Finds a role-probe terminal.
 ## `terminalKindsForMessage`
-
-Uses one shared action/evidence list to identify every terminal kind named by
-a log message.
-
+Identifies a message's terminal kind.
 ## `hasTerminalKind`
-
-Reports whether a message names one requested terminal kind.
-
+Checks for one kind.
 ## `hasOtherTerminalKind`
-
-Reports whether a message names a different terminal kind.
-
+Checks for a different kind.
 ## `hasMixedTerminalKinds`
-
-Scans the complete event and rejects cross-kind terminal evidence regardless
-of message or locator order.
-
+Rejects mixed terminal kinds.
 ## `locatePhaseBFoundationProbeEvidence`
-
-Requires exactly one foundation terminal on the one-minute observation and
-rejects duplicates, mixed terminals, wrong actions, or malformed shapes.
-
+Finds one foundation terminal.
 ## `locatePhaseBAiUsageEvidence`
-
-Requires exactly one canonical AI terminal and rejects duplicates, wrong
-actions, malformed records, or any other terminal kind.
-
+Finds one AI terminal.
+## `locateTemporaryPreviewFaultEvidence`
+Finds one preview-fault terminal and rejects duplicates or mixed records.
 ## `locateCalendarMaintenanceEvidence`
-
-Requires one valid maintenance terminal record and rejects duplicate, mixed,
-malformed, or wrongly labeled terminal records.
-
-## `classifyRestoreRowCounts`
-
-Requires one nonnegative safe count for every migration-9 backup table.
-
-## `findFailureMarker`
-
-Searches for fixed legacy recovery messages without copying or serializing the
-tail event.
-
-## `snapshotOwnEnumerableData`
-
-Copies only an object's own enumerable data properties without running
-getters, and rejects symbols, accessors, hidden keys, and custom prototypes.
-
-## `hasExactKeys`
-
-Rejects missing or extra properties.
-
-## `isNonnegativeSafeInteger`
-
-Accepts only safe whole-number counts at least zero.
-
-## `isPositiveSafeInteger`
-
-Accepts only safe positive key versions.
-
+Finds one maintenance terminal.
 ## `isUnavailableFoundationMeasurements`
-
-Recognizes only the canonical zeroed measurement shape used for unavailable
-foundation sources.
+Recognizes fixed unavailable foundation measurements.
+## `classifyRestoreRowCounts`
+Checks bounded restore row counts.
+## `findFailureMarker`
+Maps fixed legacy backup failures.
+## `snapshotOwnEnumerableData`
+Copies only plain own data fields.
+## `hasExactKeys`
+Rejects missing and extra fields.
+## `isNonnegativeSafeInteger`
+Checks safe nonnegative integers.
+## `isPositiveSafeInteger`
+Checks safe positive integers.

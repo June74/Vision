@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-07-29T02:50:00Z
-- **Phase/task:** Phase B acceptance instrumentation Task 2 full gate
+- **Last observed:** 2026-07-29T03:27:04Z
+- **Phase/task:** Phase B acceptance instrumentation Task 5 Worker RED/GREEN
 - **Environment:** Local managed sandbox
 - **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`
 
@@ -132,3 +132,7 @@ security validation passed.
 - 2026-07-29T02:51:00Z: The Task 4 follow-up build used the task-local
   temporary diagnostic directory and completed both bundles plus the
   crypto-boundary validator with no log-write warning.
+- 2026-07-29T03:27:04Z: Recurred during Task 5 Worker RED/GREEN verification
+  because the task-local diagnostic setting was omitted. The focused Worker
+  assertions passed after implementation; the next Worker command restores a
+  workspace-local `XDG_CONFIG_HOME`.

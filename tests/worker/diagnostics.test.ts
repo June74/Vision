@@ -52,6 +52,7 @@ function createDiagnosticHarness(
     authenticated?: boolean;
     databaseUsageWarning?: boolean;
     r2UsageWarning?: boolean;
+    aiMonthlyCents?: number;
   } = {},
 ) {
   const repository: DiagnosticRepositoryPort = {
@@ -68,7 +69,7 @@ function createDiagnosticHarness(
           databaseAvailable: true,
           databaseUsageWarning: options.databaseUsageWarning ?? false,
           r2UsageWarning: options.r2UsageWarning ?? false,
-          aiMonthlyCents: 950,
+          aiMonthlyCents: options.aiMonthlyCents ?? 950,
           safeErrorCode: null,
           refreshTokenEnvelope: "must-not-leak",
           databaseUrl: "must-not-leak",
@@ -208,6 +209,48 @@ describe("Vision Worker diagnostic routes", () => {
         warningCodes: ["AI_BUDGET_STOPPED"],
       },
     });
+  });
+
+  it.each([
+    ["queue_delayed", "Delayed", "normal"],
+    ["job_failed", "Action required", "normal"],
+    ["channel_expired", "Action required", "normal"],
+    ["database_unavailable", "Action required", "normal"],
+    ["ai_stopped", "Healthy", "stopped"],
+  ] as const)(
+    "applies the authenticated %s preview overlay without changing the response shape",
+    async (scenario, state, aiSpendTier) => {
+      const { app, repository } = createDiagnosticHarness({ aiMonthlyCents: 0 });
+
+      const response = await app.fetch(
+        request("/api/diagnostics/status"),
+        {
+          VISION_ENV: "preview",
+          PREVIEW_ACCEPTANCE_SCENARIO: scenario,
+        } as Env,
+      );
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({
+        status: { state, aiSpendTier },
+      });
+      expect(repository.readFoundationFacts).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("rejects an unauthenticated fault request before repository facts or overlay use", async () => {
+    const { app, repository } = createDiagnosticHarness({ authenticated: false });
+
+    const response = await app.fetch(
+      request("/api/diagnostics/status"),
+      {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "job_failed",
+      } as Env,
+    );
+
+    expect(response.status).toBe(401);
+    expect(repository.readFoundationFacts).not.toHaveBeenCalled();
   });
 
   it("preserves the exact public shape when measured storage warnings are actionable", async () => {

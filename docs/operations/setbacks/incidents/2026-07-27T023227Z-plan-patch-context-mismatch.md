@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T02:32:27Z
-- **Last observed:** 2026-07-29T02:45:00Z
-- **Phase/task:** Phase B acceptance instrumentation Task 3 replacement brief
+- **Last observed:** 2026-07-29T03:40:00Z
+- **Phase/task:** Phase B acceptance instrumentation Task 5 safe-tail RED
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `36f9df2`
 
@@ -101,3 +101,9 @@ The retry must modify only the intended plan paragraph and pass
   remembered AI-evidence test title rather than its exact current text. The
   multi-file patch was rejected atomically. The target files were reread, and
   the retry is split into exact file-sized patches.
+- 2026-07-29T03:30:16Z: Recurred when the Task 5 safe-tail test patch used a
+  guessed describe label. The patch was rejected atomically before any test
+  changed; the exact test section was then read for a short-anchor retry.
+- 2026-07-29T03:40:00Z: A large safe-tail reference restoration patch had one
+  malformed added line. It was rejected atomically; no documentation changed.
+  The retry uses concise exact-heading restoration patches.

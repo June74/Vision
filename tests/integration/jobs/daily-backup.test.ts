@@ -145,6 +145,25 @@ describe("daily encrypted backup job", () => {
     expect(failedVerification.store.objects).toHaveLength(0);
   });
 
+  it("uses an injected preview writer before any R2 put mutation", async () => {
+    const fixture = dependencies();
+    const putIfAbsent = vi.fn(async () => {
+      throw new Error("preview-only injected failure");
+    });
+
+    await expect(
+      createDailyBackup(NOW, {
+        store: fixture.store,
+        writer: { putIfAbsent },
+        snapshotSource: { readConsistentSnapshot: fixture.readConsistentSnapshot },
+        backupKey: await backupKey(),
+      }),
+    ).rejects.toThrow("Backup storage write failed.");
+
+    expect(putIfAbsent).toHaveBeenCalledOnce();
+    expect(fixture.store.objects).toHaveLength(0);
+  });
+
   it("does not expose a database snapshot failure through the scheduled error", async () => {
     const fixture = dependencies();
     fixture.readConsistentSnapshot.mockRejectedValueOnce(

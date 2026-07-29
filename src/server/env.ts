@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { decodeBase64Url } from "../crypto/envelope";
 import { AI_HARD_STOP_CENTS } from "../domain/budget/ai-budget";
+import { TEMPORARY_PREVIEW_FAULT_SCENARIOS } from "../domain/operations/temporary-preview-fault";
 import { parseCloudflareOpenAiGatewayBaseUrl } from "../integrations/openai/cloudflare-gateway-url";
 
 const keyEncryptionKeySchema = z.string().superRefine((keyEncryptionKey, context) => {
@@ -226,6 +227,9 @@ export const RuntimeEnvSchema = z
     DATABASE_USAGE_WARNING_BYTES: usageWarningThresholdSchema.optional(),
     R2_USAGE_WARNING_BYTES: usageWarningThresholdSchema.optional(),
     R2_USAGE_WARNING_OBJECTS: usageWarningThresholdSchema.optional(),
+    PREVIEW_ACCEPTANCE_SCENARIO: z
+      .enum(TEMPORARY_PREVIEW_FAULT_SCENARIOS)
+      .optional(),
   })
   .superRefine((environment, context) => {
     if (
@@ -238,6 +242,15 @@ export const RuntimeEnvSchema = z
         code: "custom",
         message:
           "Storage usage warning thresholds are required in preview and production.",
+      });
+    }
+    if (
+      environment.PREVIEW_ACCEPTANCE_SCENARIO !== undefined &&
+      environment.VISION_ENV !== "preview"
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "PREVIEW_ACCEPTANCE_SCENARIO is preview-only.",
       });
     }
     if (

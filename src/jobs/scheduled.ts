@@ -29,7 +29,12 @@ import {
   parseVisionKeyEncryptionKey,
   type Env,
 } from "../server/env";
+import { parseTemporaryPreviewFaultScenario } from "../domain/operations/temporary-preview-fault";
 import { createDailyBackup } from "./create-daily-backup";
+import {
+  runTemporaryPreviewFault,
+  TEMPORARY_PREVIEW_FAULT_CRON,
+} from "./temporary-preview-fault";
 import {
   emitPhaseBAiUsageEvidence,
   runPhaseBAiUsageEvidence,
@@ -88,6 +93,11 @@ export interface ScheduledJobDependencies {
 /** Recovery operations kept separate so retention can run only after verified creation. */
 export interface ScheduledRecoveryDependencies {
   readonly create: (now: Date) => Promise<void>;
+  /** Candidate-only writer seam; ordinary recovery always uses the default object writer. */
+  readonly createWithWriter?: (
+    now: Date,
+    writer: import("./create-daily-backup").BackupObjectWriter,
+  ) => Promise<void>;
   readonly purge: (now: Date) => Promise<void>;
 }
 
@@ -283,6 +293,26 @@ export async function scheduled(
   _context: ExecutionContext,
 ): Promise<void> {
   const now = new Date(controller.scheduledTime);
+  if (controller.cron === TEMPORARY_PREVIEW_FAULT_CRON) {
+    const scenario = parseTemporaryPreviewFaultScenario(environment);
+    if (scenario) {
+      await runTemporaryPreviewFault(
+        environment,
+        {
+          /** Builds the normal backup path only after the preview binding has been admitted. */
+          runR2Upload: async (writer) => {
+            const recovery =
+              await createProductionScheduledRecoveryDependencies(environment);
+            if (!recovery.createWithWriter) {
+              throw new Error("Temporary preview fault is unavailable.");
+            }
+            await recovery.createWithWriter(now, writer);
+          },
+        },
+      );
+      return;
+    }
+  }
   await runScheduledJob(controller.cron, now, {
     /** Builds Google maintenance capability only for the maintenance cron. */
     maintenance: async (scheduledAt) => {
@@ -353,6 +383,11 @@ async function createProductionScheduledRecoveryDependencies(
     /** Captures, encrypts, conditionally stores, and verifies today's backup. */
     create: async (now) => {
       await createDailyBackup(now, { store, snapshotSource, backupKey });
+    },
+    /** Reuses normal snapshot/encryption reads while replacing only the object writer. */
+    /** Replaces only the object writer while retaining normal snapshot and encryption reads. */
+    createWithWriter: async (now, writer) => {
+      await createDailyBackup(now, { store, snapshotSource, backupKey, writer });
     },
     /** Purges only validated objects outside the fixed recovery window. */
     purge: async (now) => {

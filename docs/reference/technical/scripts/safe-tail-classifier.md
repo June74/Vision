@@ -1,164 +1,66 @@
 # `scripts/safe-tail-classifier.ts`
 
-## `classifyPhaseBAiUsageEvidence`
-
-Reconstructs the exact AI record rather than returning tail data.
-
-Provides the closed, privacy-safe projection used for normal calendar
-maintenance, live scheduled recovery, temporary restore, and temporary
-role-probe or Phase B foundation acceptance. It incrementally parses
-Wrangler's pretty JSON, caps buffered input at one MiB, recognizes only
-approved crons, and emits no provider-controlled fields.
+Uses own-enumerable snapshots, bounded incremental framing, exact key sets, and canonical reconstruction for every accepted terminal record.
 
 ## `createSafeTailAccumulator`
-
-Creates a stateful line accumulator that resets after one complete JSON value
-or after the one-MiB safety cap.
-
+Maintains a one-MiB-bounded JSON frame.
 ## `push`
-
-Adds one raw line, returns `null` for incomplete or irrelevant input, and
-returns one closed maintenance, recovery, restore, or role-probe result only
-for a complete recognized event.
-
+Returns a result only after a complete parse.
 ## `classifySafeTailLine`
-
-Parses one JSON value, requires a recognized scheduled cron, accepts permanent
-maintenance evidence only on `*/15 * * * *`, returns exact accepted terminal
-records before legacy recovery classification, maps known fixed backup
-messages to allowlisted categories, and otherwise uses `unknown_failure`.
-Before locator dispatch, a shared terminal registry rejects any event that
-names more than one terminal kind, including action/evidence mismatches.
-
+Routes only approved cron and terminal combinations.
+## `classifyPhaseBAiUsageEvidence`
+Reconstructs the closed AI evidence form.
+## `classifyTemporaryPreviewFaultEvidence`
+Requires the exact four keys and the allowed scenario/outcome/category matrix.
 ## `isPhaseBAiUsageEvidenceShape`
-
-Requires the exact ten-key AI object, its fixed evidence discriminator, and
-typed reconstruction inputs without retaining provider-controlled fields.
-
+Validates reconstruction inputs.
 ## `isCanonicalUnavailableAiUsageEvidence`
-
-Checks every literal in the sole zeroed `failed/unavailable` producer form.
-
+Validates the sole unavailable producer form.
 ## `createUnavailableAiUsageEvidence`
-
-Returns a new frozen unavailable record containing fixed allowlisted literals.
-
+Returns fixed unavailable AI evidence.
 ## `matchesPhaseBAiUsageEvidence`
-
-Compares the candidate's derived category, outcome, thresholds, tier, and
-amount with `createPhaseBAiUsageEvidence`.
-
-## `classifyCalendarMaintenanceEvidence`
-
-Requires exactly `category`, `evidenceType`, `outcome`, `renewalOutcome`, and
-`repairOutcome`; validates all nine coherent terminal combinations; and
-reconstructs a new plain frozen object in that key order.
-
-## `classifyTemporaryPreviewRoleProbeEvidence`
-
-Requires exactly `category`, `evidenceType`, `outcome`, and `roleMatches`;
-validates the complete success/failure combination; and reconstructs a new
-plain frozen object in that key order.
-
+Checks all derived AI fields.
 ## `classifyPhaseBFoundationProbeEvidence`
-
-Snapshots the exact 19 keys, admits all counts as nonnegative safe integers,
-validates success, semantic-failure, numeric-failure, and unavailable-source
-coherence, and reconstructs a new frozen object in canonical key order. A
-numeric-bound record requires at least one zero numeric field, because every
-shape the producer can emit for an invalid input sanitizes that field to zero.
-
+Reconstructs foundation evidence.
+## `classifyCalendarMaintenanceEvidence`
+Reconstructs maintenance evidence.
+## `classifyTemporaryPreviewRoleProbeEvidence`
+Reconstructs role-probe evidence.
 ## `classifyTemporaryRestoreEvidence`
-
-Snapshots own enumerable data properties, requires the exact key set for the
-declared outcome, validates all literals, booleans, and counts, and
-reconstructs a new plain `TemporaryRestoreEvidence`.
-
+Reconstructs restore evidence.
 ## `normalizeOutcome`
-
-Maps `ok`, `exception`, `canceled`, and `exceededCpu` to the public evidence
-vocabulary; every other value becomes `unknown`.
-
+Maps allowed platform outcomes.
 ## `locateTemporaryRestoreEvidence`
-
-Walks the log array and inspects only each entry's first message. An attempted
-`backup.restore` record with extra or invalid data blocks generic fallback.
-
+Locates one restore terminal.
 ## `locateTemporaryPreviewRoleProbeEvidence`
-
-Walks only the first log message, recognizes
-`backup.restore-role-probe` on the one-minute cron, and treats malformed or
-wrong-action role-probe-shaped evidence as seen but rejected so provider text
-cannot fall through into generic output.
-
+Locates one role-probe terminal.
 ## `terminalKindsForMessage`
-
-Matches actions and evidence discriminators against one complete registry for
-maintenance, restore, role-probe, foundation, and AI terminals.
-
+Uses the shared terminal registry.
 ## `hasTerminalKind`
-
-Tests membership in the shared terminal registry for one expected kind.
-
+Tests terminal membership.
 ## `hasOtherTerminalKind`
-
-Detects any registry match other than the locator's expected kind.
-
+Detects terminal mismatches.
 ## `hasMixedTerminalKinds`
-
-Scans all log messages and rejects two distinct terminal kinds before the
-maintenance-first and one-minute locator order can affect the result.
-
+Rejects cross-kind events before locator order applies.
 ## `locatePhaseBFoundationProbeEvidence`
-
-Inspects only first log messages on the one-minute cron, requires exactly one
-`acceptance.phase-b-foundation` terminal, and rejects duplicates, mixed
-terminal evidence, wrong actions, malformed records, and extra fields.
-
+Requires one exact foundation terminal.
 ## `locatePhaseBAiUsageEvidence`
-
-Scans all messages for the shared AI terminal identity, requires one exact
-action/evidence envelope, and rejects duplicates, malformed evidence, or any
-other registered terminal kind.
-
+Requires one exact AI terminal.
+## `locateTemporaryPreviewFaultEvidence`
+Requires one exact `acceptance.preview-fault` terminal on the one-minute cron.
 ## `locateCalendarMaintenanceEvidence`
-
-Scans terminal log records without retaining raw lines, requires exactly one
-valid `calendar.maintenance` action, and rejects wrong actions, duplicates,
-mixed restore or role-probe terminals, malformed evidence, and extra fields.
-
-## `classifyRestoreRowCounts`
-
-Requires exactly the 29 authoritative migration-9 table names and a
-nonnegative safe integer for every value, then reconstructs a plain frozen
-record.
-
-## `findFailureMarker`
-
-Traverses parsed arrays and own data properties iteratively, comparing strings
-only with fixed recovery markers and never stringifying the full event.
-
-## `snapshotOwnEnumerableData`
-
-Uses property descriptors to copy only own enumerable data properties from a
-plain or null-prototype object into an internal snapshot without invoking
-accessors. Symbols, accessors, non-enumerable own properties, and custom
-prototypes reject the whole candidate.
-
-## `hasExactKeys`
-
-Requires key-count equality plus ownership of every allowlisted string key.
-
-## `isNonnegativeSafeInteger`
-
-Admits only nonnegative JavaScript safe integers for row and event counts.
-
-## `isPositiveSafeInteger`
-
-Admits only positive JavaScript safe integers for the retained backup key
-version.
-
+Requires one exact maintenance terminal.
 ## `isUnavailableFoundationMeasurements`
-
-Requires the exact all-false, all-zero, `not_tested` source-failure
-measurements so an unavailable category cannot carry misleading partial data.
+Checks fixed unavailable measurements.
+## `classifyRestoreRowCounts`
+Checks all migration backup-table counts.
+## `findFailureMarker`
+Matches fixed legacy errors without serializing logs.
+## `snapshotOwnEnumerableData`
+Rejects getters, symbols, hidden fields, and non-plain prototypes.
+## `hasExactKeys`
+Requires exact own keys.
+## `isNonnegativeSafeInteger`
+Checks accepted counts.
+## `isPositiveSafeInteger`
+Checks accepted positive values.

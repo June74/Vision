@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T19:54:22.2560981Z
-- **Last observed:** 2026-07-28T21:08:42.5183444Z
-- **Phase/task:** Phase B acceptance instrumentation Task 3 typecheck
+- **Last observed:** 2026-07-29T03:34:45Z
+- **Phase/task:** Phase B acceptance instrumentation Task 5 typecheck
 - **Environment:** Local Phase B worktree
 - **Version/commit:** Task 2 patch based on `429124f`
 
@@ -62,3 +62,12 @@ Rerun `pnpm.cmd typecheck`.
   method even after the synthetic rows were cast. The fixture separates an
   inspectable non-generic mock from a generic port wrapper; no production or
   provider state changed.
+- 2026-07-29T03:34:00Z: The Task 5 R2-failure fixture declared generic metadata
+  instead of the real closed backup-metadata contract. Typecheck stopped before
+  execution; the correction narrows the mock parameter to `BackupObjectWriter`.
+- 2026-07-29T03:34:20Z: The corrected mock still returned the writer's boolean
+  rather than the scheduled dependency's `Promise<void>` contract. No test ran;
+  the fixture now awaits the writer and returns void.
+- 2026-07-29T03:34:45Z: The first void-return patch left one extra closing call
+  delimiter in the test fixture. Typecheck stopped before execution; a bounded
+  source read identified and removed the delimiter.

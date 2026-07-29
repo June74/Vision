@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:08:27Z
-- **Last observed:** 2026-07-28T23:02:59.5413784Z
-- **Phase/task:** Phase B acceptance instrumentation Task 4 RED
+- **Last observed:** 2026-07-29T03:24:33Z
+- **Phase/task:** Phase B acceptance instrumentation Task 5 RED
 - **Environment:** Local Windows worktree
 - **Version/commit:** `22c5dc0`
 
@@ -63,3 +63,7 @@ declared unit-test script.
   `pnpm.cmd exec vitest` command. No test ran and no project or provider state
   changed. The corrected command uses `pnpm.cmd test:unit` with the same
   focused file arguments.
+- 2026-07-29T03:24:33Z: Recurred for the Task 5 brief's exact
+  `pnpm.cmd exec vitest` command. No test ran and no project or provider state
+  changed. The corrected command uses `pnpm.cmd test:unit` with the same
+  focused unit-project file argument.
