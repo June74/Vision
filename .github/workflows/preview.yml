@@ -3,11 +3,6 @@ name: Vision preview
 on:
   workflow_dispatch:
     inputs:
-      ref:
-        description: Git ref to review, build, observe, or deploy
-        required: false
-        default: main
-        type: string
       acceptance_operation:
         description: Closed preview acceptance operation
         required: true
@@ -69,7 +64,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ github.sha }}
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
@@ -97,7 +92,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ github.sha }}
       - name: Resolve verified commit
         id: verified-ref
         shell: bash
@@ -174,7 +169,14 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ github.sha }}
+      - name: Verify observer checkout matches dispatch commit
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          actual_sha="$(git rev-parse HEAD)"
+          [[ "$actual_sha" == "$EXPECTED_SHA" ]]
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
@@ -256,7 +258,10 @@ jobs:
             .status == "in_progress" and
             .conclusion == null and
             .head_sha == $sha and
-            (.path | startswith(".github/workflows/preview.yml"))
+            (
+              .path == ".github/workflows/preview.yml" or
+              (.path | startswith(".github/workflows/preview.yml@refs/"))
+            )
           ' "$run_file" > /dev/null
           jq -e --arg expected_name "$expected_name" '
             any(.jobs[];
@@ -264,6 +269,26 @@ jobs:
               .status == "in_progress"
             )
           ' "$jobs_file" > /dev/null
+      - name: Verify live preview is normal before candidate deployment
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
+        run: |
+          health_file="$(mktemp)"
+          schedules_file="$(mktemp)"
+          settings_file="$(mktemp)"
+          trap 'rm -f "$health_file" "$schedules_file" "$settings_file"' EXIT
+          curl --fail --silent --show-error \
+            "https://vision-preview.june74.workers.dev/api/health" > "$health_file"
+          curl --fail --silent --show-error \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/vision-preview/schedules" > "$schedules_file"
+          curl --fail --silent --show-error \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/vision-preview/settings" > "$settings_file"
+          pnpm exec tsx scripts/validate-preview-deploy-config.ts \
+            --verify-provider-state "$health_file" "$schedules_file" "$settings_file"
       - name: Build normal preview artifact
         run: pnpm build
         env:
@@ -290,6 +315,45 @@ jobs:
             --input dist/vision/wrangler.json \
             --output dist/vision/wrangler.acceptance.json \
             --ai-gateway-limit-attested "$AI_GATEWAY_LIMIT_ATTESTED"
+      - name: Reverify active matching observer immediately before deploy
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACCEPTANCE_OPERATION: ${{ inputs.acceptance_operation }}
+          OBSERVER_RUN_ID: ${{ inputs.observer_run_id }}
+          VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}
+        run: |
+          if ! [[ "$OBSERVER_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]; then
+            exit 1
+          fi
+          case "$ACCEPTANCE_OPERATION" in
+            deploy_foundation) expected_observer_evidence="foundation_probe" ;;
+            deploy_ai) expected_observer_evidence="ai_usage" ;;
+            deploy_fault) expected_observer_evidence="preview_fault" ;;
+            *) exit 1 ;;
+          esac
+          expected_name="Capture $expected_observer_evidence safe scheduled outcome"
+          run_file="$(mktemp)"
+          jobs_file="$(mktemp)"
+          trap 'rm -f "$run_file" "$jobs_file"' EXIT
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$OBSERVER_RUN_ID" > "$run_file"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$OBSERVER_RUN_ID/jobs" > "$jobs_file"
+          jq -e --arg sha "$VERIFIED_SHA" '
+            .event == "workflow_dispatch" and
+            .status == "in_progress" and
+            .conclusion == null and
+            .head_sha == $sha and
+            (
+              .path == ".github/workflows/preview.yml" or
+              (.path | startswith(".github/workflows/preview.yml@refs/"))
+            )
+          ' "$run_file" > /dev/null
+          jq -e --arg expected_name "$expected_name" '
+            any(.jobs[];
+              .name == $expected_name and
+              .status == "in_progress"
+            )
+          ' "$jobs_file" > /dev/null
       - name: Deploy generated acceptance candidate
         if: ${{ steps.acceptance-token.outputs.deploy == 'true' }}
         run: pnpm exec wrangler deploy --config dist/vision/wrangler.acceptance.json --name vision-preview
@@ -346,24 +410,14 @@ jobs:
           trap 'rm -f "$health_file" "$schedules_file" "$settings_file"' EXIT
           curl --fail --silent --show-error \
             "https://vision-preview.june74.workers.dev/api/health" > "$health_file"
-          jq -e '.status == "ok"' "$health_file" > /dev/null
           curl --fail --silent --show-error \
             --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/vision-preview/schedules" > "$schedules_file"
-          jq -e '
-            .success == true and
-            ((.result | map(.cron) | sort) == ["*/15 * * * *", "5 6 * * *"]) and
-            (all(.result[]; .cron != "* * * * *"))
-          ' "$schedules_file" > /dev/null
           curl --fail --silent --show-error \
             --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/vision-preview/settings" > "$settings_file"
-          jq -e '
-            .success == true and
-            (all((.result.bindings // .result.settings.bindings // [])[];
-              (.name | startswith("PREVIEW_ACCEPTANCE_") | not)
-            ))
-          ' "$settings_file" > /dev/null
+          pnpm exec tsx scripts/validate-preview-deploy-config.ts \
+            --verify-provider-state "$health_file" "$schedules_file" "$settings_file"
           echo "Provider cleanup is forbidden until this rollback verification succeeds." >> "$GITHUB_STEP_SUMMARY"
 
   configure_gateway:
@@ -375,7 +429,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ github.sha }}
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:

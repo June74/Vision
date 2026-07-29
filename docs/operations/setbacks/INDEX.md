@@ -2,6 +2,7 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
+| [SB-20260729-172238-task6-review-workflow-test-assumptions](incidents/2026-07-29T172238Z-task6-review-workflow-test-assumptions.md) | closed | 2026-07-29T17:22:38Z | Phase B acceptance instrumentation Task 6 review fixes | Review-fix tests retained stale and line-sensitive expectations |
 | [SB-20260729-170120-task6-observer-family-proof-gap](incidents/2026-07-29T170120Z-task6-observer-family-proof-gap.md) | closed | 2026-07-29T17:02:34Z | Phase B acceptance instrumentation Task 6 self-review | Observer proof did not bind the evidence family |
 | [SB-20260729-165535-task6-pglite-suite-timeouts](incidents/2026-07-29T165535Z-task6-pglite-suite-timeouts.md) | closed | 2026-07-29T16:56:22Z | Phase B acceptance instrumentation Task 6 full gate | Full unit gate hit three PGlite timeouts |
 | [SB-20260729-052113-task6-test-helper-type-widening](incidents/2026-07-29T052113Z-task6-test-helper-type-widening.md) | closed | 2026-07-29T16:49:50Z | Phase B acceptance instrumentation Task 6 typecheck | Config test helpers widened structured values |
@@ -201,6 +202,10 @@
 | [SB-20260729-022851-git-author-metadata-output](incidents/2026-07-29T022851Z-git-author-metadata-output.md) | closed | 2026-07-29T02:32:00Z | Acceptance instrumentation Task 4 review-fix investigation | Commit inspection rendered unnecessary author metadata |
 | [SB-20260729-023728-git-nul-excludes-override](incidents/2026-07-29T023728Z-git-nul-excludes-override.md) | closed | 2026-07-29T02:39:00Z | Acceptance instrumentation Task 4 review-fix investigation | Git rejected the local NUL excludes override |
 | [SB-20260729-031129-ai-action-literal-drift](incidents/2026-07-29T031129Z-ai-action-literal-drift.md) | closed | 2026-07-29T03:11:29Z | Acceptance instrumentation Task 4 final re-review tests | AI printer test guessed the terminal action literal |
+| [SB-20260729-173140-task6-review-local-vitest-resolution](incidents/2026-07-29T173140Z-task6-review-local-vitest-resolution.md) | closed | 2026-07-29T17:31:40Z | Phase B acceptance instrumentation Task 6 review fixes | Package runner did not resolve local Vitest |
+| [SB-20260729-173234-task6-cleanup-permanence-token](incidents/2026-07-29T173234Z-task6-cleanup-permanence-token.md) | closed | 2026-07-29T17:32:34Z | Phase B acceptance instrumentation Task 6 review fixes | Cleanup permanence test guessed display labels |
+| [SB-20260729-173449-task6-doc-patch-context](incidents/2026-07-29T173449Z-task6-doc-patch-context.md) | closed | 2026-07-29T17:34:49Z | Phase B acceptance instrumentation Task 6 review fixes | Combined documentation patch used stale evidence context |
+| [SB-20260729-173841-task6-yaml-parser-absent](incidents/2026-07-29T173841Z-task6-yaml-parser-absent.md) | closed | 2026-07-29T17:38:41Z | Phase B acceptance instrumentation Task 6 review fixes | Optional workflow parser dependency was absent |
 
 ## Legacy history
 

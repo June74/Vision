@@ -61,9 +61,12 @@ observation:
 
 - The 15-minute scheduler now emits one exact
   `vision.calendar-maintenance/v1` record after cleanup, repair, and renewal.
-  The safe-tail observer checks out the supplied ref, retains its separate
-  non-mutating concurrency group and bounded timeout, and accepts only that
-  closed record on the exact normal cron. A fresh guarded preview capture is
+  The safe-tail observer checks out the workflow dispatch commit, proves the
+  checkout equals `github.sha` before receiving provider credentials, retains
+  its separate non-mutating concurrency group and bounded timeout, and accepts
+  only that closed record on the exact normal cron. Candidate deployment
+  repeats the exact workflow identity, commit, active status, and evidence
+  family proof immediately before deploy. A fresh guarded preview capture is
   still required as live evidence.
 - The dedicated foundation candidate emits only fixed booleans and aggregate
   counts through read-only, owner-scoped database/R2 boundaries. It needs a
@@ -80,10 +83,19 @@ observation:
 
 The normal artifact contains only the two permanent schedules and no acceptance
 binding. After the acceptance matrix, source cleanup must be reviewed, deployed,
-and verified before any provider cleanup. The permanent cleanup contract
-retains recovery/import tooling, `backups/v1/`, key version 1, maintenance
-evidence, measured usage warnings, bounded observer behavior, and historical
-plans, setbacks, credential history, and release evidence.
+and verified before any provider cleanup. The permanent cleanup contract names
+the exact 48 dedicated deletions plus 36 shared active-residue files spanning
+runtime bindings, observer modes, routes, selectors, scheduler branches,
+references, and tests. It retains recovery/import tooling, `backups/v1/`, key
+version 1, permanent security scans, maintenance evidence, measured usage
+warnings, bounded observer behavior, and historical plans, setbacks,
+credential history, and release evidence.
+
+Before every candidate, the guarded workflow requires live preview health,
+exactly the two normal schedules, and an explicit provider binding array with
+no temporary binding. Missing, null, malformed, or failed provider responses
+fail closed. Rollback uses the same provider-state validator after deploying
+the normal artifact, and a later candidate must pass the preflight again.
 
 ## Release decision
 

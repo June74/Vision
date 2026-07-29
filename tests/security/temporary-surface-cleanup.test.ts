@@ -2,12 +2,15 @@
  * Permanent Task 8 contract for removing acceptance-only runtime reachability
  * while retaining recovery, maintenance, usage, schedule, and backup safety.
  */
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const STRICT_CLEANUP =
   process.env.PREVIEW_ACCEPTANCE_CLEANUP_ASSERT === "true";
+
+const TEMPORARY_ACTIVE_SURFACE_PATTERN =
+  /vision\.(?:phase-b-foundation-probe|ai-usage|preview-fault)\/v1|temporary-preview-(?:role-probe|restore|fault)|PREVIEW_(?:ACCEPTANCE|RESTORE)_[A-Z0-9_]+|\* \* \* \* \*|parseTemporaryPreviewAcceptance(?:Selector|AiGatewayAttestation)|TEMPORARY_PREVIEW_(?:ACCEPTANCE_SELECTORS|FAULT_SCENARIOS)|\b(?:deploy_foundation|deploy_ai|deploy_fault)\b|--(?:foundation-probe|ai-usage|preview-fault|role-probe|restore)-only\b|(?:validatePreviewAcceptanceDeployConfig|preparePreviewAcceptanceDeployConfig|validatePreviewAcceptanceWorkflowInputs)|prepare-preview-acceptance-deploy-config|\b(?:foundation_probe|ai_usage|queue_delayed|job_failed|channel_expired|database_unavailable|r2_upload_failed|ai_stopped)\b|\b(?:foundationProbe|aiUsageEvidence|temporaryFaultR2Upload)\b|\b(?:candidate selector|generated selector|generated candidate|generated preview candidate|AI[- ]attestation|six[- ]fault)\b/iu;
 
 const TEMPORARY_PATHS = [
   "src/data/backup/r2-restore-attempt-store.ts",
@@ -60,6 +63,22 @@ const TEMPORARY_PATHS = [
   "docs/reference/technical/src/jobs/temporary-preview-role-probe.md",
 ] as const;
 
+const ACTIVE_SURFACE_ROOTS = [
+  "src",
+  "tests",
+  "scripts",
+  ".github",
+  "docs/reference",
+] as const;
+
+const APPROVED_ACTIVE_SCAN_EXCLUSIONS = new Set<string>([
+  ...TEMPORARY_PATHS,
+  "tests/security/temporary-surface-cleanup.test.ts",
+  // Offline restore remains operator-only after Worker acceptance cleanup.
+  "scripts/restore-backup.ts",
+  "tests/integration/backup/restore-command.test.ts",
+]);
+
 const PERMANENT_PATHS = [
   "src/data/backup/import-backup.ts",
   "src/data/backup/neon-adapter.ts",
@@ -68,14 +87,25 @@ const PERMANENT_PATHS = [
   "src/jobs/calendar-maintenance-evidence.ts",
   "src/jobs/create-daily-backup.ts",
   "scripts/restore-backup.ts",
+  "scripts/scan-release.ts",
+  "scripts/capture-release-evidence.ts",
   "scripts/safe-tail-classifier.ts",
   "scripts/print-safe-tail.ts",
   "tests/integration/backup/restore-command.test.ts",
   "tests/integration/backup/round-trip.test.ts",
   "tests/integration/backup/schema-contract.test.ts",
+  "tests/security/protected-sentinel.test.ts",
+  "tests/security/release-evidence-capture.test.ts",
+  "tests/security/secret-bundle.test.ts",
+  "tests/unit/scripts/safe-tail-classifier.test.ts",
+  "tests/unit/scripts/print-safe-tail.test.ts",
+  "docs/superpowers/plans/2026-07-28-phase-b-acceptance-instrumentation.md",
   "docs/operations/backup-and-restore.md",
   "docs/operations/credential-change-log.md",
+  "docs/operations/phase-b-implementation-setbacks.md",
   "docs/operations/phase-b-evidence.md",
+  "docs/operations/setbacks/INDEX.md",
+  "docs/operations/setbacks/incidents/2026-07-29T170120Z-task6-observer-family-proof-gap.md",
 ] as const;
 
 async function exists(relativePath: string): Promise<boolean> {
@@ -91,7 +121,46 @@ async function read(relativePath: string): Promise<string> {
   return readFile(resolve(process.cwd(), relativePath), "utf8");
 }
 
+async function listFiles(relativePath: string): Promise<string[]> {
+  const entries = await readdir(resolve(process.cwd(), relativePath), {
+    withFileTypes: true,
+  });
+  const nested = await Promise.all(
+    entries.map(async (entry) => {
+      const child = `${relativePath}/${entry.name}`.replaceAll("\\", "/");
+      if (entry.isDirectory()) return listFiles(child);
+      return entry.isFile() ? [child] : [];
+    }),
+  );
+  return nested.flat();
+}
+
 describe("post-acceptance temporary surface cleanup", () => {
+  it("detects representative shared route, workflow, validator, observer, reference, and test residue", () => {
+    const representatives = [
+      'parseTemporaryPreviewAcceptanceSelector(context.env)',
+      'parseTemporaryPreviewAcceptanceAiGatewayAttestation(context.env)',
+      'operation: "deploy_foundation"',
+      'operation: "deploy_ai"',
+      'operation: "deploy_fault"',
+      'evidence_flag="--foundation-probe-only"',
+      'evidence_flag="--ai-usage-only"',
+      'evidence_flag="--preview-fault-only"',
+      "validatePreviewAcceptanceDeployConfig(candidate, selector)",
+      "preparePreviewAcceptanceDeployConfig(input)",
+      'from "../../domain/operations/temporary-preview-fault"',
+      "Status validates the complete candidate selector and AI attestation.",
+      "A generated preview candidate routes one dedicated evidence family.",
+      'PREVIEW_ACCEPTANCE_SCENARIO: "foundation_probe"',
+    ];
+
+    expect(
+      representatives.filter((source) =>
+        TEMPORARY_ACTIVE_SURFACE_PATTERN.test(source),
+      ),
+    ).toEqual(representatives);
+  });
+
   it("removes the exact temporary source, test, script, and reference inventory", async () => {
     const existing = (
       await Promise.all(
@@ -115,18 +184,11 @@ describe("post-acceptance temporary surface cleanup", () => {
     "removes active bindings, evidence modes, and one-minute routing",
     async () => {
       const activePaths = [
-        "src/server/env.ts",
-        "src/server/client-binding-boundary.ts",
-        "src/jobs/scheduled.ts",
-        "scripts/safe-tail-classifier.ts",
-        "scripts/print-safe-tail.ts",
-        ".github/workflows/preview.yml",
+        ...(await Promise.all(ACTIVE_SURFACE_ROOTS.map(listFiles))).flat(),
         "wrangler.jsonc",
-        "scripts/validate-preview-deploy-config.ts",
-        "docs/reference/simple/scripts/safe-tail-classifier.md",
-        "docs/reference/technical/scripts/safe-tail-classifier.md",
-        "docs/reference/technical/scripts/print-safe-tail.md",
-      ];
+      ]
+        .filter((path) => !APPROVED_ACTIVE_SCAN_EXCLUSIONS.has(path))
+        .sort();
       if (await exists("dist/vision/wrangler.json")) {
         activePaths.push("dist/vision/wrangler.json");
       }
@@ -137,11 +199,9 @@ describe("post-acceptance temporary surface cleanup", () => {
             source: await read(path),
           })),
         )
-      )
+        )
         .filter(({ source }) =>
-          /vision\.(?:phase-b-foundation-probe|ai-usage|preview-fault)\/v1|temporary-preview-(?:role-probe|restore)|PREVIEW_ACCEPTANCE_|PREVIEW_RESTORE_|\* \* \* \* \*/u.test(
-            source,
-          ),
+          TEMPORARY_ACTIVE_SURFACE_PATTERN.test(source),
         )
         .map(({ path }) => path);
 
@@ -161,6 +221,15 @@ describe("post-acceptance temporary surface cleanup", () => {
       maintenance,
       usage,
       previewWorkflow,
+      releaseScanner,
+      secretBundleTest,
+      protectedSentinelTest,
+      safeTailClassifierTest,
+      printSafeTailTest,
+      historicalPlan,
+      setbackIndex,
+      credentialHistory,
+      releaseEvidence,
     ] = await Promise.all([
       read("wrangler.jsonc"),
       read("src/jobs/create-daily-backup.ts"),
@@ -168,6 +237,17 @@ describe("post-acceptance temporary surface cleanup", () => {
       read("src/jobs/calendar-maintenance-evidence.ts"),
       read("src/domain/operations/usage-warnings.ts"),
       read(".github/workflows/preview.yml"),
+      read("scripts/scan-release.ts"),
+      read("tests/security/secret-bundle.test.ts"),
+      read("tests/security/protected-sentinel.test.ts"),
+      read("tests/unit/scripts/safe-tail-classifier.test.ts"),
+      read("tests/unit/scripts/print-safe-tail.test.ts"),
+      read(
+        "docs/superpowers/plans/2026-07-28-phase-b-acceptance-instrumentation.md",
+      ),
+      read("docs/operations/setbacks/INDEX.md"),
+      read("docs/operations/credential-change-log.md"),
+      read("docs/operations/phase-b-evidence.md"),
     ]);
     const config = JSON.parse(wrangler) as {
       triggers?: { crons?: string[] };
@@ -205,5 +285,14 @@ describe("post-acceptance temporary surface cleanup", () => {
     expect(previewWorkflow).toContain("vision-preview-mutation");
     expect(previewWorkflow).toContain("timeout-minutes: 18");
     expect(previewWorkflow).toContain("timeout 16m");
+    expect(releaseScanner).toContain("scanRelease");
+    expect(secretBundleTest).toContain("client secret-bundle boundary");
+    expect(protectedSentinelTest).toContain("protected sentinel");
+    expect(safeTailClassifierTest).toContain("safe tail");
+    expect(printSafeTailTest).toContain('describe("print-safe-tail"');
+    expect(historicalPlan).toContain("Task 8: Remove Temporary Acceptance Surfaces");
+    expect(setbackIndex).toContain("# Setback index");
+    expect(credentialHistory).toContain("# Credential and key change log");
+    expect(releaseEvidence).toContain("# Phase B completion evidence");
   });
 });

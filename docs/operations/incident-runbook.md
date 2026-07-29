@@ -94,12 +94,19 @@ over `Delayed`. AI warnings never disable deterministic event viewing.
 
 - Stop further candidate deployment and preserve only the operation, reviewed
   commit, safe terminal category, and whether the observer was still active.
+- Treat a missing, null, malformed, or failed health, schedule, settings, or
+  binding response as unsafe. Do not start another candidate until the guarded
+  normal-state preflight passes with healthy runtime, exactly the two normal
+  schedules, and an explicit binding list without temporary bindings.
 - Do not create or patch a deployment artifact by hand. Regenerate it only from
   the immutable normal artifact through the guarded workflow.
 - Do not reuse an AI Gateway verification from an earlier workflow run. The
   dedicated AI evidence candidate requires its own same-run read-only result.
 - Dispatch `rollback` as a separate operator action over the reviewed normal
   ref. Do not describe it as automatic cross-run recovery.
+- If an observer completes or is cancelled after the first proof, stop. The
+  workflow must repeat the exact workflow identity, dispatch commit, active
+  status, and evidence-family proof immediately before candidate deployment.
 - Verify normal health, exactly the two normal schedules, and absence of the
   temporary selector, AI attestation, and one-minute schedule before provider
   cleanup or another candidate.

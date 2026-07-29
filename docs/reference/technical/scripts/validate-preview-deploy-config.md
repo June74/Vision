@@ -15,6 +15,17 @@ for the AI evidence selector. The command entry point validates only the normal
 artifact and exits nonzero with one generic message when it is missing,
 malformed, or unsafe.
 
+The separate `--verify-provider-state <health> <schedules> <settings>` mode
+validates sanitized live provider responses. It requires a healthy Worker,
+exactly the two normal crons in either provider order, and one explicit binding
+array with no `PREVIEW_ACCEPTANCE_` binding. Missing, null, ambiguous,
+accessor-backed, or malformed provider data fails closed.
+
+## `NormalPreviewProviderState`
+
+Carries the untrusted health, schedule, and settings responses into the live
+normal-state validator.
+
 ## `validatePreviewDeployConfig`
 
 Requires `targetEnvironment=preview`, the complete preview application
@@ -25,6 +36,13 @@ the two approved cron expressions.
 ## `validatePreviewAcceptanceDeployConfig`
 
 Requires one admitted selector and applies the acceptance artifact contract.
+
+## `validateNormalPreviewProviderState`
+
+Validates the live normal preview boundary independently of the generated
+artifact. It requires successful provider envelopes, `health.status=ok`, the
+exact normal cron set, and an explicit array of plain bindings with non-empty
+string names and no temporary acceptance name.
 
 ## `validate`
 
@@ -58,7 +76,20 @@ Checks exact keys and primitive values on a plain data object.
 Admits only non-null, non-array objects whose prototype is exactly
 `Object.prototype`.
 
+## `ownDataValue`
+
+Reads an own property descriptor and returns only a plain data value, avoiding
+getters and inherited provider-controlled fields.
+
+## `readProviderBindings`
+
+Admits either the documented direct `result.bindings` array or nested
+`result.settings.bindings` array, but never both, and rejects every missing or
+malformed variant.
+
 ## `main`
 
-Parses the generated artifact after the environment-selected Vite build and maps every read, JSON, or contract failure
-to one non-sensitive error and a nonzero exit status.
+Parses the generated artifact after the environment-selected Vite build in
+normal mode. Provider-state mode parses three sanitized response files. Every
+read, JSON, or contract failure maps to one non-sensitive error and a nonzero
+exit status.

@@ -64,6 +64,13 @@ function readWorkflowChoiceOptions(
   return [...options].map((match) => match[1]!);
 }
 
+/** Returns explicit step names in execution order for adjacency assertions. */
+function readWorkflowStepNames(job: string): string[] {
+  return [...job.matchAll(/^      - name: (.+)$/gmu)].map(
+    (match) => match[1]!,
+  );
+}
+
 describe("delivery workflow policy", () => {
   it("keeps checks, previews, and production releases safely separated", async () => {
     const [ci, preview, production, packageMetadata] = await Promise.all([
@@ -260,7 +267,7 @@ describe("preview live diagnostics policy", () => {
     expect(tailJob).toContain(
       "uses: actions/checkout@v5\n" +
         "        with:\n" +
-        "          ref: ${{ inputs.ref }}",
+        "          ref: ${{ github.sha }}",
     );
     expect(tailJob).not.toContain("wrangler deploy");
     expect(tailJob).not.toContain("gateway:configure:preview");
@@ -290,6 +297,43 @@ describe("preview live diagnostics policy", () => {
 });
 
 describe("preview acceptance candidate workflow", () => {
+  it("binds every pre-verification checkout to the dispatch commit and proves the observer checkout before credentials", async () => {
+    const preview = await readWorkflow("preview.yml");
+    const observer = readWorkflowJob(preview, "tail");
+    const verify = readWorkflowJob(preview, "verify");
+    const observerCheckout = readWorkflowStep(
+      preview,
+      "Verify observer checkout matches dispatch commit",
+    );
+    const tailStep = readWorkflowStep(
+      preview,
+      "Print only allowlisted acceptance evidence",
+    );
+
+    expect(preview).not.toContain("      ref:\n");
+    expect(preview).not.toContain("inputs.ref");
+    expect(verify).toContain("ref: ${{ github.sha }}");
+    expect(verify.indexOf("actions/checkout@v5")).toBeLessThan(
+      verify.indexOf("name: Resolve verified commit"),
+    );
+    expect(verify).toContain('echo "sha=$(git rev-parse HEAD)"');
+    expect(observer).toContain("ref: ${{ github.sha }}");
+    expect(observerCheckout).toContain("EXPECTED_SHA: ${{ github.sha }}");
+    expect(observerCheckout).toContain('actual_sha="$(git rev-parse HEAD)"');
+    expect(observerCheckout).toContain(
+      '[[ "$actual_sha" == "$EXPECTED_SHA" ]]',
+    );
+    expect(observerCheckout).not.toContain("CLOUDFLARE_API_TOKEN");
+    expect(observerCheckout).not.toContain("CLOUDFLARE_ACCOUNT_ID");
+    expect(observer.indexOf("Verify observer checkout matches dispatch commit")).toBeLessThan(
+      observer.indexOf("Install locked dependencies"),
+    );
+    expect(observer.indexOf("Verify observer checkout matches dispatch commit")).toBeLessThan(
+      observer.indexOf("Print only allowlisted acceptance evidence"),
+    );
+    expect(tailStep).toContain("CLOUDFLARE_API_TOKEN");
+  });
+
   it("admits only the exact operation and fault choice vocabularies", async () => {
     const preview = await readWorkflow("preview.yml");
 
@@ -333,7 +377,7 @@ describe("preview acceptance candidate workflow", () => {
       "group: ${{ inputs.acceptance_operation == 'observe' && inputs.configure_ai_budget == false && 'vision-preview-observer' || 'vision-preview-mutation' }}",
     );
     expect(observer).toContain("timeout-minutes: 18");
-    expect(observer).toContain("ref: ${{ inputs.ref }}");
+    expect(observer).toContain("ref: ${{ github.sha }}");
     expect(observer).not.toContain("wrangler deploy");
     expect(observer).not.toContain("gateway:configure:preview");
     expect(tailStep).toContain("timeout 16m");
@@ -365,6 +409,19 @@ describe("preview acceptance candidate workflow", () => {
     expect(proofStep).toContain("head_sha");
     expect(proofStep).toContain("in_progress");
     expect(proofStep).toContain(
+      '.path == ".github/workflows/preview.yml" or',
+    );
+    expect(proofStep).toContain(
+      '(.path | startswith(".github/workflows/preview.yml@refs/"))',
+    );
+    expect(proofStep).not.toContain(
+      'startswith(".github/workflows/preview.yml")',
+    );
+    expect(proofStep).toContain(
+      "VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}",
+    );
+    expect(proofStep).not.toContain("VERIFIED_SHA: ${{ github.sha }}");
+    expect(proofStep).toContain(
       'deploy_foundation) expected_observer_evidence="foundation_probe"',
     );
     expect(proofStep).toContain(
@@ -393,6 +450,36 @@ describe("preview acceptance candidate workflow", () => {
     expect(deployStep).not.toContain("--var ");
     expect(candidate).not.toContain("PREVIEW_RESTORE_DATABASE_URL");
     expect(candidate).not.toContain("PREVIEW_RESTORE_TARGET_ID");
+  });
+
+  it("rechecks the exact matching observer immediately before candidate deployment", async () => {
+    const preview = await readWorkflow("preview.yml");
+    const candidate = readWorkflowJob(preview, "deploy_acceptance_candidate");
+    const finalProof = readWorkflowStep(
+      preview,
+      "Reverify active matching observer immediately before deploy",
+    );
+    const names = readWorkflowStepNames(candidate);
+    const finalProofIndex = names.indexOf(
+      "Reverify active matching observer immediately before deploy",
+    );
+    const deployIndex = names.indexOf("Deploy generated acceptance candidate");
+
+    expect(finalProofIndex).toBeGreaterThan(-1);
+    expect(deployIndex).toBe(finalProofIndex + 1);
+    expect(finalProof).toContain("actions/runs/$OBSERVER_RUN_ID");
+    expect(finalProof).toContain(
+      "VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}",
+    );
+    expect(finalProof).toContain(".head_sha == $sha");
+    expect(finalProof).toContain(".status == \"in_progress\"");
+    expect(finalProof).toContain(".name == $expected_name");
+    expect(finalProof).toContain(
+      '.path == ".github/workflows/preview.yml" or',
+    );
+    expect(finalProof).toContain(
+      '(.path | startswith(".github/workflows/preview.yml@refs/"))',
+    );
   });
 
   it("runs the read-only Gateway verifier only for AI stop or dedicated AI evidence", async () => {
@@ -434,6 +521,12 @@ describe("preview acceptance candidate workflow", () => {
       preview,
       "Verify normal runtime and temporary-surface absence",
     );
+    const candidate = readWorkflowJob(preview, "deploy_acceptance_candidate");
+    const candidatePreflight = readWorkflowStep(
+      preview,
+      "Verify live preview is normal before candidate deployment",
+    );
+    const candidateNames = readWorkflowStepNames(candidate);
 
     expect(rollback).toContain(
       "if: ${{ inputs.acceptance_operation == 'rollback' && inputs.configure_ai_budget == false }}",
@@ -448,8 +541,28 @@ describe("preview acceptance candidate workflow", () => {
     expect(rollback).not.toContain("if: ${{ always() }}");
     expect(verificationStep).toContain("/api/health");
     expect(verificationStep).toContain("schedules");
-    expect(verificationStep).toContain("PREVIEW_ACCEPTANCE_");
-    expect(verificationStep).toContain("* * * * *");
+    expect(verificationStep).toContain(
+      "scripts/validate-preview-deploy-config.ts",
+    );
+    expect(verificationStep).toContain(
+      "--verify-provider-state",
+    );
+    expect(verificationStep).not.toContain("// []");
+    expect(candidatePreflight).toContain("/api/health");
+    expect(candidatePreflight).toContain("schedules");
+    expect(candidatePreflight).toContain("settings");
+    expect(candidatePreflight).toContain(
+      "scripts/validate-preview-deploy-config.ts",
+    );
+    expect(candidatePreflight).toContain(
+      "--verify-provider-state",
+    );
+    expect(candidatePreflight).not.toContain("// []");
+    expect(
+      candidateNames.indexOf(
+        "Verify live preview is normal before candidate deployment",
+      ),
+    ).toBeLessThan(candidateNames.indexOf("Build normal preview artifact"));
     expect(preview).toContain(
       "Provider cleanup is forbidden until this rollback verification succeeds.",
     );

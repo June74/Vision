@@ -33,6 +33,9 @@ The boolean is temporary, server-only, and valid only for `ai_usage`; it is
 rejected for every other candidate and absent from the committed normal
 configuration. The separate rollback must restore the normal artifact and
 verify that both the attestation and one-minute schedule are absent.
+Every later candidate must independently pass the fail-closed live normal-state
+preflight first; a missing or malformed provider binding response cannot be
+treated as an empty safe binding list.
 
 ## Authenticated storage warnings
 

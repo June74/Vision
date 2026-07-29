@@ -7,6 +7,7 @@ import type { PreviewAcceptanceSelector } from "./prepare-preview-acceptance-dep
 const INVALID_NORMAL = "Preview deployment configuration is invalid.";
 const INVALID_ACCEPTANCE =
   "Preview acceptance deployment configuration is invalid.";
+const INVALID_PROVIDER_STATE = "Normal preview provider state is invalid.";
 const NORMAL_CRONS = ["*/15 * * * *", "5 6 * * *"] as const;
 const ACCEPTANCE_CRON = "* * * * *";
 const NORMAL_VAR_ENTRIES = Object.freeze({
@@ -40,9 +41,63 @@ export interface PreviewDeployConfig {
   readonly [key: string]: unknown;
 }
 
+/** Live responses required before a candidate and after normal rollback. */
+export interface NormalPreviewProviderState {
+  readonly healthResponse: unknown;
+  readonly schedulesResponse: unknown;
+  readonly settingsResponse: unknown;
+}
+
 /** Enforces the exact immutable normal preview environment artifact. */
 export function validatePreviewDeployConfig(candidate: unknown): void {
   validate(candidate, undefined, INVALID_NORMAL);
+}
+
+/**
+ * Requires healthy runtime, the two normal schedules, and an explicit binding
+ * inventory with no temporary acceptance binding.
+ */
+export function validateNormalPreviewProviderState(
+  input: NormalPreviewProviderState,
+): void {
+  const health = isPlainDataObject(input.healthResponse)
+    ? input.healthResponse
+    : {};
+  const schedules = isPlainDataObject(input.schedulesResponse)
+    ? input.schedulesResponse
+    : {};
+  const scheduleResult = ownDataValue(schedules, "result");
+  const bindings = readProviderBindings(input.settingsResponse);
+  const scheduleCrons =
+    Array.isArray(scheduleResult) &&
+    scheduleResult.every(
+      (entry) =>
+        isPlainDataObject(entry) &&
+        typeof ownDataValue(entry, "cron") === "string",
+    )
+      ? scheduleResult
+          .map((entry) => ownDataValue(entry, "cron") as string)
+          .sort()
+      : [];
+  const expectedCrons = [...NORMAL_CRONS].sort();
+
+  if (
+    ownDataValue(health, "status") !== "ok" ||
+    ownDataValue(schedules, "success") !== true ||
+    !exactStringArray(scheduleCrons, expectedCrons) ||
+    bindings === undefined ||
+    !bindings.every((binding) => {
+      if (!isPlainDataObject(binding)) return false;
+      const name = ownDataValue(binding, "name");
+      return (
+        typeof name === "string" &&
+        name.length > 0 &&
+        !name.startsWith("PREVIEW_ACCEPTANCE_")
+      );
+    })
+  ) {
+    throw new Error(INVALID_PROVIDER_STATE);
+  }
 }
 
 /** Enforces one generated selector, one extra cron, and AI-only attestation. */
@@ -211,6 +266,37 @@ function exactOwnRecord(
   });
 }
 
+/** Reads one own enumerable data property without invoking accessors. */
+function ownDataValue(
+  value: Readonly<Record<string, unknown>>,
+  key: string,
+): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  return descriptor?.enumerable === true && "value" in descriptor
+    ? descriptor.value
+    : undefined;
+}
+
+/** Reads one recognized explicit provider binding array and rejects ambiguity. */
+function readProviderBindings(settingsResponse: unknown): readonly unknown[] | undefined {
+  if (!isPlainDataObject(settingsResponse)) return undefined;
+  if (ownDataValue(settingsResponse, "success") !== true) return undefined;
+  const result = ownDataValue(settingsResponse, "result");
+  if (!isPlainDataObject(result)) return undefined;
+
+  const hasDirect = Object.hasOwn(result, "bindings");
+  const nestedSettings = ownDataValue(result, "settings");
+  const hasNested =
+    isPlainDataObject(nestedSettings) &&
+    Object.hasOwn(nestedSettings, "bindings");
+  if (hasDirect === hasNested) return undefined;
+
+  const bindings = hasDirect
+    ? ownDataValue(result, "bindings")
+    : ownDataValue(nestedSettings as Readonly<Record<string, unknown>>, "bindings");
+  return Array.isArray(bindings) ? bindings : undefined;
+}
+
 /** Rejects arrays, null, class instances, and accessor-bearing prototypes. */
 function isPlainDataObject(value: unknown): value is Record<string, unknown> {
   return (
@@ -223,14 +309,35 @@ function isPlainDataObject(value: unknown): value is Record<string, unknown> {
 
 /** Reads and validates the normal artifact produced by the Cloudflare Vite build. */
 async function main(): Promise<void> {
+  const arguments_ = process.argv.slice(2);
+  const providerMode = arguments_[0] === "--verify-provider-state";
   try {
+    if (providerMode) {
+      if (arguments_.length !== 4) throw new Error(INVALID_PROVIDER_STATE);
+      const [healthResponse, schedulesResponse, settingsResponse] =
+        await Promise.all(
+          arguments_.slice(1).map(async (path) =>
+            JSON.parse(await readFile(resolve(path), "utf8")),
+          ),
+        );
+      validateNormalPreviewProviderState({
+        healthResponse,
+        schedulesResponse,
+        settingsResponse,
+      });
+      process.stdout.write("Normal preview provider state is valid.\n");
+      return;
+    }
+    if (arguments_.length !== 0) throw new Error(INVALID_NORMAL);
     const serialized = await readFile(
       resolve("dist/vision/wrangler.json"),
       "utf8",
     );
     validatePreviewDeployConfig(JSON.parse(serialized));
   } catch {
-    process.stderr.write(`${INVALID_NORMAL}\n`);
+    process.stderr.write(
+      `${providerMode ? INVALID_PROVIDER_STATE : INVALID_NORMAL}\n`,
+    );
     process.exitCode = 1;
   }
 }

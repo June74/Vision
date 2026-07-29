@@ -7,6 +7,7 @@ import {
   type PreviewAcceptanceSelector,
 } from "../../../scripts/prepare-preview-acceptance-deploy-config";
 import {
+  validateNormalPreviewProviderState,
   validatePreviewAcceptanceDeployConfig,
   validatePreviewDeployConfig,
 } from "../../../scripts/validate-preview-deploy-config";
@@ -91,6 +92,29 @@ function previewArtifact(): DeployConfig {
 
 function clone<T>(value: T): T {
   return structuredClone(value);
+}
+
+function normalProviderState(): {
+  healthResponse: unknown;
+  schedulesResponse: unknown;
+  settingsResponse: unknown;
+} {
+  return {
+    healthResponse: { status: "ok" },
+    schedulesResponse: {
+      success: true,
+      result: NORMAL_CRONS.map((cron) => ({ cron })),
+    },
+    settingsResponse: {
+      success: true,
+      result: {
+        bindings: [
+          { name: "VISION_ENV", type: "plain_text" },
+          { name: "DATABASE_URL", type: "secret_text" },
+        ],
+      },
+    },
+  };
 }
 
 describe("Cloudflare asset and normal schedule routing", () => {
@@ -447,5 +471,108 @@ describe("normal preview artifact validation", () => {
         /preview deployment configuration/i,
       );
     }
+  });
+});
+
+describe("normal preview live provider-state validation", () => {
+  it("accepts healthy runtime, exactly two normal schedules, and an explicit binding inventory", () => {
+    expect(() =>
+      validateNormalPreviewProviderState(normalProviderState()),
+    ).not.toThrow();
+    const nested = normalProviderState();
+    nested.settingsResponse = {
+      success: true,
+      result: {
+        settings: {
+          bindings: [{ name: "VISION_ENV", type: "plain_text" }],
+        },
+      },
+    };
+    expect(() => validateNormalPreviewProviderState(nested)).not.toThrow();
+    const reversed = normalProviderState();
+    reversed.schedulesResponse = {
+      success: true,
+      result: [...NORMAL_CRONS].reverse().map((cron) => ({ cron })),
+    };
+    expect(() => validateNormalPreviewProviderState(reversed)).not.toThrow();
+  });
+
+  it.each([
+    ["missing settings result", undefined],
+    ["null bindings", { success: true, result: { bindings: null } }],
+    ["missing bindings", { success: true, result: {} }],
+    ["malformed nested bindings", {
+      success: true,
+      result: { settings: { bindings: "not-an-array" } },
+    }],
+    ["binding without a name", {
+      success: true,
+      result: { bindings: [{ type: "plain_text" }] },
+    }],
+    ["binding with a non-string name", {
+      success: true,
+      result: { bindings: [{ name: null }] },
+    }],
+    ["temporary selector binding", {
+      success: true,
+      result: {
+        bindings: [{ name: "PREVIEW_ACCEPTANCE_SCENARIO" }],
+      },
+    }],
+    ["temporary attestation binding", {
+      success: true,
+      result: {
+        bindings: [
+          { name: "PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED" },
+        ],
+      },
+    }],
+  ])("fails closed for %s", (_label, settingsResponse) => {
+    expect(() =>
+      validateNormalPreviewProviderState({
+        ...normalProviderState(),
+        settingsResponse,
+      }),
+    ).toThrow(/normal preview provider state is invalid/i);
+  });
+
+  it.each([
+    ["missing health", { healthResponse: undefined }],
+    ["degraded health", { healthResponse: { status: "degraded" } }],
+    ["missing schedules", { schedulesResponse: undefined }],
+    ["failed schedules response", {
+      schedulesResponse: {
+        success: false,
+        result: NORMAL_CRONS.map((cron) => ({ cron })),
+      },
+    }],
+    ["one schedule", {
+      schedulesResponse: {
+        success: true,
+        result: [{ cron: NORMAL_CRONS[0] }],
+      },
+    }],
+    ["one-minute schedule", {
+      schedulesResponse: {
+        success: true,
+        result: [
+          ...NORMAL_CRONS.map((cron) => ({ cron })),
+          { cron: ACCEPTANCE_CRON },
+        ],
+      },
+    }],
+    ["malformed schedule", {
+      schedulesResponse: {
+        success: true,
+        result: [{ cron: NORMAL_CRONS[0] }, { cron: null }],
+      },
+    }],
+  ])("rejects %s", (_label, override) => {
+    expect(() =>
+      validateNormalPreviewProviderState({
+        ...normalProviderState(),
+        ...override,
+      }),
+    ).toThrow(/normal preview provider state is invalid/i);
   });
 });
