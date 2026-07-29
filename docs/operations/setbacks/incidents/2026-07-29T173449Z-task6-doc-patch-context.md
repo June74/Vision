@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T17:34:49Z
-- **Last observed:** 2026-07-29T17:34:49Z
+- **Last observed:** 2026-07-29T18:16:52Z
 - **Phase/task:** Phase B acceptance instrumentation Task 6 review fixes
 - **Environment:** Local Phase B linked worktree
 - **Version/commit:** `fa650ad`
@@ -45,3 +45,11 @@ shorter source-cleanup paragraph with different line wrapping.
 ## Verification and related work
 
 Documentation checks will run after the smaller patches are applied.
+
+## Recurrence history
+
+- 2026-07-29T18:16:52Z: A final re-review cleanup-test refactor expected a
+  conventional closing-parenthesis indentation, but the current block retained
+  an older offset layout. The multi-hunk patch applied nothing. The correction
+  is to patch the exact numbered source block; no detector behavior or test
+  result was affected.

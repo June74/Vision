@@ -84,12 +84,15 @@ observation:
 The normal artifact contains only the two permanent schedules and no acceptance
 binding. After the acceptance matrix, source cleanup must be reviewed, deployed,
 and verified before any provider cleanup. The permanent cleanup contract names
-the exact 48 dedicated deletions plus 36 shared active-residue files spanning
+the exact 48 dedicated deletions plus 34 shared active-residue files spanning
 runtime bindings, observer modes, routes, selectors, scheduler branches,
-references, and tests. It retains recovery/import tooling, `backups/v1/`, key
-version 1, permanent security scans, maintenance evidence, measured usage
-warnings, bounded observer behavior, and historical plans, setbacks,
-credential history, and release evidence.
+references, and tests. The shared inventory includes both simple and technical
+environment references while explicitly retaining normal health warnings,
+their tests, and the OAuth `database_unavailable` category. It also retains
+recovery/import tooling, `backups/v1/`, key version 1, permanent security
+scans, maintenance evidence, measured usage warnings, bounded observer
+behavior, and historical plans, setbacks, credential history, and release
+evidence.
 
 Before every candidate, the guarded workflow requires live preview health,
 exactly the two normal schedules, and an explicit provider binding array with

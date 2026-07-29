@@ -9,8 +9,23 @@ import { describe, expect, it } from "vitest";
 const STRICT_CLEANUP =
   process.env.PREVIEW_ACCEPTANCE_CLEANUP_ASSERT === "true";
 
-const TEMPORARY_ACTIVE_SURFACE_PATTERN =
-  /vision\.(?:phase-b-foundation-probe|ai-usage|preview-fault)\/v1|temporary-preview-(?:role-probe|restore|fault)|PREVIEW_(?:ACCEPTANCE|RESTORE)_[A-Z0-9_]+|\* \* \* \* \*|parseTemporaryPreviewAcceptance(?:Selector|AiGatewayAttestation)|TEMPORARY_PREVIEW_(?:ACCEPTANCE_SELECTORS|FAULT_SCENARIOS)|\b(?:deploy_foundation|deploy_ai|deploy_fault)\b|--(?:foundation-probe|ai-usage|preview-fault|role-probe|restore)-only\b|(?:validatePreviewAcceptanceDeployConfig|preparePreviewAcceptanceDeployConfig|validatePreviewAcceptanceWorkflowInputs)|prepare-preview-acceptance-deploy-config|\b(?:foundation_probe|ai_usage|queue_delayed|job_failed|channel_expired|database_unavailable|r2_upload_failed|ai_stopped)\b|\b(?:foundationProbe|aiUsageEvidence|temporaryFaultR2Upload)\b|\b(?:candidate selector|generated selector|generated candidate|generated preview candidate|AI[- ]attestation|six[- ]fault)\b/iu;
+const TEMPORARY_ACTIVE_SURFACE_PATTERNS = [
+  /vision\.(?:phase-b-foundation-probe|ai-usage|preview-fault)\/v1/u,
+  /temporary-preview-(?:role-probe|restore|fault)/u,
+  /PREVIEW_(?:ACCEPTANCE|RESTORE)_[A-Z0-9_]+/u,
+  /\* \* \* \* \*/u,
+  /parseTemporaryPreviewAcceptance(?:Selector|AiGatewayAttestation)/u,
+  /TEMPORARY_PREVIEW_(?:ACCEPTANCE_SELECTORS|FAULT_SCENARIOS)/u,
+  /\b(?:deploy_foundation|deploy_ai|deploy_fault)\b/u,
+  /--(?:foundation-probe|ai-usage|preview-fault|role-probe|restore)-only\b/u,
+  /(?:validatePreviewAcceptanceDeployConfig|preparePreviewAcceptanceDeployConfig|validatePreviewAcceptanceWorkflowInputs)/u,
+  /prepare-preview-acceptance-deploy-config/u,
+  /\b(?:foundationProbe|aiUsageEvidence|temporaryFaultR2Upload)\b/u,
+  /\b(?:candidate selector|generated selector|generated candidate|generated preview candidate|AI[- ]attestation|six[- ]fault)\b/u,
+  /eight\s+temporary selectors/u,
+  /temporary Gateway attestation/u,
+  /temporary restore database\s+binding/u,
+] as const;
 
 const TEMPORARY_PATHS = [
   "src/data/backup/r2-restore-attempt-store.ts",
@@ -71,6 +86,43 @@ const ACTIVE_SURFACE_ROOTS = [
   "docs/reference",
 ] as const;
 
+const EXPECTED_SHARED_RESIDUE_PATHS = [
+  ".github/workflows/preview.yml",
+  "docs/reference/simple/scripts/print-safe-tail.md",
+  "docs/reference/simple/scripts/safe-tail-classifier.md",
+  "docs/reference/simple/scripts/validate-preview-deploy-config.md",
+  "docs/reference/simple/src/jobs/scheduled.md",
+  "docs/reference/simple/src/server/api/ai-category-proposal-routes.md",
+  "docs/reference/simple/src/server/api/diagnostic-routes.md",
+  "docs/reference/simple/src/server/client-binding-boundary.md",
+  "docs/reference/simple/src/server/env.md",
+  "docs/reference/technical/scripts/print-safe-tail.md",
+  "docs/reference/technical/scripts/safe-tail-classifier.md",
+  "docs/reference/technical/scripts/validate-preview-deploy-config.md",
+  "docs/reference/technical/src/jobs/scheduled.md",
+  "docs/reference/technical/src/server/api/ai-category-proposal-routes.md",
+  "docs/reference/technical/src/server/api/diagnostic-routes.md",
+  "docs/reference/technical/src/server/client-binding-boundary.md",
+  "docs/reference/technical/src/server/env.md",
+  "scripts/print-safe-tail.ts",
+  "scripts/safe-tail-classifier.ts",
+  "scripts/validate-preview-deploy-config.ts",
+  "src/jobs/scheduled.ts",
+  "src/server/api/ai-category-proposal-routes.ts",
+  "src/server/api/diagnostic-routes.ts",
+  "src/server/client-binding-boundary.ts",
+  "src/server/env.ts",
+  "tests/e2e/foundation-diagnostics.spec.ts",
+  "tests/integration/jobs/daily-backup.test.ts",
+  "tests/security/secret-bundle.test.ts",
+  "tests/unit/ci/workflows.test.ts",
+  "tests/unit/scripts/print-safe-tail.test.ts",
+  "tests/unit/scripts/safe-tail-classifier.test.ts",
+  "tests/unit/server/env.test.ts",
+  "tests/unit/server/wrangler-routing.test.ts",
+  "tests/worker/diagnostics.test.ts",
+] as const;
+
 const APPROVED_ACTIVE_SCAN_EXCLUSIONS = new Set<string>([
   ...TEMPORARY_PATHS,
   "tests/security/temporary-surface-cleanup.test.ts",
@@ -83,9 +135,11 @@ const PERMANENT_PATHS = [
   "src/data/backup/import-backup.ts",
   "src/data/backup/neon-adapter.ts",
   "src/data/usage-warning-source.ts",
+  "src/domain/operations/health.ts",
   "src/domain/operations/usage-warnings.ts",
   "src/jobs/calendar-maintenance-evidence.ts",
   "src/jobs/create-daily-backup.ts",
+  "src/server/auth/oauth-routes.ts",
   "scripts/restore-backup.ts",
   "scripts/scan-release.ts",
   "scripts/capture-release-evidence.ts",
@@ -97,6 +151,7 @@ const PERMANENT_PATHS = [
   "tests/security/protected-sentinel.test.ts",
   "tests/security/release-evidence-capture.test.ts",
   "tests/security/secret-bundle.test.ts",
+  "tests/unit/domain/health.test.ts",
   "tests/unit/scripts/safe-tail-classifier.test.ts",
   "tests/unit/scripts/print-safe-tail.test.ts",
   "docs/superpowers/plans/2026-07-28-phase-b-acceptance-instrumentation.md",
@@ -121,6 +176,12 @@ async function read(relativePath: string): Promise<string> {
   return readFile(resolve(process.cwd(), relativePath), "utf8");
 }
 
+function containsTemporaryActiveSurface(source: string): boolean {
+  return TEMPORARY_ACTIVE_SURFACE_PATTERNS.some((pattern) =>
+    pattern.test(source),
+  );
+}
+
 async function listFiles(relativePath: string): Promise<string[]> {
   const entries = await readdir(resolve(process.cwd(), relativePath), {
     withFileTypes: true,
@@ -133,6 +194,28 @@ async function listFiles(relativePath: string): Promise<string[]> {
     }),
   );
   return nested.flat();
+}
+
+async function listActiveSurfaceResidue(): Promise<string[]> {
+  const activePaths = [
+    ...(await Promise.all(ACTIVE_SURFACE_ROOTS.map(listFiles))).flat(),
+    "wrangler.jsonc",
+  ]
+    .filter((path) => !APPROVED_ACTIVE_SCAN_EXCLUSIONS.has(path))
+    .sort();
+  if (await exists("dist/vision/wrangler.json")) {
+    activePaths.push("dist/vision/wrangler.json");
+  }
+  return (
+    await Promise.all(
+      activePaths.map(async (path) => ({
+        path,
+        source: await read(path),
+      })),
+    )
+  )
+    .filter(({ source }) => containsTemporaryActiveSurface(source))
+    .map(({ path }) => path);
 }
 
 describe("post-acceptance temporary surface cleanup", () => {
@@ -152,13 +235,77 @@ describe("post-acceptance temporary surface cleanup", () => {
       "Status validates the complete candidate selector and AI attestation.",
       "A generated preview candidate routes one dedicated evidence family.",
       'PREVIEW_ACCEPTANCE_SCENARIO: "foundation_probe"',
+      "The eight\ntemporary selectors are preview-only.",
+      "temporary Gateway attestation",
+      "temporary restore database\nbinding",
     ];
 
     expect(
-      representatives.filter((source) =>
-        TEMPORARY_ACTIVE_SURFACE_PATTERN.test(source),
-      ),
+      representatives.filter(containsTemporaryActiveSurface),
     ).toEqual(representatives);
+  });
+
+  it("does not classify permanent health and authentication vocabulary as Task 8 residue", async () => {
+    const [health, healthTest, oauth] = await Promise.all([
+      read("src/domain/operations/health.ts"),
+      read("tests/unit/domain/health.test.ts"),
+      read("src/server/auth/oauth-routes.ts"),
+    ]);
+
+    expect(health).toContain('"QUEUE_DELAYED"');
+    expect(health).toContain('"CHANNEL_EXPIRED"');
+    expect(health).toContain('"DATABASE_UNAVAILABLE"');
+    expect(healthTest).toContain('"QUEUE_DELAYED"');
+    expect(oauth).toContain('"database_unavailable"');
+    expect(
+      [health, healthTest, oauth].filter(containsTemporaryActiveSurface),
+    ).toEqual([]);
+  });
+
+  it("classifies both simple and technical environment references as generated temporary residue", async () => {
+    const [simple, technical] = await Promise.all([
+      read("docs/reference/simple/src/server/env.md"),
+      read("docs/reference/technical/src/server/env.md"),
+    ]);
+
+    expect(simple).toContain("The eight");
+    expect(simple).toContain("temporary selectors are preview-only");
+    expect(simple).toContain("temporary Gateway attestation");
+    expect(simple).toContain("temporary restore database");
+    expect(technical).toContain("PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED");
+    expect(technical).toContain("PREVIEW_RESTORE_DATABASE_URL");
+    expect(
+      [simple, technical].filter(containsTemporaryActiveSurface),
+    ).toEqual([simple, technical]);
+  });
+
+  it("accounts for shared residue or enforces its post-cleanup absence", async () => {
+    await expect(listActiveSurfaceResidue()).resolves.toEqual(
+      STRICT_CLEANUP ? [] : EXPECTED_SHARED_RESIDUE_PATHS,
+    );
+  });
+
+  it("keeps all dedicated and shared inventories unique with symmetric references", () => {
+    const referenceInventory = (
+      paths: readonly string[],
+      kind: "simple" | "technical",
+    ) =>
+      paths
+        .filter((path) => path.startsWith(`docs/reference/${kind}/`))
+        .map((path) => path.replace(`docs/reference/${kind}/`, ""));
+
+    expect(TEMPORARY_PATHS).toHaveLength(48);
+    expect(new Set(TEMPORARY_PATHS)).toHaveLength(48);
+    expect(EXPECTED_SHARED_RESIDUE_PATHS).toHaveLength(34);
+    expect(new Set(EXPECTED_SHARED_RESIDUE_PATHS)).toHaveLength(34);
+    expect(referenceInventory(TEMPORARY_PATHS, "simple")).toEqual(
+      referenceInventory(TEMPORARY_PATHS, "technical"),
+    );
+    expect(
+      referenceInventory(EXPECTED_SHARED_RESIDUE_PATHS, "simple"),
+    ).toEqual(
+      referenceInventory(EXPECTED_SHARED_RESIDUE_PATHS, "technical"),
+    );
   });
 
   it("removes the exact temporary source, test, script, and reference inventory", async () => {
@@ -179,35 +326,6 @@ describe("post-acceptance temporary surface cleanup", () => {
       expect(existing).toEqual(TEMPORARY_PATHS);
     }
   });
-
-  it.runIf(STRICT_CLEANUP)(
-    "removes active bindings, evidence modes, and one-minute routing",
-    async () => {
-      const activePaths = [
-        ...(await Promise.all(ACTIVE_SURFACE_ROOTS.map(listFiles))).flat(),
-        "wrangler.jsonc",
-      ]
-        .filter((path) => !APPROVED_ACTIVE_SCAN_EXCLUSIONS.has(path))
-        .sort();
-      if (await exists("dist/vision/wrangler.json")) {
-        activePaths.push("dist/vision/wrangler.json");
-      }
-      const residue = (
-        await Promise.all(
-          activePaths.map(async (path) => ({
-            path,
-            source: await read(path),
-          })),
-        )
-        )
-        .filter(({ source }) =>
-          TEMPORARY_ACTIVE_SURFACE_PATTERN.test(source),
-        )
-        .map(({ path }) => path);
-
-      expect(residue).toEqual([]);
-    },
-  );
 
   it("retains permanent recovery, maintenance, usage-warning, and history surfaces", async () => {
     await expect(

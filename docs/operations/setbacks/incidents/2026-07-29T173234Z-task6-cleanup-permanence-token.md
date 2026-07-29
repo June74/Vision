@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T17:32:12Z
-- **Last observed:** 2026-07-29T17:32:34Z
+- **Last observed:** 2026-07-29T18:15:08Z
 - **Phase/task:** Phase B acceptance instrumentation Task 6 review fixes
 - **Environment:** Local Phase B linked worktree
 - **Version/commit:** `fa650ad`
@@ -52,3 +52,12 @@ log`, not the shorter guessed label.
 ## Verification and related work
 
 The default cleanup suite will be rerun after correcting the two test tokens.
+
+## Recurrence history
+
+- 2026-07-29T18:15:08Z: The final re-review RED test asserted `eight
+  temporary selectors` across a Markdown line break. The detector regressions
+  for the three permanent false positives and exact shared inventory failed as
+  intended, but this prose precondition failed before exercising the missing
+  simple-reference classification. The correction is to assert stable
+  fragments on each side of the line wrap.

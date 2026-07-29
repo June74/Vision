@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T02:27:34.985989Z
-- **Last observed:** 2026-07-29T03:01:53Z
+- **Last observed:** 2026-07-29T18:12:20Z
 - **Phase/task:** Acceptance instrumentation Task 4 final re-review setup
 - **Environment:** Windows PowerShell, isolated phase-b-foundation worktree
 - **Version/commit:** ecd74074fe223d4e9d185e8c92dd033eb26678a4
@@ -70,3 +70,7 @@ copying the exact path emitted in `INDEX.md`.
   `scope-gate` was addressed through the `.codex` root instead of its configured
   `.agents` root. No repository action depended on the failed read, and copying
   the configured root loaded the complete skill successfully.
+- 2026-07-29T18:12:20Z: Recurrence during Task 6 final cleanup re-review;
+  `scope-gate` was again addressed through the `.codex` root instead of its
+  configured `.agents` root. No production or test change preceded the failed
+  read. The correction is to copy the `r1` mapping exactly before continuing.
