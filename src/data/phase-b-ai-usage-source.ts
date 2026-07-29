@@ -32,7 +32,7 @@ with month as (
   from ai_usage_ledger ledger left join ai_usage_reservations reservation on reservation.id = ledger.reservation_id
   where ledger.owner_id = ${ownerId} and ledger.budget_month = ${budgetMonth}
 )
-select count(month.*) as "monthRowCount", coalesce(max(month.settled_cents),0) as "settledCents", coalesce(max(month.reserved_cents),0) as "reservedCents", ledger.ledger_settled_cents as "ledgerSettledCents", ledger.ledger_reserved_cents as "ledgerReservedCents", ledger.owner_month_mismatch_count as "ownerMonthMismatchCount", ledger.invalid_transition_count as "invalidTransitionCount" from month cross join ledger group by ledger.ledger_settled_cents, ledger.ledger_reserved_cents, ledger.owner_month_mismatch_count, ledger.invalid_transition_count
+select count(month.owner_id) as "monthRowCount", coalesce(max(month.settled_cents),0) as "settledCents", coalesce(max(month.reserved_cents),0) as "reservedCents", ledger.ledger_settled_cents as "ledgerSettledCents", ledger.ledger_reserved_cents as "ledgerReservedCents", ledger.owner_month_mismatch_count as "ownerMonthMismatchCount", ledger.invalid_transition_count as "invalidTransitionCount" from ledger left join month on true group by ledger.ledger_settled_cents, ledger.ledger_reserved_cents, ledger.owner_month_mismatch_count, ledger.invalid_transition_count
 `; }
 
 /** Creates the parameterized, aggregate-only owner/month reader. */

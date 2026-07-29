@@ -155,7 +155,7 @@ const PHASE_B_FOUNDATION_INTEGER_KEYS = Object.freeze([
 ] as const satisfies readonly (keyof PhaseBFoundationProbeMeasurements)[]);
 const MAX_TAIL_EVENT_BYTES = 1_048_576;
 const CALENDAR_MAINTENANCE_CRON = "*/15 * * * *";
-const AI_USAGE_KEYS = Object.freeze(["category","evidenceType","gatewayLimitMatches","hardStopCents","monthlyCents","nonAiAvailable","optionalStopCents","outcome","spendTier","warningCents"] as const);
+const AI_USAGE_KEYS = Object.freeze(["category","evidenceType","gatewayLimitMatches","hardStopAtCents","monthlyCents","nonAiAvailable","optionalStopAtCents","outcome","tier","warningAtCents"] as const);
 
 /** Incrementally assembles Wrangler's pretty-printed JSON without emitting it. */
 export function createSafeTailAccumulator(): {
@@ -247,8 +247,11 @@ export function classifySafeTailLine(line: string): SafeTailResult | null {
 export function classifyPhaseBAiUsageEvidence(candidate: unknown): PhaseBAiUsageEvidence | null {
   const evidence = snapshotOwnEnumerableData(candidate);
   if (!evidence || !hasExactKeys(evidence, AI_USAGE_KEYS) || evidence.evidenceType !== "vision.ai-usage/v1" || typeof evidence.monthlyCents !== "number" || typeof evidence.gatewayLimitMatches !== "boolean" || typeof evidence.nonAiAvailable !== "boolean") return null;
+  if (evidence.category === "unavailable" && evidence.outcome === "failed" && evidence.monthlyCents === 0 && evidence.gatewayLimitMatches === false && evidence.nonAiAvailable === false && evidence.warningAtCents === 800 && evidence.optionalStopAtCents === 900 && evidence.hardStopAtCents === 950 && evidence.tier === "normal") {
+    return Object.freeze({ evidenceType: "vision.ai-usage/v1", outcome: "failed", category: "unavailable", monthlyCents: 0, warningAtCents: 800, optionalStopAtCents: 900, hardStopAtCents: 950, tier: "normal", gatewayLimitMatches: false, nonAiAvailable: false });
+  }
   const reconstructed = createPhaseBAiUsageEvidence({ monthlyCents: evidence.monthlyCents, gatewayLimitMatches: evidence.gatewayLimitMatches, nonAiAvailable: evidence.nonAiAvailable });
-  return evidence.category === reconstructed.category && evidence.outcome === reconstructed.outcome && evidence.warningCents === reconstructed.warningCents && evidence.optionalStopCents === reconstructed.optionalStopCents && evidence.hardStopCents === reconstructed.hardStopCents && evidence.spendTier === reconstructed.spendTier && evidence.monthlyCents === reconstructed.monthlyCents ? reconstructed : null;
+  return evidence.category === reconstructed.category && evidence.outcome === reconstructed.outcome && evidence.warningAtCents === reconstructed.warningAtCents && evidence.optionalStopAtCents === reconstructed.optionalStopAtCents && evidence.hardStopAtCents === reconstructed.hardStopAtCents && evidence.tier === reconstructed.tier && evidence.monthlyCents === reconstructed.monthlyCents ? reconstructed : null;
 }
 
 /** Reconstructs one exact closed foundation result and rejects value drift. */

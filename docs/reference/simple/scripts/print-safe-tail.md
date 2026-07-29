@@ -1,5 +1,9 @@
 # print-safe-tail
 
+## `--ai-usage-only`
+
+Prints only one exact AI-usage acceptance record.
+
 Reads a live Cloudflare tail stream and prints only a privacy-safe
 scheduled-backup result. With the fixed `--restore-only` option, it skips
 recovery results until a closed restore result arrives. It never copies raw

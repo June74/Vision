@@ -35,3 +35,26 @@
   intentionally not implemented here because the approved plan assigns their
   selector/config-generation surface to Task 6. This Task 4 job accepts only
   the already-admitted non-secret boolean seam.
+
+## Review-fix follow-up
+
+### RED regressions
+
+- Added the Chicago month-boundary assertion and exact approved versioned field
+  assertions in the AI evidence job test.
+- Added producer/consumer regressions for canonical success, `limit_exceeded`,
+  and `unavailable` evidence. Before the fixes, the live job used `MM-YYYY`,
+  the field names differed from the approved contract, and safe-tail rejected
+  the canonical failure forms.
+
+### GREEN evidence
+
+- `pnpm.cmd typecheck` passed.
+- `pnpm.cmd test:unit tests/integration/jobs/phase-b-ai-usage-evidence.test.ts tests/unit/scripts/safe-tail-classifier.test.ts` passed: 2 files, 35 tests.
+
+### Remaining review boundary
+
+- I2/I3 require replacing mock-only aggregate coverage with the real
+  PostgreSQL-compatible lifecycle matrix; I5 requires the cross-task candidate
+  selector/admission seam. Those changes are not claimed complete in this
+  follow-up commit.

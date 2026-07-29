@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyCalendarMaintenanceEvidence,
   classifyPhaseBFoundationProbeEvidence,
+  classifyPhaseBAiUsageEvidence,
   classifySafeTailLine,
   classifyTemporaryPreviewRoleProbeEvidence,
   classifyTemporaryRestoreEvidence,
@@ -162,6 +163,12 @@ function foundationTail(
 }
 
 describe("safe Cloudflare tail classification", () => {
+  it("accepts every canonical AI evidence category without field drift", () => {
+    const base = { evidenceType: "vision.ai-usage/v1", monthlyCents: 950, warningAtCents: 800, optionalStopAtCents: 900, hardStopAtCents: 950, tier: "stopped", gatewayLimitMatches: true, nonAiAvailable: true } as const;
+    expect(classifyPhaseBAiUsageEvidence({ ...base, outcome: "succeeded", category: "none" })).toEqual({ ...base, outcome: "succeeded", category: "none" });
+    expect(classifyPhaseBAiUsageEvidence({ ...base, monthlyCents: 951, outcome: "failed", category: "limit_exceeded" })).toMatchObject({ category: "limit_exceeded", monthlyCents: 951 });
+    expect(classifyPhaseBAiUsageEvidence({ evidenceType: "vision.ai-usage/v1", outcome: "failed", category: "unavailable", monthlyCents: 0, warningAtCents: 800, optionalStopAtCents: 900, hardStopAtCents: 950, tier: "normal", gatewayLimitMatches: false, nonAiAvailable: false })).toMatchObject({ category: "unavailable" });
+  });
   it.each([
     ["reserved", "completed"],
     ["reserved", "no_work"],

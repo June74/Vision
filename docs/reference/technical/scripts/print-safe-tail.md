@@ -1,5 +1,9 @@
 # `scripts/print-safe-tail.ts`
 
+## `--ai-usage-only`
+
+Filters the safe-tail observer to the exact `vision.ai-usage/v1` record.
+
 Streams Wrangler's JSON output through `createSafeTailAccumulator` and exits
 after the first allowlisted scheduled-event classification. The fixed
 `--restore-only` option accepts only reconstructed
