@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-07-29T04:28:42.0694275Z
-- **Phase/task:** Phase B acceptance instrumentation Task 5 Worker RED/GREEN
+- **Last observed:** 2026-07-29T16:50:49Z
+- **Phase/task:** Phase B acceptance instrumentation Task 6 build verification
 - **Environment:** Local managed sandbox
 - **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`
 
@@ -145,3 +145,7 @@ security validation passed.
   the expected task-local diagnostic directory. Both exact worktree-contained
   targets were verified from metadata and removed before staging. All
   executable gates exited zero.
+- 2026-07-29T16:50:49Z: Recurred during Task 6 build verification because the
+  task-local diagnostic setting was omitted. Both bundles, the crypto-boundary
+  validator, and the normal preview artifact validator exited zero. Remaining
+  Task 6 build gates restore a temporary `XDG_CONFIG_HOME`.

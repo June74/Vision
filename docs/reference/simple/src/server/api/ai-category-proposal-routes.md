@@ -4,7 +4,9 @@ The single Phase B AI endpoint requires a live session and CSRF token, accepts o
 
 ## `registerAiCategoryProposalRoute`
 
-Registers the authenticated category proposal POST route.
+Registers the authenticated category proposal POST route. It validates the
+complete candidate selector and AI attestation, but only the strict
+`ai_stopped` fault activates the synthetic hard stop.
 
 ## `createProductionAiCategoryProposalDependencies`
 

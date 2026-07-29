@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { decodeBase64Url } from "../crypto/envelope";
 import { AI_HARD_STOP_CENTS } from "../domain/budget/ai-budget";
-import { TEMPORARY_PREVIEW_FAULT_SCENARIOS } from "../domain/operations/temporary-preview-fault";
+import { TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS } from "../domain/operations/temporary-preview-fault";
 import { parseCloudflareOpenAiGatewayBaseUrl } from "../integrations/openai/cloudflare-gateway-url";
 
 const keyEncryptionKeySchema = z.string().superRefine((keyEncryptionKey, context) => {
@@ -228,7 +228,10 @@ export const RuntimeEnvSchema = z
     R2_USAGE_WARNING_BYTES: usageWarningThresholdSchema.optional(),
     R2_USAGE_WARNING_OBJECTS: usageWarningThresholdSchema.optional(),
     PREVIEW_ACCEPTANCE_SCENARIO: z
-      .enum(TEMPORARY_PREVIEW_FAULT_SCENARIOS)
+      .enum(TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS)
+      .optional(),
+    PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: z
+      .literal("true")
       .optional(),
   })
   .superRefine((environment, context) => {
@@ -251,6 +254,16 @@ export const RuntimeEnvSchema = z
       context.addIssue({
         code: "custom",
         message: "PREVIEW_ACCEPTANCE_SCENARIO is preview-only.",
+      });
+    }
+    if (
+      (environment.PREVIEW_ACCEPTANCE_SCENARIO === "ai_usage") !==
+      (environment.PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED === "true")
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED is AI-candidate-only.",
       });
     }
     if (

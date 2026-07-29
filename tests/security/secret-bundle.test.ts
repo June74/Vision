@@ -7,7 +7,7 @@ import {
   CLIENT_SAFE_RUNTIME_BINDING_NAMES,
   RUNTIME_CLIENT_FORBIDDEN_BINDING_NAMES,
 } from "../../src/server/client-binding-boundary";
-import { TEMPORARY_PREVIEW_FAULT_SCENARIOS } from "../../src/domain/operations/temporary-preview-fault";
+import { TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS } from "../../src/domain/operations/temporary-preview-fault";
 import { RuntimeEnvSchema } from "../../src/server/env";
 import {
   createCleanReleaseFixture,
@@ -58,6 +58,7 @@ describe("client secret-bundle boundary", () => {
     expect(RUNTIME_CLIENT_FORBIDDEN_BINDING_NAMES).toEqual(
       expect.arrayContaining([
         "DATABASE_USAGE_WARNING_BYTES",
+        "PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED",
         "PREVIEW_ACCEPTANCE_SCENARIO",
         "PREVIEW_RESTORE_DATABASE_URL",
         "PREVIEW_RESTORE_TARGET_ID",
@@ -67,7 +68,7 @@ describe("client secret-bundle boundary", () => {
     );
   });
 
-  it.each(TEMPORARY_PREVIEW_FAULT_SCENARIOS)(
+  it.each(TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS)(
     "rejects preview activation value %s in a built client asset",
     async (scenario) => {
       const root = await createCleanReleaseFixture();

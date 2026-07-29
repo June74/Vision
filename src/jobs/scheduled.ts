@@ -1,9 +1,15 @@
 /** Coordinates periodic channel renewal and missed-notification repair. */
 import { createDb } from "../data/db";
+import { Pool } from "@neondatabase/serverless";
 import {
   createPhaseBAiUsageSource,
   createPhaseBNonAiReadSource,
 } from "../data/phase-b-ai-usage-source";
+import {
+  createPhaseBFoundationProbeSource,
+  createR2PhaseBFoundationProbeBucket,
+  type PhaseBFoundationProbeClientPort,
+} from "../data/phase-b-foundation-probe";
 import { createChannelMaintenanceRepository } from "../data/repositories/channel-maintenance-repository";
 import { createProjectionRepository } from "../data/repositories/projection-repository";
 import {
@@ -13,9 +19,16 @@ import {
   type TokenRepositoryPort,
 } from "../data/repositories/token-repository";
 import { importBackupEncryptionKey } from "../crypto/backup-key";
-import { encodeBase64Url, serializeCipherEnvelope } from "../crypto/envelope";
+import {
+  encodeBase64Url,
+  parseCipherEnvelope,
+  serializeCipherEnvelope,
+} from "../crypto/envelope";
 import { createWrappedKeyProvider } from "../crypto/key-provider";
-import { encryptProtectedFields } from "../crypto/protected-fields";
+import {
+  decryptProtectedFields,
+  encryptProtectedFields,
+} from "../crypto/protected-fields";
 import { createNeonBackupSnapshotSource } from "../data/backup/neon-adapter";
 import { createR2BackupObjectStore } from "../data/backup/r2-object-store";
 import { createTemporaryPreviewRoleProbeAdapter } from "../data/backup/temporary-preview-role-probe-adapter";
@@ -29,7 +42,13 @@ import {
   parseVisionKeyEncryptionKey,
   type Env,
 } from "../server/env";
-import { parseTemporaryPreviewFaultScenario } from "../domain/operations/temporary-preview-fault";
+import { PHASE_B_PRIVILEGE_MANIFEST } from "../domain/operations/phase-b-privilege-manifest";
+import {
+  TEMPORARY_PREVIEW_FAULT_SCENARIOS,
+  parseTemporaryPreviewAcceptanceAiGatewayAttestation,
+  parseTemporaryPreviewAcceptanceSelector,
+  type TemporaryPreviewFaultScenario,
+} from "../domain/operations/temporary-preview-fault";
 import { createDailyBackup } from "./create-daily-backup";
 import {
   runTemporaryPreviewFault,
@@ -43,6 +62,10 @@ import {
   type PhaseBAiUsageEvidenceDependencies,
   type PhaseBAiUsageEvidenceEntry,
 } from "./phase-b-ai-usage-evidence";
+import {
+  emitPhaseBFoundationProbeEvidence,
+  runPhaseBFoundationProbe,
+} from "./phase-b-foundation-probe";
 import {
   createCalendarMaintenanceEvidence,
   emitCalendarMaintenanceEvidence,
@@ -309,8 +332,14 @@ export async function scheduled(
 ): Promise<void> {
   const now = new Date(controller.scheduledTime);
   if (controller.cron === TEMPORARY_PREVIEW_FAULT_CRON) {
-    const scenario = parseTemporaryPreviewFaultScenario(environment);
-    if (scenario) {
+    const selector = parseTemporaryPreviewAcceptanceSelector(environment);
+    const gatewayLimitMatches =
+      parseTemporaryPreviewAcceptanceAiGatewayAttestation(environment);
+    if (
+      TEMPORARY_PREVIEW_FAULT_SCENARIOS.includes(
+        selector as TemporaryPreviewFaultScenario,
+      )
+    ) {
       await runTemporaryPreviewFault(
         environment,
         {
@@ -320,6 +349,14 @@ export async function scheduled(
         },
         dependencies.writeTemporaryFaultEvidence,
       );
+      return;
+    }
+    if (selector === "foundation_probe") {
+      await dependencies.foundationProbe(now);
+      return;
+    }
+    if (selector === "ai_usage" && gatewayLimitMatches) {
+      await dependencies.aiUsageEvidence(now);
       return;
     }
     if (
@@ -368,13 +405,24 @@ function createProductionScheduledEntryDependencies(
         throw new Error("Temporary preview role probe failed.");
       }
     },
-    /** Remains unreachable until Task 6 adds the generated candidate selector. */
-    foundationProbe: async () => {
-      throw new Error("Phase B foundation probe candidate is not configured.");
+    /** Builds only the preview foundation candidate's aggregate read boundaries. */
+    foundationProbe: async (scheduledAt) => {
+      await runProductionScheduledPhaseBFoundationProbe(
+        environment,
+        scheduledAt,
+      );
     },
-    /** Remains unreachable until Task 6 binds its verified candidate boolean. */
-    aiUsageEvidence: async () => {
-      throw new Error("Phase B AI usage candidate is not configured.");
+    /** Builds the AI source only after the generated same-run attestation is admitted. */
+    aiUsageEvidence: async (scheduledAt) => {
+      const dependencies =
+        await createProductionScheduledPhaseBAiUsageEvidenceDependencies(
+          environment,
+          parseTemporaryPreviewAcceptanceAiGatewayAttestation(environment),
+        );
+      await runScheduledPhaseBAiUsageEvidence(
+        scheduledAt,
+        dependencies,
+      );
     },
     /** Builds the normal backup path only after the preview binding has been admitted. */
     temporaryFaultR2Upload: async (scheduledAt, writer) => {
@@ -397,6 +445,79 @@ function createProductionTemporaryRoleProbeDependencies(): TemporaryPreviewRoleP
     probeRole: (connectionString) =>
       createTemporaryPreviewRoleProbeAdapter(connectionString).probeRole(),
   };
+}
+
+/** Runs the dedicated foundation candidate with one max-one pool and read-only R2 port. */
+async function runProductionScheduledPhaseBFoundationProbe(
+  environment: Env,
+  scheduledAt: Date,
+): Promise<void> {
+  if (environment.VISION_ENV !== "preview" || !environment.BACKUP_BUCKET) {
+    throw new Error("Phase B foundation probe candidate is unavailable.");
+  }
+  const ownerId = await deriveOwnerId(
+    readScheduledOwnerSubject(environment.GOOGLE_ALLOWED_SUB),
+  );
+  const database = createDb(environment.DATABASE_URL);
+  const keyProvider = await createWrappedKeyProvider(
+    parseVisionKeyEncryptionKey(environment.KEY_ENCRYPTION_KEY),
+    new DrizzleWrappedDataKeyStore(database),
+    1,
+  );
+  const pool = new Pool({
+    connectionString: environment.DATABASE_URL,
+    max: 1,
+  });
+  const source = createPhaseBFoundationProbeSource({
+    pool: {
+      /** Retains one client and exposes only the parameterized query port. */
+      async connect(): Promise<PhaseBFoundationProbeClientPort> {
+        const client = await pool.connect();
+        return {
+          /** Returns rows only; no driver metadata crosses the probe boundary. */
+          async query<Row extends Record<string, unknown>>(
+            statement: string,
+            parameters: readonly unknown[],
+          ) {
+            const result = await client.query(statement, [...parameters]);
+            return { rows: result.rows as readonly Row[] };
+          },
+          /** Returns the retained client to the max-one pool. */
+          release: () => client.release(),
+        };
+      },
+      /** Closes the dedicated pool after the probe finishes. */
+      end: () => pool.end(),
+    },
+    bucket: createR2PhaseBFoundationProbeBucket(environment.BACKUP_BUCKET),
+    privilegeManifest: PHASE_B_PRIVILEGE_MANIFEST,
+    ownerId,
+    /** Decrypts only the controlled title and returns mutable bytes for caller zeroization. */
+    decryptControlledTitle: async (candidate) => {
+      const serialized = new TextDecoder("utf-8", { fatal: true }).decode(
+        candidate.titleEnvelope,
+      );
+      const decrypted = await decryptProtectedFields(
+        keyProvider,
+        {
+          ownerId: candidate.ownerId,
+          nodeId: candidate.nodeId,
+          domain: candidate.domain,
+        },
+        { title: parseCipherEnvelope(serialized) },
+      );
+      return new TextEncoder().encode(decrypted.title ?? "");
+    },
+  });
+  const evidence = await runPhaseBFoundationProbe(
+    { VISION_ENV: "preview" },
+    scheduledAt,
+    source,
+  );
+  emitPhaseBFoundationProbeEvidence(evidence);
+  if (evidence.outcome !== "succeeded") {
+    throw new Error("Phase B foundation probe failed.");
+  }
 }
 
 /** Creates backup-only production functions without opening Google credential paths. */

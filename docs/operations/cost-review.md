@@ -26,6 +26,14 @@ $9.50, leaving more than $10 of the personal budget for unexpected
 managed-service usage. Phase B is not cost-accepted until one harmless live
 category request and fixed-shape aggregate usage evidence pass.
 
+The dedicated AI acceptance candidate does not configure or raise the Gateway
+limit. Its guarded workflow first runs the existing verifier in read-only mode
+and admits only that same-run success boolean into the generated candidate.
+The boolean is temporary, server-only, and valid only for `ai_usage`; it is
+rejected for every other candidate and absent from the committed normal
+configuration. The separate rollback must restore the normal artifact and
+verify that both the attestation and one-minute schedule are absent.
+
 ## Authenticated storage warnings
 
 The owner-only diagnostics status now measures storage instead of injecting
@@ -76,4 +84,5 @@ application must refresh injected rates whenever the provider price changes.
 **Pending.** Current measured and projected infrastructure usage is compatible
 with the ceiling, and the provider-side $9.50 rule is verified. The remaining
 cost gate is a harmless live OpenAI category request through the configured
-Gateway, followed by fixed-shape usage evidence.
+Gateway, followed by fixed-shape usage evidence from the guarded dedicated AI
+candidate and verified normal rollback.

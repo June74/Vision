@@ -11,11 +11,10 @@ The temporary candidate creates recovery dependencies only after strict
 preview-scenario admission; its supplied writer fails before R2 `put`.
 
 The scheduled entry point routes exact cron expressions to isolated
-Google-maintenance, encrypted-recovery, and temporary preview role-probe
-capability sets. The temporary branch receives only the preview environment
-marker and temporary connection binding. A typed foundation-probe boundary is
-present for Task 6. Task 4 also provides a fully composed AI-usage candidate
-member, but no committed cron dispatches either temporary candidate.
+Google-maintenance and encrypted-recovery capability sets. A generated
+preview-only artifact may add the one-minute cron and exactly one admitted
+role-probe, foundation, AI-usage, or fault capability. The committed normal
+configuration has no one-minute cron or acceptance binding.
 
 ## `runScheduledJob`
 Matches only the three configured cron expressions and rejects any unexpected
@@ -37,14 +36,14 @@ fixed value-free failure after failed evidence is emitted.
 
 ## `foundationProbe`
 
-Preserves dependency typing for the future generated candidate while every
-existing scheduler selector leaves it unreachable.
+Runs only after the generated `foundation_probe` selector is parsed; normal
+cron routing and every other selector leave it unreachable.
 
 ## `aiUsageEvidence`
 
-Carries the runnable Task 4 AI evidence callback while remaining unreachable
-from the exact normal cron router. Task 6 is still the only component allowed
-to bind it to a generated selector and temporary schedule.
+Runs only after the generated `ai_usage` selector and exact same-run boolean
+attestation are parsed; normal cron routing and every other selector leave it
+unreachable.
 
 ## `createScheduledPhaseBAiUsageEvidenceDependencies`
 
@@ -57,6 +56,35 @@ owner-bound database.
 Rejects non-preview execution and an unattested boolean before database
 construction. It derives the existing authentication-compatible owner key and
 does not construct a provider client, selector, binding, or cron.
+
+## `runProductionScheduledPhaseBFoundationProbe`
+
+Builds the preview-only foundation source from one max-one Neon pool, the
+read-only R2 adapter, frozen privilege manifest, opaque owner derivation, and
+existing wrapped-key provider. It emits one fixed terminal record and reports
+failure with a value-free error.
+
+## `connect`
+
+Retains one database client behind the foundation source's narrow pool port.
+
+## `query`
+
+Copies only result rows from parameterized queries; driver metadata does not
+cross the source boundary.
+
+## `release`
+
+Returns the retained client to the max-one pool.
+
+## `end`
+
+Closes the dedicated foundation pool after probe cleanup.
+
+## `decryptControlledTitle`
+
+Parses and decrypts only the controlled sentinel title and returns a mutable
+UTF-8 byte array for the probe's `finally` cleanup.
 
 ## `runScheduledPhaseBAiUsageEvidence`
 
@@ -79,9 +107,10 @@ Invokes the owner-scoped database-only projection retention boundary before cred
 Routes typed OAuth failure through the generation-safe maintenance checkpoint transition before rethrowing.
 ## `scheduled`
 Uses Cloudflare's scheduled time and exact cron string for
-capability-separated dispatch. On the shared one-minute cron it validates the
-fault binding first, permits the role probe only when its explicit connection
-binding exists, and otherwise fails before any injected capability is called.
+capability-separated dispatch. On the generated one-minute cron it validates
+the combined selector and AI attestation first, permits the role probe only
+when no selector and its explicit connection binding exist, and otherwise
+fails before an unrelated capability is called.
 ## `createProductionScheduledEntryDependencies`
 Returns closures rather than constructed adapters, preserving lazy provider,
 database, Queue, and R2 initialization until after exact dispatch.

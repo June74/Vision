@@ -46,6 +46,24 @@ async function readOperationsDocument(name: string): Promise<string> {
   return readFile(resolve(process.cwd(), "docs", "operations", name), "utf8");
 }
 
+/** Extracts the literal options from one workflow_dispatch choice input. */
+function readWorkflowChoiceOptions(
+  workflow: string,
+  inputName: string,
+): string[] {
+  const marker = `      ${inputName}:`;
+  const start = workflow.indexOf(marker);
+  if (start === -1) {
+    throw new Error(`Workflow input not found: ${inputName}`);
+  }
+  const remainder = workflow.slice(start + marker.length);
+  const nextInputOffset = remainder.search(/\n {6}[A-Za-z_][A-Za-z0-9_]*:/u);
+  const block =
+    nextInputOffset === -1 ? remainder : remainder.slice(0, nextInputOffset);
+  const options = block.matchAll(/^ {10}- ([a-z0-9_]+)$/gmu);
+  return [...options].map((match) => match[1]!);
+}
+
 describe("delivery workflow policy", () => {
   it("keeps checks, previews, and production releases safely separated", async () => {
     const [ci, preview, production, packageMetadata] = await Promise.all([
@@ -75,7 +93,9 @@ describe("delivery workflow policy", () => {
     expect(preview).toContain("id: verified-ref");
     expect(preview).toContain("git rev-parse HEAD");
     expect(preview).toContain("ref: ${{ needs.verify.outputs.verified_sha }}");
-    expect(preview).toContain("permissions:\n  contents: read");
+    expect(preview).toContain(
+      "permissions:\n  actions: read\n  contents: read",
+    );
     expect(preview).not.toContain("PREVIEW_RESTORE_DATABASE_URL");
     expect(preview).not.toContain("PREVIEW_RESTORE_TARGET_ID");
     expect(preview).not.toContain('echo "$');
@@ -212,27 +232,27 @@ describe("preview live diagnostics policy", () => {
     ]);
     const tailStep = readWorkflowStep(
       preview,
-      "Print only allowlisted scheduled evidence",
+      "Print only allowlisted acceptance evidence",
     );
     const tailJob = readWorkflowJob(preview, "tail");
 
-    expect(preview).toContain("safe_tail:");
+    expect(preview).toContain("acceptance_operation:");
     expect(preview).toContain("configure_ai_budget:");
     expect(preview).toContain(
-      "if: ${{ inputs.safe_tail == false && inputs.configure_ai_budget == false }}",
+      "if: ${{ inputs.acceptance_operation != 'observe' && inputs.configure_ai_budget == false }}",
     );
     expect(preview).toContain(
-      "if: ${{ inputs.safe_tail == true && inputs.configure_ai_budget == false }}",
+      "if: ${{ inputs.acceptance_operation == 'observe' && inputs.configure_ai_budget == false }}",
     );
     expect(preview).toContain(
-      "if: ${{ inputs.configure_ai_budget == true && inputs.safe_tail == false }}",
+      "if: ${{ inputs.configure_ai_budget == true && inputs.acceptance_operation == 'none' && inputs.fault_scenario == 'none' }}",
     );
     expect(preview.match(/^  deploy:/gmu)).toHaveLength(1);
     expect(preview.match(/^  tail:/gmu)).toHaveLength(1);
     expect(preview.match(/^  configure_gateway:/gmu)).toHaveLength(1);
     expect(preview).toContain(
       "concurrency:\n" +
-        "  group: ${{ inputs.safe_tail == true && inputs.configure_ai_budget == false && 'vision-preview-observer' || 'vision-preview-mutation' }}\n" +
+        "  group: ${{ inputs.acceptance_operation == 'observe' && inputs.configure_ai_budget == false && 'vision-preview-observer' || 'vision-preview-mutation' }}\n" +
         "  cancel-in-progress: true",
     );
     expect(preview).not.toContain("group: vision-preview\n");
@@ -247,7 +267,7 @@ describe("preview live diagnostics policy", () => {
     expect(tailJob).not.toContain("actions/upload-artifact");
     expect(tailStep).toContain(
       "timeout 16m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |\n" +
-        "            pnpm exec tsx scripts/print-safe-tail.ts --calendar-maintenance-only",
+        '            pnpm exec tsx scripts/print-safe-tail.ts "$evidence_flag"',
     );
     expect(tailStep).not.toContain("--restore-only");
     expect(tailStep).not.toContain("--role-probe-only");
@@ -265,6 +285,173 @@ describe("preview live diagnostics policy", () => {
     );
     expect(restoreDrill).toContain(
       "Safe-tail observers use `vision-preview-observer`; deployment, verification, and Gateway configuration use `vision-preview-mutation`.",
+    );
+  });
+});
+
+describe("preview acceptance candidate workflow", () => {
+  it("admits only the exact operation and fault choice vocabularies", async () => {
+    const preview = await readWorkflow("preview.yml");
+
+    expect(readWorkflowChoiceOptions(preview, "acceptance_operation")).toEqual([
+      "none",
+      "observe",
+      "deploy_foundation",
+      "deploy_ai",
+      "deploy_fault",
+      "rollback",
+    ]);
+    expect(readWorkflowChoiceOptions(preview, "fault_scenario")).toEqual([
+      "none",
+      "queue_delayed",
+      "job_failed",
+      "channel_expired",
+      "database_unavailable",
+      "r2_upload_failed",
+      "ai_stopped",
+    ]);
+    expect(preview).toContain(
+      "pnpm exec tsx scripts/prepare-preview-acceptance-deploy-config.ts --verify-workflow-inputs",
+    );
+    expect(preview).toContain(
+      "--operation \"${{ inputs.acceptance_operation }}\"",
+    );
+    expect(preview).toContain(
+      "--fault-scenario \"${{ inputs.fault_scenario }}\"",
+    );
+  });
+
+  it("keeps observer and mutation runs separate and bounded", async () => {
+    const preview = await readWorkflow("preview.yml");
+    const observer = readWorkflowJob(preview, "tail");
+    const tailStep = readWorkflowStep(
+      preview,
+      "Print only allowlisted acceptance evidence",
+    );
+
+    expect(preview).toContain(
+      "group: ${{ inputs.acceptance_operation == 'observe' && inputs.configure_ai_budget == false && 'vision-preview-observer' || 'vision-preview-mutation' }}",
+    );
+    expect(observer).toContain("timeout-minutes: 18");
+    expect(observer).toContain("ref: ${{ inputs.ref }}");
+    expect(observer).not.toContain("wrangler deploy");
+    expect(observer).not.toContain("gateway:configure:preview");
+    expect(tailStep).toContain("timeout 16m");
+    expect(tailStep).toContain("--format json 2>/dev/null");
+    expect(tailStep).not.toContain("actions/upload-artifact");
+  });
+
+  it("requires live observer proof before deploying an isolated generated candidate", async () => {
+    const preview = await readWorkflow("preview.yml");
+    const candidate = readWorkflowJob(preview, "deploy_acceptance_candidate");
+    const proofStep = readWorkflowStep(
+      preview,
+      "Verify active privacy-safe observer",
+    );
+    const buildStep = readWorkflowStep(
+      preview,
+      "Build generated acceptance candidate",
+    );
+    const deployStep = readWorkflowStep(
+      preview,
+      "Deploy generated acceptance candidate",
+    );
+
+    expect(candidate).toContain(
+      "ref: ${{ needs.verify.outputs.verified_sha }}",
+    );
+    expect(proofStep).toContain("OBSERVER_RUN_ID");
+    expect(proofStep).toContain("actions/runs/$OBSERVER_RUN_ID");
+    expect(proofStep).toContain("head_sha");
+    expect(proofStep).toContain("in_progress");
+    expect(proofStep).toContain(
+      'deploy_foundation) expected_observer_evidence="foundation_probe"',
+    );
+    expect(proofStep).toContain(
+      'deploy_ai) expected_observer_evidence="ai_usage"',
+    );
+    expect(proofStep).toContain(
+      'deploy_fault) expected_observer_evidence="preview_fault"',
+    );
+    expect(proofStep).toContain("--arg expected_name");
+    expect(proofStep).toContain(".name == $expected_name");
+    expect(readWorkflowJob(preview, "tail")).toContain(
+      "name: Capture ${{ inputs.observer_evidence }} safe scheduled outcome",
+    );
+    expect(buildStep).toContain(
+      "scripts/prepare-preview-acceptance-deploy-config.ts",
+    );
+    expect(buildStep).toContain(
+      "--input dist/vision/wrangler.json",
+    );
+    expect(buildStep).toContain(
+      "--output dist/vision/wrangler.acceptance.json",
+    );
+    expect(deployStep).toContain(
+      "--config dist/vision/wrangler.acceptance.json",
+    );
+    expect(deployStep).not.toContain("--var ");
+    expect(candidate).not.toContain("PREVIEW_RESTORE_DATABASE_URL");
+    expect(candidate).not.toContain("PREVIEW_RESTORE_TARGET_ID");
+  });
+
+  it("runs the read-only Gateway verifier only for AI stop or dedicated AI evidence", async () => {
+    const preview = await readWorkflow("preview.yml");
+    const candidate = readWorkflowJob(preview, "deploy_acceptance_candidate");
+    const verifier = readWorkflowStep(
+      preview,
+      "Verify the existing AI Gateway limit",
+    );
+    const buildStep = readWorkflowStep(
+      preview,
+      "Build generated acceptance candidate",
+    );
+
+    expect(verifier).toContain(
+      "inputs.acceptance_operation == 'deploy_ai' || (inputs.acceptance_operation == 'deploy_fault' && inputs.fault_scenario == 'ai_stopped')",
+    );
+    expect(verifier).toContain("pnpm gateway:verify:preview");
+    expect(verifier).not.toContain("gateway:configure:preview");
+    expect(buildStep).toContain(
+      "AI_GATEWAY_LIMIT_ATTESTED: ${{ inputs.acceptance_operation == 'deploy_ai' && steps.gateway-attestation.outputs.attested || '' }}",
+    );
+    expect(buildStep).toContain(
+      "--ai-gateway-limit-attested \"$AI_GATEWAY_LIMIT_ATTESTED\"",
+    );
+    expect(candidate).not.toContain(
+      "PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: ${{",
+    );
+  });
+
+  it("keeps rollback separately operator-dispatched over the verified normal artifact", async () => {
+    const preview = await readWorkflow("preview.yml");
+    const rollback = readWorkflowJob(preview, "rollback");
+    const deployStep = readWorkflowStep(
+      preview,
+      "Deploy immutable normal preview Worker",
+    );
+    const verificationStep = readWorkflowStep(
+      preview,
+      "Verify normal runtime and temporary-surface absence",
+    );
+
+    expect(rollback).toContain(
+      "if: ${{ inputs.acceptance_operation == 'rollback' && inputs.configure_ai_budget == false }}",
+    );
+    expect(rollback).toContain(
+      "ref: ${{ needs.verify.outputs.verified_sha }}",
+    );
+    expect(rollback).toContain("pnpm deploy:check:preview");
+    expect(deployStep).toContain("--config dist/vision/wrangler.json");
+    expect(deployStep).not.toContain("wrangler.acceptance.json");
+    expect(deployStep).not.toContain("--var ");
+    expect(rollback).not.toContain("if: ${{ always() }}");
+    expect(verificationStep).toContain("/api/health");
+    expect(verificationStep).toContain("schedules");
+    expect(verificationStep).toContain("PREVIEW_ACCEPTANCE_");
+    expect(verificationStep).toContain("* * * * *");
+    expect(preview).toContain(
+      "Provider cleanup is forbidden until this rollback verification succeeds.",
     );
   });
 });

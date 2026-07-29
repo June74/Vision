@@ -1,7 +1,18 @@
 # `src/domain/operations/temporary-preview-fault.ts`
 
-Contains the preview-only switch used to show safe operational failure states.
-It cannot read the browser request, database, Queue, provider, or AI output.
+Contains the preview-only candidate switches used to produce closed acceptance
+evidence or show safe operational failure states. It cannot read the browser
+request, database, Queue, provider, or AI output.
+
+## `parseTemporaryPreviewAcceptanceSelector`
+
+Accepts one exact generated preview selector from the six faults plus the
+foundation and AI evidence candidates.
+
+## `parseTemporaryPreviewAcceptanceAiGatewayAttestation`
+
+Requires the exact same-run attestation only for the AI evidence selector and
+rejects it everywhere else.
 
 ## `parseTemporaryPreviewFaultScenario`
 
@@ -17,3 +28,7 @@ diagnostic reads normal.
 ## `invalidScenario`
 
 Returns the one safe error used for invalid temporary configuration.
+
+## `invalidAiAttestation`
+
+Returns the one safe error used for invalid AI attestation.

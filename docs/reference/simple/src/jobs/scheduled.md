@@ -10,12 +10,10 @@ normal recovery keeps its ordinary writer.
 Builds the normal backup path only after the preview fault binding has been
 accepted.
 
-Routes the 15-minute Google maintenance schedule, daily encrypted recovery
-schedule, and temporary preview role-probe schedule without mixing their
-credentials or database targets. It also carries an injected foundation-probe
-candidate boundary that is deliberately not routed until Task 6.
-The AI-usage candidate has the same unrouted boundary plus a complete
-preview-only dependency builder and one-record runner.
+Routes the 15-minute Google maintenance schedule and daily encrypted recovery
+schedule. A generated preview candidate may add the one-minute route for
+exactly one role probe, foundation probe, AI usage record, or strict fault
+scenario without mixing their credentials or database targets.
 
 ## `runScheduledJob`
 Calls only the function belonging to one of the three exact configured cron
@@ -36,14 +34,12 @@ reports failure with one fixed message.
 
 ## `foundationProbe`
 
-Defines the typed candidate boundary but remains unreachable from every
-committed cron.
+Runs only for the exact generated `foundation_probe` selector.
 
 ## `aiUsageEvidence`
 
-Defines the runnable AI-usage candidate member. Normal committed crons and
-unsupported crons never call it; Task 6 still owns the generated selector and
-one-minute routing.
+Runs only for the exact generated `ai_usage` selector after its same-run
+Gateway attestation is admitted.
 
 ## `createScheduledPhaseBAiUsageEvidenceDependencies`
 
@@ -54,6 +50,33 @@ already-verified Gateway boolean.
 
 Keeps production composition preview-only, derives the existing private owner
 key, and constructs no Google or AI provider client.
+
+## `runProductionScheduledPhaseBFoundationProbe`
+
+Builds one max-one database pool, read-only R2 boundary, existing privilege
+manifest, owner key, and controlled-title decryptor for the foundation
+candidate.
+
+## `connect`
+
+Reserves the foundation probe's one database client.
+
+## `query`
+
+Returns only query rows through the probe's parameterized read port.
+
+## `release`
+
+Returns the retained client to the foundation probe pool.
+
+## `end`
+
+Closes the dedicated foundation probe pool.
+
+## `decryptControlledTitle`
+
+Decrypts only the controlled sentinel title and returns mutable bytes for
+caller cleanup.
 
 ## `runScheduledPhaseBAiUsageEvidence`
 
@@ -74,7 +97,7 @@ Removes expired encrypted rebuild staging before Google credentials are needed.
 Stores a safe credential failure before the scheduler reports it.
 ## `scheduled`
 Connects Cloudflare scheduled events to exact cron routing. The one-minute
-schedule requires either one valid fault scenario or the explicit role-probe
+schedule requires exactly one admitted selector or the explicit role-probe
 binding; missing or invalid candidate configuration cannot fall through.
 ## `createProductionScheduledEntryDependencies`
 Builds lazy closures for each isolated scheduled capability without opening

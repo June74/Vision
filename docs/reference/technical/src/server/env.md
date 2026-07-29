@@ -36,7 +36,19 @@ All bindings are Worker-only. `GOOGLE_ALLOWED_SUB` and email define the private-
 
 **Signature:** `z.ZodObject<{ VISION_ENV; DATABASE_URL; KEY_ENCRYPTION_KEY }>`
 
-The schema accepts `VISION_ENV`, Worker-only `DATABASE_URL`, and Worker-only `KEY_ENCRYPTION_KEY`. The key is prebounded to 43 characters, canonically decoded, re-encoded by the shared decoder, and required to produce exactly 32 bytes. This accepts all 16 legal final-character classes while rejecting padding, noncanonical trailing bits, and incorrect lengths. A `finally` block calls `fill(0)` on the application-controlled mutable decoded buffer after both successful validation and decoded-length rejection. Errors never copy either secret. This is best-effort local-buffer clearing, not a claim that immutable JavaScript strings, Web Crypto copies, or engine temporaries are erased.
+The schema accepts `VISION_ENV`, Worker-only `DATABASE_URL`, Worker-only
+`KEY_ENCRYPTION_KEY`, and the server-only preview candidate bindings. The
+candidate selector admits the frozen six faults plus `foundation_probe` and
+`ai_usage` only in preview. `PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED` must
+be exactly `"true"` if and only if the selector is `ai_usage`. The key is
+prebounded to 43 characters, canonically decoded, re-encoded by the shared
+decoder, and required to produce exactly 32 bytes. This accepts all 16 legal
+final-character classes while rejecting padding, noncanonical trailing bits,
+and incorrect lengths. A `finally` block calls `fill(0)` on the
+application-controlled mutable decoded buffer after both successful validation
+and decoded-length rejection. Errors never copy either secret. This is
+best-effort local-buffer clearing, not a claim that immutable JavaScript
+strings, Web Crypto copies, or engine temporaries are erased.
 
 ## `RuntimeEnv`
 

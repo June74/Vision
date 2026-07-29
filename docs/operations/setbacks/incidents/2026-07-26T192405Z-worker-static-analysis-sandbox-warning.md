@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:24:05.647183Z
-- **Last observed:** 2026-07-28T14:43:50Z
-- **Phase/task:** Phase B completion resume full gate
+- **Last observed:** 2026-07-29T17:00:08Z
+- **Phase/task:** Phase B acceptance instrumentation Task 6 final gate
 - **Environment:** Local managed sandbox Worker test pool
 - **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`
 
@@ -102,3 +102,6 @@ documentation, typecheck, and security validation also passed.
   complete command exited zero after 720 unit/integration tests passed with one
   intentional skip, 179 contract tests passed, and documentation, build, and
   security validation passed.
+- 2026-07-29T17:00:08Z: The Task 6 final Worker gate repeated the same
+  sandbox-only analyzer warning and passed all 94 Worker assertions. Contract,
+  documentation, build, and release security gates also exited zero.

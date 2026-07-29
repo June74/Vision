@@ -90,9 +90,27 @@ over `Delayed`. AI warnings never disable deterministic event viewing.
 - Never bypass verification by deploying an unverified commit.
 - After correction, rerun the full guarded workflow and verify live health.
 
+### Temporary preview candidate or rollback failure
+
+- Stop further candidate deployment and preserve only the operation, reviewed
+  commit, safe terminal category, and whether the observer was still active.
+- Do not create or patch a deployment artifact by hand. Regenerate it only from
+  the immutable normal artifact through the guarded workflow.
+- Do not reuse an AI Gateway verification from an earlier workflow run. The
+  dedicated AI evidence candidate requires its own same-run read-only result.
+- Dispatch `rollback` as a separate operator action over the reviewed normal
+  ref. Do not describe it as automatic cross-run recovery.
+- Verify normal health, exactly the two normal schedules, and absence of the
+  temporary selector, AI attestation, and one-minute schedule before provider
+  cleanup or another candidate.
+- Provider cleanup is last: first merge reviewed source cleanup, deploy it, and
+  verify the permanent cleanup test and normal runtime. Never delete
+  `backups/v1/`, backup key version 1, prepared-backup import or offline restore
+  tooling, permanent maintenance evidence, usage warnings, or historical
+  evidence and setback records.
+
 ## Recovery and closure
 
 An incident closes only when the exact failed boundary is rerun successfully,
 the truthful state returns, and the indexed incident records correction plus
 prevention. A provider dashboard looking normal is not enough by itself.
-

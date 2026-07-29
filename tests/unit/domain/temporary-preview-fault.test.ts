@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { AI_HARD_STOP_CENTS } from "../../../src/domain/budget/ai-budget";
 import {
+  TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS,
   TEMPORARY_PREVIEW_FAULT_SCENARIOS,
   applyTemporaryPreviewFaultOverlay,
+  parseTemporaryPreviewAcceptanceAiGatewayAttestation,
+  parseTemporaryPreviewAcceptanceSelector,
   parseTemporaryPreviewFaultScenario,
 } from "../../../src/domain/operations/temporary-preview-fault";
 import type { FoundationHealthFacts } from "../../../src/domain/operations/health";
@@ -27,6 +30,111 @@ function facts(): FoundationHealthFacts {
 }
 
 describe("temporary preview fault scenario admission", () => {
+  it("keeps foundation and AI selectors separate from the strict fault tuple", () => {
+    expect(TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS).toEqual([
+      ...TEMPORARY_PREVIEW_FAULT_SCENARIOS,
+      "foundation_probe",
+      "ai_usage",
+    ]);
+    expect(Object.isFrozen(TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS)).toBe(true);
+    expect(
+      parseTemporaryPreviewAcceptanceSelector({
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "foundation_probe",
+      }),
+    ).toBe("foundation_probe");
+    expect(
+      parseTemporaryPreviewAcceptanceSelector({
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "ai_usage",
+        PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true",
+      }),
+    ).toBe("ai_usage");
+    expect(
+      parseTemporaryPreviewAcceptanceSelector({ VISION_ENV: "preview" }),
+    ).toBeUndefined();
+
+    for (const invalid of [
+      {
+        VISION_ENV: "production",
+        PREVIEW_ACCEPTANCE_SCENARIO: "foundation_probe",
+      },
+      {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "unknown",
+      },
+      {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: [
+          "foundation_probe",
+          "ai_usage",
+        ],
+      },
+    ]) {
+      expect(() =>
+        parseTemporaryPreviewAcceptanceSelector(invalid),
+      ).toThrow("Temporary preview acceptance selector is invalid.");
+    }
+  });
+
+  it("admits the exact Gateway boolean only for the dedicated AI selector", () => {
+    expect(
+      parseTemporaryPreviewAcceptanceAiGatewayAttestation({
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "ai_usage",
+        PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true",
+      }),
+    ).toBe(true);
+    expect(
+      parseTemporaryPreviewAcceptanceAiGatewayAttestation({
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "foundation_probe",
+      }),
+    ).toBe(false);
+    expect(
+      parseTemporaryPreviewAcceptanceAiGatewayAttestation({
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "ai_stopped",
+      }),
+    ).toBe(false);
+
+    for (const invalid of [
+      {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "ai_usage",
+      },
+      {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "ai_usage",
+        PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: true,
+      },
+      {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "ai_usage",
+        PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "false",
+      },
+      {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "foundation_probe",
+        PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true",
+      },
+      {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "ai_stopped",
+        PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true",
+      },
+      {
+        VISION_ENV: "production",
+        PREVIEW_ACCEPTANCE_SCENARIO: "ai_usage",
+        PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true",
+      },
+    ]) {
+      expect(() =>
+        parseTemporaryPreviewAcceptanceAiGatewayAttestation(invalid),
+      ).toThrow("Temporary preview AI Gateway attestation is invalid.");
+    }
+  });
+
   it("admits only one exact preview deployment binding", () => {
     expect(TEMPORARY_PREVIEW_FAULT_SCENARIOS).toEqual([
       "queue_delayed",

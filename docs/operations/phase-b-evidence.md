@@ -47,6 +47,7 @@ identifiers, or provider-controlled URLs.
 | 2026-07-27 | Current live preview | Authenticated private desk | Reload session, status rail, synchronized-event list, queue retry count, AI allowance, and event-write control inspection | Pass: private desk loaded after a fresh page open; state was `Healthy`, last synchronization was within 15 minutes, queue retries were zero, the synchronized-event count was zero, AI showed $0.00 of $9.50, and no event create/edit/move/cancel/delete control was present |
 | 2026-07-27 | `a2bbc80` | Guarded preview workflow | Capture one privacy-safe scheduled outcome without deployment or configuration work | Diagnostic only: workflow passed and every mutation job was skipped, but the classifier accepts only recovery crons and returned `no_scheduled_event`; this does not prove the 15-minute calendar-maintenance path |
 | 2026-07-28 | Task 1 candidate | Local | Permanent calendar-maintenance evidence, strict safe-tail classification, and immutable-ref observer policy | Pass: 755 unit/integration tests with one intentional skip, 179 contract tests, 75 Worker tests, TypeScript, documentation, build, and security scan |
+| 2026-07-29 | Task 6 candidate | Local | Generated candidate isolation, exact operator selection, same-run AI attestation, separate rollback, security scans, and permanent cleanup contract | Pass: typecheck; 1,017 unit/integration/security tests with two intentional skips; 179 contract; 94 Worker; documentation, build, normal preview artifact validation, release security scan, zero migration diff, and zero secret-inventory diff. Fresh live exercises remain pending |
 
 The live preview schema is current through migration 0009. The normal daily
 schedule remains deployed while a fresh encrypted backup and disposable
@@ -54,8 +55,9 @@ restore drill proceed.
 
 ## Live-acceptance instrumentation gaps
 
-Current source inspection found four acceptance areas. The first now has
-permanent local instrumentation, but still needs one fresh live observation:
+The four acceptance areas now have closed local instrumentation and generated
+preview-only candidate routing, but each still needs its fresh live
+observation:
 
 - The 15-minute scheduler now emits one exact
   `vision.calendar-maintenance/v1` record after cleanup, repair, and renewal.
@@ -63,13 +65,25 @@ permanent local instrumentation, but still needs one fresh live observation:
   non-mutating concurrency group and bounded timeout, and accepts only that
   closed record on the exact normal cron. A fresh guarded preview capture is
   still required as live evidence.
-- No operator command returns live graph, privacy, or provenance assertions as
-  fixed booleans and aggregate counts without reading protected rows.
-- Production diagnostics still hard-code database and R2 usage warnings to
-  `false`, and no operator command returns fixed-shape AI provider usage.
-- No preview-only fault harness can safely and reversibly exercise delayed
-  Queue work, failed synchronization, channel expiry, database outage, R2
-  failure, or the AI budget stop.
+- The dedicated foundation candidate emits only fixed booleans and aggregate
+  counts through read-only, owner-scoped database/R2 boundaries. It needs a
+  fresh guarded observer/candidate/rollback exercise.
+- Diagnostics now measure database and R2 usage independently, and the
+  dedicated AI candidate emits fixed-shape aggregate provider usage only after
+  a same-run read-only Gateway-limit verification. It needs one harmless live
+  category request plus a fresh guarded capture and rollback.
+- The six-value preview fault harness can exercise delayed Queue work, failed
+  synchronization, channel expiry, database outage, R2 upload failure, and the
+  AI budget stop. Each candidate is isolated behind one generated selector,
+  one temporary schedule, an active observer proof, and a separate rollback;
+  the live failure matrix remains pending.
+
+The normal artifact contains only the two permanent schedules and no acceptance
+binding. After the acceptance matrix, source cleanup must be reviewed, deployed,
+and verified before any provider cleanup. The permanent cleanup contract
+retains recovery/import tooling, `backups/v1/`, key version 1, maintenance
+evidence, measured usage warnings, bounded observer behavior, and historical
+plans, setbacks, credential history, and release evidence.
 
 ## Release decision
 

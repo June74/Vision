@@ -4,7 +4,9 @@ Authenticated routes show safe foundation status and synchronized events. Changi
 
 ## `registerDiagnosticRoutes`
 
-Registers status, event list, template fallback, and category correction routes.
+Registers status, event list, template fallback, and category correction
+routes. Status validates the complete candidate selector and AI attestation,
+but applies an overlay only for one of the six fault selectors.
 
 ## `createProductionDiagnosticDependencies`
 

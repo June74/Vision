@@ -4,10 +4,25 @@ import {
   AI_GATEWAY_WINDOW_SECONDS,
   classifyAiGatewayBudgetError,
   configureAiGatewayBudget,
+  parseAiGatewayBudgetCommand,
   verifyAiGatewayBudget,
 } from "../../../scripts/configure-ai-gateway-budget";
 
 describe("preview AI Gateway budget configuration", () => {
+  it("selects the read-only verifier only through one exact command flag", () => {
+    expect(parseAiGatewayBudgetCommand([])).toBe("configure");
+    expect(parseAiGatewayBudgetCommand(["--verify-only"])).toBe("verify");
+    for (const invalid of [
+      ["--verify"],
+      ["--verify-only", "--verify-only"],
+      ["--configure"],
+    ]) {
+      expect(() => parseAiGatewayBudgetCommand(invalid)).toThrow(
+        "AI Gateway command is invalid.",
+      );
+    }
+  });
+
   it("verifies the exact rule with list and detail reads only", async () => {
     const fetchImplementation = vi
       .fn<typeof fetch>()

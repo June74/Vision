@@ -1,5 +1,11 @@
 # `scripts/configure-ai-gateway-budget.ts`
 
+## `parseAiGatewayBudgetCommand`
+
+Returns `configure` for an empty argument list and `verify` for the single
+exact `--verify-only` argument. Repeats, aliases, and every other argument fail
+before provider access.
+
 ## `verifyAiGatewayBudget`
 Uses only list and detail reads for the exact enabled global rule.
 

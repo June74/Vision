@@ -1,4 +1,5 @@
-import { rm } from "node:fs/promises";
+import { readFile, readdir, rm } from "node:fs/promises";
+import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { scanRelease } from "../../scripts/scan-release";
 import {
@@ -14,6 +15,25 @@ afterEach(async () => {
 });
 
 describe("Phase B Google and route write surface", () => {
+  it("keeps acceptance control and Google event writes off every public route", async () => {
+    const apiRoot = resolve(process.cwd(), "src", "server", "api");
+    const apiFiles = (await readdir(apiRoot, {
+      recursive: true,
+      withFileTypes: true,
+    }))
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
+      .map((entry) => resolve(entry.parentPath, entry.name));
+    const sources = await Promise.all([
+      ...apiFiles.map((file) => readFile(file, "utf8")),
+      readFile(resolve(process.cwd(), "src", "worker.ts"), "utf8"),
+    ]);
+    const publicSurface = sources.join("\n");
+
+    expect(publicSurface).not.toMatch(
+      /["'`]\/api\/(?:operator|acceptance)(?:\/|["'`])/u,
+    );
+  });
+
   it("accepts only the approved read/setup calls and Vision-only category route", async () => {
     const root = await createCleanReleaseFixture();
     roots.push(root);

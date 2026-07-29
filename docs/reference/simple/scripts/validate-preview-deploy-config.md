@@ -9,8 +9,41 @@ key that was accidentally written into ordinary deployment variables.
 
 ## `validatePreviewDeployConfig`
 
-Checks the parsed generated file for the exact preview environment, variables,
-private bucket, Queue behavior, and schedules.
+Checks the parsed normal file for the exact preview environment, variables,
+private bucket, Queue behavior, and two normal schedules.
+
+## `validatePreviewAcceptanceDeployConfig`
+
+Checks a generated candidate for exactly one expected selector, the one-minute
+schedule, and the AI-only attestation.
+
+## `validate`
+
+Applies the shared preview resources and exact normal-or-candidate mode.
+
+## `exactStringRecord`
+
+Rejects missing, extra, inherited, accessor, symbol, or changed variables.
+
+## `exactStringArray`
+
+Requires schedule strings in the exact approved order.
+
+## `validBucket`
+
+Requires only the fixed private preview backup bucket.
+
+## `validQueue`
+
+Requires the one exact Queue producer and bounded consumer.
+
+## `exactOwnRecord`
+
+Checks simple binding records without invoking accessors.
+
+## `isPlainDataObject`
+
+Rejects arrays, null values, and objects with a custom prototype.
 
 ## `main`
 

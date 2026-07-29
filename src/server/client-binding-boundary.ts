@@ -1,5 +1,5 @@
 /** Defines the authoritative client-safe and client-forbidden Vision binding-name inventory. */
-import { TEMPORARY_PREVIEW_FAULT_SCENARIOS } from "../domain/operations/temporary-preview-fault";
+import { TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS } from "../domain/operations/temporary-preview-fault";
 
 /** Runtime binding names that must never appear in a built client asset. */
 export const RUNTIME_CLIENT_FORBIDDEN_BINDING_NAMES = [
@@ -12,6 +12,7 @@ export const RUNTIME_CLIENT_FORBIDDEN_BINDING_NAMES = [
   "GOOGLE_CLIENT_SECRET",
   "KEY_ENCRYPTION_KEY",
   "OPENAI_API_KEY",
+  "PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED",
   "PREVIEW_ACCEPTANCE_SCENARIO",
   "PREVIEW_RESTORE_DATABASE_URL",
   "PREVIEW_RESTORE_TARGET_ID",
@@ -21,7 +22,7 @@ export const RUNTIME_CLIENT_FORBIDDEN_BINDING_NAMES = [
 
 /** Temporary server-only activation values that must not enter a built client asset. */
 export const CLIENT_FORBIDDEN_RUNTIME_VALUES =
-  TEMPORARY_PREVIEW_FAULT_SCENARIOS;
+  TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS;
 
 /** Runtime binding names whose names are not themselves sensitive client material. */
 export const CLIENT_SAFE_RUNTIME_BINDING_NAMES = [

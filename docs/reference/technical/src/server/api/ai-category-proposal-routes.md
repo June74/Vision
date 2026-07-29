@@ -5,6 +5,10 @@ This module exposes one authenticated AI category-proposal boundary. It validate
 ## `registerAiCategoryProposalRoute`
 
 Registers `POST /api/ai/category-proposals` before the generic API fallback. Only a validated proposal is returned; accounting and provider metadata remain internal.
+The route admits the complete generated selector and AI-attestation pair, then
+narrows back to the frozen six-fault tuple. Therefore the dedicated AI usage
+evidence candidate cannot alter or bypass the ordinary proposal path;
+`ai_stopped` remains the only selector that forces the synthetic hard stop.
 
 ## `createProductionAiCategoryProposalDependencies`
 

@@ -1,5 +1,10 @@
 # configure-ai-gateway-budget
 
+## `parseAiGatewayBudgetCommand`
+
+Chooses the existing configure operation when no flag is supplied and the
+read-only verification operation only for the exact `--verify-only` flag.
+
 ## `verifyAiGatewayBudget`
 Reads and verifies the approved rule without changing it.
 

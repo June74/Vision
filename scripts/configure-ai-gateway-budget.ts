@@ -260,13 +260,32 @@ export async function verifyAiGatewayBudget(
   return createBudgetEvidence();
 }
 
+/** Selects mutation or read-only verification through one exact CLI shape. */
+export function parseAiGatewayBudgetCommand(
+  arguments_: readonly string[],
+): "configure" | "verify" {
+  if (arguments_.length === 0) return "configure";
+  if (
+    arguments_.length === 1 &&
+    arguments_[0] === "--verify-only"
+  ) {
+    return "verify";
+  }
+  throw new Error("AI Gateway command is invalid.");
+}
+
 /** Executes the preview operator action while emitting only allowlisted evidence. */
 async function main(): Promise<void> {
   try {
-    const evidence = await configureAiGatewayBudget({
+    const command = parseAiGatewayBudgetCommand(process.argv.slice(2));
+    const credentials = {
       accountId: process.env.CLOUDFLARE_ACCOUNT_ID ?? "",
       apiToken: process.env.CLOUDFLARE_API_TOKEN ?? "",
-    });
+    };
+    const evidence =
+      command === "verify"
+        ? await verifyAiGatewayBudget(credentials)
+        : await configureAiGatewayBudget(credentials);
     process.stdout.write(`${JSON.stringify(evidence)}\n`);
   } catch (error) {
     const category = classifyAiGatewayBudgetError(error);

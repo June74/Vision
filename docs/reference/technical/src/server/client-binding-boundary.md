@@ -13,3 +13,9 @@ portion preserves the effective client denylist while keeping the runtime
 partition exact. Worker-bundle scanning checks protected values but deliberately
 does not apply this name inventory, because server code must be able to
 reference those binding names.
+
+`PREVIEW_ACCEPTANCE_SCENARIO` and
+`PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED` are also runtime
+client-forbidden. `CLIENT_FORBIDDEN_RUNTIME_VALUES` imports the complete frozen
+eight-selector candidate vocabulary, so the dedicated foundation and AI
+selectors cannot enter a built browser asset either.

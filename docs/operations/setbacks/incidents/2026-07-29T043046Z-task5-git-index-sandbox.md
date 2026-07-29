@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T04:30:46.4130206Z
-- **Last observed:** 2026-07-29T04:30:46.4130206Z
-- **Phase/task:** Phase B acceptance instrumentation Task 5 review fixes
+- **Last observed:** 2026-07-29T17:05:31Z
+- **Phase/task:** Phase B acceptance instrumentation Task 6 final staging
 - **Environment:** Managed local sandbox and linked Git worktree
 - **Version/commit:** Uncommitted review fixes based on `1880cf9`
 
@@ -40,3 +40,7 @@ remain intact.
 
 The approved retry staged the exact Task 5 source, tests, references, report,
 and setback records. The staged inventory was confirmed before commit.
+
+On 2026-07-29T17:05:31Z the same linked-worktree metadata boundary recurred
+during scoped Task 6 staging. No path was staged by the failed attempt; the
+exact scoped command is retried with repository-metadata permission.

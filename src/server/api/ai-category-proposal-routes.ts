@@ -7,7 +7,12 @@ import { createAiUsageRepository } from "../../data/repositories/ai-usage-reposi
 import { createEventRepository } from "../../data/repositories/event-repository";
 import type { EncryptedSessionRepository } from "../../data/repositories/session-repository";
 import { DrizzleWrappedDataKeyStore } from "../../data/repositories/token-repository";
-import { parseTemporaryPreviewFaultScenario } from "../../domain/operations/temporary-preview-fault";
+import {
+  TEMPORARY_PREVIEW_FAULT_SCENARIOS,
+  parseTemporaryPreviewAcceptanceAiGatewayAttestation,
+  parseTemporaryPreviewAcceptanceSelector,
+  type TemporaryPreviewFaultScenario,
+} from "../../domain/operations/temporary-preview-fault";
 import {
   BudgetedAiProvider,
   type BudgetedCategoryProposalFactoryRequest,
@@ -107,7 +112,13 @@ export function registerAiCategoryProposalRoute(
 
     let scenario;
     try {
-      scenario = parseTemporaryPreviewFaultScenario(context.env);
+      const selector = parseTemporaryPreviewAcceptanceSelector(context.env);
+      parseTemporaryPreviewAcceptanceAiGatewayAttestation(context.env);
+      scenario = TEMPORARY_PREVIEW_FAULT_SCENARIOS.includes(
+        selector as TemporaryPreviewFaultScenario,
+      )
+        ? (selector as TemporaryPreviewFaultScenario)
+        : undefined;
     } catch {
       throw aiCategoryUnavailable();
     }

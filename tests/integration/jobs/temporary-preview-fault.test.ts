@@ -182,6 +182,110 @@ describe("temporary preview fault evidence", () => {
 });
 
 describe("temporary preview fault scheduled entry", () => {
+  it("dispatches the dedicated foundation candidate without entering any fault or AI boundary", async () => {
+    const { dependencies, writeTemporaryFaultEvidence } =
+      scheduledDependencies();
+
+    await expect(
+      scheduledWithDependencies(
+        CONTROLLER,
+        {
+          VISION_ENV: "preview",
+          PREVIEW_ACCEPTANCE_SCENARIO: "foundation_probe",
+        } as Env,
+        {} as ExecutionContext,
+        dependencies,
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(dependencies.foundationProbe).toHaveBeenCalledExactlyOnceWith(NOW);
+    expect(dependencies.aiUsageEvidence).not.toHaveBeenCalled();
+    expect(dependencies.temporaryFaultR2Upload).not.toHaveBeenCalled();
+    expect(writeTemporaryFaultEvidence).not.toHaveBeenCalled();
+    expect(dependencies.maintenance).not.toHaveBeenCalled();
+    expect(dependencies.recovery).not.toHaveBeenCalled();
+    expect(dependencies.temporaryRoleProbe).not.toHaveBeenCalled();
+  });
+
+  it("dispatches the dedicated attested AI candidate without entering any fault or foundation boundary", async () => {
+    const { dependencies, writeTemporaryFaultEvidence } =
+      scheduledDependencies();
+
+    await expect(
+      scheduledWithDependencies(
+        CONTROLLER,
+        {
+          VISION_ENV: "preview",
+          PREVIEW_ACCEPTANCE_SCENARIO: "ai_usage",
+          PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true",
+        } as Env,
+        {} as ExecutionContext,
+        dependencies,
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(dependencies.aiUsageEvidence).toHaveBeenCalledExactlyOnceWith(NOW);
+    expect(dependencies.foundationProbe).not.toHaveBeenCalled();
+    expect(dependencies.temporaryFaultR2Upload).not.toHaveBeenCalled();
+    expect(writeTemporaryFaultEvidence).not.toHaveBeenCalled();
+    expect(dependencies.maintenance).not.toHaveBeenCalled();
+    expect(dependencies.recovery).not.toHaveBeenCalled();
+    expect(dependencies.temporaryRoleProbe).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      "AI evidence without attestation",
+      {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "ai_usage",
+      },
+    ],
+    [
+      "AI evidence with a non-string attestation",
+      {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "ai_usage",
+        PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: true,
+      },
+    ],
+    [
+      "foundation with an AI attestation",
+      {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "foundation_probe",
+        PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true",
+      },
+    ],
+    [
+      "fault with an AI attestation",
+      {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "ai_stopped",
+        PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true",
+      },
+    ],
+  ])(
+    "rejects %s before any candidate boundary",
+    async (_label, environment) => {
+      const { dependencies, writeTemporaryFaultEvidence } =
+        scheduledDependencies();
+
+      await expect(
+        scheduledWithDependencies(
+          CONTROLLER,
+          environment as Env,
+          {} as ExecutionContext,
+          dependencies,
+        ),
+      ).rejects.toThrow(/temporary preview .* is invalid/iu);
+
+      expect(writeTemporaryFaultEvidence).not.toHaveBeenCalled();
+      expect(dependencies.temporaryFaultR2Upload).not.toHaveBeenCalled();
+      expectNoUnrelatedCandidateCalls(dependencies);
+    },
+  );
+
   it.each([
     "queue_delayed",
     "job_failed",
@@ -270,7 +374,9 @@ describe("temporary preview fault scheduled entry", () => {
           {} as ExecutionContext,
           dependencies,
         ),
-      ).rejects.toThrow(/temporary preview (?:candidate|fault scenario) is invalid/iu);
+      ).rejects.toThrow(
+        /temporary preview (?:acceptance selector|candidate|fault scenario) is invalid/iu,
+      );
 
       expect(writeTemporaryFaultEvidence).not.toHaveBeenCalled();
       expect(dependencies.temporaryFaultR2Upload).not.toHaveBeenCalled();

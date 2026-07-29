@@ -13,8 +13,11 @@ import type { EncryptedSessionRepository } from "../../data/repositories/session
 import { DrizzleWrappedDataKeyStore } from "../../data/repositories/token-repository";
 import { calculateFoundationHealth } from "../../domain/operations/health";
 import {
+  TEMPORARY_PREVIEW_FAULT_SCENARIOS,
   applyTemporaryPreviewFaultOverlay,
-  parseTemporaryPreviewFaultScenario,
+  parseTemporaryPreviewAcceptanceAiGatewayAttestation,
+  parseTemporaryPreviewAcceptanceSelector,
+  type TemporaryPreviewFaultScenario,
 } from "../../domain/operations/temporary-preview-fault";
 import { verifyCsrfToken } from "../auth/csrf";
 import { createProductionAuthDependencies } from "../auth/oauth-routes";
@@ -65,7 +68,13 @@ export function registerDiagnosticRoutes(
       : () => dependenciesOrResolver;
 
   app.get("/api/diagnostics/status", async (context) => {
-    const scenario = parseTemporaryPreviewFaultScenario(context.env);
+    const selector = parseTemporaryPreviewAcceptanceSelector(context.env);
+    parseTemporaryPreviewAcceptanceAiGatewayAttestation(context.env);
+    const scenario = TEMPORARY_PREVIEW_FAULT_SCENARIOS.includes(
+      selector as TemporaryPreviewFaultScenario,
+    )
+      ? (selector as TemporaryPreviewFaultScenario)
+      : undefined;
     const dependencies = await resolveRouteDependencies(
       resolveDependencies,
       context,

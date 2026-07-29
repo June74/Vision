@@ -4,15 +4,50 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: Git ref to build and deploy
+        description: Git ref to review, build, observe, or deploy
         required: false
         default: main
         type: string
-      safe_tail:
-        description: Capture one privacy-safe scheduled outcome without deployment
+      acceptance_operation:
+        description: Closed preview acceptance operation
+        required: true
+        default: none
+        type: choice
+        options:
+          - none
+          - observe
+          - deploy_foundation
+          - deploy_ai
+          - deploy_fault
+          - rollback
+      fault_scenario:
+        description: Closed fault selector used only with deploy_fault
+        required: true
+        default: none
+        type: choice
+        options:
+          - none
+          - queue_delayed
+          - job_failed
+          - channel_expired
+          - database_unavailable
+          - r2_upload_failed
+          - ai_stopped
+      observer_evidence:
+        description: Privacy-safe terminal type for the non-mutating observer
+        required: true
+        default: calendar_maintenance
+        type: choice
+        options:
+          - calendar_maintenance
+          - foundation_probe
+          - ai_usage
+          - preview_fault
+      observer_run_id:
+        description: Active observe-operation run required for candidate deployment
         required: false
-        default: false
-        type: boolean
+        default: ""
+        type: string
       configure_ai_budget:
         description: Apply and verify the approved preview AI Gateway budget without deployment
         required: false
@@ -20,16 +55,42 @@ on:
         type: boolean
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
-  group: ${{ inputs.safe_tail == true && inputs.configure_ai_budget == false && 'vision-preview-observer' || 'vision-preview-mutation' }}
+  group: ${{ inputs.acceptance_operation == 'observe' && inputs.configure_ai_budget == false && 'vision-preview-observer' || 'vision-preview-mutation' }}
   cancel-in-progress: true
 
 jobs:
+  selection:
+    name: Admit one preview operation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify exact acceptance operation
+        shell: bash
+        run: |
+          if [[ "${{ inputs.configure_ai_budget }}" == "true" && "${{ inputs.acceptance_operation }}" != "none" ]]; then
+            exit 1
+          fi
+          pnpm exec tsx scripts/prepare-preview-acceptance-deploy-config.ts --verify-workflow-inputs \
+            --operation "${{ inputs.acceptance_operation }}" \
+            --fault-scenario "${{ inputs.fault_scenario }}"
+
   verify:
     name: Verify preview candidate
-    if: ${{ inputs.safe_tail == false && inputs.configure_ai_budget == false }}
+    if: ${{ inputs.acceptance_operation != 'observe' && inputs.configure_ai_budget == false }}
+    needs: selection
     runs-on: ubuntu-latest
     outputs:
       verified_sha: ${{ steps.verified-ref.outputs.sha }}
@@ -54,9 +115,10 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - name: Run browser smoke coverage
         run: pnpm test:e2e
+
   deploy:
-    name: Deploy preview
-    if: ${{ inputs.safe_tail == false && inputs.configure_ai_budget == false }}
+    name: Deploy normal preview
+    if: ${{ inputs.acceptance_operation == 'none' && inputs.configure_ai_budget == false }}
     needs: verify
     runs-on: ubuntu-latest
     environment: preview
@@ -103,8 +165,9 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
 
   tail:
-    name: Capture one safe scheduled outcome
-    if: ${{ inputs.safe_tail == true && inputs.configure_ai_budget == false }}
+    name: Capture ${{ inputs.observer_evidence }} safe scheduled outcome
+    if: ${{ inputs.acceptance_operation == 'observe' && inputs.configure_ai_budget == false }}
+    needs: selection
     runs-on: ubuntu-latest
     environment: preview
     timeout-minutes: 18
@@ -119,19 +182,194 @@ jobs:
           cache: pnpm
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
-      - name: Print only allowlisted scheduled evidence
+      - name: Print only allowlisted acceptance evidence
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
+          OBSERVER_EVIDENCE: ${{ inputs.observer_evidence }}
+        run: |
+          case "$OBSERVER_EVIDENCE" in
+            calendar_maintenance) evidence_flag="--calendar-maintenance-only" ;;
+            foundation_probe) evidence_flag="--foundation-probe-only" ;;
+            ai_usage) evidence_flag="--ai-usage-only" ;;
+            preview_fault) evidence_flag="--preview-fault-only" ;;
+            *) exit 1 ;;
+          esac
+          set +o pipefail
+          timeout 16m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |
+            pnpm exec tsx scripts/print-safe-tail.ts "$evidence_flag"
+
+  deploy_acceptance_candidate:
+    name: Deploy one generated acceptance candidate
+    if: ${{ inputs.acceptance_operation == 'deploy_foundation' || inputs.acceptance_operation == 'deploy_ai' || inputs.acceptance_operation == 'deploy_fault' }}
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: preview
+    steps:
+      - name: Check acceptance deployment authorization
+        id: acceptance-token
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
         run: |
-          set +o pipefail
-          timeout 16m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |
-            pnpm exec tsx scripts/print-safe-tail.ts --calendar-maintenance-only
+          if [[ -z "$CLOUDFLARE_API_TOKEN" || -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then
+            exit 1
+          fi
+          echo "deploy=true" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.verify.outputs.verified_sha }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify active privacy-safe observer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACCEPTANCE_OPERATION: ${{ inputs.acceptance_operation }}
+          OBSERVER_RUN_ID: ${{ inputs.observer_run_id }}
+          VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}
+        run: |
+          if ! [[ "$OBSERVER_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]; then
+            exit 1
+          fi
+          case "$ACCEPTANCE_OPERATION" in
+            deploy_foundation) expected_observer_evidence="foundation_probe" ;;
+            deploy_ai) expected_observer_evidence="ai_usage" ;;
+            deploy_fault) expected_observer_evidence="preview_fault" ;;
+            *) exit 1 ;;
+          esac
+          expected_name="Capture $expected_observer_evidence safe scheduled outcome"
+          run_file="$(mktemp)"
+          jobs_file="$(mktemp)"
+          trap 'rm -f "$run_file" "$jobs_file"' EXIT
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$OBSERVER_RUN_ID" > "$run_file"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$OBSERVER_RUN_ID/jobs" > "$jobs_file"
+          jq -e --arg sha "$VERIFIED_SHA" '
+            .event == "workflow_dispatch" and
+            .status == "in_progress" and
+            .conclusion == null and
+            .head_sha == $sha and
+            (.path | startswith(".github/workflows/preview.yml"))
+          ' "$run_file" > /dev/null
+          jq -e --arg expected_name "$expected_name" '
+            any(.jobs[];
+              .name == $expected_name and
+              .status == "in_progress"
+            )
+          ' "$jobs_file" > /dev/null
+      - name: Build normal preview artifact
+        run: pnpm build
+        env:
+          CLOUDFLARE_ENV: preview
+      - name: Verify immutable normal artifact
+        run: pnpm deploy:check:preview
+      - name: Verify the existing AI Gateway limit
+        id: gateway-attestation
+        if: ${{ inputs.acceptance_operation == 'deploy_ai' || (inputs.acceptance_operation == 'deploy_fault' && inputs.fault_scenario == 'ai_stopped') }}
+        run: |
+          pnpm gateway:verify:preview
+          echo "attested=true" >> "$GITHUB_OUTPUT"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
+      - name: Build generated acceptance candidate
+        shell: bash
+        env:
+          AI_GATEWAY_LIMIT_ATTESTED: ${{ inputs.acceptance_operation == 'deploy_ai' && steps.gateway-attestation.outputs.attested || '' }}
+        run: |
+          pnpm exec tsx scripts/prepare-preview-acceptance-deploy-config.ts \
+            --operation "${{ inputs.acceptance_operation }}" \
+            --fault-scenario "${{ inputs.fault_scenario }}" \
+            --input dist/vision/wrangler.json \
+            --output dist/vision/wrangler.acceptance.json \
+            --ai-gateway-limit-attested "$AI_GATEWAY_LIMIT_ATTESTED"
+      - name: Deploy generated acceptance candidate
+        if: ${{ steps.acceptance-token.outputs.deploy == 'true' }}
+        run: pnpm exec wrangler deploy --config dist/vision/wrangler.acceptance.json --name vision-preview
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
+
+  rollback:
+    name: Restore immutable normal preview
+    if: ${{ inputs.acceptance_operation == 'rollback' && inputs.configure_ai_budget == false }}
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: preview
+    steps:
+      - name: Check rollback authorization
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
+        run: |
+          if [[ -z "$CLOUDFLARE_API_TOKEN" || -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then
+            exit 1
+          fi
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.verify.outputs.verified_sha }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build immutable normal artifact
+        run: pnpm build
+        env:
+          CLOUDFLARE_ENV: preview
+      - name: Validate immutable normal artifact
+        run: pnpm deploy:check:preview
+      - name: Deploy immutable normal preview Worker
+        run: pnpm exec wrangler deploy --config dist/vision/wrangler.json --name vision-preview
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
+      - name: Verify normal runtime and temporary-surface absence
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
+        run: |
+          health_file="$(mktemp)"
+          schedules_file="$(mktemp)"
+          settings_file="$(mktemp)"
+          trap 'rm -f "$health_file" "$schedules_file" "$settings_file"' EXIT
+          curl --fail --silent --show-error \
+            "https://vision-preview.june74.workers.dev/api/health" > "$health_file"
+          jq -e '.status == "ok"' "$health_file" > /dev/null
+          curl --fail --silent --show-error \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/vision-preview/schedules" > "$schedules_file"
+          jq -e '
+            .success == true and
+            ((.result | map(.cron) | sort) == ["*/15 * * * *", "5 6 * * *"]) and
+            (all(.result[]; .cron != "* * * * *"))
+          ' "$schedules_file" > /dev/null
+          curl --fail --silent --show-error \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/vision-preview/settings" > "$settings_file"
+          jq -e '
+            .success == true and
+            (all((.result.bindings // .result.settings.bindings // [])[];
+              (.name | startswith("PREVIEW_ACCEPTANCE_") | not)
+            ))
+          ' "$settings_file" > /dev/null
+          echo "Provider cleanup is forbidden until this rollback verification succeeds." >> "$GITHUB_STEP_SUMMARY"
 
   configure_gateway:
     name: Configure approved AI Gateway budget
-    if: ${{ inputs.configure_ai_budget == true && inputs.safe_tail == false }}
+    if: ${{ inputs.configure_ai_budget == true && inputs.acceptance_operation == 'none' && inputs.fault_scenario == 'none' }}
+    needs: selection
     runs-on: ubuntu-latest
     environment: preview
     steps:

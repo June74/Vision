@@ -5,6 +5,10 @@ This module registers authenticated no-store HTTP surfaces for foundation status
 ## `registerDiagnosticRoutes`
 
 Registers `GET /api/diagnostics/status`, `GET /api/calendar/events`, `GET /api/diagnostics/templates`, and `PATCH /api/calendar/events/:id/category` before the generic API fallback. The PATCH route authenticates and verifies CSRF before body parsing.
+Status admits the complete generated selector and AI-attestation pair, then
+applies a synthetic health overlay only when the selector belongs to the
+frozen six-fault tuple. Dedicated foundation and AI evidence candidates retain
+normal diagnostics.
 
 ## `createProductionDiagnosticDependencies`
 
