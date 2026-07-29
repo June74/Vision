@@ -2,6 +2,15 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
+const CHECKOUT_ACTION =
+  "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0";
+const SETUP_NODE_ACTION =
+  "actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0";
+const UPLOAD_ARTIFACT_ACTION =
+  "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2";
+const PNPM_SETUP_ACTION =
+  "pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0";
+
 /** Reads a committed workflow from the repository root. */
 async function readWorkflow(name: string): Promise<string> {
   return readFile(resolve(process.cwd(), ".github", "workflows", name), "utf8");
@@ -36,9 +45,15 @@ function readWorkflowJob(workflow: string, name: string): string {
 }
 
 /** Reads the package metadata without adding a YAML parser dependency to policy tests. */
-async function readPackage(): Promise<{ packageManager?: string }> {
+async function readPackage(): Promise<{
+  packageManager?: string;
+  scripts?: Record<string, string>;
+}> {
   const contents = await readFile(resolve(process.cwd(), "package.json"), "utf8");
-  return JSON.parse(contents) as { packageManager?: string };
+  return JSON.parse(contents) as {
+    packageManager?: string;
+    scripts?: Record<string, string>;
+  };
 }
 
 /** Reads a committed non-secret operations document. */
@@ -145,12 +160,100 @@ describe("delivery workflow policy", () => {
     expect(summaryStep).toContain(
       "dist/release-summary/security-scan.txt",
     );
-    expect(uploadStep).toContain("uses: actions/upload-artifact@v4");
+    expect(uploadStep).toContain(`uses: ${UPLOAD_ARTIFACT_ACTION}`);
     expect(uploadStep).toContain("if: ${{ always() }}");
     expect(uploadStep).toContain(
       "path: dist/release-summary/security-scan.txt",
     );
     expect(uploadStep).not.toContain("dist/release-evidence");
+  });
+
+  it("pins every high-trust third-party action to the reviewed official-ref SHA", async () => {
+    const [workflows, pinRecord] = await Promise.all([
+      Promise.all(["ci.yml", "preview.yml", "production.yml"].map(readWorkflow)),
+      readOperationsDocument("github-action-pins.md"),
+    ]);
+    const allowed = new Set([
+      CHECKOUT_ACTION,
+      SETUP_NODE_ACTION,
+      UPLOAD_ARTIFACT_ACTION,
+      PNPM_SETUP_ACTION,
+    ]);
+    const highTrustAction =
+      /uses: ((?:actions\/(?:checkout|setup-node|upload-artifact)|pnpm\/action-setup)@[^\r\n]+)/gu;
+
+    const references = workflows.flatMap((workflow) =>
+      [...workflow.matchAll(highTrustAction)].map((match) => match[1]!.trim()),
+    );
+    expect(references.length).toBeGreaterThan(0);
+    expect(references.every((reference) => allowed.has(reference))).toBe(true);
+    expect(references.some((reference) => reference === CHECKOUT_ACTION)).toBe(
+      true,
+    );
+    expect(references.some((reference) => reference === SETUP_NODE_ACTION)).toBe(
+      true,
+    );
+    expect(references.some((reference) => reference === PNPM_SETUP_ACTION)).toBe(
+      true,
+    );
+    expect(
+      references.some((reference) => reference === UPLOAD_ARTIFACT_ACTION),
+    ).toBe(true);
+    for (const expectedRecord of [
+      "actions/checkout | v5.1.0 | fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09",
+      "actions/setup-node | v5.0.0 | a0853c24544627f65ddf259abe73b1d18a591444",
+      "actions/upload-artifact | v4.6.2 | ea165f8d65b6e75b540449e92b4886f43607fa02",
+      "pnpm/action-setup | v4.3.0 | b906affcce14559ad1aafd4ab0e942779e9f58b1",
+    ]) {
+      expect(pinRecord).toContain(expectedRecord);
+    }
+    expect(pinRecord).toContain("official repository tag refs");
+    expect(pinRecord).toContain("2026-07-29");
+    expect(pinRecord).not.toMatch(/https?:\/\//u);
+  });
+
+  it("builds, validates, dry-runs, and deploys one explicit production artifact on the fresh deploy runner", async () => {
+    const [production, packageMetadata] = await Promise.all([
+      readWorkflow("production.yml"),
+      readPackage(),
+    ]);
+    const deploy = readWorkflowJob(production, "deploy");
+    const build = readWorkflowStep(
+      production,
+      "Build explicit production artifact",
+    );
+    const validate = readWorkflowStep(
+      production,
+      "Validate explicit production artifact",
+    );
+    const dryRun = readWorkflowStep(
+      production,
+      "Dry-run explicit production artifact",
+    );
+    const release = readWorkflowStep(production, "Deploy release Worker");
+    const names = readWorkflowStepNames(deploy);
+
+    expect(deploy).toContain(`uses: ${CHECKOUT_ACTION}`);
+    expect(deploy).toContain("pnpm install --frozen-lockfile");
+    expect(build).toContain("run: pnpm build");
+    expect(build).toContain("CLOUDFLARE_ENV: production");
+    expect(validate).toContain("pnpm deploy:check:production");
+    expect(dryRun).toContain("wrangler deploy --dry-run");
+    expect(dryRun).toContain("--config dist/vision/wrangler.json");
+    expect(release).toContain("--config dist/vision/wrangler.json");
+    expect(release).not.toContain("--env production");
+    expect(packageMetadata.scripts?.["deploy:check:production"]).toBe(
+      "tsx scripts/validate-production-deploy-config.ts",
+    );
+    expect(names.indexOf("Build explicit production artifact")).toBeLessThan(
+      names.indexOf("Validate explicit production artifact"),
+    );
+    expect(names.indexOf("Validate explicit production artifact")).toBeLessThan(
+      names.indexOf("Dry-run explicit production artifact"),
+    );
+    expect(names.indexOf("Dry-run explicit production artifact")).toBeLessThan(
+      names.indexOf("Deploy release Worker"),
+    );
   });
 });
 
@@ -265,7 +368,7 @@ describe("preview live diagnostics policy", () => {
     expect(preview).not.toContain("group: vision-preview\n");
     expect(tailJob).toContain("timeout-minutes: 18");
     expect(tailJob).toContain(
-      "uses: actions/checkout@v5\n" +
+      `uses: ${CHECKOUT_ACTION}\n` +
         "        with:\n" +
         "          ref: ${{ github.sha }}",
     );
@@ -313,7 +416,7 @@ describe("preview acceptance candidate workflow", () => {
     expect(preview).not.toContain("      ref:\n");
     expect(preview).not.toContain("inputs.ref");
     expect(verify).toContain("ref: ${{ github.sha }}");
-    expect(verify.indexOf("actions/checkout@v5")).toBeLessThan(
+    expect(verify.indexOf(CHECKOUT_ACTION)).toBeLessThan(
       verify.indexOf("name: Resolve verified commit"),
     );
     expect(verify).toContain('echo "sha=$(git rev-parse HEAD)"');
@@ -354,6 +457,9 @@ describe("preview acceptance candidate workflow", () => {
       "r2_upload_failed",
       "ai_stopped",
     ]);
+    expect(
+      readWorkflowChoiceOptions(preview, "authenticated_reads_gate"),
+    ).toEqual(["not_verified", "verified"]);
     expect(preview).toContain(
       "pnpm exec tsx scripts/prepare-preview-acceptance-deploy-config.ts --verify-workflow-inputs",
     );
@@ -362,6 +468,9 @@ describe("preview acceptance candidate workflow", () => {
     );
     expect(preview).toContain(
       "--fault-scenario \"${{ inputs.fault_scenario }}\"",
+    );
+    expect(preview).toContain(
+      "--authenticated-reads-gate \"${{ inputs.authenticated_reads_gate }}\"",
     );
   });
 
@@ -430,8 +539,16 @@ describe("preview acceptance candidate workflow", () => {
     expect(proofStep).toContain(
       'deploy_fault) expected_observer_evidence="preview_fault"',
     );
-    expect(proofStep).toContain("--arg expected_name");
-    expect(proofStep).toContain(".name == $expected_name");
+    expect(proofStep).toContain(
+      "scripts/validate-preview-observer-state.ts",
+    );
+    expect(proofStep).toContain("--run-file \"$run_file\"");
+    expect(proofStep).toContain("--jobs-file \"$jobs_file\"");
+    expect(proofStep).toContain("--sha \"$VERIFIED_SHA\"");
+    expect(proofStep).toContain(
+      "--evidence \"$expected_observer_evidence\"",
+    );
+    expect(proofStep).not.toContain("any(.jobs[]");
     expect(readWorkflowJob(preview, "tail")).toContain(
       "name: Capture ${{ inputs.observer_evidence }} safe scheduled outcome",
     );
@@ -472,8 +589,16 @@ describe("preview acceptance candidate workflow", () => {
       "VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}",
     );
     expect(finalProof).toContain(".head_sha == $sha");
-    expect(finalProof).toContain(".status == \"in_progress\"");
-    expect(finalProof).toContain(".name == $expected_name");
+    expect(finalProof).toContain(
+      "scripts/validate-preview-observer-state.ts",
+    );
+    expect(finalProof).toContain("--run-file \"$run_file\"");
+    expect(finalProof).toContain("--jobs-file \"$jobs_file\"");
+    expect(finalProof).toContain("--sha \"$VERIFIED_SHA\"");
+    expect(finalProof).toContain(
+      "--evidence \"$expected_observer_evidence\"",
+    );
+    expect(finalProof).not.toContain("any(.jobs[]");
     expect(finalProof).toContain(
       '.path == ".github/workflows/preview.yml" or',
     );
@@ -565,6 +690,91 @@ describe("preview acceptance candidate workflow", () => {
     ).toBeLessThan(candidateNames.indexOf("Build normal preview artifact"));
     expect(preview).toContain(
       "Provider cleanup is forbidden until this rollback verification succeeds.",
+    );
+  });
+
+  it("makes the privacy-safe authenticated diagnostics and calendar operator gate unskippable in candidate preflight and rollback", async () => {
+    const [preview, environments] = await Promise.all([
+      readWorkflow("preview.yml"),
+      readOperationsDocument("environments.md"),
+    ]);
+    const candidate = readWorkflowJob(preview, "deploy_acceptance_candidate");
+    const rollback = readWorkflowJob(preview, "rollback");
+    const candidateGate = readWorkflowStep(
+      preview,
+      "Require authenticated diagnostics and calendar operator gate",
+    );
+    const rollbackGate = readWorkflowStep(
+      preview,
+      "Require rollback authenticated diagnostics and calendar operator gate",
+    );
+    const candidateNames = readWorkflowStepNames(candidate);
+    const rollbackNames = readWorkflowStepNames(rollback);
+
+    for (const gate of [candidateGate, rollbackGate]) {
+      expect(gate).toContain(
+        "AUTHENTICATED_READS_GATE: ${{ inputs.authenticated_reads_gate }}",
+      );
+      expect(gate).toContain(
+        '[[ "$AUTHENTICATED_READS_GATE" == "verified" ]]',
+      );
+      expect(gate).not.toContain("secrets.");
+      expect(gate).not.toContain("curl");
+    }
+    expect(
+      candidateNames.indexOf(
+        "Require authenticated diagnostics and calendar operator gate",
+      ),
+    ).toBeLessThan(
+      candidateNames.indexOf(
+        "Verify live preview is normal before candidate deployment",
+      ),
+    );
+    expect(
+      rollbackNames.indexOf(
+        "Require rollback authenticated diagnostics and calendar operator gate",
+      ),
+    ).toBeLessThan(
+      rollbackNames.indexOf("Deploy immutable normal preview Worker"),
+    );
+    expect(environments).toContain(
+      "authenticated diagnostics and calendar reads",
+    );
+    expect(environments).toContain(
+      "does not create or require a new authentication secret",
+    );
+  });
+
+  it("checks the fail-closed daily recovery exclusion window before preparation and immediately before deploy", async () => {
+    const preview = await readWorkflow("preview.yml");
+    const candidate = readWorkflowJob(preview, "deploy_acceptance_candidate");
+    const earlyGuard = readWorkflowStep(
+      preview,
+      "Reject daily recovery overlap before candidate preparation",
+    );
+    const finalGuard = readWorkflowStep(
+      preview,
+      "Recheck daily recovery overlap immediately before deploy",
+    );
+    const names = readWorkflowStepNames(candidate);
+
+    expect(earlyGuard).toContain(
+      "scripts/validate-preview-acceptance-window.ts",
+    );
+    expect(finalGuard).toContain(
+      "scripts/validate-preview-acceptance-window.ts",
+    );
+    expect(
+      names.indexOf("Reject daily recovery overlap before candidate preparation"),
+    ).toBeLessThan(
+      names.indexOf("Verify live preview is normal before candidate deployment"),
+    );
+    expect(
+      names.indexOf("Recheck daily recovery overlap immediately before deploy"),
+    ).toBeLessThan(
+      names.indexOf(
+        "Reverify active matching observer immediately before deploy",
+      ),
     );
   });
 });

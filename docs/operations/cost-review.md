@@ -1,8 +1,8 @@
 # Phase B cost review
 
-**Status:** In progress  
-**Environment:** Preview private pilot  
-**Measured at:** 2026-07-26  
+**Status:** In progress
+**Environment:** Preview private pilot
+**Measured at:** 2026-07-26
 **Budget ceiling:** Approximately $20 per month
 
 This review uses provider dashboards only for fixed plan states and aggregate
@@ -72,6 +72,24 @@ At current OpenAI standard pricing, the routine `gpt-5.6-luna` route is listed
 at $1.00 per million input tokens, $0.10 per million cached input tokens,
 $1.25 per million cache-write tokens, and $6.00 per million output tokens. The
 application must refresh injected rates whenever the provider price changes.
+
+## AI pricing binding attestation
+
+The **AI integration owner** checks the externally provisioned values against
+the official OpenAI API model and pricing pages before every preview AI acceptance
+and before every production release. Repeat the check after a provider price
+change or any model/request-bound change.
+
+Source control records binding names and Cloudflare binding types only; it
+does not record the externally provisioned values:
+
+| Binding | Cloudflare type |
+|---|---|
+| `AI_COMPLEX_WORST_CASE_CENTS` | `secret_text` |
+| `AI_INPUT_CENTS_PER_MILLION_TOKENS` | `secret_text` |
+| `AI_OPTIONAL_WORST_CASE_CENTS` | `secret_text` |
+| `AI_OUTPUT_CENTS_PER_MILLION_TOKENS` | `secret_text` |
+| `AI_ROUTINE_WORST_CASE_CENTS` | `secret_text` |
 
 ## Provider references
 

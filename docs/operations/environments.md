@@ -74,6 +74,25 @@ pnpm.cmd deploy:check:preview
 Without `CLOUDFLARE_ENV=preview`, the default build is not the preview artifact
 that `deploy:check:preview` is intended to validate.
 
+## Authenticated read gate for preview mutation
+
+Before selecting any candidate-deploy or rollback operation, an operator uses
+the existing signed-in Vision session to complete authenticated diagnostics and calendar reads
+against the current normal preview. Confirm that the
+diagnostics view loads and that the calendar view returns the expected
+owner-scoped result without recording response bodies in workflow output.
+
+The `authenticated_reads_gate=verified` choice is a manual operator
+attestation. It does not create or require a new authentication secret, and
+the workflow does not pretend to perform browser-session reads itself. The
+closed input validator rejects candidate deployment or rollback unless this
+attestation is verified; non-mutating `none` and `observe` operations require
+`not_verified`.
+
+Temporary candidate activation is also blocked during the fail-closed UTC
+window around the normal daily recovery schedule. The workflow checks this
+once before candidate preparation and again immediately before deployment.
+
 ## External production prerequisites
 
 This repository commit does **not** configure GitHub environment protection. Before a release is permitted, repository administrators must configure the `production` environment with required reviewers, no bypass for the release path, and an approved deployment-branch policy. The typed confirmation in the workflow is an additional repository-level check, not a substitute for those external controls.

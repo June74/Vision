@@ -17,9 +17,10 @@ malformed, or unsafe.
 
 The separate `--verify-provider-state <health> <schedules> <settings>` mode
 validates sanitized live provider responses. It requires a healthy Worker,
-exactly the two normal crons in either provider order, and one explicit binding
-array with no `PREVIEW_ACCEPTANCE_` binding. Missing, null, ambiguous,
-accessor-backed, or malformed provider data fails closed.
+exactly the two normal crons in either provider order, and the authoritative
+normal binding name/type inventory exactly once. Missing, extra, duplicated,
+unknown, wrongly typed, null, ambiguous, accessor-backed, or malformed
+provider data fails closed.
 
 ## `NormalPreviewProviderState`
 
@@ -41,8 +42,8 @@ Requires one admitted selector and applies the acceptance artifact contract.
 
 Validates the live normal preview boundary independently of the generated
 artifact. It requires successful provider envelopes, `health.status=ok`, the
-exact normal cron set, and an explicit array of plain bindings with non-empty
-string names and no temporary acceptance name.
+exact normal cron set, and an explicit array that matches every expected
+binding name and type exactly once.
 
 ## `validate`
 
@@ -86,6 +87,11 @@ getters and inherited provider-controlled fields.
 Admits either the documented direct `result.bindings` array or nested
 `result.settings.bindings` array, but never both, and rejects every missing or
 malformed variant.
+
+## `matchesNormalProviderBindingContract`
+
+Builds a unique name-to-type map from the untrusted inventory, requires the
+authoritative count, and compares every required binding to its expected type.
 
 ## `main`
 

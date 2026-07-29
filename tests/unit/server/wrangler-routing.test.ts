@@ -27,6 +27,32 @@ const ACCEPTANCE_SELECTORS = [
   "foundation_probe",
   "ai_usage",
 ] as const;
+const NORMAL_PREVIEW_PROVIDER_BINDINGS = [
+  { name: "AI_COMPLEX_WORST_CASE_CENTS", type: "secret_text" },
+  { name: "AI_INPUT_CENTS_PER_MILLION_TOKENS", type: "secret_text" },
+  { name: "AI_MONTHLY_HARD_LIMIT_CENTS", type: "plain_text" },
+  { name: "AI_OPTIONAL_WORST_CASE_CENTS", type: "secret_text" },
+  { name: "AI_OUTPUT_CENTS_PER_MILLION_TOKENS", type: "secret_text" },
+  { name: "AI_ROUTINE_WORST_CASE_CENTS", type: "secret_text" },
+  { name: "BACKUP_BUCKET", type: "r2_bucket" },
+  { name: "BACKUP_ENCRYPTION_KEY", type: "secret_text" },
+  { name: "BACKUP_KEY_VERSION", type: "plain_text" },
+  { name: "CALENDAR_SYNC_QUEUE", type: "queue" },
+  { name: "DATABASE_URL", type: "secret_text" },
+  { name: "DATABASE_USAGE_WARNING_BYTES", type: "plain_text" },
+  { name: "GOOGLE_ALLOWED_EMAIL", type: "secret_text" },
+  { name: "GOOGLE_ALLOWED_SUB", type: "secret_text" },
+  { name: "GOOGLE_CLIENT_ID", type: "secret_text" },
+  { name: "GOOGLE_CLIENT_SECRET", type: "secret_text" },
+  { name: "GOOGLE_REDIRECT_URI", type: "plain_text" },
+  { name: "KEY_ENCRYPTION_KEY", type: "secret_text" },
+  { name: "OPENAI_API_KEY", type: "secret_text" },
+  { name: "OPENAI_GATEWAY_BASE_URL", type: "secret_text" },
+  { name: "R2_USAGE_WARNING_BYTES", type: "plain_text" },
+  { name: "R2_USAGE_WARNING_OBJECTS", type: "plain_text" },
+  { name: "VISION_ENV", type: "plain_text" },
+  { name: "VISION_USER_TIME_ZONE", type: "secret_text" },
+] as const;
 
 interface DeployConfig {
   targetEnvironment?: string;
@@ -108,10 +134,7 @@ function normalProviderState(): {
     settingsResponse: {
       success: true,
       result: {
-        bindings: [
-          { name: "VISION_ENV", type: "plain_text" },
-          { name: "DATABASE_URL", type: "secret_text" },
-        ],
+        bindings: structuredClone(NORMAL_PREVIEW_PROVIDER_BINDINGS),
       },
     },
   };
@@ -162,8 +185,22 @@ describe("Cloudflare asset and normal schedule routing", () => {
     expect(config.env?.preview.r2_buckets?.[0]?.bucket_name).not.toBe(
       config.env?.production.r2_buckets?.[0]?.bucket_name,
     );
+    expect(config.env?.preview.queues).toEqual(config.queues);
+    expect(config.env?.production.queues?.producers).toEqual([
+      {
+        binding: "CALENDAR_SYNC_QUEUE",
+        queue: "vision-production-calendar-sync",
+      },
+    ]);
+    expect(config.env?.production.queues?.consumers).toEqual([
+      expect.objectContaining({
+        queue: "vision-production-calendar-sync",
+        max_retries: 5,
+        max_concurrency: 1,
+      }),
+    ]);
+    expect(config.env?.production.queues).not.toEqual(config.env?.preview.queues);
     for (const environment of ["preview", "production"] as const) {
-      expect(config.env?.[environment].queues).toEqual(config.queues);
       expect(config.env?.[environment].vars?.BACKUP_KEY_VERSION).toBe("1");
       expect(config.env?.[environment].vars).toMatchObject({
         DATABASE_USAGE_WARNING_BYTES: "400000000",
@@ -198,7 +235,7 @@ describe("Cloudflare asset and normal schedule routing", () => {
     expect(previewWorkflow).not.toContain("--env preview");
     expect(previewWorkflow).not.toContain("--var ");
     expect(previewWorkflow).toContain("pnpm deploy:check:preview");
-    expect(productionWorkflow).toContain("--env production");
+    expect(productionWorkflow).not.toContain("--env production");
   });
 });
 
@@ -373,17 +410,18 @@ describe("generated preview acceptance candidate", () => {
 
 describe("preview acceptance workflow input admission", () => {
   const validSelections: ReadonlyArray<
-    readonly [string, string, string | undefined]
+    readonly [string, string, string, string | undefined]
   > = [
-    ["none", "none", undefined],
-    ["observe", "none", undefined],
-    ["deploy_foundation", "none", "foundation_probe"],
-    ["deploy_ai", "none", "ai_usage"],
-    ["rollback", "none", undefined],
+    ["none", "none", "not_verified", undefined],
+    ["observe", "none", "not_verified", undefined],
+    ["deploy_foundation", "none", "verified", "foundation_probe"],
+    ["deploy_ai", "none", "verified", "ai_usage"],
+    ["rollback", "none", "verified", undefined],
     ...FAULT_SCENARIOS.map(
-      (scenario): readonly [string, string, string] => [
+      (scenario): readonly [string, string, string, string] => [
         "deploy_fault",
         scenario,
+        "verified",
         scenario,
       ],
     ),
@@ -391,28 +429,43 @@ describe("preview acceptance workflow input admission", () => {
 
   it.each(validSelections)(
     "admits operation %s with fault choice %s",
-    (operation, faultScenario, expectedSelector) => {
+    (operation, faultScenario, authenticatedReadsGate, expectedSelector) => {
       expect(
         validatePreviewAcceptanceWorkflowInputs(
           operation,
           faultScenario,
+          authenticatedReadsGate,
         ).selector,
       ).toBe(expectedSelector);
     },
   );
 
   it.each([
-    ["unknown", "none"],
-    ["none", "job_failed"],
-    ["observe", "job_failed"],
-    ["deploy_foundation", "job_failed"],
-    ["deploy_ai", "ai_stopped"],
-    ["deploy_fault", "none"],
-    ["deploy_fault", "unknown"],
-    ["rollback", "queue_delayed"],
-  ])("rejects operation %s with fault choice %s", (operation, faultScenario) => {
+    ["unknown", "none", "not_verified"],
+    ["none", "job_failed", "not_verified"],
+    ["observe", "job_failed", "not_verified"],
+    ["deploy_foundation", "job_failed", "verified"],
+    ["deploy_ai", "ai_stopped", "verified"],
+    ["deploy_fault", "none", "verified"],
+    ["deploy_fault", "unknown", "verified"],
+    ["rollback", "queue_delayed", "verified"],
+    ["deploy_foundation", "none", "not_verified"],
+    ["deploy_ai", "none", "unknown"],
+    ["deploy_fault", "job_failed", "not_verified"],
+    ["rollback", "none", "not_verified"],
+    ["none", "none", "verified"],
+    ["observe", "none", "verified"],
+  ])("rejects operation %s with fault choice %s and gate %s", (
+    operation,
+    faultScenario,
+    authenticatedReadsGate,
+  ) => {
     expect(() =>
-      validatePreviewAcceptanceWorkflowInputs(operation, faultScenario),
+      validatePreviewAcceptanceWorkflowInputs(
+        operation,
+        faultScenario,
+        authenticatedReadsGate,
+      ),
     ).toThrow(/acceptance workflow selection/i);
   });
 
@@ -475,16 +528,18 @@ describe("normal preview artifact validation", () => {
 });
 
 describe("normal preview live provider-state validation", () => {
-  it("accepts healthy runtime, exactly two normal schedules, and an explicit binding inventory", () => {
+  it("accepts healthy runtime, exactly two normal schedules, and the exact complete binding inventory", () => {
     expect(() =>
       validateNormalPreviewProviderState(normalProviderState()),
     ).not.toThrow();
     const nested = normalProviderState();
-    nested.settingsResponse = {
+    (nested as { settingsResponse: unknown }).settingsResponse = {
       success: true,
       result: {
         settings: {
-          bindings: [{ name: "VISION_ENV", type: "plain_text" }],
+          bindings: structuredClone(NORMAL_PREVIEW_PROVIDER_BINDINGS)
+            .slice()
+            .reverse(),
         },
       },
     };
@@ -499,6 +554,16 @@ describe("normal preview live provider-state validation", () => {
 
   it.each([
     ["missing settings result", undefined],
+    ["empty bindings", { success: true, result: { bindings: [] } }],
+    ["baseline subset", {
+      success: true,
+      result: {
+        bindings: [
+          { name: "VISION_ENV", type: "plain_text" },
+          { name: "DATABASE_URL", type: "secret_text" },
+        ],
+      },
+    }],
     ["null bindings", { success: true, result: { bindings: null } }],
     ["missing bindings", { success: true, result: {} }],
     ["malformed nested bindings", {
@@ -525,6 +590,43 @@ describe("normal preview live provider-state validation", () => {
         bindings: [
           { name: "PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED" },
         ],
+      },
+    }],
+    ["duplicate binding", {
+      success: true,
+      result: {
+        bindings: [
+          ...structuredClone(NORMAL_PREVIEW_PROVIDER_BINDINGS),
+          { name: "VISION_ENV", type: "plain_text" },
+        ],
+      },
+    }],
+    ["unknown binding", {
+      success: true,
+      result: {
+        bindings: [
+          ...structuredClone(NORMAL_PREVIEW_PROVIDER_BINDINGS),
+          { name: "UNKNOWN_BINDING", type: "plain_text" },
+        ],
+      },
+    }],
+    ["wrong binding type", {
+      success: true,
+      result: {
+        bindings: structuredClone(NORMAL_PREVIEW_PROVIDER_BINDINGS).map(
+          (binding) =>
+            binding.name === "AI_INPUT_CENTS_PER_MILLION_TOKENS"
+              ? { ...binding, type: "plain_text" }
+              : binding,
+        ),
+      },
+    }],
+    ["missing AI reservation binding", {
+      success: true,
+      result: {
+        bindings: structuredClone(NORMAL_PREVIEW_PROVIDER_BINDINGS).filter(
+          ({ name }) => name !== "AI_COMPLEX_WORST_CASE_CENTS",
+        ),
       },
     }],
   ])("fails closed for %s", (_label, settingsResponse) => {

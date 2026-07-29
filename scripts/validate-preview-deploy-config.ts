@@ -2,6 +2,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { AI_PRICING_BINDING_CONTRACT } from "../src/server/ai-pricing-binding-contract";
 import type { PreviewAcceptanceSelector } from "./prepare-preview-acceptance-deploy-config";
 
 const INVALID_NORMAL = "Preview deployment configuration is invalid.";
@@ -29,6 +30,39 @@ const ACCEPTANCE_SELECTORS = new Set([
   "ai_stopped",
   "foundation_probe",
   "ai_usage",
+]);
+const NORMAL_PROVIDER_BINDING_CONTRACT = Object.freeze([
+  ...AI_PRICING_BINDING_CONTRACT.map(({ name, type }) =>
+    Object.freeze({ name, type }),
+  ),
+  Object.freeze({
+    name: "AI_MONTHLY_HARD_LIMIT_CENTS",
+    type: "plain_text",
+  }),
+  Object.freeze({ name: "BACKUP_BUCKET", type: "r2_bucket" }),
+  Object.freeze({ name: "BACKUP_ENCRYPTION_KEY", type: "secret_text" }),
+  Object.freeze({ name: "BACKUP_KEY_VERSION", type: "plain_text" }),
+  Object.freeze({ name: "CALENDAR_SYNC_QUEUE", type: "queue" }),
+  Object.freeze({ name: "DATABASE_URL", type: "secret_text" }),
+  Object.freeze({
+    name: "DATABASE_USAGE_WARNING_BYTES",
+    type: "plain_text",
+  }),
+  Object.freeze({ name: "GOOGLE_ALLOWED_EMAIL", type: "secret_text" }),
+  Object.freeze({ name: "GOOGLE_ALLOWED_SUB", type: "secret_text" }),
+  Object.freeze({ name: "GOOGLE_CLIENT_ID", type: "secret_text" }),
+  Object.freeze({ name: "GOOGLE_CLIENT_SECRET", type: "secret_text" }),
+  Object.freeze({ name: "GOOGLE_REDIRECT_URI", type: "plain_text" }),
+  Object.freeze({ name: "KEY_ENCRYPTION_KEY", type: "secret_text" }),
+  Object.freeze({ name: "OPENAI_API_KEY", type: "secret_text" }),
+  Object.freeze({
+    name: "OPENAI_GATEWAY_BASE_URL",
+    type: "secret_text",
+  }),
+  Object.freeze({ name: "R2_USAGE_WARNING_BYTES", type: "plain_text" }),
+  Object.freeze({ name: "R2_USAGE_WARNING_OBJECTS", type: "plain_text" }),
+  Object.freeze({ name: "VISION_ENV", type: "plain_text" }),
+  Object.freeze({ name: "VISION_USER_TIME_ZONE", type: "secret_text" }),
 ]);
 
 /** Flattened Cloudflare Vite output used by normal and acceptance deployments. */
@@ -86,18 +120,36 @@ export function validateNormalPreviewProviderState(
     ownDataValue(schedules, "success") !== true ||
     !exactStringArray(scheduleCrons, expectedCrons) ||
     bindings === undefined ||
-    !bindings.every((binding) => {
-      if (!isPlainDataObject(binding)) return false;
-      const name = ownDataValue(binding, "name");
-      return (
-        typeof name === "string" &&
-        name.length > 0 &&
-        !name.startsWith("PREVIEW_ACCEPTANCE_")
-      );
-    })
+    !matchesNormalProviderBindingContract(bindings)
   ) {
     throw new Error(INVALID_PROVIDER_STATE);
   }
+}
+
+/** Requires every normal binding exactly once with its authoritative provider type. */
+function matchesNormalProviderBindingContract(
+  bindings: readonly unknown[],
+): boolean {
+  if (bindings.length !== NORMAL_PROVIDER_BINDING_CONTRACT.length) {
+    return false;
+  }
+  const actual = new Map<string, string>();
+  for (const binding of bindings) {
+    if (!isPlainDataObject(binding)) return false;
+    const name = ownDataValue(binding, "name");
+    const type = ownDataValue(binding, "type");
+    if (
+      typeof name !== "string" ||
+      typeof type !== "string" ||
+      actual.has(name)
+    ) {
+      return false;
+    }
+    actual.set(name, type);
+  }
+  return NORMAL_PROVIDER_BINDING_CONTRACT.every(
+    ({ name, type }) => actual.get(name) === type,
+  );
 }
 
 /** Enforces one generated selector, one extra cron, and AI-only attestation. */

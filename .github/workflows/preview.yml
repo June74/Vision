@@ -28,6 +28,14 @@ on:
           - database_unavailable
           - r2_upload_failed
           - ai_stopped
+      authenticated_reads_gate:
+        description: Operator attestation for authenticated diagnostics and calendar reads
+        required: true
+        default: not_verified
+        type: choice
+        options:
+          - not_verified
+          - verified
       observer_evidence:
         description: Privacy-safe terminal type for the non-mutating observer
         required: true
@@ -62,11 +70,11 @@ jobs:
     name: Admit one preview operation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ github.sha }}
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -80,7 +88,8 @@ jobs:
           fi
           pnpm exec tsx scripts/prepare-preview-acceptance-deploy-config.ts --verify-workflow-inputs \
             --operation "${{ inputs.acceptance_operation }}" \
-            --fault-scenario "${{ inputs.fault_scenario }}"
+            --fault-scenario "${{ inputs.fault_scenario }}" \
+            --authenticated-reads-gate "${{ inputs.authenticated_reads_gate }}"
 
   verify:
     name: Verify preview candidate
@@ -90,15 +99,15 @@ jobs:
     outputs:
       verified_sha: ${{ steps.verified-ref.outputs.sha }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ github.sha }}
       - name: Resolve verified commit
         id: verified-ref
         shell: bash
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -136,11 +145,11 @@ jobs:
             exit 1
           fi
           echo "deploy=true" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ needs.verify.outputs.verified_sha }}
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -167,7 +176,7 @@ jobs:
     environment: preview
     timeout-minutes: 18
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ github.sha }}
       - name: Verify observer checkout matches dispatch commit
@@ -177,8 +186,8 @@ jobs:
         run: |
           actual_sha="$(git rev-parse HEAD)"
           [[ "$actual_sha" == "$EXPECTED_SHA" ]]
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -220,16 +229,24 @@ jobs:
             exit 1
           fi
           echo "deploy=true" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ needs.verify.outputs.verified_sha }}
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: pnpm
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
+      - name: Require authenticated diagnostics and calendar operator gate
+        shell: bash
+        env:
+          AUTHENTICATED_READS_GATE: ${{ inputs.authenticated_reads_gate }}
+        run: |
+          [[ "$AUTHENTICATED_READS_GATE" == "verified" ]]
+      - name: Reject daily recovery overlap before candidate preparation
+        run: pnpm exec tsx scripts/validate-preview-acceptance-window.ts
       - name: Verify active privacy-safe observer
         shell: bash
         env:
@@ -247,7 +264,6 @@ jobs:
             deploy_fault) expected_observer_evidence="preview_fault" ;;
             *) exit 1 ;;
           esac
-          expected_name="Capture $expected_observer_evidence safe scheduled outcome"
           run_file="$(mktemp)"
           jobs_file="$(mktemp)"
           trap 'rm -f "$run_file" "$jobs_file"' EXIT
@@ -263,12 +279,11 @@ jobs:
               (.path | startswith(".github/workflows/preview.yml@refs/"))
             )
           ' "$run_file" > /dev/null
-          jq -e --arg expected_name "$expected_name" '
-            any(.jobs[];
-              .name == $expected_name and
-              .status == "in_progress"
-            )
-          ' "$jobs_file" > /dev/null
+          pnpm exec tsx scripts/validate-preview-observer-state.ts \
+            --run-file "$run_file" \
+            --jobs-file "$jobs_file" \
+            --sha "$VERIFIED_SHA" \
+            --evidence "$expected_observer_evidence"
       - name: Verify live preview is normal before candidate deployment
         shell: bash
         env:
@@ -312,9 +327,12 @@ jobs:
           pnpm exec tsx scripts/prepare-preview-acceptance-deploy-config.ts \
             --operation "${{ inputs.acceptance_operation }}" \
             --fault-scenario "${{ inputs.fault_scenario }}" \
+            --authenticated-reads-gate "${{ inputs.authenticated_reads_gate }}" \
             --input dist/vision/wrangler.json \
             --output dist/vision/wrangler.acceptance.json \
             --ai-gateway-limit-attested "$AI_GATEWAY_LIMIT_ATTESTED"
+      - name: Recheck daily recovery overlap immediately before deploy
+        run: pnpm exec tsx scripts/validate-preview-acceptance-window.ts
       - name: Reverify active matching observer immediately before deploy
         shell: bash
         env:
@@ -332,7 +350,6 @@ jobs:
             deploy_fault) expected_observer_evidence="preview_fault" ;;
             *) exit 1 ;;
           esac
-          expected_name="Capture $expected_observer_evidence safe scheduled outcome"
           run_file="$(mktemp)"
           jobs_file="$(mktemp)"
           trap 'rm -f "$run_file" "$jobs_file"' EXIT
@@ -348,12 +365,11 @@ jobs:
               (.path | startswith(".github/workflows/preview.yml@refs/"))
             )
           ' "$run_file" > /dev/null
-          jq -e --arg expected_name "$expected_name" '
-            any(.jobs[];
-              .name == $expected_name and
-              .status == "in_progress"
-            )
-          ' "$jobs_file" > /dev/null
+          pnpm exec tsx scripts/validate-preview-observer-state.ts \
+            --run-file "$run_file" \
+            --jobs-file "$jobs_file" \
+            --sha "$VERIFIED_SHA" \
+            --evidence "$expected_observer_evidence"
       - name: Deploy generated acceptance candidate
         if: ${{ steps.acceptance-token.outputs.deploy == 'true' }}
         run: pnpm exec wrangler deploy --config dist/vision/wrangler.acceptance.json --name vision-preview
@@ -377,11 +393,11 @@ jobs:
           if [[ -z "$CLOUDFLARE_API_TOKEN" || -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then
             exit 1
           fi
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ needs.verify.outputs.verified_sha }}
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -393,6 +409,12 @@ jobs:
           CLOUDFLARE_ENV: preview
       - name: Validate immutable normal artifact
         run: pnpm deploy:check:preview
+      - name: Require rollback authenticated diagnostics and calendar operator gate
+        shell: bash
+        env:
+          AUTHENTICATED_READS_GATE: ${{ inputs.authenticated_reads_gate }}
+        run: |
+          [[ "$AUTHENTICATED_READS_GATE" == "verified" ]]
       - name: Deploy immutable normal preview Worker
         run: pnpm exec wrangler deploy --config dist/vision/wrangler.json --name vision-preview
         env:
@@ -427,11 +449,11 @@ jobs:
     runs-on: ubuntu-latest
     environment: preview
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ github.sha }}
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: pnpm

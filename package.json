@@ -15,6 +15,7 @@
     "test:e2e": "tsx scripts/run-e2e.ts",
     "restore:backup": "tsx scripts/restore-backup.ts",
     "deploy:check:preview": "tsx scripts/validate-preview-deploy-config.ts",
+    "deploy:check:production": "tsx scripts/validate-production-deploy-config.ts",
     "gateway:configure:preview": "tsx scripts/configure-ai-gateway-budget.ts",
     "gateway:verify:preview": "tsx scripts/configure-ai-gateway-budget.ts --verify-only",
     "security:evidence": "tsx scripts/capture-release-evidence.ts",

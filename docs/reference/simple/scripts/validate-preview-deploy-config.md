@@ -8,7 +8,8 @@ consumer, and contains both maintenance schedules. It also rejects a backup
 key that was accidentally written into ordinary deployment variables.
 With `--verify-provider-state`, it instead checks sanitized live health,
 schedule, and settings response files before a candidate or after rollback.
-Missing or malformed responses are unsafe.
+Missing or malformed responses are unsafe, as is any missing, duplicated,
+unknown, or wrongly typed normal binding.
 
 ## `NormalPreviewProviderState`
 
@@ -27,9 +28,9 @@ schedule, and the AI-only attestation.
 
 ## `validateNormalPreviewProviderState`
 
-Requires healthy runtime, exactly the two normal schedules, and an explicit
-binding list with no temporary preview binding. It fails closed for missing,
-null, malformed, or failed provider data.
+Requires healthy runtime, exactly the two normal schedules, and the complete
+normal binding name/type inventory exactly once. It fails closed for missing,
+extra, duplicated, unknown, wrongly typed, or malformed provider data.
 
 ## `validate`
 
@@ -69,6 +70,11 @@ accessors.
 Accepts only the supported successful provider settings shapes and returns an
 explicit binding array. Missing, ambiguous, or malformed binding data is
 rejected.
+
+## `matchesNormalProviderBindingContract`
+
+Requires the complete normal binding inventory exactly once and rejects a
+missing, duplicated, unknown, or wrongly typed binding.
 
 ## `main`
 

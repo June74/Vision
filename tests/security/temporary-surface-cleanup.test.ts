@@ -106,6 +106,7 @@ const EXPECTED_SHARED_RESIDUE_PATHS = [
   "docs/reference/technical/src/server/env.md",
   "scripts/print-safe-tail.ts",
   "scripts/safe-tail-classifier.ts",
+  "scripts/validate-preview-acceptance-window.ts",
   "scripts/validate-preview-deploy-config.ts",
   "src/jobs/scheduled.ts",
   "src/server/api/ai-category-proposal-routes.ts",
@@ -116,7 +117,9 @@ const EXPECTED_SHARED_RESIDUE_PATHS = [
   "tests/integration/jobs/daily-backup.test.ts",
   "tests/security/secret-bundle.test.ts",
   "tests/unit/ci/workflows.test.ts",
+  "tests/unit/scripts/preview-acceptance-window.test.ts",
   "tests/unit/scripts/print-safe-tail.test.ts",
+  "tests/unit/scripts/production-deploy-config.test.ts",
   "tests/unit/scripts/safe-tail-classifier.test.ts",
   "tests/unit/server/env.test.ts",
   "tests/unit/server/wrangler-routing.test.ts",
@@ -296,8 +299,8 @@ describe("post-acceptance temporary surface cleanup", () => {
 
     expect(TEMPORARY_PATHS).toHaveLength(48);
     expect(new Set(TEMPORARY_PATHS)).toHaveLength(48);
-    expect(EXPECTED_SHARED_RESIDUE_PATHS).toHaveLength(34);
-    expect(new Set(EXPECTED_SHARED_RESIDUE_PATHS)).toHaveLength(34);
+    expect(EXPECTED_SHARED_RESIDUE_PATHS).toHaveLength(37);
+    expect(new Set(EXPECTED_SHARED_RESIDUE_PATHS)).toHaveLength(37);
     expect(referenceInventory(TEMPORARY_PATHS, "simple")).toEqual(
       referenceInventory(TEMPORARY_PATHS, "technical"),
     );

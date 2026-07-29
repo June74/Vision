@@ -44,9 +44,13 @@ export const PREVIEW_ACCEPTANCE_OPERATIONS = Object.freeze([
 export type PreviewAcceptanceOperation =
   (typeof PREVIEW_ACCEPTANCE_OPERATIONS)[number];
 
+/** Operator attestation state for authenticated post-deploy read checks. */
+export type PreviewAuthenticatedReadsGate = "not_verified" | "verified";
+
 /** Closed result used by both workflow verification and candidate generation. */
 export interface PreviewAcceptanceWorkflowSelection {
   readonly operation: PreviewAcceptanceOperation;
+  readonly authenticatedReadsGate: PreviewAuthenticatedReadsGate;
   readonly faultScenario:
     | "none"
     | (typeof TEMPORARY_PREVIEW_FAULT_SCENARIOS)[number];
@@ -57,10 +61,13 @@ export interface PreviewAcceptanceWorkflowSelection {
 export function validatePreviewAcceptanceWorkflowInputs(
   operation: unknown,
   faultScenario: unknown,
+  authenticatedReadsGate: unknown,
 ): PreviewAcceptanceWorkflowSelection {
   if (
     typeof operation !== "string" ||
     typeof faultScenario !== "string" ||
+    (authenticatedReadsGate !== "not_verified" &&
+      authenticatedReadsGate !== "verified") ||
     !PREVIEW_ACCEPTANCE_OPERATIONS.includes(
       operation as PreviewAcceptanceOperation,
     )
@@ -68,6 +75,14 @@ export function validatePreviewAcceptanceWorkflowInputs(
     throw new Error(INVALID_SELECTION);
   }
   const admittedOperation = operation as PreviewAcceptanceOperation;
+  const requiresAuthenticatedReads =
+    admittedOperation !== "none" && admittedOperation !== "observe";
+  if (
+    requiresAuthenticatedReads !==
+    (authenticatedReadsGate === "verified")
+  ) {
+    throw new Error(INVALID_SELECTION);
+  }
   if (admittedOperation === "deploy_fault") {
     if (
       !TEMPORARY_PREVIEW_FAULT_SCENARIOS.includes(
@@ -78,6 +93,7 @@ export function validatePreviewAcceptanceWorkflowInputs(
     }
     return Object.freeze({
       operation: admittedOperation,
+      authenticatedReadsGate,
       faultScenario:
         faultScenario as (typeof TEMPORARY_PREVIEW_FAULT_SCENARIOS)[number],
       selector:
@@ -90,6 +106,7 @@ export function validatePreviewAcceptanceWorkflowInputs(
   if (admittedOperation === "deploy_foundation") {
     return Object.freeze({
       operation: admittedOperation,
+      authenticatedReadsGate,
       faultScenario: "none",
       selector: "foundation_probe",
     });
@@ -97,12 +114,14 @@ export function validatePreviewAcceptanceWorkflowInputs(
   if (admittedOperation === "deploy_ai") {
     return Object.freeze({
       operation: admittedOperation,
+      authenticatedReadsGate,
       faultScenario: "none",
       selector: "ai_usage",
     });
   }
   return Object.freeze({
     operation: admittedOperation,
+    authenticatedReadsGate,
     faultScenario: "none",
   });
 }
@@ -178,16 +197,17 @@ async function main(): Promise<void> {
     const selection = validatePreviewAcceptanceWorkflowInputs(
       parsed.get("--operation"),
       parsed.get("--fault-scenario"),
+      parsed.get("--authenticated-reads-gate"),
     );
     if (verifyOnly) {
-      if (parsed.size !== 2) throw new Error(INVALID_SELECTION);
+      if (parsed.size !== 3) throw new Error(INVALID_SELECTION);
       process.stdout.write("Preview acceptance workflow selection is valid.\n");
       return;
     }
     if (
       parsed.get("--input") !== NORMAL_INPUT ||
       parsed.get("--output") !== ACCEPTANCE_OUTPUT ||
-      parsed.size !== 5 ||
+      parsed.size !== 6 ||
       selection.selector === undefined
     ) {
       throw new Error(INVALID_CONFIG);
