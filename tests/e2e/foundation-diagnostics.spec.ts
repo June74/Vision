@@ -1,4 +1,13 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import type {
+  DiagnosticEvent,
+  DiagnosticRepositoryPort,
+} from "../../src/data/repositories/diagnostic-repository";
+import type { FoundationHealthFacts } from "../../src/domain/operations/health";
+import type { TemporaryPreviewFaultScenario } from "../../src/domain/operations/temporary-preview-fault";
+import type { DiagnosticRouteDependencies } from "../../src/server/api/diagnostic-routes";
+import type { Env } from "../../src/server/env";
+import { createApp } from "../../src/worker";
 
 const SESSION = {
   authenticated: true,
@@ -6,6 +15,9 @@ const SESSION = {
   email: "owner@example.com",
   expiresAt: "2026-07-26T00:00:00.000Z",
 };
+const WORKER_SESSION_ID = "S".repeat(43);
+const WORKER_OWNER_ID = "usr_e2e_private_pilot";
+const WORKER_NOW = new Date("2026-07-25T15:00:00.000Z");
 
 const CONNECTED_SETUP = {
   actionRequired: false,
@@ -99,6 +111,91 @@ async function mockFoundation(
     fulfillJson(route, { events: options.events ?? EVENTS }));
 }
 
+/** Builds the real Worker overlay and owner boundary without opening external capabilities. */
+function createTask5WorkerApp() {
+  const repository: DiagnosticRepositoryPort = {
+    readFoundationFacts: async () =>
+      ({
+        authorizationState: "connected",
+        checkpointStatus: "connected",
+        lastSuccessfulSyncAt: new Date(WORKER_NOW.getTime() - 5 * 60_000),
+        oldestQueuedJobAt: null,
+        queueRetryCount: 0,
+        failedJobCount: 0,
+        channelExpiresAt: new Date(WORKER_NOW.getTime() + 48 * 60 * 60_000),
+        databaseAvailable: true,
+        databaseUsageWarning: false,
+        r2UsageWarning: false,
+        aiMonthlyCents: 214,
+        safeErrorCode: null,
+      }) as FoundationHealthFacts,
+    listEvents: async () => EVENTS as unknown as readonly DiagnosticEvent[],
+    correctCategory: async () => undefined,
+  };
+  const dependencies: DiagnosticRouteDependencies = {
+    now: () => WORKER_NOW,
+    sessions: {
+      findSession: async (sessionId) =>
+        sessionId === WORKER_SESSION_ID
+          ? {
+              ownerId: WORKER_OWNER_ID,
+              googleSubject: "google-subject",
+              email: "owner@example.test",
+              csrfToken: "C".repeat(43),
+              expiresAt: new Date(WORKER_NOW.getTime() + 60_000),
+            }
+          : undefined,
+    },
+    repositoryForOwner: (ownerId) => {
+      if (ownerId !== WORKER_OWNER_ID) {
+        throw new Error("E2E owner scope is unavailable.");
+      }
+      return repository;
+    },
+  };
+  return createApp({
+    diagnostic: dependencies,
+    createRequestId: () => "req_task5_e2e",
+    logger: () => undefined,
+  });
+}
+
+/** Fulfills a browser GET from the injected Worker response without live network access. */
+async function fulfillFromTask5Worker(
+  route: Route,
+  scenario: TemporaryPreviewFaultScenario,
+): Promise<void> {
+  const headers = new Headers(route.request().headers());
+  headers.set("cookie", `vision_session=${WORKER_SESSION_ID}`);
+  const response = await createTask5WorkerApp().fetch(
+    new Request(route.request().url(), {
+      method: route.request().method(),
+      headers,
+    }),
+    {
+      VISION_ENV: "preview",
+      PREVIEW_ACCEPTANCE_SCENARIO: scenario,
+    } as Env,
+  );
+  await route.fulfill({
+    body: await response.text(),
+    headers: Object.fromEntries(response.headers),
+    status: response.status,
+  });
+}
+
+/** Routes the deployed-shape Task 5 reads through the real Worker boundary. */
+async function mockTask5Worker(
+  page: Page,
+  scenario: TemporaryPreviewFaultScenario,
+): Promise<void> {
+  await mockConnectedShell(page);
+  await page.route("**/api/diagnostics/status", (route) =>
+    fulfillFromTask5Worker(route, scenario));
+  await page.route("**/api/calendar/events", (route) =>
+    fulfillFromTask5Worker(route, scenario));
+}
+
 test("shows a timezone-aware synchronized event ledger without Google write controls", async ({ page }) => {
   await mockFoundation(page);
 
@@ -111,6 +208,85 @@ test("shows a timezone-aware synchronized event ledger without Google write cont
   await expect(page.getByRole("button", { name: /edit|delete|move|cancel|create event/i })).toHaveCount(0);
   await expect(page.getByRole("link", { name: /edit|delete|move|cancel|create event/i })).toHaveCount(0);
 });
+
+for (const candidate of [
+  {
+    scenario: "queue_delayed",
+    state: "Delayed",
+    action: "Refresh in a few minutes to check the latest synchronization.",
+  },
+  {
+    scenario: "job_failed",
+    state: "Action required",
+    action:
+      "Refresh after the next repair run. If this remains, reconnect Google Calendar.",
+  },
+  {
+    scenario: "channel_expired",
+    state: "Action required",
+    action:
+      "Refresh Vision in a few minutes. If this remains, reconnect Google Calendar.",
+  },
+  {
+    scenario: "database_unavailable",
+    state: "Action required",
+    action:
+      "Refresh Vision in a few minutes. If this remains, reconnect Google Calendar.",
+  },
+  {
+    scenario: "r2_upload_failed",
+    state: "Healthy",
+    action: null,
+  },
+  {
+    scenario: "ai_stopped",
+    state: "Healthy",
+    action: null,
+  },
+] as const satisfies readonly {
+  readonly scenario: TemporaryPreviewFaultScenario;
+  readonly state: "Healthy" | "Delayed" | "Action required";
+  readonly action: string | null;
+}[]) {
+  test(`renders the Task 5 ${candidate.scenario} Worker state with calendar reads intact`, async ({
+    page,
+  }) => {
+    let paidAiRequests = 0;
+    await page.route("**/api/ai/**", async (route) => {
+      paidAiRequests += 1;
+      await route.abort();
+    });
+    await mockTask5Worker(page, candidate.scenario);
+
+    await page.goto("/");
+
+    const signal = page.getByRole("region", { name: "Foundation signal" });
+    await expect(signal.getByText(candidate.state, { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("Advanced data systems", { exact: true }),
+    ).toBeVisible();
+    if (candidate.action === null) {
+      await expect(signal).not.toContainText(
+        /Refresh|Reconnect|Try again|Review Vision/iu,
+      );
+    } else {
+      await expect(signal.getByText(candidate.action)).toBeVisible();
+      await expect(signal.getByText("Healthy", { exact: true })).toHaveCount(0);
+    }
+    if (candidate.scenario === "ai_stopped") {
+      await expect(page.getByLabel("AI cost status")).toContainText("AI paused");
+      await expect(page.getByLabel("AI cost status")).toContainText(
+        "Calendar viewing and category changes still work.",
+      );
+    }
+    await expect(
+      page.getByRole("button", {
+        name: /edit|delete|move|cancel|create event/iu,
+      }),
+    ).toHaveCount(0);
+    expect(paidAiRequests).toBe(0);
+  });
+}
 
 test("marks inferred and unresolved categories independently of color", async ({ page }) => {
   await mockFoundation(page);

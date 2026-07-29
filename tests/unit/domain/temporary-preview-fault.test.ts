@@ -57,6 +57,24 @@ describe("temporary preview fault scenario admission", () => {
       );
     }
   });
+
+  it.each([
+    "route",
+    "query",
+    "header",
+    "cookie",
+    "body",
+    "queueMessage",
+    "databaseRow",
+    "modelOutput",
+  ])("cannot activate from a nested %s value", (source) => {
+    expect(
+      parseTemporaryPreviewFaultScenario({
+        VISION_ENV: "preview",
+        [source]: { PREVIEW_ACCEPTANCE_SCENARIO: "job_failed" },
+      }),
+    ).toBeUndefined();
+  });
 });
 
 describe("temporary preview fault overlays", () => {

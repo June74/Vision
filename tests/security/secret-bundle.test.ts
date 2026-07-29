@@ -3,9 +3,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { scanRelease } from "../../scripts/scan-release";
 import {
   CLIENT_FORBIDDEN_BINDING_NAMES,
+  CLIENT_FORBIDDEN_RUNTIME_VALUES,
   CLIENT_SAFE_RUNTIME_BINDING_NAMES,
   RUNTIME_CLIENT_FORBIDDEN_BINDING_NAMES,
 } from "../../src/server/client-binding-boundary";
+import { TEMPORARY_PREVIEW_FAULT_SCENARIOS } from "../../src/domain/operations/temporary-preview-fault";
 import { RuntimeEnvSchema } from "../../src/server/env";
 import {
   createCleanReleaseFixture,
@@ -56,6 +58,7 @@ describe("client secret-bundle boundary", () => {
     expect(RUNTIME_CLIENT_FORBIDDEN_BINDING_NAMES).toEqual(
       expect.arrayContaining([
         "DATABASE_USAGE_WARNING_BYTES",
+        "PREVIEW_ACCEPTANCE_SCENARIO",
         "PREVIEW_RESTORE_DATABASE_URL",
         "PREVIEW_RESTORE_TARGET_ID",
         "R2_USAGE_WARNING_BYTES",
@@ -63,6 +66,34 @@ describe("client secret-bundle boundary", () => {
       ]),
     );
   });
+
+  it.each(TEMPORARY_PREVIEW_FAULT_SCENARIOS)(
+    "rejects preview activation value %s in a built client asset",
+    async (scenario) => {
+      const root = await createCleanReleaseFixture();
+      roots.push(root);
+      await writeFixtureFile(
+        root,
+        "dist/client/assets/app.js",
+        `globalThis.previewScenario = "${scenario}";`,
+      );
+
+      const result = await scanRelease({
+        projectRoot: root,
+        protectedSentinel: PROTECTED_SENTINEL,
+      });
+
+      expect(CLIENT_FORBIDDEN_RUNTIME_VALUES).toContain(scenario);
+      expect(result.violations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            category: "client-secret-binding",
+            file: "dist/client/assets/app.js",
+          }),
+        ]),
+      );
+    },
+  );
 
   it.each([
     ["temporary restore evidence", "temporary-restore-evidence-fixture"],

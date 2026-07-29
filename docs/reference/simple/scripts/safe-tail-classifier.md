@@ -1,66 +1,171 @@
 # `scripts/safe-tail-classifier.ts`
 
-Safely reduces scheduled Worker logs to closed evidence records without keeping raw provider-controlled lines.
+Turns Cloudflare scheduled-event logs into small, privacy-safe evidence records.
+It never returns a raw log line. It accepts only known schedules, exact actions,
+exact key sets, and coherent values for maintenance, recovery, restore,
+role-probe, foundation, AI-usage, and preview-fault evidence.
 
 ## `createSafeTailAccumulator`
-Buffers one bounded JSON event.
+
+Collects pretty-printed JSON one line at a time without displaying it. The
+buffer is capped at one MiB and resets after either a complete JSON event or an
+oversized frame, so unrelated events cannot be joined together.
+
 ## `push`
-Accepts one tail line and emits only a complete safe result.
+
+Adds one line to the current frame. It returns `null` for incomplete,
+oversized, malformed, or irrelevant input and emits only the closed result
+produced after one complete event.
+
 ## `classifySafeTailLine`
-Recognizes only approved schedules and terminal records.
+
+Accepts maintenance evidence only on `*/15 * * * *`, daily recovery only on
+`5 6 * * *`, and temporary acceptance terminals only on `* * * * *`.
+Terminal records take precedence over the older fixed-message recovery
+fallback. A malformed, duplicate, wrongly labeled, or mixed terminal blocks
+fallback instead of allowing provider-controlled text to become evidence.
+
 ## `classifyPhaseBAiUsageEvidence`
-Rebuilds canonical AI evidence.
+
+Requires the exact ten AI fields and rebuilds the record from monthly cents,
+the Gateway-limit boolean, and the non-AI availability boolean. Derived
+thresholds, tier, category, and outcome must match the canonical producer.
+
 ## `classifyTemporaryPreviewFaultEvidence`
-Accepts only the exact four-key preview-fault mapping.
+
+Requires exactly `category`, `evidenceType`, `outcome`, and `scenario`. It
+rebuilds the result from the frozen six-scenario vocabulary, allowing only
+`r2_upload_failed` to pair with
+`failed/backup_storage_write_failed`; the other five must pair with
+`succeeded/none`.
+
 ## `isPhaseBAiUsageEvidenceShape`
-Checks the AI evidence shape.
+
+Requires the exact AI key set and the primitive inputs needed for safe
+reconstruction.
+
 ## `isCanonicalUnavailableAiUsageEvidence`
-Recognizes fixed unavailable AI evidence.
+
+Recognizes only the producer's fixed zeroed unavailable AI record.
+
 ## `createUnavailableAiUsageEvidence`
-Builds fixed unavailable AI evidence.
+
+Builds a new unavailable AI record from fixed values rather than copying tail
+data.
+
 ## `matchesPhaseBAiUsageEvidence`
-Compares derived AI fields.
+
+Checks every derived AI category, outcome, threshold, tier, and amount against
+the canonical reconstruction.
+
 ## `classifyPhaseBFoundationProbeEvidence`
-Rebuilds closed foundation evidence.
+
+Requires exactly 19 foundation keys, safe nonnegative counts, coherent
+success/failure combinations, and a possible sanitized zero for numeric-bound
+failures. It returns a newly reconstructed record.
+
 ## `classifyCalendarMaintenanceEvidence`
-Rebuilds closed maintenance evidence.
+
+Requires exactly five keys and a coherent repair, renewal, category, and
+outcome combination.
+
 ## `classifyTemporaryPreviewRoleProbeEvidence`
-Rebuilds closed role-probe evidence.
+
+Requires exactly four keys. Success must be `succeeded/none/true`; failure must
+use an approved category and `failed/false`.
+
 ## `classifyTemporaryRestoreEvidence`
-Rebuilds closed restore evidence.
+
+Requires either the exact three-field failure form or the complete verified
+success form. Successful row counts must contain every authoritative backup
+table.
+
 ## `normalizeOutcome`
-Maps platform outcomes to the safe vocabulary.
+
+Converts Cloudflare's `ok`, `exception`, `canceled`, and `exceededCpu` values
+into Vision's small approved outcome vocabulary; everything else is
+`unknown`.
+
 ## `locateTemporaryRestoreEvidence`
-Finds a restore terminal.
+
+Checks only the first message in each log entry for the exact restore action.
+An attempted but malformed restore terminal is treated as seen and blocks
+legacy fallback.
+
 ## `locateTemporaryPreviewRoleProbeEvidence`
-Finds a role-probe terminal.
+
+Checks only the first message in each log entry. A role-probe evidence type
+under the wrong action is treated as malformed evidence and blocks fallback.
+
 ## `terminalKindsForMessage`
-Identifies a message's terminal kind.
+
+Uses one shared action/evidence registry to identify every terminal kind named
+by a message.
+
 ## `hasTerminalKind`
-Checks for one kind.
+
+Reports whether a message identifies one requested terminal kind.
+
 ## `hasOtherTerminalKind`
-Checks for a different kind.
+
+Reports whether a message identifies a different terminal kind.
+
 ## `hasMixedTerminalKinds`
-Rejects mixed terminal kinds.
+
+Scans every message in the event and rejects cross-kind evidence before any
+locator can win because of its call order.
+
 ## `locatePhaseBFoundationProbeEvidence`
-Finds one foundation terminal.
+
+Scans all messages, requires exactly one canonical foundation terminal, and
+rejects duplicates, wrong actions, extra fields, malformed values, or another
+terminal kind.
+
 ## `locatePhaseBAiUsageEvidence`
-Finds one AI terminal.
+
+Scans all messages and requires exactly one canonical AI terminal. Duplicate,
+wrong-action, malformed, and mixed evidence is rejected.
+
 ## `locateTemporaryPreviewFaultEvidence`
-Finds one preview-fault terminal and rejects duplicates or mixed records.
+
+Scans all messages and requires exactly one
+`acceptance.preview-fault`/`vision.preview-fault/v1` terminal. Duplicate,
+mixed, malformed, or wrongly labeled records are rejected.
+
 ## `locateCalendarMaintenanceEvidence`
-Finds one maintenance terminal.
+
+Scans all messages for exactly one valid maintenance terminal and rejects
+duplicates, mixed terminals, extra fields, and wrong actions.
+
 ## `isUnavailableFoundationMeasurements`
-Recognizes fixed unavailable foundation measurements.
+
+Recognizes only the fixed all-false, all-zero, `not_tested` measurement set
+used when a foundation source is unavailable.
+
 ## `classifyRestoreRowCounts`
-Checks bounded restore row counts.
+
+Requires one nonnegative safe count for every authoritative migration-9 backup
+table and reconstructs a plain record.
+
 ## `findFailureMarker`
-Maps fixed legacy backup failures.
+
+Searches for fixed legacy recovery messages without serializing or returning
+the full tail event.
+
 ## `snapshotOwnEnumerableData`
-Copies only plain own data fields.
+
+Copies only an object's own enumerable plain data fields. Getters, symbols,
+hidden fields, arrays where objects are expected, and custom prototypes reject
+the candidate before any field can be read.
+
 ## `hasExactKeys`
-Rejects missing and extra fields.
+
+Rejects missing or extra own properties.
+
 ## `isNonnegativeSafeInteger`
-Checks safe nonnegative integers.
+
+Accepts only safe whole-number counts at least zero.
+
 ## `isPositiveSafeInteger`
-Checks safe positive integers.
+
+Accepts only positive safe-integer key versions.

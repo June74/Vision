@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:47:00Z
-- **Last observed:** 2026-07-28T22:31:58.1347046Z
-- **Phase/task:** Phase B acceptance instrumentation Task 3 test design
+- **Last observed:** 2026-07-29T04:10:43.9181610Z
+- **Phase/task:** Phase B acceptance instrumentation Task 5 E2E
 - **Environment:** Local worktree
 - **Version/commit:** `50569e6`
 
@@ -129,3 +129,7 @@ At 2026-07-27T01:50Z, the repository's `docs:check` script and
   recognize the nested shell response wrapper and stopped before applying any
   edit. No manifest value was emitted and the attestation remained unchanged.
   The retry inspects only response keys and types before parsing internally.
+- 2026-07-29T04:10:43.9181610Z: A focused E2E run used an unavailable
+  package-binary invocation instead of the repository's declared `test:e2e`
+  script. No browser, provider, or external mutation started; the retry uses
+  the package script already recorded in the Task 5 brief.

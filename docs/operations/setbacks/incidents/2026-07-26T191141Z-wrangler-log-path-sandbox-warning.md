@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-07-29T03:27:04Z
+- **Last observed:** 2026-07-29T04:28:42.0694275Z
 - **Phase/task:** Phase B acceptance instrumentation Task 5 Worker RED/GREEN
 - **Environment:** Local managed sandbox
 - **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`
@@ -136,3 +136,12 @@ security validation passed.
   because the task-local diagnostic setting was omitted. The focused Worker
   assertions passed after implementation; the next Worker command restores a
   workspace-local `XDG_CONFIG_HOME`.
+- 2026-07-29T04:11:29Z: Task 5 verification left an untracked workspace-root
+  `debug.log`. Metadata and pattern-only inspection confirmed the exact
+  workspace-contained target; it was removed before staging, and the final
+  gates use the task-local diagnostic directory.
+- 2026-07-29T04:28:42.0694275Z: The final Task 5 gate recreated the
+  workspace-root `debug.log` even with task-local Wrangler paths, alongside
+  the expected task-local diagnostic directory. Both exact worktree-contained
+  targets were verified from metadata and removed before staging. All
+  executable gates exited zero.

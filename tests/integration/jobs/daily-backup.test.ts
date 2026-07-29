@@ -21,6 +21,9 @@ import {
   createDailyBackup,
 } from "../../../src/jobs/create-daily-backup";
 import {
+  runTemporaryPreviewFault,
+} from "../../../src/jobs/temporary-preview-fault";
+import {
   CALENDAR_MAINTENANCE_CRON,
   DAILY_BACKUP_CRON,
   emitTemporaryPreviewRoleProbeEvidence,
@@ -70,6 +73,7 @@ function dependencies(store = new MemoryBackupObjectStore()) {
   return {
     store,
     readConsistentSnapshot,
+    backupKey: key,
     create: async () =>
       createDailyBackup(NOW, {
         store,
@@ -147,20 +151,104 @@ describe("daily encrypted backup job", () => {
 
   it("uses an injected preview writer before any R2 put mutation", async () => {
     const fixture = dependencies();
+    const injectedFailure = new Error("preview-only injected failure");
     const putIfAbsent = vi.fn(async () => {
-      throw new Error("preview-only injected failure");
+      throw injectedFailure;
     });
 
-    await expect(
-      createDailyBackup(NOW, {
+    let failure: unknown;
+    try {
+      await createDailyBackup(NOW, {
         store: fixture.store,
         writer: { putIfAbsent },
         snapshotSource: { readConsistentSnapshot: fixture.readConsistentSnapshot },
         backupKey: await backupKey(),
-      }),
-    ).rejects.toThrow("Backup storage write failed.");
+      });
+    } catch (error) {
+      failure = error;
+    }
 
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toBe("Backup storage write failed.");
+    expect(Object.keys(failure as Error)).not.toContain("cause");
+    expect(JSON.stringify(failure)).not.toContain("preview-only injected failure");
     expect(putIfAbsent).toHaveBeenCalledOnce();
+    expect(fixture.store.objects).toHaveLength(0);
+  });
+
+  it("does not emit an R2 write terminal when a valid daily backup returns before the injected writer", async () => {
+    const fixture = dependencies();
+    await fixture.create();
+    const head = vi.spyOn(fixture.store, "head");
+    const get = vi.spyOn(fixture.store, "get");
+    const putIfAbsent = vi.spyOn(fixture.store, "putIfAbsent");
+    const deleteObject = vi.spyOn(fixture.store, "delete");
+    const write = vi.fn();
+
+    await expect(
+      runTemporaryPreviewFault(
+        {
+          VISION_ENV: "preview",
+          PREVIEW_ACCEPTANCE_SCENARIO: "r2_upload_failed",
+        },
+        {
+          runR2Upload: async (writer) => {
+            await createDailyBackup(NOW, {
+              store: fixture.store,
+              writer,
+              snapshotSource: {
+                readConsistentSnapshot: fixture.readConsistentSnapshot,
+              },
+              backupKey: await fixture.backupKey,
+            });
+          },
+        },
+        write,
+      ),
+    ).rejects.toThrow("Temporary preview R2 fault was not observed.");
+
+    expect(head).toHaveBeenCalled();
+    expect(get).toHaveBeenCalled();
+    expect(putIfAbsent).not.toHaveBeenCalled();
+    expect(deleteObject).not.toHaveBeenCalled();
+    expect(write).not.toHaveBeenCalled();
+    expect(fixture.store.objects).toHaveLength(1);
+  });
+
+  it("does not relabel an upstream snapshot failure as an R2 write terminal", async () => {
+    const fixture = dependencies();
+    fixture.readConsistentSnapshot.mockRejectedValueOnce(
+      new Error("private upstream snapshot failure"),
+    );
+    const putIfAbsent = vi.spyOn(fixture.store, "putIfAbsent");
+    const deleteObject = vi.spyOn(fixture.store, "delete");
+    const write = vi.fn();
+
+    await expect(
+      runTemporaryPreviewFault(
+        {
+          VISION_ENV: "preview",
+          PREVIEW_ACCEPTANCE_SCENARIO: "r2_upload_failed",
+        },
+        {
+          runR2Upload: async (writer) => {
+            await createDailyBackup(NOW, {
+              store: fixture.store,
+              writer,
+              snapshotSource: {
+                readConsistentSnapshot: fixture.readConsistentSnapshot,
+              },
+              backupKey: await fixture.backupKey,
+            });
+          },
+        },
+        write,
+      ),
+    ).rejects.toThrow("Backup creation failed.");
+
+    expect(putIfAbsent).not.toHaveBeenCalled();
+    expect(deleteObject).not.toHaveBeenCalled();
+    expect(write).not.toHaveBeenCalled();
     expect(fixture.store.objects).toHaveLength(0);
   });
 

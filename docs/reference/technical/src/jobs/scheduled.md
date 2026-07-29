@@ -78,7 +78,20 @@ Invokes the owner-scoped database-only projection retention boundary before cred
 ## `recordCredentialFailure`
 Routes typed OAuth failure through the generation-safe maintenance checkpoint transition before rethrowing.
 ## `scheduled`
-Uses Cloudflare's scheduled time and exact cron string for capability-separated dispatch.
+Uses Cloudflare's scheduled time and exact cron string for
+capability-separated dispatch. On the shared one-minute cron it validates the
+fault binding first, permits the role probe only when its explicit connection
+binding exists, and otherwise fails before any injected capability is called.
+## `createProductionScheduledEntryDependencies`
+Returns closures rather than constructed adapters, preserving lazy provider,
+database, Queue, and R2 initialization until after exact dispatch.
+## `temporaryFaultR2Upload`
+Constructs normal recovery dependencies after admission and calls
+`createWithWriter`; it never runs retention and cannot convert an earlier
+head, snapshot, or encryption failure into fault evidence.
+## `writeTemporaryFaultEvidence`
+Delegates only the closed `TemporaryPreviewFaultEntry` to the console after the
+job has established the canonical terminal condition.
 ## `createProductionTemporaryRoleProbeDependencies`
 Constructs only the max-one role-probe adapter. The temporary branch cannot
 reach restore, clear, R2, backup-key, target-identity, table, or HTTP code.

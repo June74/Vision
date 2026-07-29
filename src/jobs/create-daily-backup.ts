@@ -80,7 +80,21 @@ export interface BackupObjectWriter {
   ): Promise<boolean>;
 }
 
-/** Narrow write boundary used by normal backup creation and the preview fault injection. */
+/** Carries an internal writer cause while keeping the scheduled error message constant. */
+export class BackupStorageWriteError extends Error {
+  readonly #cause: unknown;
+
+  constructor(cause: unknown) {
+    super("Backup storage write failed.");
+    this.name = "BackupStorageWriteError";
+    this.#cause = cause;
+  }
+
+  /** Tests one caller-held cause by identity without exposing the retained value. */
+  isCausedBy(cause: unknown): boolean {
+    return this.#cause === cause;
+  }
+}
 
 /** Database boundary that owns one complete repeatable-read capture. */
 export interface BackupSnapshotSource {
@@ -180,8 +194,8 @@ export async function createDailyBackup(
       customMetadata,
       bodySha256,
     );
-  } catch {
-    throw new Error("Backup storage write failed.");
+  } catch (error) {
+    throw new BackupStorageWriteError(error);
   }
   try {
     return await verifyStoredBackup(

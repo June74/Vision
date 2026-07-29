@@ -34,7 +34,9 @@ import { createDailyBackup } from "./create-daily-backup";
 import {
   runTemporaryPreviewFault,
   TEMPORARY_PREVIEW_FAULT_CRON,
+  type TemporaryPreviewFaultEntry,
 } from "./temporary-preview-fault";
+import type { BackupObjectWriter } from "./create-daily-backup";
 import {
   emitPhaseBAiUsageEvidence,
   runPhaseBAiUsageEvidence,
@@ -99,6 +101,17 @@ export interface ScheduledRecoveryDependencies {
     writer: import("./create-daily-backup").BackupObjectWriter,
   ) => Promise<void>;
   readonly purge: (now: Date) => Promise<void>;
+}
+
+/** Injected scheduled-entry boundaries keep candidate dispatch testable without provider I/O. */
+export interface ScheduledEntryDependencies extends ScheduledJobDependencies {
+  readonly temporaryFaultR2Upload: (
+    now: Date,
+    writer: BackupObjectWriter,
+  ) => Promise<void>;
+  readonly writeTemporaryFaultEvidence: (
+    entry: TemporaryPreviewFaultEntry,
+  ) => void;
 }
 
 /** Routes exact configured cron expressions without coupling recovery to Google credentials. */
@@ -291,6 +304,8 @@ export async function scheduled(
   controller: ScheduledController,
   environment: Env,
   _context: ExecutionContext,
+  dependencies: ScheduledEntryDependencies =
+    createProductionScheduledEntryDependencies(environment),
 ): Promise<void> {
   const now = new Date(controller.scheduledTime);
   if (controller.cron === TEMPORARY_PREVIEW_FAULT_CRON) {
@@ -299,21 +314,31 @@ export async function scheduled(
       await runTemporaryPreviewFault(
         environment,
         {
-          /** Builds the normal backup path only after the preview binding has been admitted. */
-          runR2Upload: async (writer) => {
-            const recovery =
-              await createProductionScheduledRecoveryDependencies(environment);
-            if (!recovery.createWithWriter) {
-              throw new Error("Temporary preview fault is unavailable.");
-            }
-            await recovery.createWithWriter(now, writer);
-          },
+          /** Delegates only the admitted R2 candidate to the injected scheduled boundary. */
+          runR2Upload: (writer) =>
+            dependencies.temporaryFaultR2Upload(now, writer),
         },
+        dependencies.writeTemporaryFaultEvidence,
       );
       return;
     }
+    if (
+      environment.VISION_ENV === "preview" &&
+      typeof environment.PREVIEW_RESTORE_DATABASE_URL === "string"
+    ) {
+      await dependencies.temporaryRoleProbe(now);
+      return;
+    }
+    throw new Error("Temporary preview candidate is invalid.");
   }
-  await runScheduledJob(controller.cron, now, {
+  await runScheduledJob(controller.cron, now, dependencies);
+}
+
+/** Creates lazy production closures only after scheduled candidate selection. */
+function createProductionScheduledEntryDependencies(
+  environment: Env,
+): ScheduledEntryDependencies {
+  return {
     /** Builds Google maintenance capability only for the maintenance cron. */
     maintenance: async (scheduledAt) => {
       const dependencies =
@@ -351,7 +376,18 @@ export async function scheduled(
     aiUsageEvidence: async () => {
       throw new Error("Phase B AI usage candidate is not configured.");
     },
-  });
+    /** Builds the normal backup path only after the preview binding has been admitted. */
+    temporaryFaultR2Upload: async (scheduledAt, writer) => {
+      const recovery =
+        await createProductionScheduledRecoveryDependencies(environment);
+      if (!recovery.createWithWriter) {
+        throw new Error("Temporary preview fault is unavailable.");
+      }
+      await recovery.createWithWriter(scheduledAt, writer);
+    },
+    /** Emits only the closed four-key candidate evidence envelope. */
+    writeTemporaryFaultEvidence: (entry) => console.info(entry),
+  };
 }
 
 /** Creates only the max-one read adapter required by the preview probe. */
@@ -384,7 +420,6 @@ async function createProductionScheduledRecoveryDependencies(
     create: async (now) => {
       await createDailyBackup(now, { store, snapshotSource, backupKey });
     },
-    /** Reuses normal snapshot/encryption reads while replacing only the object writer. */
     /** Replaces only the object writer while retaining normal snapshot and encryption reads. */
     createWithWriter: async (now, writer) => {
       await createDailyBackup(now, { store, snapshotSource, backupKey, writer });

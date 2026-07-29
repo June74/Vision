@@ -9,6 +9,12 @@ Derives the daily opaque key, reuses only a verified existing object, exports a 
 serializes the encrypted envelope, computes body and ciphertext SHA-256 digests, and uses atomic create-if-absent.
 A newly created object that fails verification is removed best-effort and never reported as successful.
 
+## `isCausedBy`
+
+Compares the class-private writer cause with one caller-supplied sentinel. The
+cause is not an enumerable property, so scheduled errors and JSON inspection
+retain only the constant storage-write message.
+
 ## `verifyStoredBackup`
 
 Requires stable key, ETag, native R2 body checksum, exact closed metadata, canonical envelope serialization, matching

@@ -73,7 +73,17 @@ Removes expired encrypted rebuild staging before Google credentials are needed.
 ## `recordCredentialFailure`
 Stores a safe credential failure before the scheduler reports it.
 ## `scheduled`
-Connects Cloudflare scheduled events to exact cron routing.
+Connects Cloudflare scheduled events to exact cron routing. The one-minute
+schedule requires either one valid fault scenario or the explicit role-probe
+binding; missing or invalid candidate configuration cannot fall through.
+## `createProductionScheduledEntryDependencies`
+Builds lazy closures for each isolated scheduled capability without opening
+one before the cron and candidate have been selected.
+## `temporaryFaultR2Upload`
+Runs the admitted R2 candidate through normal backup reads and encryption while
+replacing only the final object writer.
+## `writeTemporaryFaultEvidence`
+Writes only the exact action and four-key preview-fault evidence record.
 ## `createProductionTemporaryRoleProbeDependencies`
 Builds only the max-one read adapter required by the temporary role probe.
 ## `probeRole`

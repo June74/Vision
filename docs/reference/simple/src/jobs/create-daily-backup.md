@@ -7,6 +7,11 @@ Creates at most one encrypted Vision backup for each UTC date under a fixed priv
 Captures all 29 tables, encrypts them, creates the daily object only if absent, and verifies it before reporting
 success.
 
+## `isCausedBy`
+
+Checks a caller-held writer failure by identity without exposing or serializing
+the retained cause.
+
 ## `verifyStoredBackup`
 
 Checks the path, safe metadata, R2 checksum, canonical envelope, and ciphertext checksum using fresh head and body

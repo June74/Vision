@@ -7,6 +7,7 @@ import { createAiUsageRepository } from "../../data/repositories/ai-usage-reposi
 import { createEventRepository } from "../../data/repositories/event-repository";
 import type { EncryptedSessionRepository } from "../../data/repositories/session-repository";
 import { DrizzleWrappedDataKeyStore } from "../../data/repositories/token-repository";
+import { parseTemporaryPreviewFaultScenario } from "../../domain/operations/temporary-preview-fault";
 import {
   BudgetedAiProvider,
   type BudgetedCategoryProposalFactoryRequest,
@@ -103,6 +104,16 @@ export function registerAiCategoryProposalRoute(
       await readBoundedJson(context.req.raw),
     );
     if (!input.success) throw invalidAiCategoryRequest();
+
+    let scenario;
+    try {
+      scenario = parseTemporaryPreviewFaultScenario(context.env);
+    } catch {
+      throw aiCategoryUnavailable();
+    }
+    if (scenario === "ai_stopped") {
+      throwBudgetedUnavailable("AI_BUDGET_EXHAUSTED");
+    }
 
     const provider = dependencies.createBudgetedProvider(session.ownerId);
     let result;

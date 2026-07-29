@@ -1,5 +1,8 @@
 /** Runs one generated preview fault candidate without exposing an activation route. */
-import type { BackupObjectWriter } from "./create-daily-backup";
+import {
+  BackupStorageWriteError,
+  type BackupObjectWriter,
+} from "./create-daily-backup";
 import {
   parseTemporaryPreviewFaultScenario,
   type TemporaryPreviewFaultScenario,
@@ -72,18 +75,31 @@ export async function runTemporaryPreviewFault(
 
   try {
     await dependencies.runR2Upload(TEMPORARY_PREVIEW_R2_FAILURE_WRITER);
-  } catch {
+  } catch (error) {
+    if (
+      error !== TEMPORARY_PREVIEW_R2_FAILURE &&
+      !(
+        error instanceof BackupStorageWriteError &&
+        error.isCausedBy(TEMPORARY_PREVIEW_R2_FAILURE)
+      )
+    ) {
+      throw error;
+    }
     write({ action: TEMPORARY_PREVIEW_FAULT_ACTION, evidence });
     throw new Error("Backup storage write failed.");
   }
-  write({ action: TEMPORARY_PREVIEW_FAULT_ACTION, evidence });
-  throw new Error("Backup storage write failed.");
+  throw new Error("Temporary preview R2 fault was not observed.");
 }
+
+/** Unique internal rejection retained only long enough to prove the injected writer caused failure. */
+const TEMPORARY_PREVIEW_R2_FAILURE = Object.freeze(
+  new Error("Temporary preview backup upload failure."),
+);
 
 /** Rejects before calling the real R2 adapter's put boundary or mutating an object. */
 const TEMPORARY_PREVIEW_R2_FAILURE_WRITER: BackupObjectWriter = Object.freeze({
   /** Always rejects before the real R2 adapter can receive a put request. */
   async putIfAbsent(): Promise<boolean> {
-    throw new Error("Temporary preview backup upload failure.");
+    throw TEMPORARY_PREVIEW_R2_FAILURE;
   },
 });

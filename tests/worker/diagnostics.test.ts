@@ -28,14 +28,17 @@ const PRICING: AiPricingConfiguration = {
   worstCaseCents: { routine: 10, optional: 20, complex: 50 },
 };
 
-function sessionDependencies(authenticated = true) {
+function sessionDependencies(
+  authenticated = true,
+  ownerId = OWNER_ID,
+) {
   return {
     now: () => NOW,
     sessions: {
       findSession: vi.fn(async (sessionId: string) =>
         authenticated && sessionId === SESSION_ID
           ? {
-              ownerId: OWNER_ID,
+              ownerId,
               googleSubject: "google-subject",
               email: "allowed@example.test",
               csrfToken: CSRF,
@@ -53,6 +56,7 @@ function createDiagnosticHarness(
     databaseUsageWarning?: boolean;
     r2UsageWarning?: boolean;
     aiMonthlyCents?: number;
+    sessionOwnerId?: string;
   } = {},
 ) {
   const repository: DiagnosticRepositoryPort = {
@@ -114,7 +118,10 @@ function createDiagnosticHarness(
     return repository;
   });
   const dependencies: DiagnosticRouteDependencies = {
-    ...sessionDependencies(options.authenticated ?? true),
+    ...sessionDependencies(
+      options.authenticated ?? true,
+      options.sessionOwnerId ?? OWNER_ID,
+    ),
     repositoryForOwner,
   };
   const app = createApp({
@@ -212,14 +219,50 @@ describe("Vision Worker diagnostic routes", () => {
   });
 
   it.each([
-    ["queue_delayed", "Delayed", "normal"],
-    ["job_failed", "Action required", "normal"],
-    ["channel_expired", "Action required", "normal"],
-    ["database_unavailable", "Action required", "normal"],
-    ["ai_stopped", "Healthy", "stopped"],
+    [
+      "queue_delayed",
+      {
+        state: "Delayed",
+        oldestQueuedJobAt: "2026-07-25T16:45:00.000Z",
+        oldestJobDelayMs: 900_000,
+        warningCodes: ["QUEUE_DELAYED"],
+      },
+    ],
+    [
+      "job_failed",
+      {
+        state: "Action required",
+        failedJobCount: 1,
+        warningCodes: ["FAILED_JOBS"],
+      },
+    ],
+    [
+      "channel_expired",
+      {
+        state: "Action required",
+        channelExpiresAt: "2026-07-25T16:59:59.999Z",
+        warningCodes: ["CHANNEL_EXPIRED"],
+      },
+    ],
+    [
+      "database_unavailable",
+      {
+        state: "Action required",
+        warningCodes: ["DATABASE_UNAVAILABLE"],
+      },
+    ],
+    [
+      "ai_stopped",
+      {
+        state: "Healthy",
+        aiSpendTier: "stopped",
+        aiMonthlyCents: 950,
+        warningCodes: ["AI_BUDGET_STOPPED"],
+      },
+    ],
   ] as const)(
-    "applies the authenticated %s preview overlay without changing the response shape",
-    async (scenario, state, aiSpendTier) => {
+    "applies the authenticated %s preview overlay through the exact public response",
+    async (scenario, expectedOverrides) => {
       const { app, repository } = createDiagnosticHarness({ aiMonthlyCents: 0 });
 
       const response = await app.fetch(
@@ -231,9 +274,28 @@ describe("Vision Worker diagnostic routes", () => {
       );
 
       expect(response.status).toBe(200);
-      await expect(response.json()).resolves.toMatchObject({
-        status: { state, aiSpendTier },
+      const payload = await response.json();
+      expect(payload).toEqual({
+        status: {
+          authorizationState: "connected",
+          lastSuccessfulSyncAt: "2026-07-25T16:59:00.000Z",
+          syncDelayMs: 60_000,
+          oldestQueuedJobAt: null,
+          oldestJobDelayMs: null,
+          queueRetryCount: 0,
+          failedJobCount: 0,
+          channelExpiresAt: "2026-07-27T17:00:00.000Z",
+          aiSpendTier: "normal",
+          aiMonthlyCents: 0,
+          databaseUsageWarning: false,
+          r2UsageWarning: false,
+          safeErrorCode: null,
+          ...expectedOverrides,
+        },
       });
+      expect(JSON.stringify(payload)).not.toMatch(
+        /queue_delayed|job_failed|channel_expired|database_unavailable|r2_upload_failed|ai_stopped|PREVIEW_ACCEPTANCE_SCENARIO|vision\.preview-fault/u,
+      );
       expect(repository.readFoundationFacts).toHaveBeenCalledOnce();
     },
   );
@@ -251,6 +313,169 @@ describe("Vision Worker diagnostic routes", () => {
 
     expect(response.status).toBe(401);
     expect(repository.readFoundationFacts).not.toHaveBeenCalled();
+  });
+
+  it("rejects a wrong-owner session before reading or overlaying foundation facts", async () => {
+    const { app, repository, repositoryForOwner } = createDiagnosticHarness({
+      aiMonthlyCents: 0,
+      sessionOwnerId: "usr_not_the_private_pilot",
+    });
+
+    const response = await app.fetch(
+      request("/api/diagnostics/status"),
+      {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "job_failed",
+      } as Env,
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "INTERNAL_ERROR" },
+    });
+    expect(repositoryForOwner).toHaveBeenCalledWith(
+      "usr_not_the_private_pilot",
+    );
+    expect(repository.readFoundationFacts).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      "query",
+      request("/api/diagnostics/status?PREVIEW_ACCEPTANCE_SCENARIO=job_failed"),
+    ],
+    [
+      "header",
+      request("/api/diagnostics/status", {
+        headers: { PREVIEW_ACCEPTANCE_SCENARIO: "job_failed" },
+      }),
+    ],
+    [
+      "cookie",
+      request("/api/diagnostics/status", {
+        headers: {
+          cookie:
+            `vision_session=${SESSION_ID}; PREVIEW_ACCEPTANCE_SCENARIO=job_failed`,
+        },
+      }),
+    ],
+  ])(
+    "does not activate the preview scenario from an HTTP %s",
+    async (_source, candidateRequest) => {
+      const { app } = createDiagnosticHarness({ aiMonthlyCents: 0 });
+
+      const response = await app.fetch(candidateRequest, { VISION_ENV: "preview" } as Env);
+      const payload = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(payload).toMatchObject({
+        status: {
+          state: "Healthy",
+          failedJobCount: 0,
+          aiMonthlyCents: 0,
+        },
+      });
+      expect(JSON.stringify(payload)).not.toMatch(/job_failed|PREVIEW_ACCEPTANCE_SCENARIO/u);
+    },
+  );
+
+  it.each([
+    ["route", request("/api/diagnostics/status/job_failed")],
+    [
+      "body",
+      request("/api/diagnostics/status", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ PREVIEW_ACCEPTANCE_SCENARIO: "job_failed" }),
+      }),
+    ],
+  ])(
+    "does not activate the preview scenario from an HTTP %s on an unregistered route",
+    async (_source, candidateRequest) => {
+      const { app, repository } = createDiagnosticHarness({ aiMonthlyCents: 0 });
+
+      const response = await app.fetch(candidateRequest, { VISION_ENV: "preview" } as Env);
+
+      expect(response.status).toBe(404);
+      expect(repository.readFoundationFacts).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["queueMessage", "databaseRow", "modelOutput"])(
+    "does not activate the preview scenario from nested %s data at the Worker binding boundary",
+    async (source) => {
+      const { app } = createDiagnosticHarness({ aiMonthlyCents: 0 });
+
+      const response = await app.fetch(
+        request("/api/diagnostics/status"),
+        {
+          VISION_ENV: "preview",
+          [source]: { PREVIEW_ACCEPTANCE_SCENARIO: "job_failed" },
+        } as unknown as Env,
+      );
+      const payload = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(payload).toMatchObject({
+        status: {
+          state: "Healthy",
+          failedJobCount: 0,
+          aiMonthlyCents: 0,
+        },
+      });
+      expect(JSON.stringify(payload)).not.toMatch(/job_failed|PREVIEW_ACCEPTANCE_SCENARIO/u);
+    },
+  );
+
+  it("leaves authenticated calendar reads unchanged for the R2-only scenario", async () => {
+    const { app, repository } = createDiagnosticHarness({ aiMonthlyCents: 0 });
+    const environment = {
+      VISION_ENV: "preview",
+      PREVIEW_ACCEPTANCE_SCENARIO: "r2_upload_failed",
+    } as Env;
+
+    const [statusResponse, eventsResponse] = await Promise.all([
+      app.fetch(request("/api/diagnostics/status"), environment),
+      app.fetch(request("/api/calendar/events"), environment),
+    ]);
+
+    expect(statusResponse.status).toBe(200);
+    await expect(statusResponse.json()).resolves.toEqual({
+      status: {
+        state: "Healthy",
+        authorizationState: "connected",
+        lastSuccessfulSyncAt: "2026-07-25T16:59:00.000Z",
+        syncDelayMs: 60_000,
+        oldestQueuedJobAt: null,
+        oldestJobDelayMs: null,
+        queueRetryCount: 0,
+        failedJobCount: 0,
+        channelExpiresAt: "2026-07-27T17:00:00.000Z",
+        aiSpendTier: "normal",
+        aiMonthlyCents: 0,
+        databaseUsageWarning: false,
+        r2UsageWarning: false,
+        safeErrorCode: null,
+        warningCodes: [],
+      },
+    });
+    expect(eventsResponse.status).toBe(200);
+    await expect(eventsResponse.json()).resolves.toEqual({
+      events: [
+        {
+          id: EVENT_ID,
+          title: "Private planning title",
+          startsAt: "2026-07-25T17:00:00.000Z",
+          endsAt: "2026-07-25T18:00:00.000Z",
+          timeZone: "America/Chicago",
+          status: "confirmed",
+          domain: "work",
+          domainState: "inferred",
+          categoryProvenance: "model",
+        },
+      ],
+    });
+    expect(repository.correctCategory).not.toHaveBeenCalled();
   });
 
   it("preserves the exact public shape when measured storage warnings are actionable", async () => {
@@ -420,6 +645,116 @@ describe("Vision Worker diagnostic routes", () => {
 });
 
 describe("AI hard-stop Worker survival contract", () => {
+  it("enforces the admitted ai_stopped candidate before reservation, context, or provider work", async () => {
+    const diagnostic = createDiagnosticHarness({ aiMonthlyCents: 0 });
+    const providerCall = vi.fn();
+    const loadCategoryRequest = vi.fn();
+    const createContextLoader = vi.fn(() => ({
+      load: loadCategoryRequest,
+    }));
+    const reserve = vi.fn<AiUsageRepository["reserve"]>(async () => ({
+      status: "reserved" as const,
+      reservationId: "22222222-2222-4222-8222-222222222222",
+      budgetMonth: "2026-07",
+      projectedCents: 10,
+    }));
+    const usage: AiUsageRepository = {
+      reserve,
+      markDispatched: vi.fn(async () => "dispatched" as const),
+      settle: vi.fn(async () => "settled" as const),
+      release: vi.fn(async () => "released" as const),
+    };
+    const createBudgetedProvider = vi.fn((ownerId: string) =>
+      new BudgetedAiProvider({
+        ownerId,
+        repository: usage,
+        provider: { proposeCategoryResult: providerCall },
+        pricing: PRICING,
+        reservationTtlMs: 60_000,
+        now: () => NOW,
+        createReservationId: () =>
+          "22222222-2222-4222-8222-222222222222",
+      }));
+    const app = createApp({
+      diagnostic: diagnostic.dependencies,
+      aiCategoryProposal: {
+        ...sessionDependencies(),
+        createBudgetedProvider,
+        createContextLoader,
+      },
+      createRequestId: () => "req_candidate_ai_stop",
+      logger: vi.fn(),
+    });
+    const environment = {
+      VISION_ENV: "preview",
+      PREVIEW_ACCEPTANCE_SCENARIO: "ai_stopped",
+    } as Env;
+
+    const responses = await Promise.all([
+      app.fetch(request("/api/calendar/events"), environment),
+      app.fetch(request("/api/diagnostics/status"), environment),
+      app.fetch(
+        request(`/api/calendar/events/${EVENT_ID}/category`, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-vision-csrf": CSRF,
+          },
+          body: JSON.stringify({ domain: "personal" }),
+        }),
+        environment,
+      ),
+      app.fetch(request("/api/diagnostics/templates"), environment),
+      app.fetch(
+        request("/api/ai/category-proposals", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-vision-csrf": CSRF,
+          },
+          body: JSON.stringify({
+            idempotencyKey: "11111111-1111-4111-8111-111111111111",
+            eventId: EVENT_ID,
+          }),
+        }),
+        environment,
+      ),
+    ]);
+    const payloads = await Promise.all(
+      responses.map((response) => response.json()),
+    );
+
+    expect(createBudgetedProvider).not.toHaveBeenCalled();
+    expect(reserve).not.toHaveBeenCalled();
+    expect(createContextLoader).not.toHaveBeenCalled();
+    expect(loadCategoryRequest).not.toHaveBeenCalled();
+    expect(providerCall).not.toHaveBeenCalled();
+    expect(responses.map(({ status }) => status)).toEqual([
+      200, 200, 200, 200, 503,
+    ]);
+    expect(payloads[0]).toMatchObject({
+      events: [expect.objectContaining({ id: EVENT_ID })],
+    });
+    expect(payloads[1]).toMatchObject({
+      status: {
+        state: "Healthy",
+        aiSpendTier: "stopped",
+        aiMonthlyCents: 950,
+      },
+    });
+    expect(payloads[4]).toEqual({
+      error: {
+        code: "AI_BUDGET_EXHAUSTED",
+        message:
+          "AI proposal is unavailable because the monthly budget is exhausted.",
+        requestId: "req_candidate_ai_stop",
+      },
+    });
+    expect(JSON.stringify(payloads)).not.toMatch(
+      /ai_stopped|PREVIEW_ACCEPTANCE_SCENARIO|vision\.preview-fault/u,
+    );
+  });
+
   it("keeps all deterministic routes at 200 while AI returns 503 with zero context/provider calls", async () => {
     const diagnostic = createDiagnosticHarness();
     const providerCall = vi.fn();

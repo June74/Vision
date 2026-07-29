@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T20:54:20Z
-- **Last observed:** 2026-07-29T02:35:00Z
-- **Phase/task:** Phase B acceptance instrumentation Task 4 implementation
+- **Last observed:** 2026-07-29T04:23:04Z
+- **Phase/task:** Phase B acceptance instrumentation Task 5 review-fix investigation
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `d27859e`
 
@@ -77,3 +77,17 @@ continues using discovered files only.
   included the nonexistent conventional `drizzle` directory. The valid source
   and test reads completed, no repository or external state changed, and all
   subsequent searches are limited to paths returned by `git ls-files`.
+- 2026-07-29T03:59:31.2600155Z: Recurred when a compound read-only Task 5
+  inspection used the obsolete `src/client/calendar/FoundationStatus.tsx`
+  path. The surrounding valid reads completed, no source or external state
+  changed, and the component path was then taken from the tracked search
+  result under `src/client/status/`.
+- 2026-07-29T04:01:16.3523600Z: Recurred when the next compound read-only
+  inspection included two conventional helper paths not present in the
+  repository. The imported `tests/integration/jobs/backup-test-helpers.ts`
+  path was read instead; no source or external state changed.
+- 2026-07-29T04:23:04Z: Recurred when a review lookup guessed
+  `.superpowers/sdd/review-Task-5.md` instead of the inventory-listed
+  `.superpowers/sdd/acceptance-task-5-review.md`. No source or external state
+  changed; the exact filename was discovered before the review requirement was
+  re-read.

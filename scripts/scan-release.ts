@@ -4,7 +4,10 @@ import { lstat, readdir, readFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as ts from "typescript";
-import { CLIENT_FORBIDDEN_BINDING_NAMES } from "../src/server/client-binding-boundary";
+import {
+  CLIENT_FORBIDDEN_BINDING_NAMES,
+  CLIENT_FORBIDDEN_RUNTIME_VALUES,
+} from "../src/server/client-binding-boundary";
 
 /** Established plaintext canary used by Vision's encrypted-event privacy tests. */
 export const PROTECTED_RELEASE_SENTINEL = "VISION_PROTECTED_SENTINEL_7F9A";
@@ -1030,6 +1033,7 @@ export async function scanRelease(
   const forbiddenFileFragments = [
     ...protectedVariants,
     ...CLIENT_FORBIDDEN_BINDING_NAMES,
+    ...CLIENT_FORBIDDEN_RUNTIME_VALUES,
   ];
   const manifestPath = resolve(projectRoot, EVIDENCE_MANIFEST_PATH);
   let evidenceManifest: ReleaseEvidenceManifest | undefined;
@@ -1257,8 +1261,11 @@ export async function scanRelease(
       }
       if (
         target.secretBindings &&
-        CLIENT_FORBIDDEN_BINDING_NAMES.some((binding) =>
-          text.includes(binding),
+        [
+          ...CLIENT_FORBIDDEN_BINDING_NAMES,
+          ...CLIENT_FORBIDDEN_RUNTIME_VALUES,
+        ].some((literal) =>
+          text.includes(literal),
         )
       ) {
         violations.push({
