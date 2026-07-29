@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T17:30:55Z
-- **Last observed:** 2026-07-29T17:31:40Z
-- **Phase/task:** Phase B acceptance instrumentation Task 6 review fixes
+- **Last observed:** 2026-07-29T20:04:24Z
+- **Phase/task:** Phase B acceptance instrumentation Task 6 review fixes and consolidated final-fix RED wave
 - **Environment:** Local Phase B linked worktree in Windows PowerShell
 - **Version/commit:** `fa650ad`
 
@@ -12,7 +12,8 @@
 `pnpm.cmd vitest run tests/security/temporary-surface-cleanup.test.ts`
 reported that `vitest` was not recognized even though the dependency is
 installed. The first timestamp diagnostic also used the unsupported
-`Get-Date -AsUTC` parameter.
+`Get-Date -AsUTC` parameter. The same resolution failure recurred when the
+consolidated RED wave used `pnpm exec vitest`.
 
 ## Impact
 
@@ -54,4 +55,5 @@ version also lacks `Get-Date -AsUTC`.
 
 ## Verification and related work
 
-The cleanup suite will be rerun through the verified local executable.
+The consolidated focused suite collected through the verified local
+executable and produced only the intended RED failures.

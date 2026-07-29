@@ -34,4 +34,3 @@ navigation. No dashboard or provider state changed.
 ## Verification and related work
 
 The blocked action was abandoned without a bypass attempt.
-

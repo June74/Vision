@@ -1,10 +1,10 @@
 # Temporary Preview Worker Restore Design
 
 **Status:** Approved
-**Approved by:** Project owner  
-**Approval date:** 2026-07-27  
+**Approved by:** Project owner
+**Approval date:** 2026-07-27
 **Written-spec approval date:** 2026-07-27
-**Environment:** Preview only  
+**Environment:** Preview only
 **Purpose:** Complete the Phase B encrypted restore drill without rotating or
 exporting the existing backup key.
 

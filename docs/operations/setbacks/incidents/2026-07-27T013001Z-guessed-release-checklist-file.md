@@ -34,4 +34,3 @@ provider state changed.
 ## Verification and related work
 
 The authoritative plan supplied the complete remaining gate list.
-

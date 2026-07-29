@@ -34,4 +34,3 @@ state changed, and no secret value was captured.
 
 The correction is defined and no retry is required to create the requested
 credential ledger.
-

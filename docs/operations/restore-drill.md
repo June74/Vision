@@ -1,8 +1,8 @@
 # Phase B encrypted restore drill
 
-**Status:** In progress  
-**Source:** Private preview R2 bucket  
-**Target:** Empty disposable Neon branch only  
+**Status:** In progress
+**Source:** Private preview R2 bucket
+**Target:** Empty disposable Neon branch only
 **Live branch overwrite:** Forbidden
 
 This document records only counts, booleans, timestamps, schema versions, and

@@ -1,8 +1,8 @@
 # Phase B completion evidence
 
-**Status:** In progress  
-**Branch:** `codex/phase-b-foundation`  
-**Environment:** Local clean checks plus live preview  
+**Status:** In progress
+**Branch:** `codex/phase-b-foundation`
+**Environment:** Local clean checks plus live preview
 **Evidence rule:** A gate remains pending until its required live exercise has
 fresh evidence.
 

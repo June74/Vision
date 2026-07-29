@@ -1,7 +1,7 @@
 # Preview Database Role Probe Design
 
-**Status:** Approved  
-**Environment:** Preview only  
+**Status:** Approved
+**Environment:** Preview only
 **Purpose:** Resolve the Task 3 database-role uncertainty without claiming the
 restore fence or changing database data.
 

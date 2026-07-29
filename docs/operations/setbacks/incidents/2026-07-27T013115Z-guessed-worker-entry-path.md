@@ -33,4 +33,3 @@ No source or provider state changed.
 ## Verification and related work
 
 Repository discovery found `src/jobs/scheduled.ts`.
-
