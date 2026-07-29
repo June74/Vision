@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T20:54:20Z
-- **Last observed:** 2026-07-29T04:23:04Z
-- **Phase/task:** Phase B acceptance instrumentation Task 5 review-fix investigation
+- **Last observed:** 2026-07-29T22:34:16.5141180Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `d27859e`
 
@@ -91,3 +91,9 @@ continues using discovered files only.
   `.superpowers/sdd/acceptance-task-5-review.md`. No source or external state
   changed; the exact filename was discovered before the review requirement was
   re-read.
+- 2026-07-29T22:34:00.8801276Z: Recurred when a bounded pricing-contract
+  inspection guessed `src/config/environment.ts`. No state changed and the
+  valid source reads were redacted; tracked paths are enumerated next.
+- 2026-07-29T22:34:16.5141180Z: The recurrence note lookup then omitted the
+  tracked filename's `Z` suffix. No state changed; the exact path from the
+  setback index was used immediately.

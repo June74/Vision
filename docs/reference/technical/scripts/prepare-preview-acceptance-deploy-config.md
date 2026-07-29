@@ -19,7 +19,12 @@ extra, missing, or cross-operation fault choices with a generic safe error.
 ## `preparePreviewAcceptanceDeployConfig`
 
 Validates the normal artifact, performs a structured clone, adds only the
-temporary cron and admitted bindings, then validates the complete candidate.
+temporary cron, canonical bounded expiry, and admitted bindings, then validates
+the complete candidate.
+
+## `isRunId`
+
+Requires a positive decimal run identifier without coercion.
 
 ## `readArguments`
 

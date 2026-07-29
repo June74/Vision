@@ -1,9 +1,7 @@
 # AI pricing binding contract
 
-Defines the five server-only AI cost settings that an operator provisions
-outside source control. The file records only each setting's name, provider
-binding type, and pricing basis. It deliberately contains no configured
-value.
+Defines the five server-only AI cost settings and their exact approved policy.
+The settings are ordinary server-side bindings and are never browser bindings.
 
 ## `AiPricingBindingContractEntry`
 
@@ -12,6 +10,14 @@ Describes one value-free binding declaration.
 ## `AI_PRICING_BINDING_CONTRACT`
 
 Lists every required AI pricing and reservation binding exactly once.
+
+## `AI_PRICING_POLICY_VALUES`
+
+Holds the exact source-controlled policy used by both deployment environments.
+
+## `assertAiPricingPolicyValues`
+
+Rejects missing, stale, malformed, extra, or changed policy fields.
 
 ## `AI_PRICING_CONTRACT_OWNER`
 

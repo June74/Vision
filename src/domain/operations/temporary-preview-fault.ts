@@ -27,11 +27,110 @@ export type TemporaryPreviewFaultScenario =
 export type TemporaryPreviewAcceptanceSelector =
   (typeof TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS)[number];
 
+/** Inclusive UTC minute at which temporary preview activation becomes unsafe. */
+export const PREVIEW_ACCEPTANCE_BLOCKED_START_UTC_MINUTE = 5 * 60 + 35;
+
+/** Exclusive UTC minute at which temporary preview activation becomes safe again. */
+export const PREVIEW_ACCEPTANCE_BLOCKED_END_UTC_MINUTE = 6 * 60 + 35;
+
+/** Maximum time from candidate construction through evidence and rollback. */
+export const PREVIEW_ACCEPTANCE_MAX_LIFETIME_MINUTES = 30;
+
+const MILLISECONDS_PER_MINUTE = 60_000;
+const MILLISECONDS_PER_DAY = 24 * 60 * MILLISECONDS_PER_MINUTE;
+const CANONICAL_INSTANT =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
+const INVALID_TIMING = "Preview acceptance timing is unavailable.";
+
 type PreviewFaultBinding = {
   readonly VISION_ENV?: unknown;
   readonly PREVIEW_ACCEPTANCE_SCENARIO?: unknown;
+  readonly PREVIEW_ACCEPTANCE_EXPIRES_AT?: unknown;
   readonly PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED?: unknown;
 };
+
+/** Fails closed when the complete maximum lifetime touches recovery. */
+export function assertPreviewAcceptanceWindow(now: Date): void {
+  const startsAt = validAcceptanceInstant(now);
+  assertAvailableAcceptanceInterval(
+    startsAt,
+    startsAt +
+      PREVIEW_ACCEPTANCE_MAX_LIFETIME_MINUTES * MILLISECONDS_PER_MINUTE,
+  );
+}
+
+/** Creates the only candidate deadline after checking its whole lifetime. */
+export function createPreviewAcceptanceDeadline(activatedAt: Date): string {
+  assertPreviewAcceptanceWindow(activatedAt);
+  return new Date(
+    validAcceptanceInstant(activatedAt) +
+      PREVIEW_ACCEPTANCE_MAX_LIFETIME_MINUTES * MILLISECONDS_PER_MINUTE,
+  ).toISOString();
+}
+
+/** Rechecks the remaining candidate lifetime against expiry and recovery. */
+export function assertPreviewAcceptanceLifetime(
+  now: Date,
+  expiresAt: unknown,
+): void {
+  const startsAt = validAcceptanceInstant(now);
+  if (typeof expiresAt !== "string" || !CANONICAL_INSTANT.test(expiresAt)) {
+    throw new Error(INVALID_TIMING);
+  }
+  const endsAt = Date.parse(expiresAt);
+  if (
+    !Number.isFinite(endsAt) ||
+    new Date(endsAt).toISOString() !== expiresAt ||
+    endsAt <= startsAt ||
+    endsAt - startsAt >
+      PREVIEW_ACCEPTANCE_MAX_LIFETIME_MINUTES * MILLISECONDS_PER_MINUTE
+  ) {
+    throw new Error(INVALID_TIMING);
+  }
+  assertAvailableAcceptanceInterval(startsAt, endsAt);
+}
+
+/** Applies the runtime guard to one already-admitted candidate environment. */
+export function assertTemporaryPreviewAcceptanceLifetime(
+  now: Date,
+  environment: unknown,
+): void {
+  if (environment === null || typeof environment !== "object") {
+    throw new Error(INVALID_TIMING);
+  }
+  assertPreviewAcceptanceLifetime(
+    now,
+    (environment as PreviewFaultBinding).PREVIEW_ACCEPTANCE_EXPIRES_AT,
+  );
+}
+
+/** Returns a finite instant or fails closed for invalid or forged Date values. */
+function validAcceptanceInstant(value: Date): number {
+  const instant = Date.prototype.getTime.call(value);
+  if (!Number.isFinite(instant)) throw new Error(INVALID_TIMING);
+  return instant;
+}
+
+/** Rejects any candidate interval that intersects the protected UTC window. */
+function assertAvailableAcceptanceInterval(
+  startsAt: number,
+  endsAt: number,
+): void {
+  if (endsAt <= startsAt) throw new Error(INVALID_TIMING);
+  const firstDay = Math.floor(startsAt / MILLISECONDS_PER_DAY) - 1;
+  const lastDay = Math.floor(endsAt / MILLISECONDS_PER_DAY) + 1;
+  for (let day = firstDay; day <= lastDay; day += 1) {
+    const blockedStartsAt =
+      day * MILLISECONDS_PER_DAY +
+      PREVIEW_ACCEPTANCE_BLOCKED_START_UTC_MINUTE * MILLISECONDS_PER_MINUTE;
+    const blockedEndsAt =
+      day * MILLISECONDS_PER_DAY +
+      PREVIEW_ACCEPTANCE_BLOCKED_END_UTC_MINUTE * MILLISECONDS_PER_MINUTE;
+    if (startsAt < blockedEndsAt && endsAt > blockedStartsAt) {
+      throw new Error(INVALID_TIMING);
+    }
+  }
+}
 
 /** Admits one exact generated preview selector without collapsing evidence into faults. */
 export function parseTemporaryPreviewAcceptanceSelector(

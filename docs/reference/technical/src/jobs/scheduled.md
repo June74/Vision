@@ -108,12 +108,17 @@ Routes typed OAuth failure through the generation-safe maintenance checkpoint tr
 ## `scheduled`
 Uses Cloudflare's scheduled time and exact cron string for
 capability-separated dispatch. On the generated one-minute cron it validates
-the combined selector and AI attestation first, permits the role probe only
-when no selector and its explicit connection binding exist, and otherwise
-fails before an unrelated capability is called.
+candidate expiry against injected wall-clock execution time before dependency
+access, preventing a delayed event from running after the deadline, while
+passing the original scheduled instant to evidence work. It then validates the
+combined selector and AI attestation, permits the role probe only when no
+selector and its explicit connection binding exist, and otherwise fails before
+an unrelated capability is called.
 ## `createProductionScheduledEntryDependencies`
 Returns closures rather than constructed adapters, preserving lazy provider,
 database, Queue, and R2 initialization until after exact dispatch.
+## `currentTime`
+Returns a fresh wall-clock `Date` for temporary lifetime admission only.
 ## `temporaryFaultR2Upload`
 Constructs normal recovery dependencies after admission and calls
 `createWithWriter`; it never runs retention and cannot convert an earlier

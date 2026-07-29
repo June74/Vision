@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T18:53:07.263429Z
-- **Last observed:** 2026-07-28T20:43:57.5678432Z
-- **Phase/task:** Phase B acceptance instrumentation Task 3 instruction discovery
+- **Last observed:** 2026-07-29T21:48:32.2142290Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
 - **Environment:** Local Codex workspace
 - **Version/commit:** `codex/phase-b-foundation`
 
@@ -76,3 +76,8 @@ The correct skill file was read successfully in the same run.
   treated the catalog-declared `r1` scope skill as an `r0` skill. The lookup
   failed before implementation work, the correct catalog path was read
   successfully, and no project, provider, or private state changed.
+- 2026-07-29T21:48:32.2142290Z: A combined read-only instruction lookup
+  again treated the catalog-declared `r1` scope skill as an `r0` skill. The
+  lookup failed before implementation work, the catalog-mapped path was then
+  read successfully, no private data entered the output, and repository and
+  provider state were unchanged.

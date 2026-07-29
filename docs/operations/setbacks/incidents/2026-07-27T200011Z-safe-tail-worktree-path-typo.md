@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T20:00:11Z
-- **Last observed:** 2026-07-27T20:00:11Z
-- **Phase/task:** Phase B restore Task 4 safe-tail
+- **Last observed:** 2026-07-29T22:58:24.0691484Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
 - **Environment:** Local Windows worktree
 - **Version/commit:** `b9ec10c`
 
@@ -32,3 +32,10 @@ unaffected and continued observing the deployed Worker.
 ## Verification and related work
 
 The next status check uses the canonical worktree path.
+
+## Recurrence history
+
+- 2026-07-29T22:58:24.0691484Z: A focused candidate-deadline test call
+  mistyped one character in the established worktree path, so process creation
+  failed before the test started. No file, repository, or external state
+  changed; the retry copies the canonical path verbatim.

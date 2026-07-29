@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T22:00:17Z
-- **Last observed:** 2026-07-26T22:24:39.8262153Z
-- **Phase/task:** Phase B temporary backup deployment
+- **Last observed:** 2026-07-29T23:08:53.7918669Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
 - **Environment:** Local PowerShell worktree
 - **Version/commit:** `6a14659`
 
@@ -53,3 +53,14 @@ Closed after bounded directory enumeration identified the workflow.
 - 2026-07-26T22:24:39.8262153Z: Recurred after enumerating
   `tests/unit/ci/workflows.test.ts` but opening the singular filename. No state
   changed; the enumerated path is used directly.
+- 2026-07-29T22:21:43.9921489Z: Recurred when a bounded source-inspection
+  command guessed `docs/operations/preview-environments.md` instead of the
+  tracked `docs/operations/environments.md`. No state changed; tracked paths
+  are now enumerated before opening optional documentation.
+- 2026-07-29T23:06:32.2236081Z: Recurred when a bounded source-inspection
+  command guessed a singular workflow test filename instead of the discovered
+  plural filename. No state changed; the enumerated path is used directly.
+- 2026-07-29T23:08:53.7918669Z: Recurred when a bounded source-inspection
+  command guessed that the Wrangler routing test was under the scripts test
+  folder instead of the server test folder. No state changed; recursive
+  filename discovery resolved the tracked path.

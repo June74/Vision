@@ -5,6 +5,35 @@ Owns the frozen six-value preview-only scenario vocabulary and pure
 vocabulary adds `foundation_probe` and `ai_usage` without widening the fault
 tuple.
 
+## `assertPreviewAcceptanceWindow`
+
+Validates a `Date` and rejects minutes in the inclusive-start,
+exclusive-end protected UTC range.
+
+## `createPreviewAcceptanceDeadline`
+
+First proves the full maximum interval is safe, then returns its canonical UTC
+expiry.
+
+## `assertPreviewAcceptanceLifetime`
+
+Requires ordered canonical instants, a positive lifetime within the maximum,
+no expiry at evaluation time, and no intersection with the protected window.
+
+## `assertTemporaryPreviewAcceptanceLifetime`
+
+Leaves the permanent normal scheduler untouched and applies the exact deadline
+contract before temporary dependencies are resolved.
+
+## `validAcceptanceInstant`
+
+Uses the intrinsic `Date` getter and rejects non-finite or forged inputs.
+
+## `assertAvailableAcceptanceInterval`
+
+Projects an interval across adjacent UTC days and rejects every overlap with
+the protected daily range.
+
 ## `parseTemporaryPreviewAcceptanceSelector`
 
 Returns one of the eight generated candidate selectors only in preview.

@@ -8,6 +8,7 @@ import {
   validatePreviewDeployConfig,
   type PreviewDeployConfig,
 } from "./validate-preview-deploy-config";
+import { createPreviewAcceptanceDeadline } from "./validate-preview-acceptance-window";
 
 const INVALID_CONFIG =
   "Preview acceptance deployment configuration is invalid.";
@@ -39,6 +40,8 @@ export const PREVIEW_ACCEPTANCE_OPERATIONS = Object.freeze([
   "deploy_ai",
   "deploy_fault",
   "rollback",
+  "close_rollback",
+  "verify_cleanup",
 ] as const);
 
 export type PreviewAcceptanceOperation =
@@ -54,7 +57,15 @@ export interface PreviewAcceptanceWorkflowSelection {
   readonly faultScenario:
     | "none"
     | (typeof TEMPORARY_PREVIEW_FAULT_SCENARIOS)[number];
+  readonly candidateRunRef: string;
+  readonly rollbackRunId: string;
+  readonly rollbackClosureRunId: string;
   readonly selector?: PreviewAcceptanceSelector;
+}
+
+/** Accepts only a positive decimal workflow-run identifier. */
+function isRunId(value: unknown): value is string {
+  return typeof value === "string" && /^[1-9][0-9]*$/u.test(value);
 }
 
 /** Validates the one allowed operation/fault combination without coercion. */
@@ -62,10 +73,16 @@ export function validatePreviewAcceptanceWorkflowInputs(
   operation: unknown,
   faultScenario: unknown,
   authenticatedReadsGate: unknown,
+  candidateRunRef: unknown,
+  rollbackRunId: unknown,
+  rollbackClosureRunId: unknown,
 ): PreviewAcceptanceWorkflowSelection {
   if (
     typeof operation !== "string" ||
     typeof faultScenario !== "string" ||
+    typeof candidateRunRef !== "string" ||
+    typeof rollbackRunId !== "string" ||
+    typeof rollbackClosureRunId !== "string" ||
     (authenticatedReadsGate !== "not_verified" &&
       authenticatedReadsGate !== "verified") ||
     !PREVIEW_ACCEPTANCE_OPERATIONS.includes(
@@ -75,14 +92,45 @@ export function validatePreviewAcceptanceWorkflowInputs(
     throw new Error(INVALID_SELECTION);
   }
   const admittedOperation = operation as PreviewAcceptanceOperation;
-  const requiresAuthenticatedReads =
-    admittedOperation !== "none" && admittedOperation !== "observe";
-  if (
-    requiresAuthenticatedReads !==
-    (authenticatedReadsGate === "verified")
-  ) {
+  const candidateOperation =
+    admittedOperation === "deploy_foundation" ||
+    admittedOperation === "deploy_ai" ||
+    admittedOperation === "deploy_fault";
+  const exactLifecycleInputs =
+    ((admittedOperation === "none" || admittedOperation === "observe") &&
+      authenticatedReadsGate === "not_verified" &&
+      candidateRunRef === "" &&
+      rollbackRunId === "" &&
+      rollbackClosureRunId === "") ||
+    (candidateOperation &&
+      authenticatedReadsGate === "verified" &&
+      rollbackRunId === "" &&
+      ((candidateRunRef === "baseline" &&
+        rollbackClosureRunId === "baseline") ||
+        (isRunId(candidateRunRef) && isRunId(rollbackClosureRunId)))) ||
+    (admittedOperation === "rollback" &&
+      authenticatedReadsGate === "not_verified" &&
+      isRunId(candidateRunRef) &&
+      rollbackRunId === "" &&
+      rollbackClosureRunId === "") ||
+    (admittedOperation === "close_rollback" &&
+      authenticatedReadsGate === "verified" &&
+      isRunId(candidateRunRef) &&
+      isRunId(rollbackRunId) &&
+      rollbackClosureRunId === "") ||
+    (admittedOperation === "verify_cleanup" &&
+      authenticatedReadsGate === "not_verified" &&
+      isRunId(candidateRunRef) &&
+      rollbackRunId === "" &&
+      isRunId(rollbackClosureRunId));
+  if (!exactLifecycleInputs) {
     throw new Error(INVALID_SELECTION);
   }
+  const lifecycle = {
+    candidateRunRef,
+    rollbackRunId,
+    rollbackClosureRunId,
+  } as const;
   if (admittedOperation === "deploy_fault") {
     if (
       !TEMPORARY_PREVIEW_FAULT_SCENARIOS.includes(
@@ -96,6 +144,7 @@ export function validatePreviewAcceptanceWorkflowInputs(
       authenticatedReadsGate,
       faultScenario:
         faultScenario as (typeof TEMPORARY_PREVIEW_FAULT_SCENARIOS)[number],
+      ...lifecycle,
       selector:
         faultScenario as (typeof TEMPORARY_PREVIEW_FAULT_SCENARIOS)[number],
     });
@@ -108,6 +157,7 @@ export function validatePreviewAcceptanceWorkflowInputs(
       operation: admittedOperation,
       authenticatedReadsGate,
       faultScenario: "none",
+      ...lifecycle,
       selector: "foundation_probe",
     });
   }
@@ -116,6 +166,7 @@ export function validatePreviewAcceptanceWorkflowInputs(
       operation: admittedOperation,
       authenticatedReadsGate,
       faultScenario: "none",
+      ...lifecycle,
       selector: "ai_usage",
     });
   }
@@ -123,6 +174,7 @@ export function validatePreviewAcceptanceWorkflowInputs(
     operation: admittedOperation,
     authenticatedReadsGate,
     faultScenario: "none",
+    ...lifecycle,
   });
 }
 
@@ -131,6 +183,7 @@ export function preparePreviewAcceptanceDeployConfig(input: {
   readonly normalConfig: unknown;
   readonly selector: PreviewAcceptanceSelector;
   readonly aiGatewayLimitAttested?: true;
+  readonly activatedAt?: Date;
 }): PreviewDeployConfig {
   try {
     validatePreviewDeployConfig(input.normalConfig);
@@ -151,6 +204,9 @@ export function preparePreviewAcceptanceDeployConfig(input: {
     vars: {
       ...(normal.vars as Readonly<Record<string, string>>),
       PREVIEW_ACCEPTANCE_SCENARIO: input.selector,
+      PREVIEW_ACCEPTANCE_EXPIRES_AT: createPreviewAcceptanceDeadline(
+        input.activatedAt ?? new Date(),
+      ),
       ...(input.selector === "ai_usage"
         ? {
             PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true",
@@ -198,16 +254,19 @@ async function main(): Promise<void> {
       parsed.get("--operation"),
       parsed.get("--fault-scenario"),
       parsed.get("--authenticated-reads-gate"),
+      parsed.get("--candidate-run-ref"),
+      parsed.get("--rollback-run-id"),
+      parsed.get("--rollback-closure-run-id"),
     );
     if (verifyOnly) {
-      if (parsed.size !== 3) throw new Error(INVALID_SELECTION);
+      if (parsed.size !== 6) throw new Error(INVALID_SELECTION);
       process.stdout.write("Preview acceptance workflow selection is valid.\n");
       return;
     }
     if (
       parsed.get("--input") !== NORMAL_INPUT ||
       parsed.get("--output") !== ACCEPTANCE_OUTPUT ||
-      parsed.size !== 6 ||
+      parsed.size !== 9 ||
       selection.selector === undefined
     ) {
       throw new Error(INVALID_CONFIG);

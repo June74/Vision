@@ -15,6 +15,8 @@ on:
           - deploy_ai
           - deploy_fault
           - rollback
+          - close_rollback
+          - verify_cleanup
       fault_scenario:
         description: Closed fault selector used only with deploy_fault
         required: true
@@ -51,6 +53,21 @@ on:
         required: false
         default: ""
         type: string
+      candidate_run_ref:
+        description: Latest candidate run, or baseline only before the first candidate
+        required: false
+        default: ""
+        type: string
+      rollback_run_id:
+        description: Completed rollback run required only to close rollback
+        required: false
+        default: ""
+        type: string
+      rollback_closure_run_id:
+        description: Latest closure run, or baseline only before the first candidate
+        required: false
+        default: ""
+        type: string
       configure_ai_budget:
         description: Apply and verify the approved preview AI Gateway budget without deployment
         required: false
@@ -63,7 +80,7 @@ permissions:
 
 concurrency:
   group: ${{ inputs.acceptance_operation == 'observe' && inputs.configure_ai_budget == false && 'vision-preview-observer' || 'vision-preview-mutation' }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   selection:
@@ -89,7 +106,10 @@ jobs:
           pnpm exec tsx scripts/prepare-preview-acceptance-deploy-config.ts --verify-workflow-inputs \
             --operation "${{ inputs.acceptance_operation }}" \
             --fault-scenario "${{ inputs.fault_scenario }}" \
-            --authenticated-reads-gate "${{ inputs.authenticated_reads_gate }}"
+            --authenticated-reads-gate "${{ inputs.authenticated_reads_gate }}" \
+            --candidate-run-ref "${{ inputs.candidate_run_ref }}" \
+            --rollback-run-id "${{ inputs.rollback_run_id }}" \
+            --rollback-closure-run-id "${{ inputs.rollback_closure_run_id }}"
 
   verify:
     name: Verify preview candidate
@@ -216,6 +236,7 @@ jobs:
     if: ${{ inputs.acceptance_operation == 'deploy_foundation' || inputs.acceptance_operation == 'deploy_ai' || inputs.acceptance_operation == 'deploy_fault' }}
     needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment: preview
     steps:
       - name: Check acceptance deployment authorization
@@ -245,6 +266,43 @@ jobs:
           AUTHENTICATED_READS_GATE: ${{ inputs.authenticated_reads_gate }}
         run: |
           [[ "$AUTHENTICATED_READS_GATE" == "verified" ]]
+      - name: Verify latest post-restore closure before candidate deployment
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_RUN_REF: ${{ inputs.candidate_run_ref }}
+          ROLLBACK_CLOSURE_RUN_ID: ${{ inputs.rollback_closure_run_id }}
+          VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}
+        run: |
+          artifacts_file="$(mktemp)"
+          closure_file="$(mktemp)"
+          closure_run_file="$(mktemp)"
+          closure_jobs_file="$(mktemp)"
+          closure_dir="$(mktemp -d)"
+          trap 'rm -f "$artifacts_file" "$closure_file" "$closure_run_file" "$closure_jobs_file"; rm -rf "$closure_dir"' EXIT
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=vision-preview-candidate-intent&per_page=100" > "$artifacts_file"
+          pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-latest-candidate \
+            --artifacts-file "$artifacts_file" \
+            --candidate-run-ref "$CANDIDATE_RUN_REF"
+          if [[ "$CANDIDATE_RUN_REF" == "baseline" ]]; then
+            [[ "$ROLLBACK_CLOSURE_RUN_ID" == "baseline" ]]
+            printf 'null\n' > "$closure_file"
+          else
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ROLLBACK_CLOSURE_RUN_ID" > "$closure_run_file"
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ROLLBACK_CLOSURE_RUN_ID/jobs" > "$closure_jobs_file"
+            pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-run \
+              --run-file "$closure_run_file" \
+              --jobs-file "$closure_jobs_file" \
+              --commit "$VERIFIED_SHA" \
+              --job-name "Close restored normal preview"
+            gh run download "$ROLLBACK_CLOSURE_RUN_ID" --name vision-preview-rollback-closed --dir "$closure_dir" > /dev/null
+            closure_file="$closure_dir/preview-rollback-closure.json"
+          fi
+          pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-closure \
+            --closure-proof "$closure_file" \
+            --candidate-run-ref "$CANDIDATE_RUN_REF" \
+            --commit "$VERIFIED_SHA" \
+            --operation "candidate"
       - name: Reject daily recovery overlap before candidate preparation
         run: pnpm exec tsx scripts/validate-preview-acceptance-window.ts
       - name: Verify active privacy-safe observer
@@ -310,6 +368,9 @@ jobs:
           CLOUDFLARE_ENV: preview
       - name: Verify immutable normal artifact
         run: pnpm deploy:check:preview
+      - name: Attest exact server-only AI pricing policy
+        if: ${{ inputs.acceptance_operation == 'deploy_ai' || (inputs.acceptance_operation == 'deploy_fault' && inputs.fault_scenario == 'ai_stopped') }}
+        run: pnpm ai:pricing:attest --config dist/vision/wrangler.json --environment preview
       - name: Verify the existing AI Gateway limit
         id: gateway-attestation
         if: ${{ inputs.acceptance_operation == 'deploy_ai' || (inputs.acceptance_operation == 'deploy_fault' && inputs.fault_scenario == 'ai_stopped') }}
@@ -328,11 +389,24 @@ jobs:
             --operation "${{ inputs.acceptance_operation }}" \
             --fault-scenario "${{ inputs.fault_scenario }}" \
             --authenticated-reads-gate "${{ inputs.authenticated_reads_gate }}" \
+            --candidate-run-ref "${{ inputs.candidate_run_ref }}" \
+            --rollback-run-id "${{ inputs.rollback_run_id }}" \
+            --rollback-closure-run-id "${{ inputs.rollback_closure_run_id }}" \
             --input dist/vision/wrangler.json \
             --output dist/vision/wrangler.acceptance.json \
             --ai-gateway-limit-attested "$AI_GATEWAY_LIMIT_ATTESTED"
-      - name: Recheck daily recovery overlap immediately before deploy
-        run: pnpm exec tsx scripts/validate-preview-acceptance-window.ts
+      - name: Write candidate intent before preview mutation
+        run: |
+          pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --write-candidate-intent \
+            --commit "${{ needs.verify.outputs.verified_sha }}" \
+            --output preview-candidate-intent.json
+      - name: Upload candidate intent before preview mutation
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vision-preview-candidate-intent
+          path: preview-candidate-intent.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Reverify active matching observer immediately before deploy
         shell: bash
         env:
@@ -370,6 +444,8 @@ jobs:
             --jobs-file "$jobs_file" \
             --sha "$VERIFIED_SHA" \
             --evidence "$expected_observer_evidence"
+      - name: Recheck daily recovery overlap immediately before deploy
+        run: pnpm exec tsx scripts/validate-preview-acceptance-window.ts --candidate dist/vision/wrangler.acceptance.json
       - name: Deploy generated acceptance candidate
         if: ${{ steps.acceptance-token.outputs.deploy == 'true' }}
         run: pnpm exec wrangler deploy --config dist/vision/wrangler.acceptance.json --name vision-preview
@@ -382,6 +458,7 @@ jobs:
     if: ${{ inputs.acceptance_operation == 'rollback' && inputs.configure_ai_budget == false }}
     needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment: preview
     steps:
       - name: Check rollback authorization
@@ -403,24 +480,40 @@ jobs:
           cache: pnpm
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
+      - name: Verify rollback targets the latest candidate intent
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_RUN_REF: ${{ inputs.candidate_run_ref }}
+          VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}
+        run: |
+          artifacts_file="$(mktemp)"
+          candidate_dir="$(mktemp -d)"
+          trap 'rm -f "$artifacts_file"; rm -rf "$candidate_dir"' EXIT
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=vision-preview-candidate-intent&per_page=100" > "$artifacts_file"
+          pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-latest-candidate \
+            --artifacts-file "$artifacts_file" \
+            --candidate-run-ref "$CANDIDATE_RUN_REF"
+          gh run download "$CANDIDATE_RUN_REF" --name vision-preview-candidate-intent --dir "$candidate_dir" > /dev/null
+          pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-candidate-intent \
+            --candidate-intent "$candidate_dir/preview-candidate-intent.json" \
+            --commit "$VERIFIED_SHA"
       - name: Build immutable normal artifact
         run: pnpm build
         env:
           CLOUDFLARE_ENV: preview
       - name: Validate immutable normal artifact
         run: pnpm deploy:check:preview
-      - name: Require rollback authenticated diagnostics and calendar operator gate
-        shell: bash
-        env:
-          AUTHENTICATED_READS_GATE: ${{ inputs.authenticated_reads_gate }}
-        run: |
-          [[ "$AUTHENTICATED_READS_GATE" == "verified" ]]
       - name: Deploy immutable normal preview Worker
-        run: pnpm exec wrangler deploy --config dist/vision/wrangler.json --name vision-preview
+        id: rollback-deploy
+        run: |
+          pnpm exec wrangler deploy --config dist/vision/wrangler.json --name vision-preview
+          node -e 'process.stdout.write(`restored_at=${new Date().toISOString()}\n`)' >> "$GITHUB_OUTPUT"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
       - name: Verify normal runtime and temporary-surface absence
+        id: rollback-provider
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
@@ -440,7 +533,169 @@ jobs:
             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/vision-preview/settings" > "$settings_file"
           pnpm exec tsx scripts/validate-preview-deploy-config.ts \
             --verify-provider-state "$health_file" "$schedules_file" "$settings_file"
-          echo "Provider cleanup is forbidden until this rollback verification succeeds." >> "$GITHUB_STEP_SUMMARY"
+          node -e 'process.stdout.write(`provider_verified_at=${new Date().toISOString()}\n`)' >> "$GITHUB_OUTPUT"
+      - name: Write privacy-safe restored-normal proof
+        run: |
+          pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --write-restore-proof \
+            --candidate-run-ref "${{ inputs.candidate_run_ref }}" \
+            --commit "${{ needs.verify.outputs.verified_sha }}" \
+            --restored-at "${{ steps.rollback-deploy.outputs.restored_at }}" \
+            --provider-verified-at "${{ steps.rollback-provider.outputs.provider_verified_at }}" \
+            --provider-state "verified" \
+            --output preview-rollback-restored.json
+      - name: Upload restored-normal proof
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vision-preview-rollback-restored
+          path: preview-rollback-restored.json
+          if-no-files-found: error
+          retention-days: 30
+
+  close_rollback:
+    name: Close restored normal preview
+    if: ${{ inputs.acceptance_operation == 'close_rollback' && inputs.configure_ai_budget == false }}
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: preview
+    steps:
+      - name: Check closure verification authorization
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
+        run: |
+          if [[ -z "$CLOUDFLARE_API_TOKEN" || -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then
+            exit 1
+          fi
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ needs.verify.outputs.verified_sha }}
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify completed rollback run and restored-normal proof
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ROLLBACK_RUN_ID: ${{ inputs.rollback_run_id }}
+          VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}
+        run: |
+          run_file="$(mktemp)"
+          jobs_file="$(mktemp)"
+          proof_dir="$(mktemp -d)"
+          trap 'rm -f "$run_file" "$jobs_file"; rm -rf "$proof_dir"' EXIT
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ROLLBACK_RUN_ID" > "$run_file"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ROLLBACK_RUN_ID/jobs" > "$jobs_file"
+          pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-run \
+            --run-file "$run_file" \
+            --jobs-file "$jobs_file" \
+            --commit "$VERIFIED_SHA" \
+            --job-name "Restore immutable normal preview"
+          gh run download "$ROLLBACK_RUN_ID" --name vision-preview-rollback-restored --dir "$proof_dir" > /dev/null
+          cp "$proof_dir/preview-rollback-restored.json" preview-rollback-restored.json
+      - name: Build and validate immutable normal artifact for closure
+        run: |
+          pnpm build
+          pnpm deploy:check:preview
+        env:
+          CLOUDFLARE_ENV: preview
+      - name: Reverify normal provider state before rollback closure
+        id: closure-provider
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
+        run: |
+          health_file="$(mktemp)"
+          schedules_file="$(mktemp)"
+          settings_file="$(mktemp)"
+          trap 'rm -f "$health_file" "$schedules_file" "$settings_file"' EXIT
+          public_origin="$(node --input-type=module -e 'import { readFileSync } from "node:fs"; const config = JSON.parse(readFileSync("dist/vision/wrangler.json", "utf8")); process.stdout.write(new URL(config.vars.GOOGLE_OAUTH_REDIRECT_URI).origin)')"
+          provider_origin="$(printf '%s%s' 'https:' '//api.cloudflare.com/client/v4')"
+          curl --fail --silent --show-error "$public_origin/api/health" > "$health_file"
+          curl --fail --silent --show-error \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "$provider_origin/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/vision-preview/schedules" > "$schedules_file"
+          curl --fail --silent --show-error \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "$provider_origin/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/vision-preview/settings" > "$settings_file"
+          pnpm exec tsx scripts/validate-preview-deploy-config.ts \
+            --verify-provider-state "$health_file" "$schedules_file" "$settings_file"
+          node -e 'process.stdout.write(`provider_verified_at=${new Date().toISOString()}\n`)' >> "$GITHUB_OUTPUT"
+      - name: Close rollback after post-restore authenticated reads
+        shell: bash
+        env:
+          AUTHENTICATED_READS_GATE: ${{ inputs.authenticated_reads_gate }}
+        run: |
+          pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --close-rollback \
+            --restore-proof preview-rollback-restored.json \
+            --candidate-run-ref "${{ inputs.candidate_run_ref }}" \
+            --commit "${{ needs.verify.outputs.verified_sha }}" \
+            --authenticated-reads-gate "$AUTHENTICATED_READS_GATE" \
+            --closure-provider-verified-at "${{ steps.closure-provider.outputs.provider_verified_at }}" \
+            --closed-at "$(node -e 'process.stdout.write(new Date().toISOString())')" \
+            --output preview-rollback-closure.json
+      - name: Upload rollback closure
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vision-preview-rollback-closed
+          path: preview-rollback-closure.json
+          if-no-files-found: error
+          retention-days: 30
+
+  verify_cleanup:
+    name: Verify cleanup admission
+    if: ${{ inputs.acceptance_operation == 'verify_cleanup' && inputs.configure_ai_budget == false }}
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ needs.verify.outputs.verified_sha }}
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify rollback closure before provider cleanup
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_RUN_REF: ${{ inputs.candidate_run_ref }}
+          ROLLBACK_CLOSURE_RUN_ID: ${{ inputs.rollback_closure_run_id }}
+          VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}
+        run: |
+          artifacts_file="$(mktemp)"
+          run_file="$(mktemp)"
+          jobs_file="$(mktemp)"
+          closure_dir="$(mktemp -d)"
+          trap 'rm -f "$artifacts_file" "$run_file" "$jobs_file"; rm -rf "$closure_dir"' EXIT
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=vision-preview-candidate-intent&per_page=100" > "$artifacts_file"
+          pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-latest-candidate \
+            --artifacts-file "$artifacts_file" \
+            --candidate-run-ref "$CANDIDATE_RUN_REF"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ROLLBACK_CLOSURE_RUN_ID" > "$run_file"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ROLLBACK_CLOSURE_RUN_ID/jobs" > "$jobs_file"
+          pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-run \
+            --run-file "$run_file" \
+            --jobs-file "$jobs_file" \
+            --commit "$VERIFIED_SHA" \
+            --job-name "Close restored normal preview"
+          gh run download "$ROLLBACK_CLOSURE_RUN_ID" --name vision-preview-rollback-closed --dir "$closure_dir" > /dev/null
+          pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-closure \
+            --closure-proof "$closure_dir/preview-rollback-closure.json" \
+            --candidate-run-ref "$CANDIDATE_RUN_REF" \
+            --commit "$VERIFIED_SHA" \
+            --operation "cleanup"
+          echo "Provider cleanup remains forbidden until the post-restore closure gate succeeds." >> "$GITHUB_STEP_SUMMARY"
 
   configure_gateway:
     name: Configure approved AI Gateway budget

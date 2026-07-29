@@ -1,10 +1,14 @@
 # SB-20260729-202515-final-fix-typecheck-test-narrowing
 
 - **Status:** closed
-- **Last observed:** 2026-07-29T20:27:22Z
-- **Phase/task:** Phase B consolidated final-fix typecheck
+- **Last observed:** 2026-07-29T22:53:19.8395997Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
 - **Title:** New contract tests inferred types narrower than their test operations
 - **Impact:** Typecheck reported two test-only errors after the focused runtime suite passed. No runtime or external state changed.
 - **Cause:** One negative membership check used a tuple whose literal union intentionally excluded the queried names, one fixture replacement targeted a property inferred from a narrower initial object, and the replacement attempted a mutable reverse directly on a readonly tuple clone.
 - **Resolution:** Widened only the test-side membership view and fixture replacement boundary, copied the readonly tuple before reversing it, and passed the full typecheck.
 - **Recurrence:** The second typecheck confirmed the first fix and exposed the remaining readonly-array operation.
+- **Recurrence:** The wave-2 typecheck found that the new immutable restore-proof
+  interface was narrower than the generic canonical-record digest input. Tests
+  had passed because the mismatch is static only; no runtime or external state
+  changed. The digest boundary is narrowed to the exact proof interface.

@@ -11,6 +11,10 @@ import {
   validatePreviewAcceptanceDeployConfig,
   validatePreviewDeployConfig,
 } from "../../../scripts/validate-preview-deploy-config";
+import {
+  AI_PRICING_BINDING_CONTRACT,
+  AI_PRICING_POLICY_VALUES,
+} from "../../../src/server/ai-pricing-binding-contract";
 
 const NORMAL_CRONS = ["*/15 * * * *", "5 6 * * *"] as const;
 const ACCEPTANCE_CRON = "* * * * *";
@@ -28,12 +32,12 @@ const ACCEPTANCE_SELECTORS = [
   "ai_usage",
 ] as const;
 const NORMAL_PREVIEW_PROVIDER_BINDINGS = [
-  { name: "AI_COMPLEX_WORST_CASE_CENTS", type: "secret_text" },
-  { name: "AI_INPUT_CENTS_PER_MILLION_TOKENS", type: "secret_text" },
+  ...AI_PRICING_BINDING_CONTRACT.map(({ name, type, value }) => ({
+    name,
+    type,
+    text: value,
+  })),
   { name: "AI_MONTHLY_HARD_LIMIT_CENTS", type: "plain_text" },
-  { name: "AI_OPTIONAL_WORST_CASE_CENTS", type: "secret_text" },
-  { name: "AI_OUTPUT_CENTS_PER_MILLION_TOKENS", type: "secret_text" },
-  { name: "AI_ROUTINE_WORST_CASE_CENTS", type: "secret_text" },
   { name: "BACKUP_BUCKET", type: "r2_bucket" },
   { name: "BACKUP_ENCRYPTION_KEY", type: "secret_text" },
   { name: "BACKUP_KEY_VERSION", type: "plain_text" },
@@ -106,6 +110,7 @@ function previewArtifact(): DeployConfig {
     vars: {
       VISION_ENV: "preview",
       AI_MONTHLY_HARD_LIMIT_CENTS: "950",
+      ...AI_PRICING_POLICY_VALUES,
       BACKUP_KEY_VERSION: "1",
       DATABASE_USAGE_WARNING_BYTES: "400000000",
       R2_USAGE_WARNING_BYTES: "8000000000",
@@ -248,6 +253,7 @@ describe("generated preview acceptance candidate", () => {
       const candidate = preparePreviewAcceptanceDeployConfig({
         normalConfig: source,
         selector: scenario,
+        activatedAt: new Date("2026-07-29T04:00:00.000Z"),
       }) as DeployConfig;
 
       expect(source).toEqual(before);
@@ -259,6 +265,7 @@ describe("generated preview acceptance candidate", () => {
       expect(candidate.vars).toEqual({
         ...source.vars,
         PREVIEW_ACCEPTANCE_SCENARIO: scenario,
+        PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-29T04:30:00.000Z",
       });
       expect(candidate.vars).not.toHaveProperty(
         "PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED",
@@ -273,6 +280,7 @@ describe("generated preview acceptance candidate", () => {
     const candidate = preparePreviewAcceptanceDeployConfig({
       normalConfig: previewArtifact(),
       selector: "foundation_probe",
+      activatedAt: new Date("2026-07-29T04:00:00.000Z"),
     });
 
     expect(candidate.vars).toMatchObject({
@@ -286,11 +294,42 @@ describe("generated preview acceptance candidate", () => {
     ).not.toThrow();
   });
 
+  it("rejects a missing, malformed, or unreviewed candidate deadline", () => {
+    const candidate = preparePreviewAcceptanceDeployConfig({
+      normalConfig: previewArtifact(),
+      selector: "foundation_probe",
+      activatedAt: new Date("2026-07-29T04:00:00.000Z"),
+    });
+    expect(candidate.vars).toMatchObject({
+      PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-29T04:30:00.000Z",
+    });
+    for (const expiresAt of [
+      undefined,
+      "malformed",
+      "2026-07-29T04:31:00Z",
+      "2026-13-29T04:30:00.000Z",
+    ]) {
+      expect(() =>
+        validatePreviewAcceptanceDeployConfig(
+          {
+            ...candidate,
+            vars: {
+              ...(candidate.vars as Record<string, unknown>),
+              PREVIEW_ACCEPTANCE_EXPIRES_AT: expiresAt,
+            },
+          },
+          "foundation_probe",
+        ),
+      ).toThrow(/acceptance deployment configuration/i);
+    }
+  });
+
   it("adds the same-run Gateway attestation only to the AI evidence candidate", () => {
     const candidate = preparePreviewAcceptanceDeployConfig({
       normalConfig: previewArtifact(),
       selector: "ai_usage",
       aiGatewayLimitAttested: true,
+      activatedAt: new Date("2026-07-29T04:00:00.000Z"),
     });
 
     expect(candidate.vars).toMatchObject({
@@ -384,6 +423,7 @@ describe("generated preview acceptance candidate", () => {
     const candidate = preparePreviewAcceptanceDeployConfig({
       normalConfig: previewArtifact(),
       selector: "job_failed",
+      activatedAt: new Date("2026-07-29T04:00:00.000Z"),
     });
     const unknown = clone(candidate) as DeployConfig;
     unknown.vars!.PREVIEW_ACCEPTANCE_SCENARIO = "unknown";
@@ -410,18 +450,49 @@ describe("generated preview acceptance candidate", () => {
 
 describe("preview acceptance workflow input admission", () => {
   const validSelections: ReadonlyArray<
-    readonly [string, string, string, string | undefined]
+    readonly [
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string | undefined,
+    ]
   > = [
-    ["none", "none", "not_verified", undefined],
-    ["observe", "none", "not_verified", undefined],
-    ["deploy_foundation", "none", "verified", "foundation_probe"],
-    ["deploy_ai", "none", "verified", "ai_usage"],
-    ["rollback", "none", "verified", undefined],
+    ["none", "none", "not_verified", "", "", "", undefined],
+    ["observe", "none", "not_verified", "", "", "", undefined],
+    [
+      "deploy_foundation",
+      "none",
+      "verified",
+      "baseline",
+      "",
+      "baseline",
+      "foundation_probe",
+    ],
+    [
+      "deploy_ai",
+      "none",
+      "verified",
+      "101",
+      "",
+      "202",
+      "ai_usage",
+    ],
+    ["rollback", "none", "not_verified", "101", "", "", undefined],
+    ["close_rollback", "none", "verified", "101", "202", "", undefined],
+    ["verify_cleanup", "none", "not_verified", "101", "", "303", undefined],
     ...FAULT_SCENARIOS.map(
-      (scenario): readonly [string, string, string, string] => [
+      (
+        scenario,
+      ): readonly [string, string, string, string, string, string, string] => [
         "deploy_fault",
         scenario,
         "verified",
+        "101",
+        "",
+        "202",
         scenario,
       ],
     ),
@@ -429,42 +500,72 @@ describe("preview acceptance workflow input admission", () => {
 
   it.each(validSelections)(
     "admits operation %s with fault choice %s",
-    (operation, faultScenario, authenticatedReadsGate, expectedSelector) => {
-      expect(
-        validatePreviewAcceptanceWorkflowInputs(
-          operation,
-          faultScenario,
-          authenticatedReadsGate,
-        ).selector,
-      ).toBe(expectedSelector);
+    (
+      operation,
+      faultScenario,
+      authenticatedReadsGate,
+      candidateRunRef,
+      rollbackRunId,
+      rollbackClosureRunId,
+      expectedSelector,
+    ) => {
+      const selection = validatePreviewAcceptanceWorkflowInputs(
+        operation,
+        faultScenario,
+        authenticatedReadsGate,
+        candidateRunRef,
+        rollbackRunId,
+        rollbackClosureRunId,
+      );
+      expect(selection.selector).toBe(expectedSelector);
+      expect(selection.candidateRunRef).toBe(candidateRunRef);
+      expect(selection.rollbackRunId).toBe(rollbackRunId);
+      expect(selection.rollbackClosureRunId).toBe(rollbackClosureRunId);
     },
   );
 
   it.each([
-    ["unknown", "none", "not_verified"],
-    ["none", "job_failed", "not_verified"],
-    ["observe", "job_failed", "not_verified"],
-    ["deploy_foundation", "job_failed", "verified"],
-    ["deploy_ai", "ai_stopped", "verified"],
-    ["deploy_fault", "none", "verified"],
-    ["deploy_fault", "unknown", "verified"],
-    ["rollback", "queue_delayed", "verified"],
-    ["deploy_foundation", "none", "not_verified"],
-    ["deploy_ai", "none", "unknown"],
-    ["deploy_fault", "job_failed", "not_verified"],
-    ["rollback", "none", "not_verified"],
-    ["none", "none", "verified"],
-    ["observe", "none", "verified"],
-  ])("rejects operation %s with fault choice %s and gate %s", (
+    ["unknown", "none", "not_verified", "", "", ""],
+    ["none", "job_failed", "not_verified", "", "", ""],
+    ["observe", "job_failed", "not_verified", "", "", ""],
+    ["deploy_foundation", "job_failed", "verified", "baseline", "", "baseline"],
+    ["deploy_ai", "ai_stopped", "verified", "baseline", "", "baseline"],
+    ["deploy_fault", "none", "verified", "baseline", "", "baseline"],
+    ["deploy_fault", "unknown", "verified", "baseline", "", "baseline"],
+    ["rollback", "queue_delayed", "not_verified", "101", "", ""],
+    ["deploy_foundation", "none", "not_verified", "baseline", "", "baseline"],
+    ["deploy_ai", "none", "unknown", "baseline", "", "baseline"],
+    ["deploy_fault", "job_failed", "not_verified", "baseline", "", "baseline"],
+    ["rollback", "none", "verified", "101", "", ""],
+    ["none", "none", "verified", "", "", ""],
+    ["observe", "none", "verified", "", "", ""],
+    ["none", "none", "not_verified", "101", "", ""],
+    ["deploy_ai", "none", "verified", "", "", ""],
+    ["deploy_ai", "none", "verified", "baseline", "", "202"],
+    ["deploy_ai", "none", "verified", "101", "", "baseline"],
+    ["deploy_ai", "none", "verified", "01", "", "202"],
+    ["rollback", "none", "not_verified", "baseline", "", ""],
+    ["rollback", "none", "not_verified", "101", "202", ""],
+    ["close_rollback", "none", "not_verified", "101", "202", ""],
+    ["close_rollback", "none", "verified", "101", "", ""],
+    ["verify_cleanup", "none", "not_verified", "101", "", ""],
+    ["verify_cleanup", "none", "not_verified", "101", "202", "303"],
+  ])("rejects operation %s with invalid lifecycle inputs", (
     operation,
     faultScenario,
     authenticatedReadsGate,
+    candidateRunRef,
+    rollbackRunId,
+    rollbackClosureRunId,
   ) => {
     expect(() =>
       validatePreviewAcceptanceWorkflowInputs(
         operation,
         faultScenario,
         authenticatedReadsGate,
+        candidateRunRef,
+        rollbackRunId,
+        rollbackClosureRunId,
       ),
     ).toThrow(/acceptance workflow selection/i);
   });
@@ -474,6 +575,7 @@ describe("preview acceptance workflow input admission", () => {
       preparePreviewAcceptanceDeployConfig({
         normalConfig: previewArtifact(),
         selector: selector as PreviewAcceptanceSelector,
+        activatedAt: new Date("2026-07-29T04:00:00.000Z"),
         ...(selector === "ai_usage"
           ? { aiGatewayLimitAttested: true as const }
           : {}),
@@ -616,7 +718,32 @@ describe("normal preview live provider-state validation", () => {
         bindings: structuredClone(NORMAL_PREVIEW_PROVIDER_BINDINGS).map(
           (binding) =>
             binding.name === "AI_INPUT_CENTS_PER_MILLION_TOKENS"
-              ? { ...binding, type: "plain_text" }
+              ? { ...binding, type: "secret_text" }
+              : binding,
+        ),
+      },
+    }],
+    ["missing pricing text", {
+      success: true,
+      result: {
+        bindings: structuredClone(NORMAL_PREVIEW_PROVIDER_BINDINGS).map(
+          (binding) => {
+            if (binding.name !== "AI_INPUT_CENTS_PER_MILLION_TOKENS") {
+              return binding;
+            }
+            const { text: _missing, ...withoutText } = binding;
+            return withoutText;
+          },
+        ),
+      },
+    }],
+    ["stale pricing text", {
+      success: true,
+      result: {
+        bindings: structuredClone(NORMAL_PREVIEW_PROVIDER_BINDINGS).map(
+          (binding) =>
+            binding.name === "AI_INPUT_CENTS_PER_MILLION_TOKENS"
+              ? { ...binding, text: `${binding.text}0` }
               : binding,
         ),
       },

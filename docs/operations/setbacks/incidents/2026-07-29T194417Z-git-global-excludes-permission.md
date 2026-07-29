@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T19:44:17Z
-- **Last observed:** 2026-07-29T19:44:17Z
-- **Phase/task:** Phase B consolidated final-fix preflight
+- **Last observed:** 2026-07-29T23:35:05.5454395Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
 - **Environment:** Local Phase B worktree
-- **Version/commit:** Clean `e3c1272` base
+- **Version/commit:** `41d3e74` base with tracked setback recurrences
 
 ## Symptom
 
@@ -36,3 +36,22 @@ were still available, but later Git commands may repeat the warning.
 ## Verification and related work
 
 The same command returned a clean worktree at the required base commit.
+
+## Recurrence history
+
+- 2026-07-29T21:46:31.2210743Z: The warning recurred after the
+  command-scoped worktree ownership override allowed repository metadata reads.
+  Git still returned the expected branch, commit, and status. No persistent
+  Git configuration or provider state changed.
+- 2026-07-29T21:50:06.9379108Z: The warning recurred during the wave-2
+  baseline check. Git still returned the expected branch, commit, linked
+  worktree metadata, and tracked status; no persistent Git configuration or
+  provider state changed.
+- 2026-07-29T22:11:21.8745113Z: A controller read-only status check reproduced
+  the same user-excludes permission warning. The status command still
+  completed, and no repository, persistent Git configuration, or provider
+  state changed.
+- 2026-07-29T23:35:05.5454395Z: The final-fix range scan reproduced the same
+  user-excludes warning. Git still returned complete safe aggregate path and
+  pattern counts plus an exit-zero diff check; no repository or persistent
+  Git configuration changed.

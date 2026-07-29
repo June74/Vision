@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:47:00Z
-- **Last observed:** 2026-07-29T18:53:57Z
-- **Phase/task:** Phase B acceptance instrumentation Task 5 E2E
+- **Last observed:** 2026-07-29T23:11:04.7507139Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
 - **Environment:** Local worktree
 - **Version/commit:** `50569e6`
 
@@ -150,3 +150,12 @@ recurrence.
 
 The named-variable retry completed with exit zero and emitted only aggregate
 path, policy-pattern, and diff-check counts. This closes the recurrence.
+
+- 2026-07-29T22:25:22.4881675Z: A bounded tracked-source lookup supplied
+  `-R` to `git grep`, which supports recursive search by default and rejected
+  that option. No source content or protected value was emitted and no state
+  changed. The retry uses the tool's documented default recursion.
+- 2026-07-29T23:11:04.7507139Z: A recursive documentation-count search
+  included the large ignored SDD directory and exceeded its local time limit.
+  It emitted only truncated path rows, changed no state, and is replaced by a
+  search over tracked text paths plus specifically named reports.

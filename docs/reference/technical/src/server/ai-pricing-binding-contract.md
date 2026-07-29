@@ -1,9 +1,9 @@
 # `src/server/ai-pricing-binding-contract.ts`
 
-Defines a frozen, value-free deployment contract for the five server-only AI
-cost inputs. Each declaration includes an exact binding name, the
-`secret_text` provider type, and a stable basis identifier. Runtime values
-remain in the external deployment environment.
+Defines the frozen deployment contract and exact policy for the five
+server-only AI cost inputs. Each declaration includes an exact binding name,
+the ordinary-text provider type, a stable basis identifier, and its canonical
+source-controlled string.
 
 ## `AiPricingBindingContractEntry`
 
@@ -12,6 +12,16 @@ Restricts names, type, and basis to the approved literal unions.
 ## `AI_PRICING_BINDING_CONTRACT`
 
 Provides the frozen binding inventory consumed by normal-state validation.
+
+## `AI_PRICING_POLICY_VALUES`
+
+Provides the exact five-field policy consumed by runtime schemas, artifact
+attestation, and provider-state validation.
+
+## `assertAiPricingPolicyValues`
+
+Requires one plain object with exactly the five approved own string values and
+no missing, extra, inherited, accessor-backed, or changed field.
 
 ## `AI_PRICING_CONTRACT_OWNER`
 

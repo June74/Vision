@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T02:37:28.278093Z
-- **Last observed:** 2026-07-29T02:39:00Z
-- **Phase/task:** Acceptance instrumentation Task 4 review-fix investigation
+- **Last observed:** 2026-07-29T23:06:32.2236081Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
 - **Environment:** Windows PowerShell, isolated phase-b-foundation worktree
 - **Version/commit:** ecd74074fe223d4e9d185e8c92dd033eb26678a4
 
@@ -56,3 +56,6 @@ removed.
 ## Recurrence history
 
 - 2026-07-29T02:37:28.278093Z: First observed.
+- 2026-07-29T23:06:32.2236081Z: Recurred when a consolidated status-and-source
+  inspection reused the rejected override. The read stopped before any state
+  change; subsequent Git reads omit the override.

@@ -90,7 +90,7 @@ jobs:
           } > dist/release-summary/security-scan.txt
       - name: Upload safe release security summary
         if: ${{ always() }}
-          uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: vision-phase-b-security-summary
           path: dist/release-summary/security-scan.txt
@@ -123,6 +123,8 @@ jobs:
           CLOUDFLARE_ENV: production
       - name: Validate explicit production artifact
         run: pnpm deploy:check:production
+      - name: Attest exact server-only AI pricing policy
+        run: pnpm ai:pricing:attest --config dist/vision/wrangler.json --environment production
       - name: Dry-run explicit production artifact
         run: >-
           pnpm exec wrangler deploy --dry-run

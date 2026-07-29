@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T19:45:30Z
-- **Last observed:** 2026-07-29T20:59:03Z
-- **Phase/task:** Phase B consolidated final-fix live-path tracing
+- **Last observed:** 2026-07-29T22:46:45.9890985Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
 - **Environment:** Local Phase B worktree
-- **Version/commit:** Working changes based on `e3c1272`
+- **Version/commit:** Working changes based on `41d3e74`
 
 ## Symptom
 
@@ -56,3 +56,28 @@ stricter prohibition on rendering any URL.
 Closure requires all remaining source inspections, ref lookups, and generated
 evidence to contain only names, types, counts, and other explicitly safe fixed
 facts.
+
+## Recurrence history
+
+- 2026-07-29T22:05:35.1087778Z: A bounded configuration projection included
+  one already-tracked deployment callback value because the projection was
+  serialized before URL redaction. No credential, authorization data, private
+  content, or provider mutation was involved. Subsequent configuration reads
+  are limited to names, counts, and redacted summaries.
+- 2026-07-29T22:06:36.3770325Z: The successful package-manager dependency
+  update printed its own public update-notice link. It was unrelated to the
+  repository or any provider account and exposed no protected data. Future
+  package-manager output is captured and summarized without rendering links.
+- 2026-07-29T22:24:07.3408553Z: A bounded workflow range read still included
+  already-tracked public endpoint literals. No credential, authorization
+  value, provider-private data, or state change was involved. Further workflow
+  inspection is restricted to redacted projections or exact static assertions.
+- 2026-07-29T22:31:49.4391296Z: A focused static-workflow test failure rendered
+  its whole tracked received string, including already-committed public
+  endpoint literals. No credential, authorization value, external response, or
+  state change was involved. Remaining static assertions are corrected before
+  rerun so failure output stays bounded.
+- 2026-07-29T22:46:45.9890985Z: A short production-fixture range read rendered
+  committed policy and threshold numbers while deriving the exact closed
+  production contract. No credential, provider-private data, or state change
+  was involved. Subsequent verification emits only pass/fail counts.

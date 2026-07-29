@@ -2,17 +2,19 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { AI_PRICING_POLICY_VALUES } from "../src/server/ai-pricing-binding-contract";
 
 const INVALID = "Production deployment configuration is invalid.";
 const NORMAL_CRONS = ["*/15 * * * *", "5 6 * * *"] as const;
-const EXPECTED_VAR_NAMES = [
-  "AI_MONTHLY_HARD_LIMIT_CENTS",
-  "BACKUP_KEY_VERSION",
-  "DATABASE_USAGE_WARNING_BYTES",
-  "R2_USAGE_WARNING_BYTES",
-  "R2_USAGE_WARNING_OBJECTS",
-  "VISION_ENV",
-] as const;
+const EXPECTED_VAR_ENTRIES = Object.freeze({
+  AI_MONTHLY_HARD_LIMIT_CENTS: "950",
+  ...AI_PRICING_POLICY_VALUES,
+  BACKUP_KEY_VERSION: "1",
+  DATABASE_USAGE_WARNING_BYTES: "400000000",
+  R2_USAGE_WARNING_BYTES: "8000000000",
+  R2_USAGE_WARNING_OBJECTS: "100",
+  VISION_ENV: "production",
+});
 
 /** Enforces production isolation, normal schedules, and the closed variable shape. */
 export function validateProductionDeployConfig(candidate: unknown): void {
@@ -52,26 +54,11 @@ export function validateProductionDeployConfig(candidate: unknown): void {
   }
 }
 
-/** Requires exactly the approved names and canonical nonnegative decimal values. */
+/** Requires the exact reviewed production values without numeric wildcards. */
 function validProductionVars(
   vars: Record<string, unknown> | undefined,
 ): boolean {
-  if (vars === undefined) return false;
-  const keys = Object.keys(vars).sort();
-  const expectedKeys = [...EXPECTED_VAR_NAMES].sort();
-  if (
-    keys.length !== expectedKeys.length ||
-    keys.some((key, index) => key !== expectedKeys[index]) ||
-    vars.VISION_ENV !== "production"
-  ) {
-    return false;
-  }
-  return expectedKeys
-    .filter((name) => name !== "VISION_ENV")
-    .every((name) => {
-      const value = vars[name];
-      return typeof value === "string" && /^(?:0|[1-9]\d*)$/u.test(value);
-    });
+  return exactRecord(vars, EXPECTED_VAR_ENTRIES);
 }
 
 /** Requires one exact array without coercion. */

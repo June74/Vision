@@ -4,6 +4,7 @@ import { decodeBase64Url } from "../crypto/envelope";
 import { AI_HARD_STOP_CENTS } from "../domain/budget/ai-budget";
 import { TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS } from "../domain/operations/temporary-preview-fault";
 import { parseCloudflareOpenAiGatewayBaseUrl } from "../integrations/openai/cloudflare-gateway-url";
+import { AI_PRICING_POLICY_VALUES } from "./ai-pricing-binding-contract";
 
 const keyEncryptionKeySchema = z.string().superRefine((keyEncryptionKey, context) => {
   let decoded: Uint8Array | undefined;
@@ -87,16 +88,24 @@ const openAiGatewayBaseUrlSchema = z
       });
     }
   });
-const injectedNonNegativeIntegerSchema = z.coerce
-  .number()
-  .int()
-  .nonnegative()
-  .max(100_000);
-const injectedPositiveCentsSchema = z.coerce
-  .number()
-  .int()
-  .positive()
-  .max(949);
+/** Converts one exact source-controlled pricing binding into runtime cents. */
+const exactPricingCentsSchema = (expected: string) =>
+  z.literal(expected).transform((value) => Number(value));
+const aiInputCentsPerMillionTokensSchema = exactPricingCentsSchema(
+  AI_PRICING_POLICY_VALUES.AI_INPUT_CENTS_PER_MILLION_TOKENS,
+);
+const aiOutputCentsPerMillionTokensSchema = exactPricingCentsSchema(
+  AI_PRICING_POLICY_VALUES.AI_OUTPUT_CENTS_PER_MILLION_TOKENS,
+);
+const aiRoutineWorstCaseCentsSchema = exactPricingCentsSchema(
+  AI_PRICING_POLICY_VALUES.AI_ROUTINE_WORST_CASE_CENTS,
+);
+const aiOptionalWorstCaseCentsSchema = exactPricingCentsSchema(
+  AI_PRICING_POLICY_VALUES.AI_OPTIONAL_WORST_CASE_CENTS,
+);
+const aiComplexWorstCaseCentsSchema = exactPricingCentsSchema(
+  AI_PRICING_POLICY_VALUES.AI_COMPLEX_WORST_CASE_CENTS,
+);
 const aiMonthlyHardLimitSchema = z.coerce
   .number()
   .int()
@@ -111,6 +120,18 @@ const usageWarningThresholdSchema = z.coerce.number().refine(
       "Storage usage warning thresholds must be positive safe integers.",
   },
 );
+const previewAcceptanceExpiresAtSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u)
+  .refine(
+    (value) => {
+      const instant = Date.parse(value);
+      return Number.isFinite(instant) && new Date(instant).toISOString() === value;
+    },
+    {
+      message: "PREVIEW_ACCEPTANCE_EXPIRES_AT must be a canonical UTC instant.",
+    },
+  );
 
 /** Validates only the server-side configuration needed by the OpenAI adapter. */
 export const OpenAiEnvSchema = z
@@ -124,11 +145,11 @@ export const OpenAiEnvSchema = z
 export const AiBudgetEnvSchema = z
   .object({
     AI_MONTHLY_HARD_LIMIT_CENTS: aiMonthlyHardLimitSchema,
-    AI_INPUT_CENTS_PER_MILLION_TOKENS: injectedNonNegativeIntegerSchema,
-    AI_OUTPUT_CENTS_PER_MILLION_TOKENS: injectedNonNegativeIntegerSchema,
-    AI_ROUTINE_WORST_CASE_CENTS: injectedPositiveCentsSchema,
-    AI_OPTIONAL_WORST_CASE_CENTS: injectedPositiveCentsSchema,
-    AI_COMPLEX_WORST_CASE_CENTS: injectedPositiveCentsSchema,
+    AI_INPUT_CENTS_PER_MILLION_TOKENS: aiInputCentsPerMillionTokensSchema,
+    AI_OUTPUT_CENTS_PER_MILLION_TOKENS: aiOutputCentsPerMillionTokensSchema,
+    AI_ROUTINE_WORST_CASE_CENTS: aiRoutineWorstCaseCentsSchema,
+    AI_OPTIONAL_WORST_CASE_CENTS: aiOptionalWorstCaseCentsSchema,
+    AI_COMPLEX_WORST_CASE_CENTS: aiComplexWorstCaseCentsSchema,
   })
   .strict();
 
@@ -218,18 +239,20 @@ export const RuntimeEnvSchema = z
     OPENAI_API_KEY: z.string().min(1).max(2_048).optional(),
     AI_MONTHLY_HARD_LIMIT_CENTS: aiMonthlyHardLimitSchema.optional(),
     AI_INPUT_CENTS_PER_MILLION_TOKENS:
-      injectedNonNegativeIntegerSchema.optional(),
+      aiInputCentsPerMillionTokensSchema.optional(),
     AI_OUTPUT_CENTS_PER_MILLION_TOKENS:
-      injectedNonNegativeIntegerSchema.optional(),
-    AI_ROUTINE_WORST_CASE_CENTS: injectedPositiveCentsSchema.optional(),
-    AI_OPTIONAL_WORST_CASE_CENTS: injectedPositiveCentsSchema.optional(),
-    AI_COMPLEX_WORST_CASE_CENTS: injectedPositiveCentsSchema.optional(),
+      aiOutputCentsPerMillionTokensSchema.optional(),
+    AI_ROUTINE_WORST_CASE_CENTS: aiRoutineWorstCaseCentsSchema.optional(),
+    AI_OPTIONAL_WORST_CASE_CENTS: aiOptionalWorstCaseCentsSchema.optional(),
+    AI_COMPLEX_WORST_CASE_CENTS: aiComplexWorstCaseCentsSchema.optional(),
     DATABASE_USAGE_WARNING_BYTES: usageWarningThresholdSchema.optional(),
     R2_USAGE_WARNING_BYTES: usageWarningThresholdSchema.optional(),
     R2_USAGE_WARNING_OBJECTS: usageWarningThresholdSchema.optional(),
     PREVIEW_ACCEPTANCE_SCENARIO: z
       .enum(TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS)
       .optional(),
+    PREVIEW_ACCEPTANCE_EXPIRES_AT:
+      previewAcceptanceExpiresAtSchema.optional(),
     PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: z
       .literal("true")
       .optional(),
@@ -254,6 +277,16 @@ export const RuntimeEnvSchema = z
       context.addIssue({
         code: "custom",
         message: "PREVIEW_ACCEPTANCE_SCENARIO is preview-only.",
+      });
+    }
+    if (
+      (environment.PREVIEW_ACCEPTANCE_SCENARIO === undefined) !==
+      (environment.PREVIEW_ACCEPTANCE_EXPIRES_AT === undefined)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "PREVIEW_ACCEPTANCE_SCENARIO and PREVIEW_ACCEPTANCE_EXPIRES_AT must be configured together.",
       });
     }
     if (

@@ -1,11 +1,11 @@
-# SB-20260729-173140-task6-review-local-vitest-resolution: Package runner did not resolve local Vitest
+# SB-20260729-173140-task6-review-local-vitest-resolution: Package runner did not resolve local binaries
 
 - **Status:** closed
 - **First observed:** 2026-07-29T17:30:55Z
-- **Last observed:** 2026-07-29T20:04:24Z
-- **Phase/task:** Phase B acceptance instrumentation Task 6 review fixes and consolidated final-fix RED wave
+- **Last observed:** 2026-07-29T23:28:10.1332873Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
 - **Environment:** Local Phase B linked worktree in Windows PowerShell
-- **Version/commit:** `fa650ad`
+- **Version/commit:** Working changes based on `41d3e74`
 
 ## Symptom
 
@@ -57,3 +57,15 @@ version also lacks `Get-Date -AsUTC`.
 
 The consolidated focused suite collected through the verified local
 executable and produced only the intended RED failures.
+
+## Recurrence history
+
+- 2026-07-29T22:12:31.6559531Z: `pnpm.cmd exec vitest` again failed before
+  collection while starting the parser-backed workflow regression. No test,
+  repository, runtime, or provider state changed; the retry uses the
+  repository-pinned executable directly.
+- 2026-07-29T23:28:10.1332873Z: `pnpm.cmd exec wrangler` did not resolve the
+  installed Wrangler executable during a local nondeploy dry-run. Preview
+  build, artifact validation, and pricing attestation had already passed; no
+  deployment or provider request began. The retry uses the verified
+  repository-local `wrangler.CMD`.

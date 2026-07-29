@@ -99,7 +99,14 @@ Validates the exact server-only OpenAI adapter binding pair. The base URL must b
 
 ## `parseAiBudgetEnvironment`
 
-Validates the hard limit as exactly 950 cents and requires non-negative integer per-million-token rates plus positive routine, optional, and complex worst-case reservations. Values are injected because provider prices are not assumed by source code.
+Validates the exact hard limit and requires all five canonical
+source-controlled per-token and reservation policy strings before converting
+them to runtime cents.
+
+## `exactPricingCentsSchema`
+
+Builds a literal-string Zod schema from one approved policy value and
+transforms only that exact string to a number.
 
 ## `parseUsageWarningThresholds`
 

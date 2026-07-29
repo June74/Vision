@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T04:02:13Z
-- **Last observed:** 2026-07-28T19:59:44.7378306Z
-- **Phase/task:** Phase B acceptance instrumentation Task 2 self-review
+- **Last observed:** 2026-07-29T23:49:18.1537051Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `4420f6d`
 
@@ -113,3 +113,8 @@ this incident was recorded.
   whitespace review. `git diff --check` exited zero; warnings remained limited
   to expected Windows normalization metadata, and no formatting rewrite or
   external action occurred.
+- 2026-07-29T23:49:18.1537051Z: A final-fix wrapper temporarily disabled
+  automatic line-ending normalization in an attempt to suppress warning
+  output. That made existing CRLF bytes appear as trailing whitespace and
+  produced a false nonzero diff result. No file changed; the ordinary
+  repository-configured check is used for the authoritative result.

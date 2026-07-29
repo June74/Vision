@@ -1,33 +1,69 @@
-/** Blocks temporary preview activation around the normal recovery schedule. */
+/** Guards temporary preview activation and its generated lifetime deadline. */
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import {
+  assertPreviewAcceptanceLifetime,
+  assertPreviewAcceptanceWindow,
+  createPreviewAcceptanceDeadline,
+} from "../src/domain/operations/temporary-preview-fault";
+
+export {
+  assertPreviewAcceptanceLifetime,
+  assertPreviewAcceptanceWindow,
+  createPreviewAcceptanceDeadline,
+  PREVIEW_ACCEPTANCE_BLOCKED_END_UTC_MINUTE,
+  PREVIEW_ACCEPTANCE_BLOCKED_START_UTC_MINUTE,
+  PREVIEW_ACCEPTANCE_MAX_LIFETIME_MINUTES,
+} from "../src/domain/operations/temporary-preview-fault";
 
 const INVALID = "Preview acceptance timing is unavailable.";
+const CANDIDATE_PATH = "dist/vision/wrangler.acceptance.json";
 
-/** Inclusive UTC minute at which temporary preview activation becomes unsafe. */
-export const PREVIEW_ACCEPTANCE_BLOCKED_START_UTC_MINUTE = 5 * 60 + 35;
-
-/** Exclusive UTC minute at which temporary preview activation becomes safe again. */
-export const PREVIEW_ACCEPTANCE_BLOCKED_END_UTC_MINUTE = 6 * 60 + 35;
-
-/** Fails closed for invalid time or any instant in the recovery overlap window. */
-export function assertPreviewAcceptanceWindow(now: Date): void {
-  const instant = Date.prototype.getTime.call(now);
-  if (!Number.isFinite(instant)) throw new Error(INVALID);
-  const minute = now.getUTCHours() * 60 + now.getUTCMinutes();
-  if (
-    minute >= PREVIEW_ACCEPTANCE_BLOCKED_START_UTC_MINUTE &&
-    minute < PREVIEW_ACCEPTANCE_BLOCKED_END_UTC_MINUTE
-  ) {
-    throw new Error(INVALID);
-  }
+/** Admits only ordinary data objects with the default object prototype. */
+function plainObject(value: unknown): Record<string, unknown> | undefined {
+  return value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.getPrototypeOf(value) === Object.prototype
+    ? (value as Record<string, unknown>)
+    : undefined;
 }
 
-/** Checks the current clock without accepting caller-controlled arguments. */
-function main(): void {
+/** Reads one own enumerable data property without invoking accessors. */
+function dataValue(
+  record: Record<string, unknown> | undefined,
+  key: string,
+): unknown {
+  const descriptor =
+    record === undefined ? undefined : Object.getOwnPropertyDescriptor(record, key);
+  return descriptor?.enumerable === true && "value" in descriptor
+    ? descriptor.value
+    : undefined;
+}
+
+/** Checks either a fresh maximum interval or the fixed generated artifact. */
+async function main(): Promise<void> {
   try {
-    if (process.argv.length !== 2) throw new Error(INVALID);
-    assertPreviewAcceptanceWindow(new Date());
+    const arguments_ = process.argv.slice(2);
+    if (arguments_.length === 0) {
+      assertPreviewAcceptanceWindow(new Date());
+    } else if (
+      arguments_.length === 2 &&
+      arguments_[0] === "--candidate" &&
+      arguments_[1] === CANDIDATE_PATH
+    ) {
+      const config = plainObject(
+        JSON.parse(await readFile(resolve(CANDIDATE_PATH), "utf8")) as unknown,
+      );
+      const vars = plainObject(dataValue(config, "vars"));
+      assertPreviewAcceptanceLifetime(
+        new Date(),
+        dataValue(vars, "PREVIEW_ACCEPTANCE_EXPIRES_AT"),
+      );
+    } else {
+      throw new Error(INVALID);
+    }
     process.stdout.write("Preview acceptance timing is available.\n");
   } catch {
     process.stderr.write(`${INVALID}\n`);
@@ -39,5 +75,5 @@ if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(resolve(process.argv[1])).href
 ) {
-  main();
+  void main();
 }

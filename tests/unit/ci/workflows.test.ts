@@ -226,6 +226,10 @@ describe("delivery workflow policy", () => {
       production,
       "Validate explicit production artifact",
     );
+    const attestPricing = readWorkflowStep(
+      production,
+      "Attest exact server-only AI pricing policy",
+    );
     const dryRun = readWorkflowStep(
       production,
       "Dry-run explicit production artifact",
@@ -238,6 +242,9 @@ describe("delivery workflow policy", () => {
     expect(build).toContain("run: pnpm build");
     expect(build).toContain("CLOUDFLARE_ENV: production");
     expect(validate).toContain("pnpm deploy:check:production");
+    expect(attestPricing).toContain(
+      "pnpm ai:pricing:attest --config dist/vision/wrangler.json --environment production",
+    );
     expect(dryRun).toContain("wrangler deploy --dry-run");
     expect(dryRun).toContain("--config dist/vision/wrangler.json");
     expect(release).toContain("--config dist/vision/wrangler.json");
@@ -245,10 +252,18 @@ describe("delivery workflow policy", () => {
     expect(packageMetadata.scripts?.["deploy:check:production"]).toBe(
       "tsx scripts/validate-production-deploy-config.ts",
     );
+    expect(packageMetadata.scripts?.["ai:pricing:attest"]).toBe(
+      "tsx scripts/attest-ai-pricing-policy.ts",
+    );
     expect(names.indexOf("Build explicit production artifact")).toBeLessThan(
       names.indexOf("Validate explicit production artifact"),
     );
     expect(names.indexOf("Validate explicit production artifact")).toBeLessThan(
+      names.indexOf("Attest exact server-only AI pricing policy"),
+    );
+    expect(
+      names.indexOf("Attest exact server-only AI pricing policy"),
+    ).toBeLessThan(
       names.indexOf("Dry-run explicit production artifact"),
     );
     expect(names.indexOf("Dry-run explicit production artifact")).toBeLessThan(
@@ -363,7 +378,7 @@ describe("preview live diagnostics policy", () => {
     expect(preview).toContain(
       "concurrency:\n" +
         "  group: ${{ inputs.acceptance_operation == 'observe' && inputs.configure_ai_budget == false && 'vision-preview-observer' || 'vision-preview-mutation' }}\n" +
-        "  cancel-in-progress: true",
+        "  cancel-in-progress: false",
     );
     expect(preview).not.toContain("group: vision-preview\n");
     expect(tailJob).toContain("timeout-minutes: 18");
@@ -447,6 +462,8 @@ describe("preview acceptance candidate workflow", () => {
       "deploy_ai",
       "deploy_fault",
       "rollback",
+      "close_rollback",
+      "verify_cleanup",
     ]);
     expect(readWorkflowChoiceOptions(preview, "fault_scenario")).toEqual([
       "none",
@@ -472,11 +489,22 @@ describe("preview acceptance candidate workflow", () => {
     expect(preview).toContain(
       "--authenticated-reads-gate \"${{ inputs.authenticated_reads_gate }}\"",
     );
+    expect(preview).toContain(
+      "--candidate-run-ref \"${{ inputs.candidate_run_ref }}\"",
+    );
+    expect(preview).toContain(
+      "--rollback-run-id \"${{ inputs.rollback_run_id }}\"",
+    );
+    expect(preview).toContain(
+      "--rollback-closure-run-id \"${{ inputs.rollback_closure_run_id }}\"",
+    );
   });
 
   it("keeps observer and mutation runs separate and bounded", async () => {
     const preview = await readWorkflow("preview.yml");
     const observer = readWorkflowJob(preview, "tail");
+    const candidate = readWorkflowJob(preview, "deploy_acceptance_candidate");
+    const rollback = readWorkflowJob(preview, "rollback");
     const tailStep = readWorkflowStep(
       preview,
       "Print only allowlisted acceptance evidence",
@@ -485,7 +513,10 @@ describe("preview acceptance candidate workflow", () => {
     expect(preview).toContain(
       "group: ${{ inputs.acceptance_operation == 'observe' && inputs.configure_ai_budget == false && 'vision-preview-observer' || 'vision-preview-mutation' }}",
     );
+    expect(preview).toContain("cancel-in-progress: false");
     expect(observer).toContain("timeout-minutes: 18");
+    expect(candidate).toContain("timeout-minutes: 30");
+    expect(rollback).toContain("timeout-minutes: 15");
     expect(observer).toContain("ref: ${{ github.sha }}");
     expect(observer).not.toContain("wrangler deploy");
     expect(observer).not.toContain("gateway:configure:preview");
@@ -583,7 +614,10 @@ describe("preview acceptance candidate workflow", () => {
     const deployIndex = names.indexOf("Deploy generated acceptance candidate");
 
     expect(finalProofIndex).toBeGreaterThan(-1);
-    expect(deployIndex).toBe(finalProofIndex + 1);
+    expect(deployIndex).toBe(finalProofIndex + 2);
+    expect(names[finalProofIndex + 1]).toBe(
+      "Recheck daily recovery overlap immediately before deploy",
+    );
     expect(finalProof).toContain("actions/runs/$OBSERVER_RUN_ID");
     expect(finalProof).toContain(
       "VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}",
@@ -614,6 +648,10 @@ describe("preview acceptance candidate workflow", () => {
       preview,
       "Verify the existing AI Gateway limit",
     );
+    const policyAttestation = readWorkflowStep(
+      preview,
+      "Attest exact server-only AI pricing policy",
+    );
     const buildStep = readWorkflowStep(
       preview,
       "Build generated acceptance candidate",
@@ -630,14 +668,48 @@ describe("preview acceptance candidate workflow", () => {
     expect(buildStep).toContain(
       "--ai-gateway-limit-attested \"$AI_GATEWAY_LIMIT_ATTESTED\"",
     );
+    expect(policyAttestation).toContain(
+      "inputs.acceptance_operation == 'deploy_ai' || (inputs.acceptance_operation == 'deploy_fault' && inputs.fault_scenario == 'ai_stopped')",
+    );
+    expect(policyAttestation).toContain(
+      "pnpm ai:pricing:attest --config dist/vision/wrangler.json --environment preview",
+    );
+    expect(
+      readWorkflowStepNames(candidate).indexOf(
+        "Attest exact server-only AI pricing policy",
+      ),
+    ).toBeLessThan(
+      readWorkflowStepNames(candidate).indexOf(
+        "Verify the existing AI Gateway limit",
+      ),
+    );
     expect(candidate).not.toContain(
       "PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: ${{",
     );
   });
 
-  it("keeps rollback separately operator-dispatched over the verified normal artifact", async () => {
+  it("enforces a closed rollback lifecycle before another candidate or cleanup", async () => {
     const preview = await readWorkflow("preview.yml");
+    const candidate = readWorkflowJob(preview, "deploy_acceptance_candidate");
     const rollback = readWorkflowJob(preview, "rollback");
+    const closeRollback = readWorkflowJob(preview, "close_rollback");
+    const cleanupGate = readWorkflowJob(preview, "verify_cleanup");
+    const candidateNames = readWorkflowStepNames(candidate);
+    const rollbackNames = readWorkflowStepNames(rollback);
+    const closeNames = readWorkflowStepNames(closeRollback);
+
+    const candidateClosure = readWorkflowStep(
+      preview,
+      "Verify latest post-restore closure before candidate deployment",
+    );
+    const candidatePreflight = readWorkflowStep(
+      preview,
+      "Verify live preview is normal before candidate deployment",
+    );
+    const rollbackCandidate = readWorkflowStep(
+      preview,
+      "Verify rollback targets the latest candidate intent",
+    );
     const deployStep = readWorkflowStep(
       preview,
       "Deploy immutable normal preview Worker",
@@ -646,12 +718,47 @@ describe("preview acceptance candidate workflow", () => {
       preview,
       "Verify normal runtime and temporary-surface absence",
     );
-    const candidate = readWorkflowJob(preview, "deploy_acceptance_candidate");
-    const candidatePreflight = readWorkflowStep(
+    const restoreProof = readWorkflowStep(
       preview,
-      "Verify live preview is normal before candidate deployment",
+      "Write privacy-safe restored-normal proof",
     );
-    const candidateNames = readWorkflowStepNames(candidate);
+    const closeRun = readWorkflowStep(
+      preview,
+      "Verify completed rollback run and restored-normal proof",
+    );
+    const closeProvider = readWorkflowStep(
+      preview,
+      "Reverify normal provider state before rollback closure",
+    );
+    const closeProof = readWorkflowStep(
+      preview,
+      "Close rollback after post-restore authenticated reads",
+    );
+    const cleanupClosure = readWorkflowStep(
+      preview,
+      "Verify rollback closure before provider cleanup",
+    );
+
+    expect(candidateClosure).toContain(
+      "scripts/validate-preview-rollback-lifecycle.ts --verify-closure",
+    );
+    expect(candidateClosure).toContain('--operation "candidate"');
+    expect(candidateClosure).toContain(
+      'gh run download "$ROLLBACK_CLOSURE_RUN_ID" --name vision-preview-rollback-closed',
+    );
+    expect(
+      candidateNames.indexOf(
+        "Verify latest post-restore closure before candidate deployment",
+      ),
+    ).toBeLessThan(
+      candidateNames.indexOf(
+        "Verify live preview is normal before candidate deployment",
+      ),
+    );
+    expect(candidatePreflight).toContain("/api/health");
+    expect(candidatePreflight).toContain("schedules");
+    expect(candidatePreflight).toContain("settings");
+    expect(candidatePreflight).toContain("--verify-provider-state");
 
     expect(rollback).toContain(
       "if: ${{ inputs.acceptance_operation == 'rollback' && inputs.configure_ai_budget == false }}",
@@ -660,85 +767,130 @@ describe("preview acceptance candidate workflow", () => {
       "ref: ${{ needs.verify.outputs.verified_sha }}",
     );
     expect(rollback).toContain("pnpm deploy:check:preview");
+    expect(rollback).not.toContain("AUTHENTICATED_READS_GATE");
+    expect(rollbackCandidate).toContain(
+      "scripts/validate-preview-rollback-lifecycle.ts --verify-latest-candidate",
+    );
     expect(deployStep).toContain("--config dist/vision/wrangler.json");
     expect(deployStep).not.toContain("wrangler.acceptance.json");
     expect(deployStep).not.toContain("--var ");
-    expect(rollback).not.toContain("if: ${{ always() }}");
-    expect(verificationStep).toContain("/api/health");
-    expect(verificationStep).toContain("schedules");
-    expect(verificationStep).toContain(
-      "scripts/validate-preview-deploy-config.ts",
+    expect(verificationStep).toContain("--verify-provider-state");
+    expect(restoreProof).toContain(
+      "scripts/validate-preview-rollback-lifecycle.ts --write-restore-proof",
     );
-    expect(verificationStep).toContain(
-      "--verify-provider-state",
-    );
-    expect(verificationStep).not.toContain("// []");
-    expect(candidatePreflight).toContain("/api/health");
-    expect(candidatePreflight).toContain("schedules");
-    expect(candidatePreflight).toContain("settings");
-    expect(candidatePreflight).toContain(
-      "scripts/validate-preview-deploy-config.ts",
-    );
-    expect(candidatePreflight).toContain(
-      "--verify-provider-state",
-    );
-    expect(candidatePreflight).not.toContain("// []");
+    expect(restoreProof).toContain('--provider-state "verified"');
     expect(
-      candidateNames.indexOf(
-        "Verify live preview is normal before candidate deployment",
+      rollbackNames.indexOf("Deploy immutable normal preview Worker"),
+    ).toBeLessThan(
+      rollbackNames.indexOf("Verify normal runtime and temporary-surface absence"),
+    );
+    expect(
+      rollbackNames.indexOf("Verify normal runtime and temporary-surface absence"),
+    ).toBeLessThan(
+      rollbackNames.indexOf("Write privacy-safe restored-normal proof"),
+    );
+
+    expect(closeRollback).toContain(
+      "if: ${{ inputs.acceptance_operation == 'close_rollback' && inputs.configure_ai_budget == false }}",
+    );
+    expect(closeRun).toContain("actions/runs/$ROLLBACK_RUN_ID");
+    expect(closeRun).toContain(
+      'gh run download "$ROLLBACK_RUN_ID" --name vision-preview-rollback-restored',
+    );
+    expect(closeRun).toContain(
+      '--job-name "Restore immutable normal preview"',
+    );
+    expect(closeProvider).toContain("--verify-provider-state");
+    expect(closeProof).toContain(
+      "scripts/validate-preview-rollback-lifecycle.ts --close-rollback",
+    );
+    expect(closeProof).toContain(
+      "AUTHENTICATED_READS_GATE: ${{ inputs.authenticated_reads_gate }}",
+    );
+    expect(
+      closeNames.indexOf(
+        "Verify completed rollback run and restored-normal proof",
       ),
-    ).toBeLessThan(candidateNames.indexOf("Build normal preview artifact"));
+    ).toBeLessThan(
+      closeNames.indexOf(
+        "Reverify normal provider state before rollback closure",
+      ),
+    );
+    expect(
+      closeNames.indexOf(
+        "Reverify normal provider state before rollback closure",
+      ),
+    ).toBeLessThan(
+      closeNames.indexOf(
+        "Close rollback after post-restore authenticated reads",
+      ),
+    );
+
+    expect(cleanupGate).toContain(
+      "if: ${{ inputs.acceptance_operation == 'verify_cleanup' && inputs.configure_ai_budget == false }}",
+    );
+    expect(cleanupClosure).toContain(
+      "scripts/validate-preview-rollback-lifecycle.ts --verify-closure",
+    );
+    expect(cleanupClosure).toContain('--operation "cleanup"');
     expect(preview).toContain(
-      "Provider cleanup is forbidden until this rollback verification succeeds.",
+      "Provider cleanup remains forbidden until the post-restore closure gate succeeds.",
     );
   });
 
-  it("makes the privacy-safe authenticated diagnostics and calendar operator gate unskippable in candidate preflight and rollback", async () => {
+  it("cannot use a pre-deploy authenticated-read assertion to close rollback", async () => {
     const [preview, environments] = await Promise.all([
       readWorkflow("preview.yml"),
       readOperationsDocument("environments.md"),
     ]);
     const candidate = readWorkflowJob(preview, "deploy_acceptance_candidate");
     const rollback = readWorkflowJob(preview, "rollback");
+    const closeRollback = readWorkflowJob(preview, "close_rollback");
     const candidateGate = readWorkflowStep(
       preview,
       "Require authenticated diagnostics and calendar operator gate",
     );
-    const rollbackGate = readWorkflowStep(
+    const closureGate = readWorkflowStep(
       preview,
-      "Require rollback authenticated diagnostics and calendar operator gate",
+      "Close rollback after post-restore authenticated reads",
     );
     const candidateNames = readWorkflowStepNames(candidate);
-    const rollbackNames = readWorkflowStepNames(rollback);
+    const closureNames = readWorkflowStepNames(closeRollback);
 
-    for (const gate of [candidateGate, rollbackGate]) {
-      expect(gate).toContain(
-        "AUTHENTICATED_READS_GATE: ${{ inputs.authenticated_reads_gate }}",
-      );
-      expect(gate).toContain(
-        '[[ "$AUTHENTICATED_READS_GATE" == "verified" ]]',
-      );
-      expect(gate).not.toContain("secrets.");
-      expect(gate).not.toContain("curl");
-    }
+    expect(candidateGate).toContain(
+      "AUTHENTICATED_READS_GATE: ${{ inputs.authenticated_reads_gate }}",
+    );
+    expect(candidateGate).toContain(
+      '[[ "$AUTHENTICATED_READS_GATE" == "verified" ]]',
+    );
+    expect(rollback).not.toContain("AUTHENTICATED_READS_GATE");
+    expect(closureGate).toContain(
+      "AUTHENTICATED_READS_GATE: ${{ inputs.authenticated_reads_gate }}",
+    );
+    expect(closureGate).toContain(
+      '--authenticated-reads-gate "$AUTHENTICATED_READS_GATE"',
+    );
+    expect(closureGate).toContain("--restore-proof");
     expect(
       candidateNames.indexOf(
         "Require authenticated diagnostics and calendar operator gate",
       ),
     ).toBeLessThan(
       candidateNames.indexOf(
-        "Verify live preview is normal before candidate deployment",
+        "Verify latest post-restore closure before candidate deployment",
       ),
     );
     expect(
-      rollbackNames.indexOf(
-        "Require rollback authenticated diagnostics and calendar operator gate",
+      closureNames.indexOf(
+        "Verify completed rollback run and restored-normal proof",
       ),
     ).toBeLessThan(
-      rollbackNames.indexOf("Deploy immutable normal preview Worker"),
+      closureNames.indexOf(
+        "Close rollback after post-restore authenticated reads",
+      ),
     );
     expect(environments).toContain(
-      "authenticated diagnostics and calendar reads",
+      "post-restore authenticated diagnostics and calendar reads",
     );
     expect(environments).toContain(
       "does not create or require a new authentication secret",
@@ -764,6 +916,9 @@ describe("preview acceptance candidate workflow", () => {
     expect(finalGuard).toContain(
       "scripts/validate-preview-acceptance-window.ts",
     );
+    expect(finalGuard).toContain(
+      "--candidate dist/vision/wrangler.acceptance.json",
+    );
     expect(
       names.indexOf("Reject daily recovery overlap before candidate preparation"),
     ).toBeLessThan(
@@ -771,10 +926,8 @@ describe("preview acceptance candidate workflow", () => {
     );
     expect(
       names.indexOf("Recheck daily recovery overlap immediately before deploy"),
-    ).toBeLessThan(
-      names.indexOf(
-        "Reverify active matching observer immediately before deploy",
-      ),
+    ).toBe(
+      names.indexOf("Deploy generated acceptance candidate") - 1,
     );
   });
 });

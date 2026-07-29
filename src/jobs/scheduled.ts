@@ -45,6 +45,7 @@ import {
 import { PHASE_B_PRIVILEGE_MANIFEST } from "../domain/operations/phase-b-privilege-manifest";
 import {
   TEMPORARY_PREVIEW_FAULT_SCENARIOS,
+  assertTemporaryPreviewAcceptanceLifetime,
   parseTemporaryPreviewAcceptanceAiGatewayAttestation,
   parseTemporaryPreviewAcceptanceSelector,
   type TemporaryPreviewFaultScenario,
@@ -128,6 +129,8 @@ export interface ScheduledRecoveryDependencies {
 
 /** Injected scheduled-entry boundaries keep candidate dispatch testable without provider I/O. */
 export interface ScheduledEntryDependencies extends ScheduledJobDependencies {
+  /** Execution clock used only to enforce a temporary candidate's real lifetime. */
+  readonly currentTime: () => Date;
   readonly temporaryFaultR2Upload: (
     now: Date,
     writer: BackupObjectWriter,
@@ -330,9 +333,15 @@ export async function scheduled(
   dependencies: ScheduledEntryDependencies =
     createProductionScheduledEntryDependencies(environment),
 ): Promise<void> {
-  const now = new Date(controller.scheduledTime);
+  const scheduledAt = new Date(controller.scheduledTime);
   if (controller.cron === TEMPORARY_PREVIEW_FAULT_CRON) {
     const selector = parseTemporaryPreviewAcceptanceSelector(environment);
+    if (selector !== undefined) {
+      assertTemporaryPreviewAcceptanceLifetime(
+        dependencies.currentTime(),
+        environment,
+      );
+    }
     const gatewayLimitMatches =
       parseTemporaryPreviewAcceptanceAiGatewayAttestation(environment);
     if (
@@ -345,30 +354,30 @@ export async function scheduled(
         {
           /** Delegates only the admitted R2 candidate to the injected scheduled boundary. */
           runR2Upload: (writer) =>
-            dependencies.temporaryFaultR2Upload(now, writer),
+            dependencies.temporaryFaultR2Upload(scheduledAt, writer),
         },
         dependencies.writeTemporaryFaultEvidence,
       );
       return;
     }
     if (selector === "foundation_probe") {
-      await dependencies.foundationProbe(now);
+      await dependencies.foundationProbe(scheduledAt);
       return;
     }
     if (selector === "ai_usage" && gatewayLimitMatches) {
-      await dependencies.aiUsageEvidence(now);
+      await dependencies.aiUsageEvidence(scheduledAt);
       return;
     }
     if (
       environment.VISION_ENV === "preview" &&
       typeof environment.PREVIEW_RESTORE_DATABASE_URL === "string"
     ) {
-      await dependencies.temporaryRoleProbe(now);
+      await dependencies.temporaryRoleProbe(scheduledAt);
       return;
     }
     throw new Error("Temporary preview candidate is invalid.");
   }
-  await runScheduledJob(controller.cron, now, dependencies);
+  await runScheduledJob(controller.cron, scheduledAt, dependencies);
 }
 
 /** Creates lazy production closures only after scheduled candidate selection. */
@@ -376,6 +385,8 @@ function createProductionScheduledEntryDependencies(
   environment: Env,
 ): ScheduledEntryDependencies {
   return {
+    /** Uses wall-clock execution time so delayed delivery cannot outlive a candidate. */
+    currentTime: () => new Date(),
     /** Builds Google maintenance capability only for the maintenance cron. */
     maintenance: async (scheduledAt) => {
       const dependencies =

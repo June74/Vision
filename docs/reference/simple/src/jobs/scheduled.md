@@ -98,10 +98,14 @@ Stores a safe credential failure before the scheduler reports it.
 ## `scheduled`
 Connects Cloudflare scheduled events to exact cron routing. The one-minute
 schedule requires exactly one admitted selector or the explicit role-probe
-binding; missing or invalid candidate configuration cannot fall through.
+binding. Temporary candidate expiry uses actual execution time, so a delayed
+event cannot run after the candidate deadline; evidence work keeps the original
+scheduled time. Missing or invalid candidate configuration cannot fall through.
 ## `createProductionScheduledEntryDependencies`
 Builds lazy closures for each isolated scheduled capability without opening
 one before the cron and candidate have been selected.
+## `currentTime`
+Returns wall-clock execution time only for the temporary lifetime guard.
 ## `temporaryFaultR2Upload`
 Runs the admitted R2 candidate through normal backup reads and encryption while
 replacing only the final object writer.

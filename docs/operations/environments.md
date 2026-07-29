@@ -39,10 +39,11 @@ acceptance work is available only from an explicit preview dispatch:
    an explicit provider binding list with no temporary binding. A missing,
    null, malformed, or failed provider response fails closed.
 3. The workflow proves that one exact `preview.yml` observer run is in progress
-   at the candidate's verified commit and matches its evidence family. It
-   repeats the complete workflow-identity, SHA, liveness, and family proof
-   immediately before the deploy command, so a finished or cancelled observer
-   cannot authorize the deployment.
+   at the candidate's verified commit and matches its evidence family. As the
+   last two pre-deploy controls, it repeats the complete workflow-identity, SHA,
+   liveness, and family proof and then revalidates the generated candidate's
+   expiry against the recovery window. A finished observer or stale candidate
+   cannot authorize deployment.
 4. The workflow builds and validates the normal artifact first, then generates
    a separate `dist/vision/wrangler.acceptance.json`. The candidate adds only
    one exact selector and the one-minute schedule; it never edits the normal
@@ -51,16 +52,31 @@ acceptance work is available only from an explicit preview dispatch:
    Gateway-limit verification. Only the dedicated AI evidence operation may
    compose that successful same-run boolean into the generated attestation
    binding.
-6. After evidence, dispatch `rollback` separately. Rollback deploys the
+6. After evidence, dispatch `rollback` separately with the latest candidate run
+   reference and `authenticated_reads_gate=not_verified`. Rollback first proves
+   that reference owns the newest candidate-intent artifact, deploys the
    pre-validated normal artifact, then verifies healthy runtime, exactly two
    schedules, and an explicit valid binding list without the temporary
-   selector or attestation. A later candidate independently repeats that
-   normal-state preflight, so it cannot proceed after an unverified rollback.
+   selector or attestation. It uploads a value-free restored-normal proof bound
+   to the candidate reference and reviewed normal commit.
+7. Only after rollback succeeds, use the existing signed-in Vision session for
+   post-restore authenticated diagnostics and calendar reads. Dispatch
+   `close_rollback` with that candidate reference, the successful rollback run,
+   and `authenticated_reads_gate=verified`. The closure job proves the rollback
+   run and restored-normal artifact, repeats the provider-state verification,
+   and writes a closure bound to the commit and both provider checks.
+8. A later candidate must supply the newest candidate reference and the
+   successful closure run. `verify_cleanup` enforces the same closed state
+   before any provider cleanup. The first candidate is the only baseline case:
+   the artifact query must prove that no candidate intent exists.
 
 Observer and mutation jobs use different concurrency groups, so starting an
 observer cannot cancel a deployment and a deployment cannot cancel the
-observer it must prove. This is an operator-controlled cross-run sequence; the
-workflow does not claim an automatic rollback across runs.
+observer it must prove. Mutation runs serialize without cancelling an
+in-progress rollback or closure. Candidate deployment is bounded to 30 minutes,
+rollback and closure to 15 minutes each, and cleanup verification to 10 minutes.
+This is an operator-controlled cross-run sequence; the workflow does not claim
+an automatic rollback across runs.
 
 For a local preview artifact check in PowerShell, select the preview Vite
 environment explicitly before building:
@@ -76,22 +92,32 @@ that `deploy:check:preview` is intended to validate.
 
 ## Authenticated read gate for preview mutation
 
-Before selecting any candidate-deploy or rollback operation, an operator uses
-the existing signed-in Vision session to complete authenticated diagnostics and calendar reads
-against the current normal preview. Confirm that the
+Before selecting a candidate-deploy operation, an operator uses the existing
+signed-in Vision session to complete authenticated diagnostics and calendar
+reads against the current normal preview. Confirm that the
 diagnostics view loads and that the calendar view returns the expected
 owner-scoped result without recording response bodies in workflow output.
 
 The `authenticated_reads_gate=verified` choice is a manual operator
 attestation. It does not create or require a new authentication secret, and
-the workflow does not pretend to perform browser-session reads itself. The
-closed input validator rejects candidate deployment or rollback unless this
-attestation is verified; non-mutating `none` and `observe` operations require
-`not_verified`.
+the workflow does not pretend to perform browser-session reads itself.
+Candidate deployment requires the pre-candidate attestation, but rollback
+requires `not_verified` so a pre-deploy assertion cannot close the lifecycle.
+After the normal Worker and provider state are restored, `close_rollback`
+requires a new `verified` attestation for the post-restore authenticated
+diagnostics and calendar reads. Non-mutating `none`, `observe`, cleanup
+verification, and rollback require `not_verified`.
 
 Temporary candidate activation is also blocked during the fail-closed UTC
-window around the normal daily recovery schedule. The workflow checks this
-once before candidate preparation and again immediately before deployment.
+window around the normal daily recovery schedule. Candidate preparation stamps
+an exact expiry no more than 30 minutes after activation. The first check proves
+that this complete maximum lifetime cannot overlap the protected window; the
+second check reads the generated candidate and is immediately adjacent to
+deployment. Every temporary scheduled execution rechecks the candidate expiry
+and protected interval against wall-clock execution time before resolving
+temporary dependencies, so an expired, delayed, overlong, malformed, or
+overlap-capable candidate fails closed. The normal purge window, permanent
+daily recovery, and post-acceptance cleanup behavior are unchanged.
 
 ## External production prerequisites
 

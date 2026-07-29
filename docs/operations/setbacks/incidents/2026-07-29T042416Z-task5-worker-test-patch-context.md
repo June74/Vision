@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T04:24:16.3267175Z
-- **Last observed:** 2026-07-29T04:31:37.7684282Z
-- **Phase/task:** Phase B acceptance instrumentation Task 5 review fixes
+- **Last observed:** 2026-07-29T23:51:26.1763604Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
 - **Environment:** Local Phase B worktree
-- **Version/commit:** Uncommitted review fixes based on `1880cf9`
+- **Version/commit:** Uncommitted wave-2 fixes based on `41d3e74`
 
 ## Symptom
 
@@ -45,3 +45,23 @@ the final complete gate.
   patch expected a verification section that had not yet been created. The
   patch was rejected before mutation; the incident was re-read and updated
   against exact current context.
+- 2026-07-29T22:17:29.4606218Z: A combined workflow regression patch expected
+  surrounding assertions that differed from the current file. The patch was
+  rejected atomically before mutation; the correction is to use smaller
+  patches copied from current local context.
+- 2026-07-29T22:50:43.9725689Z: A combined AI environment-fixture patch
+  assumed the wrong stale Gateway-limit case while updating exact pricing
+  values. The patch was rejected atomically; the correction uses the current
+  bounded section and smaller hunks.
+- 2026-07-29T23:03:52.7596594Z: A combined workflow lifetime-test patch used
+  an assertion line from an adjacent test block as shared context. The patch
+  was rejected atomically; the correction targets each current assertion
+  independently.
+- 2026-07-29T23:16:32.5931857Z: A combined reference-document patch reused
+  the technical domain document's introduction as context for the simple
+  document. The patch was rejected atomically; the correction uses independent
+  exact-file hunks.
+- 2026-07-29T23:51:26.1763604Z: The ignored report append copied a prior
+  UTF-8 dash through the default PowerShell decoding and therefore missed the
+  exact final-line context. The patch was rejected atomically; the correction
+  reads the boundary explicitly as UTF-8.

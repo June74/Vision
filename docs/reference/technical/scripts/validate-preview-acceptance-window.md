@@ -1,15 +1,21 @@
 # `scripts/validate-preview-acceptance-window.ts`
 
-Implements the fail-closed time guard used before candidate preparation and
-again immediately before preview deployment. The protected range is
-inclusive at its start and exclusive at its end.
+Implements the fail-closed lifetime guard used before candidate preparation
+and immediately before preview deployment. Pure time rules live in the
+temporary acceptance domain module. The second mode reads the exact generated
+candidate expiry instead of recalculating it from the current clock.
 
-## `assertPreviewAcceptanceWindow`
+## `plainObject`
 
-Validates the `Date`, derives its UTC minute of day, and rejects every instant
-inside the recovery overlap range with one constant error.
+Admits only non-null, non-array values with `Object.prototype`.
+
+## `dataValue`
+
+Uses a property descriptor to read only an enumerable own data value.
 
 ## `main`
 
-Rejects caller-controlled arguments, evaluates the current time, and maps all
-failures to one non-sensitive message and nonzero exit status.
+No-argument mode validates the complete maximum interval beginning now.
+`--candidate dist/vision/wrangler.acceptance.json` validates the canonical
+deadline embedded in the fixed artifact. Every other argument or input maps to
+one non-sensitive error and nonzero exit status.

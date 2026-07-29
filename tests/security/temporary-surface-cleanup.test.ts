@@ -40,6 +40,8 @@ const TEMPORARY_PATHS = [
   "src/jobs/temporary-preview-restore.ts",
   "src/jobs/temporary-preview-role-probe.ts",
   "scripts/prepare-preview-acceptance-deploy-config.ts",
+  "scripts/validate-preview-acceptance-window.ts",
+  "scripts/validate-preview-observer-state.ts",
   "tests/integration/backup/r2-restore-attempt-store.test.ts",
   "tests/integration/backup/temporary-preview-clear-adapter.test.ts",
   "tests/integration/backup/temporary-preview-role-probe-adapter.test.ts",
@@ -52,8 +54,14 @@ const TEMPORARY_PATHS = [
   "tests/integration/jobs/temporary-preview-restore.test.ts",
   "tests/integration/jobs/temporary-preview-role-probe.test.ts",
   "tests/unit/domain/temporary-preview-fault.test.ts",
+  "tests/unit/scripts/preview-acceptance-window.test.ts",
+  "tests/unit/scripts/preview-observer-state.test.ts",
   "docs/reference/simple/scripts/prepare-preview-acceptance-deploy-config.md",
+  "docs/reference/simple/scripts/validate-preview-acceptance-window.md",
+  "docs/reference/simple/scripts/validate-preview-observer-state.md",
   "docs/reference/technical/scripts/prepare-preview-acceptance-deploy-config.md",
+  "docs/reference/technical/scripts/validate-preview-acceptance-window.md",
+  "docs/reference/technical/scripts/validate-preview-observer-state.md",
   "docs/reference/simple/src/data/backup/r2-restore-attempt-store.md",
   "docs/reference/simple/src/data/backup/temporary-preview-clear-adapter.md",
   "docs/reference/simple/src/data/backup/temporary-preview-role-probe-adapter.md",
@@ -106,7 +114,6 @@ const EXPECTED_SHARED_RESIDUE_PATHS = [
   "docs/reference/technical/src/server/env.md",
   "scripts/print-safe-tail.ts",
   "scripts/safe-tail-classifier.ts",
-  "scripts/validate-preview-acceptance-window.ts",
   "scripts/validate-preview-deploy-config.ts",
   "src/jobs/scheduled.ts",
   "src/server/api/ai-category-proposal-routes.ts",
@@ -117,7 +124,6 @@ const EXPECTED_SHARED_RESIDUE_PATHS = [
   "tests/integration/jobs/daily-backup.test.ts",
   "tests/security/secret-bundle.test.ts",
   "tests/unit/ci/workflows.test.ts",
-  "tests/unit/scripts/preview-acceptance-window.test.ts",
   "tests/unit/scripts/print-safe-tail.test.ts",
   "tests/unit/scripts/production-deploy-config.test.ts",
   "tests/unit/scripts/safe-tail-classifier.test.ts",
@@ -297,10 +303,10 @@ describe("post-acceptance temporary surface cleanup", () => {
         .filter((path) => path.startsWith(`docs/reference/${kind}/`))
         .map((path) => path.replace(`docs/reference/${kind}/`, ""));
 
-    expect(TEMPORARY_PATHS).toHaveLength(48);
-    expect(new Set(TEMPORARY_PATHS)).toHaveLength(48);
-    expect(EXPECTED_SHARED_RESIDUE_PATHS).toHaveLength(37);
-    expect(new Set(EXPECTED_SHARED_RESIDUE_PATHS)).toHaveLength(37);
+    expect(TEMPORARY_PATHS).toHaveLength(56);
+    expect(new Set(TEMPORARY_PATHS)).toHaveLength(56);
+    expect(EXPECTED_SHARED_RESIDUE_PATHS).toHaveLength(35);
+    expect(new Set(EXPECTED_SHARED_RESIDUE_PATHS)).toHaveLength(35);
     expect(referenceInventory(TEMPORARY_PATHS, "simple")).toEqual(
       referenceInventory(TEMPORARY_PATHS, "technical"),
     );

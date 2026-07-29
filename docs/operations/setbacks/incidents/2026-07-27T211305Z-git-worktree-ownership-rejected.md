@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T21:13:05Z
-- **Last observed:** 2026-07-28T20:43:57.5678432Z
-- **Phase/task:** Phase B acceptance instrumentation Task 3 setup
+- **Last observed:** 2026-07-29T21:45:45.9840176Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave
 - **Environment:** Managed local sandbox, linked worktree
 - **Version/commit:** Not inspected; Git metadata access was rejected first.
 
@@ -74,3 +74,8 @@ configuration was changed.
   The initial reads stopped at the ownership check; the controller-approved
   command-scoped boundary then verified the expected worktree, branch, and base
   commit without a persistent Git configuration change or provider action.
+- 2026-07-29T21:45:45.9840176Z: Recurred while resuming the Task 7 final-fix
+  wave. Plain read-only Git commands stopped at the ownership check. No
+  repository or provider state changed; subsequent Git commands use the existing
+  command-scoped safe-directory override, without changing persistent Git
+  configuration.

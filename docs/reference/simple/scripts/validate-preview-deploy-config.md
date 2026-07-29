@@ -36,6 +36,10 @@ extra, duplicated, unknown, wrongly typed, or malformed provider data.
 
 Applies the shared preview resources and exact normal-or-candidate mode.
 
+## `readOwnString`
+
+Reads one exact own string binding without invoking a getter.
+
 ## `exactStringRecord`
 
 Rejects missing, extra, inherited, accessor, symbol, or changed variables.

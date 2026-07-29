@@ -8,6 +8,7 @@ import {
   RuntimeEnvSchema,
   TemporaryRestoreEnvSchema,
 } from "../../../src/server/env";
+import { AI_PRICING_POLICY_VALUES } from "../../../src/server/ai-pricing-binding-contract";
 
 function encodeBase64Url(bytes: Uint8Array): string {
   return btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
@@ -359,29 +360,31 @@ describe("AiBudgetEnvSchema", () => {
     expect(
       AiBudgetEnvSchema.parse({
         AI_MONTHLY_HARD_LIMIT_CENTS: "950",
-        AI_INPUT_CENTS_PER_MILLION_TOKENS: "1000",
-        AI_OUTPUT_CENTS_PER_MILLION_TOKENS: "4000",
-        AI_ROUTINE_WORST_CASE_CENTS: "10",
-        AI_OPTIONAL_WORST_CASE_CENTS: "20",
-        AI_COMPLEX_WORST_CASE_CENTS: "50",
+        ...AI_PRICING_POLICY_VALUES,
       }),
     ).toEqual({
       AI_MONTHLY_HARD_LIMIT_CENTS: 950,
-      AI_INPUT_CENTS_PER_MILLION_TOKENS: 1000,
-      AI_OUTPUT_CENTS_PER_MILLION_TOKENS: 4000,
-      AI_ROUTINE_WORST_CASE_CENTS: 10,
-      AI_OPTIONAL_WORST_CASE_CENTS: 20,
-      AI_COMPLEX_WORST_CASE_CENTS: 50,
+      AI_INPUT_CENTS_PER_MILLION_TOKENS: Number(
+        AI_PRICING_POLICY_VALUES.AI_INPUT_CENTS_PER_MILLION_TOKENS,
+      ),
+      AI_OUTPUT_CENTS_PER_MILLION_TOKENS: Number(
+        AI_PRICING_POLICY_VALUES.AI_OUTPUT_CENTS_PER_MILLION_TOKENS,
+      ),
+      AI_ROUTINE_WORST_CASE_CENTS: Number(
+        AI_PRICING_POLICY_VALUES.AI_ROUTINE_WORST_CASE_CENTS,
+      ),
+      AI_OPTIONAL_WORST_CASE_CENTS: Number(
+        AI_PRICING_POLICY_VALUES.AI_OPTIONAL_WORST_CASE_CENTS,
+      ),
+      AI_COMPLEX_WORST_CASE_CENTS: Number(
+        AI_PRICING_POLICY_VALUES.AI_COMPLEX_WORST_CASE_CENTS,
+      ),
     });
 
     expect(() =>
       AiBudgetEnvSchema.parse({
         AI_MONTHLY_HARD_LIMIT_CENTS: "951",
-        AI_INPUT_CENTS_PER_MILLION_TOKENS: "1000",
-        AI_OUTPUT_CENTS_PER_MILLION_TOKENS: "4000",
-        AI_ROUTINE_WORST_CASE_CENTS: "10",
-        AI_OPTIONAL_WORST_CASE_CENTS: "20",
-        AI_COMPLEX_WORST_CASE_CENTS: "50",
+        ...AI_PRICING_POLICY_VALUES,
       }),
     ).toThrow(/950/u);
   });
@@ -396,18 +399,16 @@ describe("AiBudgetEnvSchema", () => {
     expect(() =>
       RuntimeEnvSchema.parse({
         ...runtime,
-        AI_INPUT_CENTS_PER_MILLION_TOKENS: "1000",
+        AI_INPUT_CENTS_PER_MILLION_TOKENS:
+          AI_PRICING_POLICY_VALUES.AI_INPUT_CENTS_PER_MILLION_TOKENS,
       }),
     ).toThrow(/pricing fields must be configured together/u);
     for (const invalid of ["0", "-1", "1.5", "NaN"]) {
       expect(() =>
         AiBudgetEnvSchema.parse({
           AI_MONTHLY_HARD_LIMIT_CENTS: "950",
-          AI_INPUT_CENTS_PER_MILLION_TOKENS: "1000",
-          AI_OUTPUT_CENTS_PER_MILLION_TOKENS: "4000",
+          ...AI_PRICING_POLICY_VALUES,
           AI_ROUTINE_WORST_CASE_CENTS: invalid,
-          AI_OPTIONAL_WORST_CASE_CENTS: "20",
-          AI_COMPLEX_WORST_CASE_CENTS: "50",
         }),
       ).toThrow();
     }

@@ -4,6 +4,31 @@ Contains the preview-only candidate switches used to produce closed acceptance
 evidence or show safe operational failure states. It cannot read the browser
 request, database, Queue, provider, or AI output.
 
+## `assertPreviewAcceptanceWindow`
+
+Rejects an instant inside the protected daily recovery window.
+
+## `createPreviewAcceptanceDeadline`
+
+Creates the canonical maximum expiry for one safely activated candidate.
+
+## `assertPreviewAcceptanceLifetime`
+
+Rejects an expired, malformed, overlong, or recovery-overlapping interval.
+
+## `assertTemporaryPreviewAcceptanceLifetime`
+
+Applies the lifetime check only when a temporary selector is active.
+
+## `validAcceptanceInstant`
+
+Converts a valid clock instant to milliseconds or fails closed.
+
+## `assertAvailableAcceptanceInterval`
+
+Rejects any interval that crosses the protected window, including across
+midnight.
+
 ## `parseTemporaryPreviewAcceptanceSelector`
 
 Accepts one exact generated preview selector from the six faults plus the

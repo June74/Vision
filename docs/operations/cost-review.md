@@ -75,21 +75,23 @@ application must refresh injected rates whenever the provider price changes.
 
 ## AI pricing binding attestation
 
-The **AI integration owner** checks the externally provisioned values against
+The **AI integration owner** checks the exact source-controlled policy against
 the official OpenAI API model and pricing pages before every preview AI acceptance
-and before every production release. Repeat the check after a provider price
-change or any model/request-bound change.
+and before every production release. Repeat the check after a
+provider price change or any model/request-bound change. The reviewed policy is
+the single source for the normal Worker artifact, runtime schema, provider
+binding proof, preview AI gate, and production release gate.
 
-Source control records binding names and Cloudflare binding types only; it
-does not record the externally provisioned values:
+The attestation fails closed on missing, stale, malformed, extra, or arbitrary
+values. Its command reports only whether the policy is valid and does not print the values:
 
 | Binding | Cloudflare type |
 |---|---|
-| `AI_COMPLEX_WORST_CASE_CENTS` | `secret_text` |
-| `AI_INPUT_CENTS_PER_MILLION_TOKENS` | `secret_text` |
-| `AI_OPTIONAL_WORST_CASE_CENTS` | `secret_text` |
-| `AI_OUTPUT_CENTS_PER_MILLION_TOKENS` | `secret_text` |
-| `AI_ROUTINE_WORST_CASE_CENTS` | `secret_text` |
+| `AI_COMPLEX_WORST_CASE_CENTS` | `plain_text` |
+| `AI_INPUT_CENTS_PER_MILLION_TOKENS` | `plain_text` |
+| `AI_OPTIONAL_WORST_CASE_CENTS` | `plain_text` |
+| `AI_OUTPUT_CENTS_PER_MILLION_TOKENS` | `plain_text` |
+| `AI_ROUTINE_WORST_CASE_CENTS` | `plain_text` |
 
 ## Provider references
 

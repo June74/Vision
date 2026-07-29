@@ -2,7 +2,10 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { AI_PRICING_BINDING_CONTRACT } from "../src/server/ai-pricing-binding-contract";
+import {
+  AI_PRICING_BINDING_CONTRACT,
+  AI_PRICING_POLICY_VALUES,
+} from "../src/server/ai-pricing-binding-contract";
 import type { PreviewAcceptanceSelector } from "./prepare-preview-acceptance-deploy-config";
 
 const INVALID_NORMAL = "Preview deployment configuration is invalid.";
@@ -11,8 +14,11 @@ const INVALID_ACCEPTANCE =
 const INVALID_PROVIDER_STATE = "Normal preview provider state is invalid.";
 const NORMAL_CRONS = ["*/15 * * * *", "5 6 * * *"] as const;
 const ACCEPTANCE_CRON = "* * * * *";
+const CANONICAL_INSTANT =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const NORMAL_VAR_ENTRIES = Object.freeze({
   AI_MONTHLY_HARD_LIMIT_CENTS: "950",
+  ...AI_PRICING_POLICY_VALUES,
   BACKUP_KEY_VERSION: "1",
   DATABASE_USAGE_WARNING_BYTES: "400000000",
   GOOGLE_REDIRECT_URI:
@@ -31,9 +37,16 @@ const ACCEPTANCE_SELECTORS = new Set([
   "foundation_probe",
   "ai_usage",
 ]);
-const NORMAL_PROVIDER_BINDING_CONTRACT = Object.freeze([
-  ...AI_PRICING_BINDING_CONTRACT.map(({ name, type }) =>
-    Object.freeze({ name, type }),
+interface ProviderBindingContract {
+  readonly name: string;
+  readonly type: string;
+  readonly text?: string;
+}
+
+const NORMAL_PROVIDER_BINDING_CONTRACT: readonly ProviderBindingContract[] =
+  Object.freeze([
+  ...AI_PRICING_BINDING_CONTRACT.map(({ name, type, value }) =>
+    Object.freeze({ name, type, text: value }),
   ),
   Object.freeze({
     name: "AI_MONTHLY_HARD_LIMIT_CENTS",
@@ -63,7 +76,7 @@ const NORMAL_PROVIDER_BINDING_CONTRACT = Object.freeze([
   Object.freeze({ name: "R2_USAGE_WARNING_OBJECTS", type: "plain_text" }),
   Object.freeze({ name: "VISION_ENV", type: "plain_text" }),
   Object.freeze({ name: "VISION_USER_TIME_ZONE", type: "secret_text" }),
-]);
+  ]);
 
 /** Flattened Cloudflare Vite output used by normal and acceptance deployments. */
 export interface PreviewDeployConfig {
@@ -133,7 +146,7 @@ function matchesNormalProviderBindingContract(
   if (bindings.length !== NORMAL_PROVIDER_BINDING_CONTRACT.length) {
     return false;
   }
-  const actual = new Map<string, string>();
+  const actual = new Map<string, { readonly text: unknown; readonly type: string }>();
   for (const binding of bindings) {
     if (!isPlainDataObject(binding)) return false;
     const name = ownDataValue(binding, "name");
@@ -145,10 +158,19 @@ function matchesNormalProviderBindingContract(
     ) {
       return false;
     }
-    actual.set(name, type);
+    actual.set(name, {
+      text: ownDataValue(binding, "text"),
+      type,
+    });
   }
   return NORMAL_PROVIDER_BINDING_CONTRACT.every(
-    ({ name, type }) => actual.get(name) === type,
+    ({ name, text, type }) => {
+      const binding = actual.get(name);
+      return (
+        binding?.type === type &&
+        (text === undefined || binding.text === text)
+      );
+    },
   );
 }
 
@@ -197,11 +219,29 @@ function validate(
     expectedSelector === undefined
       ? NORMAL_CRONS
       : [...NORMAL_CRONS, ACCEPTANCE_CRON];
+  const acceptanceExpiresAt =
+    expectedSelector === undefined
+      ? undefined
+      : readOwnString(vars, "PREVIEW_ACCEPTANCE_EXPIRES_AT");
+  const acceptanceExpiresAtMs =
+    acceptanceExpiresAt === undefined ? Number.NaN : Date.parse(acceptanceExpiresAt);
+  if (
+    expectedSelector !== undefined &&
+    (acceptanceExpiresAt === undefined ||
+      !CANONICAL_INSTANT.test(acceptanceExpiresAt) ||
+      !Number.isFinite(acceptanceExpiresAtMs) ||
+      new Date(acceptanceExpiresAtMs).toISOString() !== acceptanceExpiresAt)
+  ) {
+    throw new Error(errorMessage);
+  }
   const expectedVars: Readonly<Record<string, string>> = {
     ...NORMAL_VAR_ENTRIES,
     ...(expectedSelector === undefined
       ? {}
-      : { PREVIEW_ACCEPTANCE_SCENARIO: expectedSelector }),
+      : {
+          PREVIEW_ACCEPTANCE_EXPIRES_AT: acceptanceExpiresAt!,
+          PREVIEW_ACCEPTANCE_SCENARIO: expectedSelector,
+        }),
     ...(expectedSelector === "ai_usage"
       ? { PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true" }
       : {}),
@@ -216,6 +256,19 @@ function validate(
   ) {
     throw new Error(errorMessage);
   }
+}
+
+/** Reads one exact own string binding without invoking accessors. */
+function readOwnString(
+  record: Readonly<Record<string, unknown>>,
+  key: string,
+): string | undefined {
+  const descriptor = Object.getOwnPropertyDescriptor(record, key);
+  return descriptor?.enumerable === true &&
+    "value" in descriptor &&
+    typeof descriptor.value === "string"
+    ? descriptor.value
+    : undefined;
 }
 
 /** Requires exact own enumerable scalar variables and rejects hidden terminal modes. */

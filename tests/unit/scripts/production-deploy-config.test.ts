@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { validateProductionDeployConfig } from "../../../scripts/validate-production-deploy-config";
+import {
+  AI_PRICING_POLICY_VALUES,
+  type AiPricingBindingName,
+} from "../../../src/server/ai-pricing-binding-contract";
 
 const NORMAL_CRONS = ["*/15 * * * *", "5 6 * * *"] as const;
 
@@ -33,6 +37,7 @@ function productionArtifact() {
     vars: {
       VISION_ENV: "production",
       AI_MONTHLY_HARD_LIMIT_CENTS: "950",
+      ...AI_PRICING_POLICY_VALUES,
       BACKUP_KEY_VERSION: "1",
       DATABASE_USAGE_WARNING_BYTES: "400000000",
       R2_USAGE_WARNING_BYTES: "8000000000",
@@ -45,6 +50,32 @@ describe("production deploy artifact validation", () => {
   it("accepts the explicit generated production artifact", () => {
     expect(() => validateProductionDeployConfig(productionArtifact())).not.toThrow();
   });
+
+  it.each(Object.keys(AI_PRICING_POLICY_VALUES) as AiPricingBindingName[])(
+    "rejects an arbitrary nonnegative production value for %s",
+    (name) => {
+      const artifact = productionArtifact();
+      artifact.vars[name] = String(
+        Number(AI_PRICING_POLICY_VALUES[name]) + 1,
+      );
+      expect(() => validateProductionDeployConfig(artifact)).toThrow(
+        /production deployment configuration is invalid/i,
+      );
+    },
+  );
+
+  it.each(["010", "1.0", 10, null])(
+    "rejects malformed or wrong-typed production pricing %j",
+    (invalid) => {
+      const artifact = productionArtifact();
+      (
+        artifact.vars as Record<string, unknown>
+      ).AI_ROUTINE_WORST_CASE_CENTS = invalid;
+      expect(() => validateProductionDeployConfig(artifact)).toThrow(
+        /production deployment configuration is invalid/i,
+      );
+    },
+  );
 
   it.each([
     ["preview target", { targetEnvironment: "preview" }],

@@ -50,6 +50,11 @@ binding name and type exactly once.
 Builds the exact expected variables and schedules for normal or acceptance
 mode, then validates the common Queue and R2 resources.
 
+## `readOwnString`
+
+Reads one required own string data property without inherited or accessor
+coercion.
+
 ## `exactStringRecord`
 
 Compares own enumerable data properties to the exact expected variable record

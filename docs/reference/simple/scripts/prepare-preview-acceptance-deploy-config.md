@@ -15,7 +15,12 @@ Invalid or mixed choices fail before any deployment.
 
 ## `preparePreviewAcceptanceDeployConfig`
 
-Returns a new validated candidate while leaving the normal input unchanged.
+Returns a new validated candidate with one bounded expiry while leaving the
+normal input unchanged.
+
+## `isRunId`
+
+Accepts only a positive workflow-run identifier used by lifecycle operations.
 
 ## `readArguments`
 

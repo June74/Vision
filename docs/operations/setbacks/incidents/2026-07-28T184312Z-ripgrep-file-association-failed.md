@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T18:43:12.190089Z
-- **Last observed:** 2026-07-28T18:43:28.7660518Z
-- **Phase/task:** Phase B acceptance instrumentation Task 1 discovery
+- **Last observed:** 2026-07-29T21:52:02.2637668Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
 - **Environment:** Local Windows PowerShell worktree
-- **Version/commit:** `f3873fe`
+- **Version/commit:** `41d3e74`
 
 ## Symptom
 
@@ -57,3 +57,7 @@ without retrying `rg.exe`.
 ## Recurrence history
 
 - 2026-07-28T18:43:12.190089Z: First observed.
+- 2026-07-29T21:52:02.2637668Z: The executable shim was present but again
+  could not start through the current Windows association. The read-only
+  search did not execute; repository and provider state were unchanged, and
+  bounded discovery resumed with `Select-String`.
