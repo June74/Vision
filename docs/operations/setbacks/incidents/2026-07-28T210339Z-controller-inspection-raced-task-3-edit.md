@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T21:03:39.942454Z
-- **Last observed:** 2026-07-28T21:03:39.942454Z
+- **Last observed:** 2026-07-29T19:12:27.1987572Z
 - **Phase/task:** Phase B acceptance instrumentation Task 3
 - **Environment:** Local shared Phase B worktree
 - **Version/commit:** `36f9df2` plus uncommitted Task 3 implementation
@@ -59,3 +59,9 @@ owned by the active Task 3 subagent.
 ## Recurrence history
 
 - 2026-07-28T21:03:39.942454Z: First observed.
+- 2026-07-29T19:12:27.1987572Z: Recurred when the controller added a
+  coordination-setback record while two reviewers were reading immutable diff
+  packages. Their packages and reviewed commit ranges were unchanged, but the
+  live tracked worktree became dirty during review. The controller stopped
+  further edits and will ask reviewers to rely on their immutable packages,
+  then commit the coordination record only after both reviews finish.

@@ -2,6 +2,7 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
+| [SB-20260729-191154-subagent-thread-limit](incidents/2026-07-29T191154Z-subagent-thread-limit.md) | closed | 2026-07-29T19:38:09.4855675Z | Phase B Task 7 final review and live-runbook preparation | Optional runbook auditor hit the subagent-thread limit |
 | [SB-20260729-172238-task6-review-workflow-test-assumptions](incidents/2026-07-29T172238Z-task6-review-workflow-test-assumptions.md) | closed | 2026-07-29T17:22:38Z | Phase B acceptance instrumentation Task 6 review fixes | Review-fix tests retained stale and line-sensitive expectations |
 | [SB-20260729-170120-task6-observer-family-proof-gap](incidents/2026-07-29T170120Z-task6-observer-family-proof-gap.md) | closed | 2026-07-29T17:02:34Z | Phase B acceptance instrumentation Task 6 self-review | Observer proof did not bind the evidence family |
 | [SB-20260729-165535-task6-pglite-suite-timeouts](incidents/2026-07-29T165535Z-task6-pglite-suite-timeouts.md) | closed | 2026-07-29T16:56:22Z | Phase B acceptance instrumentation Task 6 full gate | Full unit gate hit three PGlite timeouts |
@@ -194,7 +195,7 @@
 | [SB-20260728-203912-task-3-implementer-produced-no-checkpoint](incidents/2026-07-28T203912Z-task-3-implementer-produced-no-checkpoint.md) | closed | 2026-07-28T20:48:52.6563216Z | Phase B acceptance instrumentation Task 3 | Task 3 implementer produced no checkpoint |
 | [SB-20260728-205803-foundation-test-table-import](incidents/2026-07-28T205803Z-foundation-test-table-import.md) | closed | 2026-07-28T21:38:48.5999933Z | Phase B acceptance instrumentation Task 3 GREEN | Foundation test imported table contract from the wrong module |
 | [SB-20260728-210658-foundation-source-narrowing](incidents/2026-07-28T210658Z-foundation-source-narrowing.md) | closed | 2026-07-28T23:08:08.6433836Z | Phase B acceptance instrumentation Task 4 typecheck | Foundation source types were not narrowed at closed boundaries |
-| [SB-20260728-210339-controller-inspection-raced-task-3-edit](incidents/2026-07-28T210339Z-controller-inspection-raced-task-3-edit.md) | closed | 2026-07-28T21:03:39.942454Z | Phase B acceptance instrumentation Task 3 | Controller inspection raced Task 3 edit |
+| [SB-20260728-210339-controller-inspection-raced-task-3-edit](incidents/2026-07-28T210339Z-controller-inspection-raced-task-3-edit.md) | closed | 2026-07-29T19:12:27.1987572Z | Phase B acceptance instrumentation Task 3 | Controller inspection raced Task 3 edit |
 | [SB-20260728-214956-powershell-markdown-backtick-escaped-ledger](incidents/2026-07-28T214956Z-powershell-markdown-backtick-escaped-ledger.md) | closed | 2026-07-28T21:49:56.608574Z | Phase B acceptance instrumentation Task 3 progress bookkeeping | PowerShell escaped Markdown backtick in ledger |
 | [SB-20260728-215115-read-only-reviewer-modified-setback-log](incidents/2026-07-28T215115Z-read-only-reviewer-modified-setback-log.md) | closed | 2026-07-28T21:51:15.406047Z | Phase B acceptance instrumentation Task 3 re-review | Read-only reviewer modified setback log |
 | [SB-20260728-223654-frozen-privilege-array-type-widening](incidents/2026-07-28T223654Z-frozen-privilege-array-type-widening.md) | closed | 2026-07-28T22:46:26.2499697Z | Phase B acceptance instrumentation Task 3 live privilege manifest | Frozen privilege arrays widened during typecheck |
