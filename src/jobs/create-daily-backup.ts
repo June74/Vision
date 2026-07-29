@@ -141,20 +141,22 @@ export async function createDailyBackup(
 ): Promise<BackupResult> {
   const createdDate = utcDate(now);
   const objectKey = await dailyObjectKey(createdDate);
-  let existing: BackupObjectHead | null;
-  try {
-    existing = await dependencies.store.head(objectKey);
-  } catch {
-    throw new Error("Backup storage read failed.");
-  }
-  if (existing) {
-    return verifyStoredBackup(
-      dependencies.store,
-      objectKey,
-      createdDate,
-      dependencies.backupKey,
-      "existing",
-    );
+  if (dependencies.writer === undefined) {
+    let existing: BackupObjectHead | null;
+    try {
+      existing = await dependencies.store.head(objectKey);
+    } catch {
+      throw new Error("Backup storage read failed.");
+    }
+    if (existing) {
+      return verifyStoredBackup(
+        dependencies.store,
+        objectKey,
+        createdDate,
+        dependencies.backupKey,
+        "existing",
+      );
+    }
   }
 
   let body: Uint8Array;

@@ -197,6 +197,49 @@ describe("usage warning source", () => {
     expect(list).toHaveBeenCalledTimes(2);
   });
 
+  it("fails R2 safe when one provider page exceeds the direct object cap", async () => {
+    const list = vi.fn(async () => ({
+      objects: Array.from({ length: 101 }, () => object(0)),
+      delimitedPrefixes: [],
+      truncated: false,
+    } as R2Objects));
+    const source = createUsageWarningSource(
+      databaseReturning(1),
+      bucketListing(list),
+      thresholds,
+    );
+
+    await expect(source.readUsageWarnings()).resolves.toEqual({
+      databaseUsageWarning: false,
+      r2UsageWarning: true,
+    });
+    expect(list).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["empty", ""],
+    ["overlong", "x".repeat(2_049)],
+  ])("fails R2 safe for a %s truncated cursor", async (_label, cursor) => {
+    const list = vi.fn(async () => ({
+      objects: [],
+      delimitedPrefixes: [],
+      truncated: true,
+      ...(cursor === undefined ? {} : { cursor }),
+    } as R2Objects));
+    const source = createUsageWarningSource(
+      databaseReturning(1),
+      bucketListing(list),
+      thresholds,
+    );
+
+    await expect(source.readUsageWarnings()).resolves.toEqual({
+      databaseUsageWarning: false,
+      r2UsageWarning: true,
+    });
+    expect(list).toHaveBeenCalledOnce();
+  });
+
   it.each([undefined, null, 0, 1, "false"])(
     "fails R2 safe when truncated is not boolean: %s",
     async (truncated) => {

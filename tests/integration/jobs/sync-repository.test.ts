@@ -209,6 +209,34 @@ describe("encrypted atomic synchronization repository", () => {
     expect(JSON.stringify(runRows.rows)).not.toContain(sentinel);
   });
 
+  it("rejects a checkpoint whose row key version disagrees with its encrypted envelope", async () => {
+    const syncRepository = await repository();
+    await run(
+      client({
+        changes: [],
+        calendarTimeZone: "America/Chicago",
+        nextSyncToken: "sync-token-key-version-mismatch",
+      }),
+      syncRepository,
+      "job-key-version-mismatch",
+    );
+    const stored = await pglite.query<{ key_version: number }>(
+      `select key_version from sync_checkpoints`,
+    );
+    const storedVersion = stored.rows[0]?.key_version;
+    if (!Number.isSafeInteger(storedVersion)) {
+      throw new Error("Test checkpoint key version is unavailable.");
+    }
+    await pglite.query(
+      `update sync_checkpoints set key_version = $1`,
+      [storedVersion! + 1],
+    );
+
+    await expect(
+      syncRepository.loadCheckpoint(ownerId, calendarId),
+    ).rejects.toThrow("Committed synchronization checkpoint is invalid.");
+  });
+
   it("locks existing nodes and events deterministically before admitting the checkpoint", async () => {
     const syncRepository = await repository();
     await run(

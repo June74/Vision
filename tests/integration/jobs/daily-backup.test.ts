@@ -176,7 +176,7 @@ describe("daily encrypted backup job", () => {
     expect(fixture.store.objects).toHaveLength(0);
   });
 
-  it("does not emit an R2 write terminal when a valid daily backup returns before the injected writer", async () => {
+  it("forces the injected R2 failure boundary even when a valid daily backup already exists", async () => {
     const fixture = dependencies();
     await fixture.create();
     const head = vi.spyOn(fixture.store, "head");
@@ -205,13 +205,22 @@ describe("daily encrypted backup job", () => {
         },
         write,
       ),
-    ).rejects.toThrow("Temporary preview R2 fault was not observed.");
+    ).rejects.toThrow("Backup storage write failed.");
 
-    expect(head).toHaveBeenCalled();
-    expect(get).toHaveBeenCalled();
+    expect(head).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
     expect(putIfAbsent).not.toHaveBeenCalled();
     expect(deleteObject).not.toHaveBeenCalled();
-    expect(write).not.toHaveBeenCalled();
+    expect(write).toHaveBeenCalledExactlyOnceWith({
+      action: "acceptance.preview-fault",
+      evidence: {
+        evidenceType: "vision.preview-fault/v1",
+        scenario: "r2_upload_failed",
+        outcome: "failed",
+        category: "backup_storage_write_failed",
+      },
+    });
+    expect(fixture.readConsistentSnapshot).toHaveBeenCalledTimes(2);
     expect(fixture.store.objects).toHaveLength(1);
   });
 

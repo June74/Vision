@@ -840,10 +840,14 @@ class EncryptedSyncRepository implements SyncRepository {
     if (row.tokenEnvelope === null || row.keyVersion === null) {
       throw new Error("Committed synchronization checkpoint is invalid.");
     }
+    const tokenEnvelope = decodeEnvelope(row.tokenEnvelope);
+    if (tokenEnvelope.keyVersion !== row.keyVersion) {
+      throw new Error("Committed synchronization checkpoint is invalid.");
+    }
     const decrypted = await decryptProtectedFields(
       this.keyProvider,
       checkpointContext(ownerId, calendarId),
-      { syncToken: decodeEnvelope(row.tokenEnvelope) },
+      { syncToken: tokenEnvelope },
     );
     return SyncCheckpointSchema.parse({
       calendarId: row.calendarId,
