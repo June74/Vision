@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:16:44.091309Z
-- **Last observed:** 2026-07-29T03:11:29Z
+- **Last observed:** 2026-07-29T18:47:59Z
 - **Phase/task:** Acceptance instrumentation Task 4 final re-review diagnosis
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** `7d2f9f6`; reviewed candidate `0f08fc1`
@@ -78,5 +78,13 @@ files with 59 passing tests.
   classifier diagnostic through `pnpm exec` and `pnpm tsx`. Neither invocation
   resolved the local executable, no product or provider state changed, and the
   documented `node --import tsx` form completed successfully.
+- 2026-07-29T18:47:59Z: Recurred during Task 7 candidate generation when
+  `pnpm.cmd exec tsx` did not resolve the installed local wrapper. No candidate
+  artifact was written, no application code ran, and no provider or external
+  state changed. The local wrapper exists and will run the same script and
+  arguments directly.
 
-The repository-local wrapper then ran the focused suite with 8 passing tests.
+The repository-local wrapper reached the candidate script, confirming the
+package-runner resolution boundary. The workflow-equivalent local Node loader
+then generated and validated the exact foundation artifact successfully. The
+repository-local wrapper also ran the focused suite with 8 passing tests.

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T03:58:01Z
-- **Last observed:** 2026-07-28T15:00:32Z
+- **Last observed:** 2026-07-29T18:31:14Z
 - **Phase/task:** Phase B production-environment protection audit
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `1d6ad12`
@@ -64,6 +64,10 @@ The follow-up inspection returned only redacted identifiers, booleans, counts,
 and line numbers. It confirmed the required workflow-policy and client-boundary
 interfaces without emitting URL contents.
 
+The 2026-07-29 Task 7 recurrence was closed by a bounded three-file inspection
+that emitted only file count, URL-literal match count, raw-value count, and a
+pass category. It reported zero raw values.
+
 ## Recurrence history
 
 - 2026-07-27T03:58:01Z: First observed and contained.
@@ -105,3 +109,9 @@ interfaces without emitting URL contents.
   database value, account identifier, protected row, or environment details.
   Later diagnostics suppress raw provider error bodies and return only status
   categories.
+- 2026-07-29T18:31:14Z: Recurred during Task 7 when a broad source-context
+  inspection printed one repository-configured deployment URL. No credential,
+  token, database value, account identifier, protected row, or provider action
+  was involved. Raw source-context inspection of URL-bearing configuration
+  stopped; remaining freeze evidence is limited to redacted summaries,
+  booleans, counts, and exit statuses.

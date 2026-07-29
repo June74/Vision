@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:58:57.365788Z
-- **Last observed:** 2026-07-27T04:58:39Z
+- **Last observed:** 2026-07-29T18:58:08Z
 - **Phase/task:** Phase B restore Task 3 verification
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `3935500`
@@ -65,3 +65,10 @@ The generated file is absent and the setback itself is indexed.
   594-byte untracked file was never printed; six fixed-shape privacy checks
   were false, and its resolved path was confirmed inside the worktree before
   exact-path removal.
+- 2026-07-29T18:58:08Z: Recurred after Task 7 local verification. The
+  990-byte file was never printed. URL, email, database-URL, and
+  secret/token/cookie word-shape counts were all zero, and its resolved parent
+  was confirmed as the worktree root before exact-path removal.
+
+The exact-path removal succeeded and a fresh existence check returned false.
+This closes the recurrence.

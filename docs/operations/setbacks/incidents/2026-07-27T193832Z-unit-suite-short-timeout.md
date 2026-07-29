@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T19:38:32Z
-- **Last observed:** 2026-07-27T19:38:32Z
+- **Last observed:** 2026-07-29T18:34:29Z
 - **Phase/task:** Phase B restore Task 4 diagnosis
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `9bbc4be`
@@ -37,3 +37,16 @@ assertion failure was reported before termination and no provider state changed.
 The background run completed after 76 seconds and produced an authoritative
 single-test failure. The longer-run result is tracked as the tail-correction
 test-coverage incident; the timeout workaround itself is verified.
+
+## Recurrence history
+
+- 2026-07-29T18:34:29Z: Recurred during acceptance instrumentation Task 7
+  because the shell deadline was set to one second while expecting a yielded
+  long-running cell. The harness terminated the command instead. No completed
+  test result was produced, no assertion failure was reported, and no provider
+  or external state changed. The exact suite will be rerun with a normal shell
+  deadline and bounded output.
+
+The exact Task 7 unit project rerun completed with exit zero: 78 files passed,
+1 file was intentionally skipped, 1,040 tests passed, and 1 test was
+intentionally skipped. This closes the recurrence.

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:47:00Z
-- **Last observed:** 2026-07-29T04:10:43.9181610Z
+- **Last observed:** 2026-07-29T18:53:57Z
 - **Phase/task:** Phase B acceptance instrumentation Task 5 E2E
 - **Environment:** Local worktree
 - **Version/commit:** `50569e6`
@@ -133,3 +133,20 @@ At 2026-07-27T01:50Z, the repository's `docs:check` script and
   package-binary invocation instead of the repository's declared `test:e2e`
   script. No browser, provider, or external mutation started; the retry uses
   the package script already recorded in the Task 5 brief.
+- 2026-07-29T18:50:30Z: A Task 7 inline Node child-launcher lost its string
+  quotes across the PowerShell native-command boundary and failed at parse
+  time. No child process, candidate generation, provider action, or external
+  mutation occurred. The retry removes inline JavaScript and uses one fixed
+  command line that preserves the empty scalar.
+
+The fixed command generated and internally validated the foundation candidate
+with exit zero, then removed the ephemeral artifact. This closes the
+recurrence.
+
+- 2026-07-29T18:53:57Z: The first aggregate Task 7 self-review command used
+  nested PowerShell subexpressions that did not parse. It stopped before
+  reading the range diff, emitted no source content, and changed no state. The
+  retry calculates each count in a named variable before formatting output.
+
+The named-variable retry completed with exit zero and emitted only aggregate
+path, policy-pattern, and diff-check counts. This closes the recurrence.
