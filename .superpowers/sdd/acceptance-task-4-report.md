@@ -146,3 +146,58 @@
 - I1 remains closed by the exact Chicago boundary assertion. I4 remains closed
   by the canonical safe-tail/classifier/printer regression. I6 remains closed
   by the exact approved `vision.ai-usage/v1` field assertions.
+
+## Final I4/M3/M4 re-review resolution
+
+### Root cause and strict RED evidence
+
+- The live observer path is `print-safe-tail` standard input to
+  `createSafeTailAccumulator().push()`, then `classifySafeTailLine()`, then the
+  terminal locators.
+- `classifySafeTailLine()` returned the first valid locator result. The
+  foundation locator ran before the AI locator and its private terminal list
+  omitted both the AI action and `vision.ai-usage/v1`, so a canonical
+  foundation plus canonical AI event was returned as foundation evidence.
+- The first regression-only run was:
+  `pnpm.cmd test:unit tests/unit/scripts/safe-tail-classifier.test.ts`.
+  Output: 1 file, 34 tests, 2 expected mixed-order failures and 32 passes. Both
+  foundation-first and AI-first cases returned foundation evidence instead of
+  `null`.
+- The minimal foundation vocabulary correction made that file GREEN at 34/34.
+- A second shared-vocabulary RED added AI plus every registered terminal kind
+  in both orders. Output: 1 file, 35 tests, 1 expected failure and 34 passes.
+  The maintenance-first path returned canonical maintenance evidence when AI
+  evidence was present.
+
+### GREEN and auditability refactor
+
+- One `TERMINAL_IDENTITIES` registry now defines every terminal action and
+  evidence discriminator. `hasMixedTerminalKinds()` scans the entire event
+  before any locator runs, so cross-kind messages and action/evidence
+  mismatches fail closed independent of message or locator order.
+- Foundation, maintenance, and AI locators use named terminal-kind helpers
+  instead of separate incomplete string lists.
+- The AI classifier now exposes its decision structure through named exact
+  shape, unavailable-form, canonical-match, and reconstruction helpers. The AI
+  locator uses expanded duplicate, envelope, and classification branches.
+- The exhaustive canonical matrix now covers `none`, `limit_exceeded`,
+  `inconsistent`, and `unavailable` directly and through the one-minute tail.
+  Additional tests cover duplicate, wrong-action, wrong-cron, extra-key,
+  accessor, symbol, hidden-key, and non-plain-prototype rejection.
+- Focused AI/foundation classifier and printer GREEN:
+  `pnpm.cmd test:unit tests/unit/scripts/safe-tail-classifier.test.ts
+  tests/unit/scripts/print-safe-tail.test.ts`.
+  Output: 2 files, 54 tests, zero failures. The printer coverage includes
+  `--ai-usage-only` success, fixed fallback, and combined-mode rejection.
+
+### Final verification
+
+- The covering AI, foundation, safe-tail, scheduler, budget, health, and
+  Gateway slice passed: 11 files, 202 tests, zero failures.
+- The AI budget schema contract passed: 1 file, 13 tests, zero failures.
+- `pnpm.cmd typecheck`, `pnpm.cmd docs:check`, `pnpm.cmd build`, and
+  `pnpm.cmd security:scan` exited successfully.
+- `git diff --check` passed. Migration and committed
+  deployment/secret-inventory surfaces remain unchanged.
+- No Task 6 selector, binding generation, one-minute cron configuration, or
+  orchestration was added.

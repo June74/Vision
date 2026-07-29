@@ -155,7 +155,47 @@ const PHASE_B_FOUNDATION_INTEGER_KEYS = Object.freeze([
 ] as const satisfies readonly (keyof PhaseBFoundationProbeMeasurements)[]);
 const MAX_TAIL_EVENT_BYTES = 1_048_576;
 const CALENDAR_MAINTENANCE_CRON = "*/15 * * * *";
-const AI_USAGE_KEYS = Object.freeze(["category","evidenceType","gatewayLimitMatches","hardStopAtCents","monthlyCents","nonAiAvailable","optionalStopAtCents","outcome","tier","warningAtCents"] as const);
+const AI_USAGE_EVIDENCE_TYPE = "vision.ai-usage/v1";
+const AI_USAGE_KEYS = Object.freeze([
+  "category",
+  "evidenceType",
+  "gatewayLimitMatches",
+  "hardStopAtCents",
+  "monthlyCents",
+  "nonAiAvailable",
+  "optionalStopAtCents",
+  "outcome",
+  "tier",
+  "warningAtCents",
+] as const);
+const TERMINAL_IDENTITIES = Object.freeze([
+  {
+    action: "calendar.maintenance",
+    evidenceType: "vision.calendar-maintenance/v1",
+    kind: "calendar_maintenance",
+  },
+  {
+    action: "backup.restore",
+    evidenceType: "vision.preview-restore/v1",
+    kind: "preview_restore",
+  },
+  {
+    action: "backup.restore-role-probe",
+    evidenceType: "vision.preview-role-probe/v1",
+    kind: "preview_role_probe",
+  },
+  {
+    action: PHASE_B_FOUNDATION_PROBE_ACTION,
+    evidenceType: "vision.phase-b-foundation-probe/v1",
+    kind: "phase_b_foundation",
+  },
+  {
+    action: PHASE_B_AI_USAGE_ACTION,
+    evidenceType: AI_USAGE_EVIDENCE_TYPE,
+    kind: "phase_b_ai_usage",
+  },
+] as const);
+type TerminalKind = (typeof TERMINAL_IDENTITIES)[number]["kind"];
 
 /** Incrementally assembles Wrangler's pretty-printed JSON without emitting it. */
 export function createSafeTailAccumulator(): {
@@ -195,6 +235,7 @@ export function classifySafeTailLine(line: string): SafeTailResult | null {
   const tail = snapshotOwnEnumerableData(candidate);
   const event = snapshotOwnEnumerableData(tail?.event);
   if (!tail || !event) return null;
+  if (hasMixedTerminalKinds(tail.logs)) return null;
   const maintenance = locateCalendarMaintenanceEvidence(tail.logs);
   if (maintenance.seen) {
     return event.cron === CALENDAR_MAINTENANCE_CRON
@@ -244,14 +285,89 @@ export function classifySafeTailLine(line: string): SafeTailResult | null {
 }
 
 /** Reconstructs one exact AI-usage terminal record without copying tail-controlled data. */
-export function classifyPhaseBAiUsageEvidence(candidate: unknown): PhaseBAiUsageEvidence | null {
+export function classifyPhaseBAiUsageEvidence(
+  candidate: unknown,
+): PhaseBAiUsageEvidence | null {
   const evidence = snapshotOwnEnumerableData(candidate);
-  if (!evidence || !hasExactKeys(evidence, AI_USAGE_KEYS) || evidence.evidenceType !== "vision.ai-usage/v1" || typeof evidence.monthlyCents !== "number" || typeof evidence.gatewayLimitMatches !== "boolean" || typeof evidence.nonAiAvailable !== "boolean") return null;
-  if (evidence.category === "unavailable" && evidence.outcome === "failed" && evidence.monthlyCents === 0 && evidence.gatewayLimitMatches === false && evidence.nonAiAvailable === false && evidence.warningAtCents === 800 && evidence.optionalStopAtCents === 900 && evidence.hardStopAtCents === 950 && evidence.tier === "normal") {
-    return Object.freeze({ evidenceType: "vision.ai-usage/v1", outcome: "failed", category: "unavailable", monthlyCents: 0, warningAtCents: 800, optionalStopAtCents: 900, hardStopAtCents: 950, tier: "normal", gatewayLimitMatches: false, nonAiAvailable: false });
+  if (!isPhaseBAiUsageEvidenceShape(evidence)) return null;
+  if (isCanonicalUnavailableAiUsageEvidence(evidence)) {
+    return createUnavailableAiUsageEvidence();
   }
-  const reconstructed = createPhaseBAiUsageEvidence({ monthlyCents: evidence.monthlyCents, gatewayLimitMatches: evidence.gatewayLimitMatches, nonAiAvailable: evidence.nonAiAvailable });
-  return evidence.category === reconstructed.category && evidence.outcome === reconstructed.outcome && evidence.warningAtCents === reconstructed.warningAtCents && evidence.optionalStopAtCents === reconstructed.optionalStopAtCents && evidence.hardStopAtCents === reconstructed.hardStopAtCents && evidence.tier === reconstructed.tier && evidence.monthlyCents === reconstructed.monthlyCents ? reconstructed : null;
+  const reconstructed = createPhaseBAiUsageEvidence({
+    monthlyCents: evidence.monthlyCents,
+    gatewayLimitMatches: evidence.gatewayLimitMatches,
+    nonAiAvailable: evidence.nonAiAvailable,
+  });
+  return matchesPhaseBAiUsageEvidence(evidence, reconstructed)
+    ? reconstructed
+    : null;
+}
+
+/** Requires the exact AI key set and primitive inputs used for reconstruction. */
+function isPhaseBAiUsageEvidenceShape(
+  evidence: Record<string, unknown> | null,
+): evidence is Record<string, unknown> & {
+  readonly monthlyCents: number;
+  readonly gatewayLimitMatches: boolean;
+  readonly nonAiAvailable: boolean;
+} {
+  return (
+    evidence !== null &&
+    hasExactKeys(evidence, AI_USAGE_KEYS) &&
+    evidence.evidenceType === AI_USAGE_EVIDENCE_TYPE &&
+    typeof evidence.monthlyCents === "number" &&
+    typeof evidence.gatewayLimitMatches === "boolean" &&
+    typeof evidence.nonAiAvailable === "boolean"
+  );
+}
+
+/** Recognizes the producer's sole source-unavailable AI evidence form. */
+function isCanonicalUnavailableAiUsageEvidence(
+  evidence: Record<string, unknown>,
+): boolean {
+  return (
+    evidence.category === "unavailable" &&
+    evidence.outcome === "failed" &&
+    evidence.monthlyCents === 0 &&
+    evidence.gatewayLimitMatches === false &&
+    evidence.nonAiAvailable === false &&
+    evidence.warningAtCents === 800 &&
+    evidence.optionalStopAtCents === 900 &&
+    evidence.hardStopAtCents === 950 &&
+    evidence.tier === "normal"
+  );
+}
+
+/** Rebuilds the source-unavailable record from fixed allowlisted values only. */
+function createUnavailableAiUsageEvidence(): PhaseBAiUsageEvidence {
+  return Object.freeze({
+    evidenceType: AI_USAGE_EVIDENCE_TYPE,
+    outcome: "failed",
+    category: "unavailable",
+    monthlyCents: 0,
+    warningAtCents: 800,
+    optionalStopAtCents: 900,
+    hardStopAtCents: 950,
+    tier: "normal",
+    gatewayLimitMatches: false,
+    nonAiAvailable: false,
+  });
+}
+
+/** Confirms that every derived AI field matches the canonical reconstruction. */
+function matchesPhaseBAiUsageEvidence(
+  candidate: Record<string, unknown>,
+  reconstructed: PhaseBAiUsageEvidence,
+): boolean {
+  return (
+    candidate.category === reconstructed.category &&
+    candidate.outcome === reconstructed.outcome &&
+    candidate.warningAtCents === reconstructed.warningAtCents &&
+    candidate.optionalStopAtCents === reconstructed.optionalStopAtCents &&
+    candidate.hardStopAtCents === reconstructed.hardStopAtCents &&
+    candidate.tier === reconstructed.tier &&
+    candidate.monthlyCents === reconstructed.monthlyCents
+  );
 }
 
 /** Reconstructs one exact closed foundation result and rejects value drift. */
@@ -573,6 +689,61 @@ function locateTemporaryPreviewRoleProbeEvidence(candidate: unknown): {
   return { seen, evidence: null };
 }
 
+/** Returns every terminal kind named by one action or evidence discriminator. */
+function terminalKindsForMessage(
+  message: Record<string, unknown>,
+): ReadonlySet<TerminalKind> {
+  const evidence = snapshotOwnEnumerableData(message.evidence);
+  const kinds = new Set<TerminalKind>();
+  for (const identity of TERMINAL_IDENTITIES) {
+    if (
+      message.action === identity.action ||
+      evidence?.evidenceType === identity.evidenceType
+    ) {
+      kinds.add(identity.kind);
+    }
+  }
+  return kinds;
+}
+
+/** Reports whether one message identifies the requested terminal kind. */
+function hasTerminalKind(
+  message: Record<string, unknown>,
+  expected: TerminalKind,
+): boolean {
+  return terminalKindsForMessage(message).has(expected);
+}
+
+/** Reports whether one message identifies any different terminal kind. */
+function hasOtherTerminalKind(
+  message: Record<string, unknown>,
+  expected: TerminalKind,
+): boolean {
+  for (const kind of terminalKindsForMessage(message)) {
+    if (kind !== expected) return true;
+  }
+  return false;
+}
+
+/** Rejects cross-kind terminal evidence before locator order can select a winner. */
+function hasMixedTerminalKinds(candidate: unknown): boolean {
+  if (!Array.isArray(candidate)) return false;
+  let observed: TerminalKind | null = null;
+  for (const logCandidate of candidate) {
+    const log = snapshotOwnEnumerableData(logCandidate);
+    if (!log || !Array.isArray(log.message)) continue;
+    for (const messageCandidate of log.message) {
+      const message = snapshotOwnEnumerableData(messageCandidate);
+      if (!message) continue;
+      for (const kind of terminalKindsForMessage(message)) {
+        if (observed !== null && observed !== kind) return true;
+        observed = kind;
+      }
+    }
+  }
+  return false;
+}
+
 /** Requires exactly one valid foundation terminal and rejects every mixed terminal. */
 function locatePhaseBFoundationProbeEvidence(candidate: unknown): {
   readonly seen: boolean;
@@ -588,18 +759,11 @@ function locatePhaseBFoundationProbeEvidence(candidate: unknown): {
     for (const messageCandidate of log.message) {
       const message = snapshotOwnEnumerableData(messageCandidate);
       if (!message) continue;
-      const evidenceLike = snapshotOwnEnumerableData(message.evidence);
-      const foundationLike =
-        evidenceLike?.evidenceType ===
-        "vision.phase-b-foundation-probe/v1";
-      const otherTerminal =
-        message.action === "calendar.maintenance" ||
-        message.action === "backup.restore" ||
-        message.action === "backup.restore-role-probe" ||
-        evidenceLike?.evidenceType === "vision.calendar-maintenance/v1" ||
-        evidenceLike?.evidenceType === "vision.preview-restore/v1" ||
-        evidenceLike?.evidenceType === "vision.preview-role-probe/v1";
-      if (foundationLike || message.action === PHASE_B_FOUNDATION_PROBE_ACTION) {
+      const foundationLike = hasTerminalKind(
+        message,
+        "phase_b_foundation",
+      );
+      if (foundationLike) {
         if (seen) invalid = true;
         seen = true;
         if (
@@ -617,7 +781,7 @@ function locatePhaseBFoundationProbeEvidence(candidate: unknown): {
           continue;
         }
         valid = evidence;
-      } else if (otherTerminal) {
+      } else if (hasOtherTerminalKind(message, "phase_b_foundation")) {
         invalid = true;
       }
     }
@@ -629,21 +793,47 @@ function locatePhaseBFoundationProbeEvidence(candidate: unknown): {
 }
 
 /** Requires one exact AI terminal and rejects duplicate or mixed terminal records. */
-function locatePhaseBAiUsageEvidence(candidate: unknown): { readonly seen: boolean; readonly evidence: PhaseBAiUsageEvidence | null } {
+function locatePhaseBAiUsageEvidence(candidate: unknown): {
+  readonly seen: boolean;
+  readonly evidence: PhaseBAiUsageEvidence | null;
+} {
   if (!Array.isArray(candidate)) return { seen: false, evidence: null };
-  let seen = false; let invalid = false; let valid: PhaseBAiUsageEvidence | null = null;
+  let seen = false;
+  let invalid = false;
+  let valid: PhaseBAiUsageEvidence | null = null;
   for (const logCandidate of candidate) {
-    const log = snapshotOwnEnumerableData(logCandidate); if (!log || !Array.isArray(log.message)) continue;
+    const log = snapshotOwnEnumerableData(logCandidate);
+    if (!log || !Array.isArray(log.message)) continue;
     for (const messageCandidate of log.message) {
-      const message = snapshotOwnEnumerableData(messageCandidate); if (!message) continue;
-      const evidenceLike = snapshotOwnEnumerableData(message.evidence);
-      if (message.action === PHASE_B_AI_USAGE_ACTION || evidenceLike?.evidenceType === "vision.ai-usage/v1") {
-        if (seen || message.action !== PHASE_B_AI_USAGE_ACTION || !hasExactKeys(message,["action","evidence"])) invalid = true;
-        seen = true; const evidence = classifyPhaseBAiUsageEvidence(message.evidence); if (!evidence || valid) invalid = true; else valid = evidence;
-      } else if (message.action === "calendar.maintenance" || message.action === "backup.restore" || message.action === "backup.restore-role-probe" || message.action === PHASE_B_FOUNDATION_PROBE_ACTION) invalid = true;
+      const message = snapshotOwnEnumerableData(messageCandidate);
+      if (!message) continue;
+      if (!hasTerminalKind(message, "phase_b_ai_usage")) {
+        if (hasOtherTerminalKind(message, "phase_b_ai_usage")) {
+          invalid = true;
+        }
+        continue;
+      }
+      if (seen) invalid = true;
+      seen = true;
+      if (
+        message.action !== PHASE_B_AI_USAGE_ACTION ||
+        !hasExactKeys(message, ["action", "evidence"] as const)
+      ) {
+        invalid = true;
+        continue;
+      }
+      const evidence = classifyPhaseBAiUsageEvidence(message.evidence);
+      if (!evidence || valid) {
+        invalid = true;
+        continue;
+      }
+      valid = evidence;
     }
   }
-  return { seen, evidence: seen && !invalid ? valid : null };
+  return {
+    seen,
+    evidence: seen && !invalid ? valid : null,
+  };
 }
 
 /** Requires exactly one valid maintenance terminal record and no mixed terminal record. */
@@ -661,17 +851,14 @@ function locateCalendarMaintenanceEvidence(candidate: unknown): {
     for (const messageCandidate of log.message) {
       const message = snapshotOwnEnumerableData(messageCandidate);
       if (!message) continue;
-      const evidenceLike = snapshotOwnEnumerableData(message.evidence);
-      const maintenanceLike =
-        evidenceLike?.evidenceType === "vision.calendar-maintenance/v1";
-      const mixedTerminal =
-        message.action === "backup.restore" ||
-        message.action === "backup.restore-role-probe" ||
-        message.action === PHASE_B_FOUNDATION_PROBE_ACTION ||
-        evidenceLike?.evidenceType === "vision.preview-restore/v1" ||
-        evidenceLike?.evidenceType === "vision.preview-role-probe/v1" ||
-        evidenceLike?.evidenceType ===
-          "vision.phase-b-foundation-probe/v1";
+      const maintenanceLike = hasTerminalKind(
+        message,
+        "calendar_maintenance",
+      );
+      const mixedTerminal = hasOtherTerminalKind(
+        message,
+        "calendar_maintenance",
+      );
       if (mixedTerminal) invalid = true;
       if (message.action !== "calendar.maintenance") {
         if (maintenanceLike) {

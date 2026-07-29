@@ -1,9 +1,8 @@
 # safe-tail-classifier
 
 ## `classifyPhaseBAiUsageEvidence`
-Accepts one exact AI evidence record.
-## `locatePhaseBAiUsageEvidence`
-Rejects duplicate or mixed terminal records.
+
+Accepts one exact AI evidence record and rebuilds only canonical fixed fields.
 
 Turns a Cloudflare scheduled-event log into a tiny recovery result, the exact
 five-field normal maintenance result, the exact closed temporary-restore
@@ -22,7 +21,26 @@ Accepts one line and returns a safe result only after one complete event exists.
 
 Recognizes only the exact maintenance or recovery schedules, returns an exact
 maintenance, role-probe, or restore result, and otherwise maps known backup
-failures to fixed names.
+failures to fixed names. It rejects an event that contains more than one kind
+of terminal evidence before any locator can win by running first.
+
+## `isPhaseBAiUsageEvidenceShape`
+
+Requires the exact AI key set and the primitive inputs needed for safe
+reconstruction.
+
+## `isCanonicalUnavailableAiUsageEvidence`
+
+Recognizes only the producer's fixed zeroed unavailable record.
+
+## `createUnavailableAiUsageEvidence`
+
+Builds a new unavailable AI record from fixed values rather than tail data.
+
+## `matchesPhaseBAiUsageEvidence`
+
+Checks every derived AI category, outcome, threshold, tier, and amount against
+the canonical reconstruction.
 
 ## `classifyCalendarMaintenanceEvidence`
 
@@ -59,10 +77,33 @@ Checks only the first message in each log entry for the exact role-probe
 action, and blocks generic fallback for malformed or wrongly labeled
 role-probe-shaped records.
 
+## `terminalKindsForMessage`
+
+Uses one shared action/evidence list to identify every terminal kind named by
+a log message.
+
+## `hasTerminalKind`
+
+Reports whether a message names one requested terminal kind.
+
+## `hasOtherTerminalKind`
+
+Reports whether a message names a different terminal kind.
+
+## `hasMixedTerminalKinds`
+
+Scans the complete event and rejects cross-kind terminal evidence regardless
+of message or locator order.
+
 ## `locatePhaseBFoundationProbeEvidence`
 
 Requires exactly one foundation terminal on the one-minute observation and
 rejects duplicates, mixed terminals, wrong actions, or malformed shapes.
+
+## `locatePhaseBAiUsageEvidence`
+
+Requires exactly one canonical AI terminal and rejects duplicates, wrong
+actions, malformed records, or any other terminal kind.
 
 ## `locateCalendarMaintenanceEvidence`
 

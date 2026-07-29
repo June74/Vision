@@ -1,9 +1,8 @@
 # `scripts/safe-tail-classifier.ts`
 
 ## `classifyPhaseBAiUsageEvidence`
-Reconstructs the exact AI record rather than tail data.
-## `locatePhaseBAiUsageEvidence`
-Requires one unmixed terminal record.
+
+Reconstructs the exact AI record rather than returning tail data.
 
 Provides the closed, privacy-safe projection used for normal calendar
 maintenance, live scheduled recovery, temporary restore, and temporary
@@ -28,6 +27,26 @@ Parses one JSON value, requires a recognized scheduled cron, accepts permanent
 maintenance evidence only on `*/15 * * * *`, returns exact accepted terminal
 records before legacy recovery classification, maps known fixed backup
 messages to allowlisted categories, and otherwise uses `unknown_failure`.
+Before locator dispatch, a shared terminal registry rejects any event that
+names more than one terminal kind, including action/evidence mismatches.
+
+## `isPhaseBAiUsageEvidenceShape`
+
+Requires the exact ten-key AI object, its fixed evidence discriminator, and
+typed reconstruction inputs without retaining provider-controlled fields.
+
+## `isCanonicalUnavailableAiUsageEvidence`
+
+Checks every literal in the sole zeroed `failed/unavailable` producer form.
+
+## `createUnavailableAiUsageEvidence`
+
+Returns a new frozen unavailable record containing fixed allowlisted literals.
+
+## `matchesPhaseBAiUsageEvidence`
+
+Compares the candidate's derived category, outcome, thresholds, tier, and
+amount with `createPhaseBAiUsageEvidence`.
 
 ## `classifyCalendarMaintenanceEvidence`
 
@@ -72,11 +91,35 @@ Walks only the first log message, recognizes
 wrong-action role-probe-shaped evidence as seen but rejected so provider text
 cannot fall through into generic output.
 
+## `terminalKindsForMessage`
+
+Matches actions and evidence discriminators against one complete registry for
+maintenance, restore, role-probe, foundation, and AI terminals.
+
+## `hasTerminalKind`
+
+Tests membership in the shared terminal registry for one expected kind.
+
+## `hasOtherTerminalKind`
+
+Detects any registry match other than the locator's expected kind.
+
+## `hasMixedTerminalKinds`
+
+Scans all log messages and rejects two distinct terminal kinds before the
+maintenance-first and one-minute locator order can affect the result.
+
 ## `locatePhaseBFoundationProbeEvidence`
 
 Inspects only first log messages on the one-minute cron, requires exactly one
 `acceptance.phase-b-foundation` terminal, and rejects duplicates, mixed
 terminal evidence, wrong actions, malformed records, and extra fields.
+
+## `locatePhaseBAiUsageEvidence`
+
+Scans all messages for the shared AI terminal identity, requires one exact
+action/evidence envelope, and rejects duplicates, malformed evidence, or any
+other registered terminal kind.
 
 ## `locateCalendarMaintenanceEvidence`
 

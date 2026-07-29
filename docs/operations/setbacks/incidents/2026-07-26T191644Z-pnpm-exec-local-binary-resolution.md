@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:16:44.091309Z
-- **Last observed:** 2026-07-28T14:18:00Z
-- **Phase/task:** CI secret-handoff architecture audit
+- **Last observed:** 2026-07-29T03:11:29Z
+- **Phase/task:** Acceptance instrumentation Task 4 final re-review diagnosis
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** `7d2f9f6`; reviewed candidate `0f08fc1`
 
@@ -74,5 +74,9 @@ files with 59 passing tests.
 - 2026-07-28T14:18:00Z: Recurred during a read-only CI capability audit when
   `pnpm exec` did not resolve the installed Wrangler binary. The local wrapper
   remained present, and no provider or repository mutation was attempted.
+- 2026-07-29T03:11:29Z: Recurred twice while running a read-only inline
+  classifier diagnostic through `pnpm exec` and `pnpm tsx`. Neither invocation
+  resolved the local executable, no product or provider state changed, and the
+  documented `node --import tsx` form completed successfully.
 
 The repository-local wrapper then ran the focused suite with 8 passing tests.

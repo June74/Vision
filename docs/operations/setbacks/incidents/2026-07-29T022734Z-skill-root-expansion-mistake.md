@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T02:27:34.985989Z
-- **Last observed:** 2026-07-29T02:30:00Z
-- **Phase/task:** Acceptance instrumentation Task 4 review-fix setup
+- **Last observed:** 2026-07-29T03:01:53Z
+- **Phase/task:** Acceptance instrumentation Task 4 final re-review setup
 - **Environment:** Windows PowerShell, isolated phase-b-foundation worktree
 - **Version/commit:** ecd74074fe223d4e9d185e8c92dd033eb26678a4
 
@@ -66,3 +66,7 @@ copying the exact path emitted in `INDEX.md`.
 - 2026-07-29T02:27:34.985989Z: First observed.
 - 2026-07-29T02:30:00Z: Recurrence while reading the newly created incident;
   corrected by using the exact indexed filename.
+- 2026-07-29T03:01:53Z: Recurrence while loading the final re-review skills;
+  `scope-gate` was addressed through the `.codex` root instead of its configured
+  `.agents` root. No repository action depended on the failed read, and copying
+  the configured root loaded the complete skill successfully.

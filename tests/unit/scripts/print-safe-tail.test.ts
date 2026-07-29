@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { PHASE_B_AI_USAGE_ACTION } from "../../../src/jobs/phase-b-ai-usage-evidence";
 
 /** Runs the safe-tail executable against synthetic, non-sensitive input. */
 async function runPrintSafeTail(
@@ -116,6 +117,33 @@ function foundationTail(evidence: unknown): string {
     {
       message: [
         { action: "acceptance.phase-b-foundation", evidence },
+      ],
+    },
+  ]);
+}
+
+/** Builds one exact AI-usage success result. */
+function aiUsageSuccess(): unknown {
+  return {
+    evidenceType: "vision.ai-usage/v1",
+    outcome: "succeeded",
+    category: "none",
+    monthlyCents: 950,
+    warningAtCents: 800,
+    optionalStopAtCents: 900,
+    hardStopAtCents: 950,
+    tier: "stopped",
+    gatewayLimitMatches: true,
+    nonAiAvailable: true,
+  };
+}
+
+/** Wraps one AI-usage result in the future one-minute candidate shape. */
+function aiUsageTail(evidence: unknown): string {
+  return scheduledTail([
+    {
+      message: [
+        { action: PHASE_B_AI_USAGE_ACTION, evidence },
       ],
     },
   ]);
@@ -241,6 +269,35 @@ describe("print-safe-tail", () => {
     });
   });
 
+  it("emits only AI evidence in ai-usage-only mode", async () => {
+    const evidence = aiUsageSuccess();
+    const result = await runPrintSafeTail(
+      ["--ai-usage-only"],
+      [
+        restoreTail(restoreFailure()),
+        roleProbeTail(roleProbeSuccess()),
+        foundationTail(foundationSuccess()),
+        aiUsageTail(evidence),
+      ],
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual(evidence);
+  });
+
+  it("emits the fixed fallback when ai-usage-only mode sees no AI result", async () => {
+    await expect(
+      runPrintSafeTail(
+        ["--ai-usage-only"],
+        [restoreTail(restoreFailure()), foundationTail(foundationSuccess())],
+      ),
+    ).resolves.toEqual({
+      exitCode: 0,
+      stdout:
+        '{"category":"no_scheduled_event","cron":"none","outcome":"unknown"}\n',
+    });
+  });
+
   it("rejects unknown arguments without emitting recovery evidence", async () => {
     await expect(
       runPrintSafeTail(["--unrecognized"], [scheduledTail()]),
@@ -276,6 +333,15 @@ describe("print-safe-tail", () => {
       runPrintSafeTail(
         ["--foundation-probe-only", "--role-probe-only"],
         [foundationTail(foundationSuccess())],
+      ),
+    ).resolves.toEqual({ exitCode: 1, stdout: "" });
+  });
+
+  it("rejects combined AI and foundation observer modes", async () => {
+    await expect(
+      runPrintSafeTail(
+        ["--ai-usage-only", "--foundation-probe-only"],
+        [aiUsageTail(aiUsageSuccess())],
       ),
     ).resolves.toEqual({ exitCode: 1, stdout: "" });
   });

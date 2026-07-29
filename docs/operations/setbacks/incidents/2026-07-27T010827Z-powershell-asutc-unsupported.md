@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:08:27Z
-- **Last observed:** 2026-07-28T22:23:26.3813087Z
-- **Phase/task:** Phase B acceptance instrumentation Task 1 discovery
+- **Last observed:** 2026-07-29T03:01:53Z
+- **Phase/task:** Acceptance instrumentation Task 4 final re-review setup
 - **Environment:** Local Windows worktree
 - **Version/commit:** `0f08fc1`
 
@@ -65,3 +65,8 @@ The replacement returned a valid UTC timestamp.
   preparing the Task 3 privilege-helper incident. No mutation depended on the
   failed timestamp, and `[DateTime]::UtcNow.ToString(...)` immediately returned
   a valid UTC timestamp.
+- **2026-07-29T03:01:53Z:** The unsupported flag was used again while
+  timestamping the Task 4 final re-review setup recurrence. No mutation
+  depended on the failed timestamp, and
+  `(Get-Date).ToUniversalTime().ToString(...)` immediately returned a valid UTC
+  timestamp.

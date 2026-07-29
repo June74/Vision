@@ -14,6 +14,10 @@ import type {
   TemporaryRestoreFailureCategory,
 } from "../../../src/jobs/temporary-preview-restore";
 import type { CalendarMaintenanceEvidence } from "../../../src/jobs/calendar-maintenance-evidence";
+import {
+  PHASE_B_AI_USAGE_ACTION,
+  type PhaseBAiUsageEvidence,
+} from "../../../src/jobs/phase-b-ai-usage-evidence";
 import type { TemporaryPreviewRoleProbeEvidence } from "../../../src/jobs/temporary-preview-role-probe";
 import type { PhaseBFoundationProbeEvidence } from "../../../src/jobs/phase-b-foundation-probe";
 
@@ -162,13 +166,224 @@ function foundationTail(
   });
 }
 
+/** Returns all canonical AI evidence categories accepted from safe tail output. */
+function canonicalAiUsageEvidence(): readonly PhaseBAiUsageEvidence[] {
+  return [
+    {
+      evidenceType: "vision.ai-usage/v1",
+      outcome: "succeeded",
+      category: "none",
+      monthlyCents: 950,
+      warningAtCents: 800,
+      optionalStopAtCents: 900,
+      hardStopAtCents: 950,
+      tier: "stopped",
+      gatewayLimitMatches: true,
+      nonAiAvailable: true,
+    },
+    {
+      evidenceType: "vision.ai-usage/v1",
+      outcome: "failed",
+      category: "limit_exceeded",
+      monthlyCents: 951,
+      warningAtCents: 800,
+      optionalStopAtCents: 900,
+      hardStopAtCents: 950,
+      tier: "stopped",
+      gatewayLimitMatches: true,
+      nonAiAvailable: true,
+    },
+    {
+      evidenceType: "vision.ai-usage/v1",
+      outcome: "failed",
+      category: "inconsistent",
+      monthlyCents: 0,
+      warningAtCents: 800,
+      optionalStopAtCents: 900,
+      hardStopAtCents: 950,
+      tier: "normal",
+      gatewayLimitMatches: false,
+      nonAiAvailable: false,
+    },
+    {
+      evidenceType: "vision.ai-usage/v1",
+      outcome: "failed",
+      category: "unavailable",
+      monthlyCents: 0,
+      warningAtCents: 800,
+      optionalStopAtCents: 900,
+      hardStopAtCents: 950,
+      tier: "normal",
+      gatewayLimitMatches: false,
+      nonAiAvailable: false,
+    },
+  ];
+}
+
+/** Wraps AI records in the future one-minute candidate tail. */
+function aiUsageTail(
+  evidence: PhaseBAiUsageEvidence,
+  records: readonly unknown[] = [
+    { action: PHASE_B_AI_USAGE_ACTION, evidence },
+  ],
+  cron = "* * * * *",
+): string {
+  return JSON.stringify({
+    outcome: "ok",
+    event: { cron },
+    logs: records.map((record) => ({ message: [record] })),
+  });
+}
+
 describe("safe Cloudflare tail classification", () => {
   it("accepts every canonical AI evidence category without field drift", () => {
-    const base = { evidenceType: "vision.ai-usage/v1", monthlyCents: 950, warningAtCents: 800, optionalStopAtCents: 900, hardStopAtCents: 950, tier: "stopped", gatewayLimitMatches: true, nonAiAvailable: true } as const;
-    expect(classifyPhaseBAiUsageEvidence({ ...base, outcome: "succeeded", category: "none" })).toEqual({ ...base, outcome: "succeeded", category: "none" });
-    expect(classifyPhaseBAiUsageEvidence({ ...base, monthlyCents: 951, outcome: "failed", category: "limit_exceeded" })).toMatchObject({ category: "limit_exceeded", monthlyCents: 951 });
-    expect(classifyPhaseBAiUsageEvidence({ evidenceType: "vision.ai-usage/v1", outcome: "failed", category: "unavailable", monthlyCents: 0, warningAtCents: 800, optionalStopAtCents: 900, hardStopAtCents: 950, tier: "normal", gatewayLimitMatches: false, nonAiAvailable: false })).toMatchObject({ category: "unavailable" });
+    for (const evidence of canonicalAiUsageEvidence()) {
+      expect(classifyPhaseBAiUsageEvidence(evidence)).toEqual(evidence);
+      expect(classifySafeTailLine(aiUsageTail(evidence))).toEqual(evidence);
+    }
   });
+
+  it.each(["foundation-first", "ai-first"] as const)(
+    "rejects one-minute %s tails containing canonical foundation and AI terminals",
+    (order) => {
+      const foundation = foundationEvidence();
+      const aiUsage = canonicalAiUsageEvidence()[0];
+      const foundationRecord = {
+        action: "acceptance.phase-b-foundation",
+        evidence: foundation,
+      };
+      const aiUsageRecord = {
+        action: PHASE_B_AI_USAGE_ACTION,
+        evidence: aiUsage,
+      };
+      const records =
+        order === "foundation-first"
+          ? [foundationRecord, aiUsageRecord]
+          : [aiUsageRecord, foundationRecord];
+
+      expect(
+        classifySafeTailLine(aiUsageTail(aiUsage, records)),
+      ).toBeNull();
+    },
+  );
+
+  it("rejects AI combined with every other terminal kind in either order", () => {
+    const aiUsage = canonicalAiUsageEvidence()[0];
+    const aiUsageRecord = {
+      action: PHASE_B_AI_USAGE_ACTION,
+      evidence: aiUsage,
+    };
+    const terminalCases = [
+      {
+        cron: "* * * * *",
+        record: {
+          action: "acceptance.phase-b-foundation",
+          evidence: foundationEvidence(),
+        },
+      },
+      {
+        cron: "* * * * *",
+        record: {
+          action: "backup.restore",
+          evidence: successfulRestoreEvidence(),
+        },
+      },
+      {
+        cron: "* * * * *",
+        record: {
+          action: "backup.restore-role-probe",
+          evidence: {
+            evidenceType: "vision.preview-role-probe/v1",
+            outcome: "succeeded",
+            category: "none",
+            roleMatches: true,
+          },
+        },
+      },
+      {
+        cron: "*/15 * * * *",
+        record: {
+          action: "calendar.maintenance",
+          evidence: maintenanceEvidence(),
+        },
+      },
+    ] as const;
+
+    for (const { cron, record } of terminalCases) {
+      for (const records of [
+        [aiUsageRecord, record],
+        [record, aiUsageRecord],
+      ]) {
+        expect(
+          classifySafeTailLine(
+            JSON.stringify({
+              outcome: "ok",
+              event: { cron },
+              logs: records.map((message) => ({ message: [message] })),
+            }),
+          ),
+        ).toBeNull();
+      }
+    }
+  });
+
+  it("rejects duplicate, wrong-action, wrong-cron, and extra-key AI terminals", () => {
+    const aiUsage = canonicalAiUsageEvidence()[0];
+    const record = {
+      action: PHASE_B_AI_USAGE_ACTION,
+      evidence: aiUsage,
+    };
+
+    expect(
+      classifySafeTailLine(aiUsageTail(aiUsage, [record, record])),
+    ).toBeNull();
+    expect(
+      classifySafeTailLine(
+        aiUsageTail(aiUsage, [{ action: "wrong.action", evidence: aiUsage }]),
+      ),
+    ).toBeNull();
+    expect(
+      classifySafeTailLine(
+        aiUsageTail(aiUsage, undefined, "5 6 * * *"),
+      ),
+    ).toBeNull();
+    expect(
+      classifySafeTailLine(
+        aiUsageTail(aiUsage, [{ ...record, extra: true }]),
+      ),
+    ).toBeNull();
+    expect(
+      classifySafeTailLine(
+        aiUsageTail({ ...aiUsage, extra: true } as PhaseBAiUsageEvidence),
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects AI accessors, symbols, hidden keys, and non-plain prototypes without invoking them", () => {
+    const aiUsage = canonicalAiUsageEvidence()[0];
+    let getterCalls = 0;
+    const accessor = {
+      ...aiUsage,
+      get monthlyCents() {
+        getterCalls += 1;
+        return 950;
+      },
+    };
+    const symbol = { ...aiUsage, [Symbol("private")]: true };
+    const hidden = { ...aiUsage };
+    Object.defineProperty(hidden, "private", {
+      enumerable: false,
+      value: true,
+    });
+    const prototype = Object.assign(Object.create({ inherited: true }), aiUsage);
+
+    expect(classifyPhaseBAiUsageEvidence(accessor)).toBeNull();
+    expect(getterCalls).toBe(0);
+    expect(classifyPhaseBAiUsageEvidence(symbol)).toBeNull();
+    expect(classifyPhaseBAiUsageEvidence(hidden)).toBeNull();
+    expect(classifyPhaseBAiUsageEvidence(prototype)).toBeNull();
+  });
+
   it.each([
     ["reserved", "completed"],
     ["reserved", "no_work"],
