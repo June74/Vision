@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-07-28T20:03:59.2816903Z
+- **Last observed:** 2026-07-29T02:50:00Z
 - **Phase/task:** Phase B acceptance instrumentation Task 2 full gate
 - **Environment:** Local managed sandbox
 - **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`
@@ -125,3 +125,10 @@ security validation passed.
   tests passed and one intentional skip, 179 contract tests passed, 77 Worker
   tests passed, and typecheck, documentation, build, and security validation
   passing.
+- 2026-07-29T02:50:00Z: Recurred during Task 4 review-fix verification after
+  the task-local diagnostic setting was omitted. Both production bundles and
+  the crypto-boundary validator completed with exit zero; the follow-up build
+  restores a task-local temporary `XDG_CONFIG_HOME`.
+- 2026-07-29T02:51:00Z: The Task 4 follow-up build used the task-local
+  temporary diagnostic directory and completed both bundles plus the
+  crypto-boundary validator with no log-write warning.

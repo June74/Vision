@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T13:18:23Z
-- **Last observed:** 2026-07-28T22:49:25.1060844Z
+- **Last observed:** 2026-07-29T02:55:00Z
 - **Phase/task:** Phase B restore Task 4 tail correction
 - **Environment:** Local repository staging
 - **Version/commit:** Task report bookkeeping commit `3257771`
@@ -60,3 +60,8 @@ Stage the task-report path without an explicit force option.
   report in the final commit. Git nevertheless staged the already tracked
   report and every other named path; the ignored live-attestation artifact
   remained unstaged and unchanged.
+- 2026-07-29T02:55:00Z: Task 4 review-fix staging named the already tracked
+  acceptance report with all scoped files. Git returned the ignored-path
+  category, but `git status --short` confirmed the report and every other named
+  file were staged. No force-add was needed; only this recurrence update
+  remained to be staged.

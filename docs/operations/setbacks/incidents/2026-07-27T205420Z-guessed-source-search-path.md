@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T20:54:20Z
-- **Last observed:** 2026-07-28T23:00:48.3221588Z
+- **Last observed:** 2026-07-29T02:35:00Z
 - **Phase/task:** Phase B acceptance instrumentation Task 4 implementation
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `d27859e`
@@ -73,3 +73,7 @@ continues using discovered files only.
   guessed two obsolete reference paths and then recursively searched dependency
   directories while looking for a helper. No file or external state changed.
   Subsequent inspection uses the tracked-file inventory and explicit paths only.
+- 2026-07-29T02:35:00Z: Recurred when a compound read-only Task 4 scan again
+  included the nonexistent conventional `drizzle` directory. The valid source
+  and test reads completed, no repository or external state changed, and all
+  subsequent searches are limited to paths returned by `git ls-files`.

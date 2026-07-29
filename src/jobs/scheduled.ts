@@ -1,5 +1,9 @@
 /** Coordinates periodic channel renewal and missed-notification repair. */
 import { createDb } from "../data/db";
+import {
+  createPhaseBAiUsageSource,
+  createPhaseBNonAiReadSource,
+} from "../data/phase-b-ai-usage-source";
 import { createChannelMaintenanceRepository } from "../data/repositories/channel-maintenance-repository";
 import { createProjectionRepository } from "../data/repositories/projection-repository";
 import {
@@ -26,6 +30,12 @@ import {
   type Env,
 } from "../server/env";
 import { createDailyBackup } from "./create-daily-backup";
+import {
+  emitPhaseBAiUsageEvidence,
+  runPhaseBAiUsageEvidence,
+  type PhaseBAiUsageEvidenceDependencies,
+  type PhaseBAiUsageEvidenceEntry,
+} from "./phase-b-ai-usage-evidence";
 import {
   createCalendarMaintenanceEvidence,
   emitCalendarMaintenanceEvidence,
@@ -68,6 +78,11 @@ export interface ScheduledJobDependencies {
    * and one-minute routing; normal committed schedules never dispatch it.
    */
   readonly foundationProbe: (now: Date) => Promise<void>;
+  /**
+   * Runnable Task 4 candidate boundary. Task 6 alone binds this member to its
+   * generated selector and one-minute cron.
+   */
+  readonly aiUsageEvidence: (now: Date) => Promise<void>;
 }
 
 /** Recovery operations kept separate so retention can run only after verified creation. */
@@ -104,6 +119,60 @@ export async function runScheduledRecovery(
 ): Promise<void> {
   await dependencies.create(now);
   await dependencies.purge(now);
+}
+
+/** Creates the read-only AI candidate dependencies from one admitted boolean. */
+export function createScheduledPhaseBAiUsageEvidenceDependencies(
+  database: ReturnType<typeof createDb>,
+  ownerId: string,
+  gatewayLimitMatches: boolean,
+): PhaseBAiUsageEvidenceDependencies {
+  if (gatewayLimitMatches !== true) {
+    throw new Error("Phase B AI usage candidate is unavailable.");
+  }
+  const usage = createPhaseBAiUsageSource(database, ownerId);
+  const nonAi = createPhaseBNonAiReadSource(database, ownerId);
+  return Object.freeze({
+    read: usage.read,
+    readStatus: nonAi.readStatus,
+    readCalendar: nonAi.readCalendar,
+    gatewayLimitMatches: true,
+  });
+}
+
+/** Builds only the preview AI candidate's owner-scoped read dependencies. */
+export async function createProductionScheduledPhaseBAiUsageEvidenceDependencies(
+  environment: Env,
+  gatewayLimitMatches: boolean,
+): Promise<PhaseBAiUsageEvidenceDependencies> {
+  if (
+    environment.VISION_ENV !== "preview" ||
+    gatewayLimitMatches !== true
+  ) {
+    throw new Error("Phase B AI usage candidate is unavailable.");
+  }
+  const googleSubject = readScheduledOwnerSubject(
+    environment.GOOGLE_ALLOWED_SUB,
+  );
+  const ownerId = await deriveOwnerId(googleSubject);
+  return createScheduledPhaseBAiUsageEvidenceDependencies(
+    createDb(environment.DATABASE_URL),
+    ownerId,
+    gatewayLimitMatches,
+  );
+}
+
+/** Runs and emits exactly one terminal AI record for an admitted candidate. */
+export async function runScheduledPhaseBAiUsageEvidence(
+  now: Date,
+  dependencies: PhaseBAiUsageEvidenceDependencies,
+  write: (entry: PhaseBAiUsageEvidenceEntry) => void = console.info,
+): Promise<void> {
+  const evidence = await runPhaseBAiUsageEvidence(now, dependencies);
+  emitPhaseBAiUsageEvidence(evidence, write);
+  if (evidence.outcome !== "succeeded") {
+    throw new Error("Phase B AI usage evidence failed.");
+  }
 }
 
 /** Emits only the fixed role-probe action and its already-closed evidence. */
@@ -247,6 +316,10 @@ export async function scheduled(
     /** Remains unreachable until Task 6 adds the generated candidate selector. */
     foundationProbe: async () => {
       throw new Error("Phase B foundation probe candidate is not configured.");
+    },
+    /** Remains unreachable until Task 6 binds its verified candidate boolean. */
+    aiUsageEvidence: async () => {
+      throw new Error("Phase B AI usage candidate is not configured.");
     },
   });
 }
@@ -467,4 +540,17 @@ async function sha256Base64Url(value: string): Promise<string> {
 /** Derives the same stable private owner key used by authentication and Queue work. */
 async function deriveOwnerId(googleSubject: string): Promise<string> {
   return `usr_${await sha256Base64Url(googleSubject)}`;
+}
+
+/** Admits the existing non-secret owner subject without copying it to errors. */
+function readScheduledOwnerSubject(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    value.length < 1 ||
+    value.length > 255 ||
+    !/^[\x21-\x7e]+$/u.test(value)
+  ) {
+    throw new Error("Phase B AI usage candidate is unavailable.");
+  }
+  return value;
 }

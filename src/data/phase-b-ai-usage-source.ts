@@ -1,9 +1,11 @@
 /** Reads one owner/month AI accounting snapshot without exposing ledger identities. */
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import type { VisionDatabase } from "./db";
 
 /** Closed source failure vocabulary for temporary AI-usage evidence. */
-export type PhaseBAiUsageSourceFailureCategory = "unavailable" | "inconsistent";
+export type PhaseBAiUsageSourceFailureCategory =
+  | "unavailable"
+  | "inconsistent";
 
 /** Prevents database/provider detail crossing into the evidence job. */
 export class PhaseBAiUsageSourceError extends Error {
@@ -14,42 +16,354 @@ export class PhaseBAiUsageSourceError extends Error {
 }
 
 /** Aggregate-only result admitted by the evidence job. */
-export interface PhaseBAiUsageMeasurements { readonly monthlyCents: number; }
-export interface PhaseBAiUsageSource { read(budgetMonth: string): Promise<PhaseBAiUsageMeasurements>; }
+export interface PhaseBAiUsageMeasurements {
+  readonly monthlyCents: number;
+}
 
-/** Builds the parameterized aggregate-only SQL statement. */
-function query(ownerId: string, budgetMonth: string) { return sql`
-/* phase_b_ai_usage_aggregates */
-with month as (
-  select settled_cents, reserved_cents from ai_usage_months
-  where owner_id = ${ownerId} and budget_month = ${budgetMonth}
-), ledger as (
-  select
-    coalesce(sum(case when event_type in ('settled','settled_estimate') then actual_cents else 0 end), 0) as ledger_settled_cents,
-    coalesce(sum(case when event_type = 'reserved' then estimated_cents when event_type in ('released','settled','settled_estimate') then -estimated_cents else 0 end), 0) as ledger_reserved_cents,
-    count(*) filter (where reservation.owner_id is distinct from ledger.owner_id or reservation.budget_month is distinct from ledger.budget_month) as owner_month_mismatch_count,
-    count(*) filter (where ledger.event_type not in ('reserved','dispatched','settled','settled_estimate','released')) as invalid_transition_count
-  from ai_usage_ledger ledger left join ai_usage_reservations reservation on reservation.id = ledger.reservation_id
-  where ledger.owner_id = ${ownerId} and ledger.budget_month = ${budgetMonth}
-)
-select count(month.owner_id) as "monthRowCount", coalesce(max(month.settled_cents),0) as "settledCents", coalesce(max(month.reserved_cents),0) as "reservedCents", ledger.ledger_settled_cents as "ledgerSettledCents", ledger.ledger_reserved_cents as "ledgerReservedCents", ledger.owner_month_mismatch_count as "ownerMonthMismatchCount", ledger.invalid_transition_count as "invalidTransitionCount" from ledger left join month on true group by ledger.ledger_settled_cents, ledger.ledger_reserved_cents, ledger.owner_month_mismatch_count, ledger.invalid_transition_count
-`; }
+/** Owner-bound aggregate read used by the evidence job. */
+export interface PhaseBAiUsageSource {
+  read(budgetMonth: string): Promise<PhaseBAiUsageMeasurements>;
+}
+
+/** Deterministic non-AI reads required before successful stop-tier evidence. */
+export interface PhaseBNonAiReadSource {
+  readStatus(): Promise<void>;
+  readCalendar(): Promise<void>;
+}
+
+/** Builds one guaranteed-row aggregate with canonical per-reservation accounting. */
+function phaseBAiUsageQuery(ownerId: string, budgetMonth: string) {
+  return sql`
+    /* phase_b_ai_usage_aggregates */
+    with target_month as (
+      select
+        count(*) as month_row_count,
+        coalesce(max(month.settled_cents), 0) as settled_cents,
+        coalesce(max(month.reserved_cents), 0) as reserved_cents
+      from ai_usage_months month
+      where month.owner_id = ${ownerId}
+        and month.budget_month = ${budgetMonth}
+    ),
+    target_reservations as materialized (
+      select
+        reservation.id,
+        reservation.status,
+        reservation.estimated_cents,
+        reservation.actual_cents,
+        reservation.created_at,
+        reservation.dispatched_at as reservation_dispatched_at,
+        reservation.completed_at as reservation_completed_at
+      from ai_usage_reservations reservation
+      where reservation.owner_id = ${ownerId}
+        and reservation.budget_month = ${budgetMonth}
+    ),
+    reservation_histories as (
+      select
+        reservation.id,
+        reservation.status,
+        reservation.estimated_cents,
+        reservation.actual_cents,
+        reservation.created_at,
+        reservation.reservation_dispatched_at,
+        reservation.reservation_completed_at,
+        count(ledger.id) as event_count,
+        count(*) filter (
+          where ledger.event_type = 'reserved'
+        ) as reserved_count,
+        count(*) filter (
+          where ledger.event_type = 'dispatched'
+        ) as dispatched_count,
+        count(*) filter (
+          where ledger.event_type = 'released'
+        ) as released_count,
+        count(*) filter (
+          where ledger.event_type = 'settled_estimate'
+        ) as settled_estimate_count,
+        count(*) filter (
+          where ledger.event_type = 'settled'
+        ) as settled_count,
+        min(ledger.occurred_at) filter (
+          where ledger.event_type = 'reserved'
+        ) as ledger_reserved_at,
+        min(ledger.occurred_at) filter (
+          where ledger.event_type = 'dispatched'
+        ) as ledger_dispatched_at,
+        min(ledger.occurred_at) filter (
+          where ledger.event_type = 'released'
+        ) as ledger_released_at,
+        min(ledger.occurred_at) filter (
+          where ledger.event_type = 'settled_estimate'
+        ) as ledger_settled_estimate_at,
+        min(ledger.occurred_at) filter (
+          where ledger.event_type = 'settled'
+        ) as ledger_settled_at,
+        count(*) filter (
+          where ledger.id is not null
+            and (
+              ledger.owner_id is distinct from ${ownerId}
+              or ledger.budget_month is distinct from ${budgetMonth}
+            )
+        ) as owner_month_mismatch_count,
+        count(*) filter (
+          where ledger.id is not null
+            and (
+              ledger.estimated_cents is distinct from
+                reservation.estimated_cents
+              or (
+                ledger.event_type in ('reserved', 'dispatched', 'released')
+                and ledger.actual_cents is not null
+              )
+              or (
+                ledger.event_type = 'settled_estimate'
+                and ledger.actual_cents is distinct from
+                  reservation.estimated_cents
+              )
+              or (
+                ledger.event_type = 'settled'
+                and ledger.actual_cents is null
+              )
+            )
+        ) as invalid_value_count,
+        max(ledger.actual_cents) filter (
+          where ledger.event_type = 'settled_estimate'
+        ) as settled_estimate_actual_cents,
+        max(ledger.actual_cents) filter (
+          where ledger.event_type = 'settled'
+        ) as settled_actual_cents
+      from target_reservations reservation
+      left join ai_usage_ledger ledger
+        on ledger.reservation_id = reservation.id
+      group by
+        reservation.id,
+        reservation.status,
+        reservation.estimated_cents,
+        reservation.actual_cents,
+        reservation.created_at,
+        reservation.reservation_dispatched_at,
+        reservation.reservation_completed_at
+    ),
+    validated_reservations as (
+      select
+        history.*,
+        case
+          when history.invalid_value_count <> 0 then 1
+          when history.ledger_reserved_at is distinct from history.created_at
+            then 1
+          when history.status = 'reserved'
+            and history.event_count = 1
+            and history.reserved_count = 1
+            and history.dispatched_count = 0
+            and history.released_count = 0
+            and history.settled_estimate_count = 0
+            and history.settled_count = 0
+            and history.reservation_dispatched_at is null
+            and history.reservation_completed_at is null
+            and history.actual_cents is null
+            then 0
+          when history.status = 'dispatched'
+            and history.event_count = 2
+            and history.reserved_count = 1
+            and history.dispatched_count = 1
+            and history.released_count = 0
+            and history.settled_estimate_count = 0
+            and history.settled_count = 0
+            and history.reservation_dispatched_at is not null
+            and history.reservation_completed_at is null
+            and history.actual_cents is null
+            and history.ledger_reserved_at <= history.ledger_dispatched_at
+            and history.ledger_dispatched_at =
+              history.reservation_dispatched_at
+            then 0
+          when history.status = 'released'
+            and history.event_count = 2
+            and history.reserved_count = 1
+            and history.dispatched_count = 0
+            and history.released_count = 1
+            and history.settled_estimate_count = 0
+            and history.settled_count = 0
+            and history.reservation_dispatched_at is null
+            and history.reservation_completed_at is not null
+            and history.actual_cents is null
+            and history.ledger_reserved_at <= history.ledger_released_at
+            and history.ledger_released_at =
+              history.reservation_completed_at
+            then 0
+          when history.status = 'settled_estimate'
+            and history.event_count = 3
+            and history.reserved_count = 1
+            and history.dispatched_count = 1
+            and history.released_count = 0
+            and history.settled_estimate_count = 1
+            and history.settled_count = 0
+            and history.reservation_dispatched_at is not null
+            and history.reservation_completed_at is not null
+            and history.actual_cents = history.estimated_cents
+            and history.settled_estimate_actual_cents =
+              history.estimated_cents
+            and history.ledger_reserved_at <= history.ledger_dispatched_at
+            and history.ledger_dispatched_at <=
+              history.ledger_settled_estimate_at
+            and history.ledger_dispatched_at =
+              history.reservation_dispatched_at
+            and history.ledger_settled_estimate_at =
+              history.reservation_completed_at
+            then 0
+          when history.status = 'settled'
+            and history.event_count = 3
+            and history.reserved_count = 1
+            and history.dispatched_count = 1
+            and history.released_count = 0
+            and history.settled_estimate_count = 0
+            and history.settled_count = 1
+            and history.reservation_dispatched_at is not null
+            and history.reservation_completed_at is not null
+            and history.actual_cents is not null
+            and history.settled_actual_cents = history.actual_cents
+            and history.ledger_reserved_at <= history.ledger_dispatched_at
+            and history.ledger_dispatched_at <= history.ledger_settled_at
+            and history.ledger_dispatched_at =
+              history.reservation_dispatched_at
+            and history.ledger_settled_at =
+              history.reservation_completed_at
+            then 0
+          when history.status = 'settled'
+            and history.event_count = 4
+            and history.reserved_count = 1
+            and history.dispatched_count = 1
+            and history.released_count = 0
+            and history.settled_estimate_count = 1
+            and history.settled_count = 1
+            and history.reservation_dispatched_at is not null
+            and history.reservation_completed_at is not null
+            and history.actual_cents is not null
+            and history.settled_estimate_actual_cents =
+              history.estimated_cents
+            and history.settled_actual_cents = history.actual_cents
+            and history.ledger_reserved_at <= history.ledger_dispatched_at
+            and history.ledger_dispatched_at <=
+              history.ledger_settled_estimate_at
+            and history.ledger_settled_estimate_at <=
+              history.ledger_settled_at
+            and history.ledger_dispatched_at =
+              history.reservation_dispatched_at
+            and history.ledger_settled_at =
+              history.reservation_completed_at
+            then 0
+          else 1
+        end as invalid_transition_count
+      from reservation_histories history
+    ),
+    reservation_totals as (
+      select
+        count(*) as reservation_count,
+        coalesce(sum(
+          case
+            when reservation.status in ('settled', 'settled_estimate')
+              then reservation.actual_cents
+            else 0
+          end
+        ), 0) as ledger_settled_cents,
+        coalesce(sum(
+          case
+            when reservation.status in ('reserved', 'dispatched')
+              then reservation.estimated_cents
+            else 0
+          end
+        ), 0) as ledger_reserved_cents,
+        coalesce(sum(reservation.event_count), 0) as ledger_activity_count,
+        coalesce(sum(reservation.owner_month_mismatch_count), 0)
+          as owner_month_mismatch_count,
+        coalesce(sum(reservation.invalid_transition_count), 0)
+          as invalid_transition_count
+      from validated_reservations reservation
+    ),
+    foreign_scoped_ledger as (
+      select
+        count(*) as ledger_activity_count,
+        count(*) filter (
+          where reservation.id is null
+            or reservation.owner_id is distinct from ${ownerId}
+            or reservation.budget_month is distinct from ${budgetMonth}
+        ) as owner_month_mismatch_count
+      from ai_usage_ledger ledger
+      left join ai_usage_reservations reservation
+        on reservation.id = ledger.reservation_id
+      where ledger.owner_id = ${ownerId}
+        and ledger.budget_month = ${budgetMonth}
+        and (
+          reservation.id is null
+          or reservation.owner_id is distinct from ${ownerId}
+          or reservation.budget_month is distinct from ${budgetMonth}
+        )
+    )
+    select
+      target_month.month_row_count as "monthRowCount",
+      target_month.settled_cents as "settledCents",
+      target_month.reserved_cents as "reservedCents",
+      reservation_totals.ledger_settled_cents as "ledgerSettledCents",
+      reservation_totals.ledger_reserved_cents as "ledgerReservedCents",
+      reservation_totals.reservation_count as "reservationCount",
+      reservation_totals.ledger_activity_count
+        + foreign_scoped_ledger.ledger_activity_count
+        as "ledgerActivityCount",
+      reservation_totals.owner_month_mismatch_count
+        + foreign_scoped_ledger.owner_month_mismatch_count
+        as "ownerMonthMismatchCount",
+      reservation_totals.invalid_transition_count
+        as "invalidTransitionCount"
+    from target_month
+    cross join reservation_totals
+    cross join foreign_scoped_ledger
+  `;
+}
 
 /** Creates the parameterized, aggregate-only owner/month reader. */
-export function createPhaseBAiUsageSource(database: VisionDatabase, ownerId: string): PhaseBAiUsageSource {
-  if (typeof ownerId !== "string" || ownerId.length === 0) throw new Error("Phase B AI usage source is unavailable.");
+export function createPhaseBAiUsageSource(
+  database: VisionDatabase,
+  ownerId: string,
+): PhaseBAiUsageSource {
+  if (typeof ownerId !== "string" || ownerId.length === 0) {
+    throw new Error("Phase B AI usage source is unavailable.");
+  }
   return Object.freeze({
     /** Reads one exact aggregate owner/month snapshot. */
-    async read(budgetMonth: string): Promise<PhaseBAiUsageMeasurements> {
-      if (!/^\d{4}-(0[1-9]|1[0-2])$/u.test(budgetMonth)) throw new PhaseBAiUsageSourceError("unavailable");
+    async read(
+      budgetMonth: string,
+    ): Promise<PhaseBAiUsageMeasurements> {
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/u.test(budgetMonth)) {
+        throw new PhaseBAiUsageSourceError("unavailable");
+      }
       try {
-        const result = await database.execute<Record<string, unknown>>(query(ownerId, budgetMonth));
+        const result = await database.execute<Record<string, unknown>>(
+          phaseBAiUsageQuery(ownerId, budgetMonth),
+        );
         const row = result.rows[0];
-        if (!row || result.rows.length !== 1) throw new PhaseBAiUsageSourceError("unavailable");
-        const values = ["monthRowCount","settledCents","reservedCents","ledgerSettledCents","ledgerReservedCents","ownerMonthMismatchCount","invalidTransitionCount"].map((key) => decode(row[key]));
-        const [monthRows, settled, reserved, ledgerSettled, ledgerReserved, mismatches, transitions] = values;
-        if (monthRows! > 1 || mismatches !== 0 || transitions !== 0 || (monthRows === 0 && (settled !== 0 || reserved !== 0)) || settled !== ledgerSettled || reserved !== ledgerReserved || settled! > Number.MAX_SAFE_INTEGER - reserved!) throw new PhaseBAiUsageSourceError("inconsistent");
-        return Object.freeze({ monthlyCents: settled! + reserved! });
+        if (!row || result.rows.length !== 1) {
+          throw new PhaseBAiUsageSourceError("unavailable");
+        }
+        const monthRows = decodeAggregateCell(row.monthRowCount);
+        const settled = decodeAggregateCell(row.settledCents);
+        const reserved = decodeAggregateCell(row.reservedCents);
+        const ledgerSettled = decodeAggregateCell(row.ledgerSettledCents);
+        const ledgerReserved = decodeAggregateCell(row.ledgerReservedCents);
+        const reservations = decodeAggregateCell(row.reservationCount);
+        const ledgerActivity = decodeAggregateCell(row.ledgerActivityCount);
+        const mismatches = decodeAggregateCell(row.ownerMonthMismatchCount);
+        const transitions = decodeAggregateCell(row.invalidTransitionCount);
+
+        if (
+          monthRows > 1 ||
+          mismatches !== 0 ||
+          transitions !== 0 ||
+          (monthRows === 0 &&
+            (reservations !== 0 || ledgerActivity !== 0)) ||
+          settled !== ledgerSettled ||
+          reserved !== ledgerReserved ||
+          settled > Number.MAX_SAFE_INTEGER - reserved
+        ) {
+          throw new PhaseBAiUsageSourceError("inconsistent");
+        }
+        return Object.freeze({ monthlyCents: settled + reserved });
       } catch (error) {
         if (error instanceof PhaseBAiUsageSourceError) throw error;
         throw new PhaseBAiUsageSourceError("unavailable");
@@ -58,9 +372,81 @@ export function createPhaseBAiUsageSource(database: VisionDatabase, ownerId: str
   });
 }
 
-/** Admits one nonnegative safe integer database cell. */
-function decode(value: unknown): number {
-  const decoded = typeof value === "string" && /^(?:0|[1-9]\d*)$/u.test(value) ? Number(value) : value;
-  if (!Number.isSafeInteger(decoded) || (decoded as number) < 0) throw new PhaseBAiUsageSourceError("inconsistent");
+/** Creates owner-scoped status and calendar read checks without returning content. */
+export function createPhaseBNonAiReadSource(
+  database: VisionDatabase,
+  ownerId: string,
+): PhaseBNonAiReadSource {
+  if (typeof ownerId !== "string" || ownerId.length === 0) {
+    throw new Error("Phase B non-AI read source is unavailable.");
+  }
+  return Object.freeze({
+    /** Exercises the same content-free owner status tables used by diagnostics. */
+    async readStatus(): Promise<void> {
+      await readAvailabilityAggregate(
+        database,
+        sql`
+          /* phase_b_non_ai_status_read */
+          select
+            (
+              select count(*)
+              from sync_checkpoints checkpoint
+              where checkpoint.owner_id = ${ownerId}
+                and checkpoint.provider = 'google-calendar'
+            ) + (
+              select count(*)
+              from calendar_sync_jobs job
+              where job.owner_id = ${ownerId}
+                and job.provider = 'google-calendar'
+            ) as "rowCount"
+        `,
+      );
+    },
+    /** Exercises the owner-scoped calendar projection without selecting content. */
+    async readCalendar(): Promise<void> {
+      await readAvailabilityAggregate(
+        database,
+        sql`
+          /* phase_b_non_ai_calendar_read */
+          select count(*) as "rowCount"
+          from nodes node
+          inner join events event
+            on event.node_id = node.id
+            and event.owner_id = node.owner_id
+          where node.owner_id = ${ownerId}
+            and node.node_type = 'event'
+            and node.lifecycle = 'active'
+        `,
+      );
+    },
+  });
+}
+
+/** Executes and decodes one guaranteed-row count while discarding its value. */
+async function readAvailabilityAggregate(
+  database: VisionDatabase,
+  statement: SQL,
+): Promise<void> {
+  try {
+    const result = await database.execute<Record<string, unknown>>(statement);
+    if (result.rows.length !== 1 || result.rows[0] === undefined) {
+      throw new PhaseBAiUsageSourceError("unavailable");
+    }
+    decodeAggregateCell(result.rows[0].rowCount);
+  } catch (error) {
+    if (error instanceof PhaseBAiUsageSourceError) throw error;
+    throw new PhaseBAiUsageSourceError("unavailable");
+  }
+}
+
+/** Admits one nonnegative safe integer database aggregate cell. */
+function decodeAggregateCell(value: unknown): number {
+  const decoded =
+    typeof value === "string" && /^(?:0|[1-9]\d*)$/u.test(value)
+      ? Number(value)
+      : value;
+  if (!Number.isSafeInteger(decoded) || (decoded as number) < 0) {
+    throw new PhaseBAiUsageSourceError("inconsistent");
+  }
   return decoded as number;
 }

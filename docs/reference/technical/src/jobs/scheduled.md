@@ -4,7 +4,8 @@ The scheduled entry point routes exact cron expressions to isolated
 Google-maintenance, encrypted-recovery, and temporary preview role-probe
 capability sets. The temporary branch receives only the preview environment
 marker and temporary connection binding. A typed foundation-probe boundary is
-present for Task 6, but no committed cron dispatches it.
+present for Task 6. Task 4 also provides a fully composed AI-usage candidate
+member, but no committed cron dispatches either temporary candidate.
 
 ## `runScheduledJob`
 Matches only the three configured cron expressions and rejects any unexpected
@@ -28,6 +29,30 @@ fixed value-free failure after failed evidence is emitted.
 
 Preserves dependency typing for the future generated candidate while every
 existing scheduler selector leaves it unreachable.
+
+## `aiUsageEvidence`
+
+Carries the runnable Task 4 AI evidence callback while remaining unreachable
+from the exact normal cron router. Task 6 is still the only component allowed
+to bind it to a generated selector and temporary schedule.
+
+## `createScheduledPhaseBAiUsageEvidenceDependencies`
+
+Requires the same-run verifier result to be exactly true, then composes the
+aggregate AI source and content-free status/calendar sources over one
+owner-bound database.
+
+## `createProductionScheduledPhaseBAiUsageEvidenceDependencies`
+
+Rejects non-preview execution and an unattested boolean before database
+construction. It derives the existing authentication-compatible owner key and
+does not construct a provider client, selector, binding, or cron.
+
+## `runScheduledPhaseBAiUsageEvidence`
+
+Executes the composed job, writes exactly one
+`acceptance.ai-usage` terminal, and throws a fixed value-free error only after
+a failed record is emitted.
 
 ## `emitTemporaryPreviewRoleProbeEvidence`
 Writes only the exact allowlisted action/evidence object.
@@ -90,3 +115,6 @@ Encodes random bytes as canonical base64url.
 Produces a fixed-size digest.
 ## `deriveOwnerId`
 Matches authentication's opaque owner derivation.
+## `readScheduledOwnerSubject`
+Validates the bounded existing subject used only for private owner derivation;
+rejection never includes the supplied value.

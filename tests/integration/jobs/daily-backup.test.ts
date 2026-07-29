@@ -236,6 +236,7 @@ describe("daily encrypted backup job", () => {
       recovery: vi.fn(async () => undefined),
       temporaryRoleProbe: vi.fn(async () => undefined),
       foundationProbe: vi.fn(async () => undefined),
+      aiUsageEvidence: vi.fn(async () => undefined),
     };
 
     expect(DAILY_BACKUP_CRON).toBe("5 6 * * *");
@@ -248,6 +249,7 @@ describe("daily encrypted backup job", () => {
     expect(dependencies.recovery).not.toHaveBeenCalled();
     expect(dependencies.temporaryRoleProbe).not.toHaveBeenCalled();
     expect(dependencies.foundationProbe).not.toHaveBeenCalled();
+    expect(dependencies.aiUsageEvidence).not.toHaveBeenCalled();
 
     vi.clearAllMocks();
     await runScheduledJob(DAILY_BACKUP_CRON, NOW, dependencies);
@@ -255,6 +257,7 @@ describe("daily encrypted backup job", () => {
     expect(dependencies.maintenance).not.toHaveBeenCalled();
     expect(dependencies.temporaryRoleProbe).not.toHaveBeenCalled();
     expect(dependencies.foundationProbe).not.toHaveBeenCalled();
+    expect(dependencies.aiUsageEvidence).not.toHaveBeenCalled();
 
     vi.clearAllMocks();
     await runScheduledJob(
@@ -266,6 +269,7 @@ describe("daily encrypted backup job", () => {
     expect(dependencies.maintenance).not.toHaveBeenCalled();
     expect(dependencies.recovery).not.toHaveBeenCalled();
     expect(dependencies.foundationProbe).not.toHaveBeenCalled();
+    expect(dependencies.aiUsageEvidence).not.toHaveBeenCalled();
 
     vi.clearAllMocks();
     await expect(
@@ -275,6 +279,7 @@ describe("daily encrypted backup job", () => {
     expect(dependencies.recovery).not.toHaveBeenCalled();
     expect(dependencies.temporaryRoleProbe).not.toHaveBeenCalled();
     expect(dependencies.foundationProbe).not.toHaveBeenCalled();
+    expect(dependencies.aiUsageEvidence).not.toHaveBeenCalled();
   });
 
   it("preserves the exact value-free role-probe evidence log contract", () => {

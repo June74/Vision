@@ -14,5 +14,6 @@ stopped state; a higher amount is reported only as `limit_exceeded`.
 
 ## `runPhaseBAiUsageEvidence`
 
-Reads a monthly aggregate and converts unavailable or inconsistent results into
-closed evidence without printing error details.
+Reads a monthly aggregate, then performs the deterministic status and calendar
+checks. `nonAiAvailable` becomes true only after both reads succeed. Unavailable
+or inconsistent results become closed evidence without printing error details.

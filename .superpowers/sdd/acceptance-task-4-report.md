@@ -58,3 +58,91 @@
   PostgreSQL-compatible lifecycle matrix; I5 requires the cross-task candidate
   selector/admission seam. Those changes are not claimed complete in this
   follow-up commit.
+
+## I2/I3/I5 review-fix resolution
+
+### Confirmed causes and RED evidence
+
+- The real PostgreSQL-compatible boundary showed that the aggregate query
+  referenced a month column its CTE did not project, so every database-backed
+  case became `unavailable`. The prior fabricated rows could not expose this.
+- Ledger reconstruction summed both `settled_estimate` and a later `settled`
+  event. It also counted only unknown event names rather than validating exact
+  lifecycle order and agreement with current reservation state.
+- The evidence dependency accepted `nonAiAvailable` as an arbitrary boolean,
+  and the scheduled Worker had no AI candidate member, source builder, or
+  run/emit function for Task 6 to bind.
+- First combined RED:
+  `pnpm.cmd test:unit
+  tests/integration/data/phase-b-ai-usage-source.test.ts
+  tests/integration/jobs/phase-b-ai-usage-evidence.test.ts
+  tests/integration/jobs/phase-b-ai-usage-scheduled.test.ts
+  tests/integration/jobs/daily-backup.test.ts`.
+  Output: 4 files, 34 tests, 17 expected failures and 17 passes.
+- The added preview/admission RED then failed all 3 scheduled-seam tests because
+  the three requested composition exports did not exist.
+
+### I2/I3 GREEN
+
+- The aggregate now anchors on guaranteed one-row PostgreSQL aggregates and
+  distinguishes a genuinely empty owner/month from any reservation or ledger
+  activity.
+- It reconstructs settled and reserved cents once per current reservation.
+  `settled_estimate` followed by late exact `settled` replaces the conservative
+  contribution instead of adding a second terminal amount.
+- It validates exact allowed histories for `reserved`, `dispatched`,
+  `released`, direct `settled`, `settled_estimate`, and late exact settlement,
+  including event counts, time order, terminal values, current-state
+  agreement, and owner/month attribution.
+- The PGlite matrix exercises the actual Drizzle SQL and decoder for empty and
+  existing zero rows, every admitted state, late settlement, duplicate
+  dispatch, invalid order, state disagreement, and owner/month disagreement.
+  Separate decoder-only cases isolate unsafe cells, overflow with otherwise
+  agreeing totals, and malformed cells.
+- Focused database GREEN:
+  `pnpm.cmd test:unit
+  tests/integration/data/phase-b-ai-usage-source.test.ts`.
+  Output: 1 file, 16 tests, zero failures.
+
+### I5 GREEN and Task 6 boundary
+
+- `runPhaseBAiUsageEvidence()` now performs the usage read followed by fixed
+  status and calendar reads. `nonAiAvailable` is true only after both
+  deterministic non-AI reads succeed.
+- `ScheduledJobDependencies` now includes an `aiUsageEvidence` member.
+  `createScheduledPhaseBAiUsageEvidenceDependencies()` composes the three
+  owner-scoped read boundaries from only a true same-run Gateway verifier
+  boolean.
+- The production builder rejects non-preview use and a false attestation before
+  database construction. The runner emits exactly one fixed terminal record
+  and reports failure only after emission.
+- Normal committed crons and unsupported crons never dispatch the AI member.
+  The normal configuration, temporary selector, one-minute cron, attestation
+  binding generation, and workflow orchestration remain Task 6-owned and are
+  not implemented here.
+- Focused seam GREEN:
+  `pnpm.cmd test:unit
+  tests/integration/jobs/phase-b-ai-usage-evidence.test.ts
+  tests/integration/jobs/phase-b-ai-usage-scheduled.test.ts
+  tests/integration/jobs/daily-backup.test.ts`.
+  Output: 3 files, 19 tests, zero failures.
+
+### Final verification and prior-finding recheck
+
+- Covering Task 4 regression: 9 files, 141 tests, zero failures. This includes
+  Chicago month selection, shared tier boundaries, exact evidence categories
+  and keys, Gateway read-only verification, safe-tail reconstruction, printer
+  behavior, normal cron non-dispatch, real lifecycle SQL, and the scheduled
+  AI seam.
+- AI budget schema contract: 1 file, 13 tests, zero failures.
+- `pnpm.cmd typecheck`, `pnpm.cmd docs:check`, and
+  `pnpm.cmd security:scan` exited successfully.
+- The final task-local-diagnostics `pnpm.cmd build` completed both production
+  bundles and the crypto-boundary validator without the optional Wrangler
+  log-path warning.
+- `git diff --check` passed. Diffs under `migrations/`, committed deployment
+  configuration, workflows, and environment secret-inventory documentation are
+  empty.
+- I1 remains closed by the exact Chicago boundary assertion. I4 remains closed
+  by the canonical safe-tail/classifier/printer regression. I6 remains closed
+  by the exact approved `vision.ai-usage/v1` field assertions.

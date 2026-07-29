@@ -4,6 +4,8 @@ Routes the 15-minute Google maintenance schedule, daily encrypted recovery
 schedule, and temporary preview role-probe schedule without mixing their
 credentials or database targets. It also carries an injected foundation-probe
 candidate boundary that is deliberately not routed until Task 6.
+The AI-usage candidate has the same unrouted boundary plus a complete
+preview-only dependency builder and one-record runner.
 
 ## `runScheduledJob`
 Calls only the function belonging to one of the three exact configured cron
@@ -26,6 +28,27 @@ reports failure with one fixed message.
 
 Defines the typed candidate boundary but remains unreachable from every
 committed cron.
+
+## `aiUsageEvidence`
+
+Defines the runnable AI-usage candidate member. Normal committed crons and
+unsupported crons never call it; Task 6 still owns the generated selector and
+one-minute routing.
+
+## `createScheduledPhaseBAiUsageEvidenceDependencies`
+
+Builds the owner-scoped usage, status, and calendar read set only from a true
+already-verified Gateway boolean.
+
+## `createProductionScheduledPhaseBAiUsageEvidenceDependencies`
+
+Keeps production composition preview-only, derives the existing private owner
+key, and constructs no Google or AI provider client.
+
+## `runScheduledPhaseBAiUsageEvidence`
+
+Runs the three reads, emits exactly one fixed terminal record, and reports a
+failed record only through one fixed error.
 
 ## `emitTemporaryPreviewRoleProbeEvidence`
 Preserves the exact
@@ -83,3 +106,5 @@ Creates canonical random base64url text.
 Hashes channel tokens and owner identifiers.
 ## `deriveOwnerId`
 Derives the authentication-compatible owner key.
+## `readScheduledOwnerSubject`
+Admits the existing bounded owner subject without copying it to an error.

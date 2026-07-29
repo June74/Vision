@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T02:32:27Z
-- **Last observed:** 2026-07-28T22:23:26.3813087Z
+- **Last observed:** 2026-07-29T02:45:00Z
 - **Phase/task:** Phase B acceptance instrumentation Task 3 replacement brief
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `36f9df2`
@@ -97,3 +97,7 @@ The retry must modify only the intended plan paragraph and pass
 - 2026-07-28T22:23:26.3813087Z: Three combined setback patches used an
   incorrect multi-hunk assumption or nonexistent trailing context. They were
   rejected atomically. No file changed, and separate exact hunks succeeded.
+- 2026-07-29T02:45:00Z: Recurred when the first Task 4 RED patch used a
+  remembered AI-evidence test title rather than its exact current text. The
+  multi-file patch was rejected atomically. The target files were reread, and
+  the retry is split into exact file-sized patches.
