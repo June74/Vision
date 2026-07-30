@@ -2,10 +2,19 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:47:00Z
-- **Last observed:** 2026-07-30T03:07:03.8217300Z
+- **Last observed:** 2026-07-30T03:38:37.0257010Z
 - **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 3
 - **Environment:** Local worktree
 - **Version/commit:** `50569e6`; `d24e24d`
+- **Latest recurrence:** A Gate 0 config diagnostic read `.Count` directly from
+  an enumerable PowerShell property collection and produced one marker per
+  property instead of one total. No raw value or external state was exposed.
+  The corrected diagnostic wraps the collection in an explicit array before
+  counting.
+- **Latest search recurrence:** A targeted dependency-package search still
+  used recursive file enumeration and encountered one missing generated file.
+  It emitted only a local path error and changed no state. Further diagnosis
+  uses the already identified compiled file or official documentation.
 
 ## Symptom
 

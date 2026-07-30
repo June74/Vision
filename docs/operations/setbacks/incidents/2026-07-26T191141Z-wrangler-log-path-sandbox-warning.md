@@ -2,10 +2,14 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-07-30T02:41:31.5864131Z
+- **Last observed:** 2026-07-30T03:32:34.1083650Z
 - **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 5
 - **Environment:** Local managed sandbox
-- **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`
+- **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`; `6ebabd1`
+- **Latest recurrence:** 2026-07-30T03:32:34.1083650Z — the segmented Gate 0
+  Worker run omitted the task-local diagnostic setting. The optional log write
+  was denied, while all 94 Worker assertions passed with a zero exit. No
+  provider, credential, repository, or private-data state changed.
 
 ## Symptom
 

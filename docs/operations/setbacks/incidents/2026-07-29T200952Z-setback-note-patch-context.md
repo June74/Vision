@@ -1,7 +1,7 @@
 # SB-20260729-200952-setback-note-patch-context
 
 - **Status:** closed
-- **Last observed:** 2026-07-30T01:28:56.5986795Z
+- **Last observed:** 2026-07-30T03:34:07.7910316Z
 - **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 4
 - **Title:** Setback-note patch used stale prevention wording
 - **Impact:** Six patches were rejected before making changes: one documentation-only patch, one production workflow patch, and four incident closeout patches.
@@ -11,3 +11,11 @@
 - **Recurrence:** A wave-4 multi-file recurrence update assumed two setback
   index rows were adjacent. The patch was rejected atomically before mutation;
   the correction uses one exact hunk per current row.
+- **Recurrence:** Two Gate 0 warning-recurrence patches used repeated trailing
+  paragraphs as multi-file anchors. Both were rejected atomically before
+  mutation. The correction uses one file and one unique timestamp anchor per
+  patch.
+- **Recurrence:** A third insertion assumed the final repeated verification
+  paragraph could be stabilized with an end-of-file marker; the mixed-line
+  working copy still rejected it atomically. The correction records the
+  recurrence beside unique header metadata instead.

@@ -2,10 +2,17 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:41:34.954006Z
-- **Last observed:** 2026-07-26T19:42:26.3754466Z
+- **Last observed:** 2026-07-30T03:36:16.0309882Z
 - **Phase/task:** Phase B temporary backup deployment
 - **Environment:** Local Phase B worktree
-- **Version/commit:** `066fcbd` plus uncommitted temporary acceptance changes
+- **Version/commit:** `066fcbd` plus uncommitted temporary acceptance changes;
+  `6ebabd1`
+- **Latest recurrence:** The Gate 0 controller followed the abbreviated
+  runbook command without carrying the guarded workflow's explicit preview
+  environment. The default artifact built successfully and the preview
+  validator rejected it. Rebuilding with the one required environment selector
+  made both build and validator exit zero. No deployment or provider access
+  occurred.
 
 ## Symptom
 
@@ -59,3 +66,7 @@ zero, and the Wrangler log-path warning did not recur.
 ## Recurrence history
 
 - 2026-07-26T19:41:34.954006Z: First observed.
+- 2026-07-30T03:36:16.0309882Z: Recurred during local Gate 0 because the
+  runbook command omitted the environment selector already present in the
+  guarded workflow and operations manual. The explicit preview rebuild and
+  validator passed, confirming the same root cause and closing the recurrence.

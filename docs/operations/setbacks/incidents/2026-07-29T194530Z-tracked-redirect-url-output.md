@@ -2,10 +2,14 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T19:45:30Z
-- **Last observed:** 2026-07-30T03:07:03.8217300Z
+- **Last observed:** 2026-07-30T03:40:11.7346777Z
 - **Phase/task:** Phase B acceptance instrumentation Task 7 final re-review
 - **Environment:** Local Phase B worktree
 - **Version/commit:** Working changes based on `41d3e74`; `d24e24d`
+- **Latest recurrence:** A read-only sync/AI procedure audit rendered
+  checked-in public endpoint literals in one source excerpt before switching to
+  value-redacted output. It exposed no credential, personal data, provider
+  identifier, or live state and made no mutation.
 
 ## Symptom
 
