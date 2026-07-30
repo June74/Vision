@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:30:35.2961897Z
-- **Last observed:** 2026-07-28T19:40:26.0838768Z
-- **Phase/task:** Phase B acceptance instrumentation Task 2 implementation
+- **Last observed:** 2026-07-30T04:21:35.4114952Z
+- **Phase/task:** Phase B live-acceptance specification finalization
 - **Environment:** Local Phase B worktree under the managed sandbox
-- **Version/commit:** Staged Task 1 patch based on `59e6a02`
+- **Version/commit:** Written-spec candidate based on `38c35eb`
 
 ## Symptom
 
@@ -162,3 +162,8 @@ commit `4420f6d`.
   preflight status check. Git returned the expected branch, base commit, and
   empty worktree inventory before the known warning. No configuration
   workaround, provider action, or unrelated repository mutation was attempted.
+- 2026-07-30T04:21:35.4114952Z: Recurred during the live-acceptance written-spec
+  pre-commit Git checks. Status returned the expected branch and sole untracked
+  specification, and the staged whitespace check exited successfully before
+  the known warning. No workaround, provider action, or unrelated repository
+  mutation was attempted.
