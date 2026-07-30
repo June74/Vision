@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T04:30:46.4130206Z
-- **Last observed:** 2026-07-29T17:05:31Z
-- **Phase/task:** Phase B acceptance instrumentation Task 6 final staging
+- **Last observed:** 2026-07-30T01:34:09.3799447Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 4
 - **Environment:** Managed local sandbox and linked Git worktree
 - **Version/commit:** Uncommitted review fixes based on `1880cf9`
 
@@ -44,3 +44,8 @@ and setback records. The staged inventory was confirmed before commit.
 On 2026-07-29T17:05:31Z the same linked-worktree metadata boundary recurred
 during scoped Task 6 staging. No path was staged by the failed attempt; the
 exact scoped command is retried with repository-metadata permission.
+
+On 2026-07-30T01:34:09.3799447Z the wave-4 tracked-file stage hit the same
+linked-worktree index boundary. The lock could not be created, the staged diff
+remained empty, and the verified working changes remained intact. The exact
+tracked-file stage and commit require the same narrow metadata permission.

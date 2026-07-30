@@ -96,11 +96,14 @@ Removes expired encrypted rebuild staging before Google credentials are needed.
 ## `recordCredentialFailure`
 Stores a safe credential failure before the scheduler reports it.
 ## `scheduled`
-Connects Cloudflare scheduled events to exact cron routing. The one-minute
-schedule requires exactly one admitted selector or the explicit role-probe
-binding. Temporary candidate expiry uses actual execution time, so a delayed
-event cannot run after the candidate deadline; evidence work keeps the original
-scheduled time. Missing or invalid candidate configuration cannot fall through.
+Connects Cloudflare scheduled events to exact cron routing. It parses and
+admits any deployed candidate once, checking its lifetime against current
+execution time and validating any required AI attestation before dispatching
+the one-minute, 15-minute, or daily cron route. The one-minute route then uses
+the already-admitted selector or exact role-probe binding. A delayed event
+cannot run after the candidate deadline; evidence work keeps the original
+scheduled time. Missing or invalid candidate configuration cannot reach
+maintenance, recovery, or temporary dependencies.
 ## `createProductionScheduledEntryDependencies`
 Builds lazy closures for each isolated scheduled capability without opening
 one before the cron and candidate have been selected.

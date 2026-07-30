@@ -50,6 +50,7 @@ identifiers, or provider-controlled URLs.
 | 2026-07-29 | Task 6 candidate | Local | Generated candidate isolation, exact operator selection, same-run AI attestation, separate rollback, security scans, and permanent cleanup contract | Pass: typecheck; 1,017 unit/integration/security tests with two intentional skips; 179 contract; 94 Worker; documentation, build, normal preview artifact validation, release security scan, zero migration diff, and zero secret-inventory diff. Fresh live exercises remain pending |
 | 2026-07-29 | `d4de4de` | Local Task 7 freeze | Full focused and aggregate gates, generated normal/foundation/AI/six-fault candidate matrix, safe-tail observer shapes, workflow/client/secret checks, and pre-cleanup residue contract | Pass with a documented plan-wording concern: 1,040 unit/integration/security tests with one intentional skip; 179 contract; 94 Worker; 35 browser; TypeScript, documentation, build, release security scan, normal preview validation, eight generated candidates, nine exact printer shapes, zero migration diff, and zero acceptance-range production delete-call additions. Strict future cleanup mode remains intentionally RED for exactly 48 dedicated and 34 shared temporary paths. No live acceptance or provider mutation was performed |
 | 2026-07-29 | Pending post-push identifier | Local final-fix wave 2 | Parser-backed workflow reachability, post-restore closure, exact AI pricing policy, full-lifetime recovery exclusion, expanded Task 8 inventory, explicit preview/production artifact validation, and nondeploy dry-runs | Pass: 1,170 unit/integration/security tests with one intentional skip; 179 contract; 94 Worker; 35 browser; TypeScript, documentation, build, release security scan, real YAML parsing, 40 immutable action references, preview and production build-validation-attestation-dry-run chains, eight generated candidates, 62 safe-tail assertions, zero migration paths, zero added Google event writes, zero added source delete calls, and exit-zero diff check. Strict cleanup remains intentionally RED while exactly 56 dedicated and 35 shared paths remain. No live acceptance, provider mutation, push, or deployment was performed |
+| 2026-07-29 | Pending post-push identifier | Local final-fix wave 3 | Candidate lifetime and AI-attestation admission once at the scheduled entry point before every cron-specific route | Pass: 1,180 unit/integration/security tests with one intentional skip; 179 contract; 94 Worker; 40 scheduled-handler tests; and 35 browser E2E tests. The requested wave-3 preview and production Wrangler dry-runs were safety-denied before process start and were not executed; the wave-2 dry-run result above remains historical. No live acceptance, provider mutation, push, or deployment was performed |
 
 The live preview schema is current through migration 0009. The normal daily
 schedule remains deployed while a fresh encrypted backup and disposable
@@ -89,19 +90,22 @@ observation:
 
 The normal artifact contains only the two permanent schedules and no acceptance
 binding. Each temporary candidate carries a canonical bounded deadline; its
-complete maximum lifetime must avoid the protected recovery interval, and the
-scheduler rechecks expiry and overlap against wall-clock execution time before
-temporary dependency access, so delayed delivery cannot extend the lifetime.
-Normal purge, permanent recovery, and cleanup behavior remain unchanged. After
-the acceptance matrix, source cleanup must be reviewed, deployed, and verified
-before any provider cleanup. The permanent cleanup contract names the exact 56
-dedicated deletions plus 35 shared active-residue files spanning runtime
-bindings, observer modes, routes, selectors, scheduler branches, references,
-and tests. The dedicated inventory now includes the observer validator and
-test, acceptance-window script and test, and both simple/technical references
-for each validator. The shared inventory explicitly retains normal health
-warnings, their tests, and the OAuth `database_unavailable` category. It also
-retains recovery/import tooling, `backups/v1/`, key version 1, permanent
+complete maximum lifetime must avoid the protected recovery interval. The
+scheduled entry point parses any deployed candidate, rechecks lifetime and
+overlap against wall-clock execution time, and validates any required AI
+attestation before any cron dispatch, including both permanent routes, so
+delayed delivery cannot extend the lifetime. Normal non-candidate dispatch,
+purge, permanent recovery, and cleanup behavior remain unchanged. After the
+acceptance matrix, source cleanup must be reviewed, deployed, and verified
+before any provider cleanup. The
+permanent cleanup contract names the exact 60 dedicated deletions plus 35 shared
+active-residue files spanning runtime bindings, observer modes, routes,
+selectors, scheduler branches, references, and tests. The dedicated inventory
+now includes the observer validator and test, acceptance-window script and
+test, rollback-lifecycle validator and test, and both simple/technical
+references for every validator. The shared inventory explicitly retains normal
+health warnings, their tests, and the OAuth `database_unavailable` category. It
+also retains recovery/import tooling, `backups/v1/`, key version 1, permanent
 security scans, maintenance evidence, measured usage warnings, bounded observer
 behavior, and historical plans, setbacks, credential history, and release
 evidence.

@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T21:13:05Z
-- **Last observed:** 2026-07-27T21:13:05Z
-- **Phase/task:** Listener-first restore retry Task 1
+- **Last observed:** 2026-07-30T01:32:37.0772417Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 4
 - **Environment:** Local Codex command orchestration
 - **Version/commit:** Not applicable
 
@@ -50,3 +50,11 @@ completed and returned the requested local files.
 ## Verification and related work
 
 The immediate retry completed without the wrapper error.
+
+## Recurrence history
+
+- 2026-07-30T01:32:37.0772417Z: A final verification wrapper grouped an
+  intentionally nonzero strict-cleanup test with two passing checks. The
+  expected RED made the wrapper fail and suppress the passing outputs. No
+  repository or external state changed; final checks run separately so each
+  exit is explicit.

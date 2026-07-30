@@ -107,13 +107,14 @@ Invokes the owner-scoped database-only projection retention boundary before cred
 Routes typed OAuth failure through the generation-safe maintenance checkpoint transition before rethrowing.
 ## `scheduled`
 Uses Cloudflare's scheduled time and exact cron string for
-capability-separated dispatch. On the generated one-minute cron it validates
-candidate expiry against injected wall-clock execution time before dependency
-access, preventing a delayed event from running after the deadline, while
-passing the original scheduled instant to evidence work. It then validates the
-combined selector and AI attestation, permits the role probe only when no
-selector and its explicit connection binding exist, and otherwise fails before
-an unrelated capability is called.
+capability-separated dispatch. Before any cron-specific dispatch, it parses the
+candidate selector, validates lifetime against injected wall-clock execution
+time, and validates any required AI attestation. A still-deployed invalid,
+expired, delayed, or unattested candidate therefore fails before maintenance or
+recovery dependency construction. The generated one-minute branch reuses the
+admitted selector and attestation, permits the role probe only when no selector
+and its explicit connection binding exist, and passes the original scheduled
+instant to evidence work.
 ## `createProductionScheduledEntryDependencies`
 Returns closures rather than constructed adapters, preserving lazy provider,
 database, Queue, and R2 initialization until after exact dispatch.

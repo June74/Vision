@@ -42,6 +42,7 @@ const TEMPORARY_PATHS = [
   "scripts/prepare-preview-acceptance-deploy-config.ts",
   "scripts/validate-preview-acceptance-window.ts",
   "scripts/validate-preview-observer-state.ts",
+  "scripts/validate-preview-rollback-lifecycle.ts",
   "tests/integration/backup/r2-restore-attempt-store.test.ts",
   "tests/integration/backup/temporary-preview-clear-adapter.test.ts",
   "tests/integration/backup/temporary-preview-role-probe-adapter.test.ts",
@@ -56,12 +57,15 @@ const TEMPORARY_PATHS = [
   "tests/unit/domain/temporary-preview-fault.test.ts",
   "tests/unit/scripts/preview-acceptance-window.test.ts",
   "tests/unit/scripts/preview-observer-state.test.ts",
+  "tests/unit/scripts/preview-rollback-lifecycle.test.ts",
   "docs/reference/simple/scripts/prepare-preview-acceptance-deploy-config.md",
   "docs/reference/simple/scripts/validate-preview-acceptance-window.md",
   "docs/reference/simple/scripts/validate-preview-observer-state.md",
+  "docs/reference/simple/scripts/validate-preview-rollback-lifecycle.md",
   "docs/reference/technical/scripts/prepare-preview-acceptance-deploy-config.md",
   "docs/reference/technical/scripts/validate-preview-acceptance-window.md",
   "docs/reference/technical/scripts/validate-preview-observer-state.md",
+  "docs/reference/technical/scripts/validate-preview-rollback-lifecycle.md",
   "docs/reference/simple/src/data/backup/r2-restore-attempt-store.md",
   "docs/reference/simple/src/data/backup/temporary-preview-clear-adapter.md",
   "docs/reference/simple/src/data/backup/temporary-preview-role-probe-adapter.md",
@@ -84,6 +88,13 @@ const TEMPORARY_PATHS = [
   "docs/reference/technical/src/jobs/temporary-preview-fault.md",
   "docs/reference/technical/src/jobs/temporary-preview-restore.md",
   "docs/reference/technical/src/jobs/temporary-preview-role-probe.md",
+] as const;
+
+const REQUIRED_ROLLBACK_LIFECYCLE_PATHS = [
+  "scripts/validate-preview-rollback-lifecycle.ts",
+  "tests/unit/scripts/preview-rollback-lifecycle.test.ts",
+  "docs/reference/simple/scripts/validate-preview-rollback-lifecycle.md",
+  "docs/reference/technical/scripts/validate-preview-rollback-lifecycle.md",
 ] as const;
 
 const ACTIVE_SURFACE_ROOTS = [
@@ -303,8 +314,11 @@ describe("post-acceptance temporary surface cleanup", () => {
         .filter((path) => path.startsWith(`docs/reference/${kind}/`))
         .map((path) => path.replace(`docs/reference/${kind}/`, ""));
 
-    expect(TEMPORARY_PATHS).toHaveLength(56);
-    expect(new Set(TEMPORARY_PATHS)).toHaveLength(56);
+    expect(TEMPORARY_PATHS).toEqual(
+      expect.arrayContaining([...REQUIRED_ROLLBACK_LIFECYCLE_PATHS]),
+    );
+    expect(TEMPORARY_PATHS).toHaveLength(60);
+    expect(new Set(TEMPORARY_PATHS)).toHaveLength(60);
     expect(EXPECTED_SHARED_RESIDUE_PATHS).toHaveLength(35);
     expect(new Set(EXPECTED_SHARED_RESIDUE_PATHS)).toHaveLength(35);
     expect(referenceInventory(TEMPORARY_PATHS, "simple")).toEqual(

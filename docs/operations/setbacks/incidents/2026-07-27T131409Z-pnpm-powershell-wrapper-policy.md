@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T13:14:09Z
-- **Last observed:** 2026-07-28T01:20:44.6624354Z
-- **Phase/task:** Listener-first restore retry Task 3 Step 1
+- **Last observed:** 2026-07-30T01:11:37.7754332Z
+- **Phase/task:** Phase B acceptance instrumentation final whole-branch review
 - **Environment:** Local Windows verification shell
 - **Version/commit:** `7d2f9f6`; reviewed candidate `0f08fc1`
 
@@ -54,3 +54,8 @@ Invoke the package-manager command through its PowerShell script wrapper in this
   rejected it before test startup. The repository-local Windows test wrapper
   subsequently ran the exact five focused files with 59 passing tests. No
   provider or private-data boundary was involved.
+- 2026-07-30T01:11:37.7754332Z: Recurred when the independent whole-branch
+  reviewer invoked a focused regression through the script-form launcher.
+  PowerShell rejected it before the test process started. The reviewer stopped
+  without retrying, editing the repository, or accessing external state; the
+  implementer's command-shim evidence remains recorded separately.
