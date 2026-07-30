@@ -295,11 +295,15 @@ function canonicalPreviewAcceptanceContext(
       const closedPair =
         isRunRef(candidateRunRef) && isRunRef(rollbackClosureRunRef);
       const faultScenario = dataValue(record, "faultScenario");
+      const orderedDispatchInterval =
+        isCanonicalInstant(observerDispatchStartedAt) &&
+        isCanonicalInstant(observerDispatchCompletedAt) &&
+        Date.parse(observerDispatchStartedAt) <=
+          Date.parse(observerDispatchCompletedAt);
       if (
         authenticatedReadsGate !== "verified" ||
         (!baselinePair && !closedPair) ||
-        !isCanonicalInstant(observerDispatchStartedAt) ||
-        !isCanonicalInstant(observerDispatchCompletedAt) ||
+        !orderedDispatchInterval ||
         (kind === "deploy_fault" &&
           !TEMPORARY_PREVIEW_FAULT_SCENARIOS.includes(
             faultScenario as TemporaryPreviewFaultScenario,
@@ -410,17 +414,21 @@ function isBoundedAscii(value: unknown): value is string {
 
 /** Returns one ordinary record with enumerable data properties only. */
 function exactPlainRecord(value: unknown): Readonly<Record<string, unknown>> {
+  const ownKeys =
+    value !== null && typeof value === "object"
+      ? Reflect.ownKeys(value)
+      : [];
   if (
     value === null ||
     typeof value !== "object" ||
     Array.isArray(value) ||
     Object.getPrototypeOf(value) !== Object.prototype ||
-    Reflect.ownKeys(value).some((key) => typeof key !== "string")
+    ownKeys.some((key) => typeof key !== "string")
   ) {
     throw new Error(INVALID_SELECTION);
   }
   const record = value as Readonly<Record<string, unknown>>;
-  for (const key of Object.keys(record)) {
+  for (const key of ownKeys as string[]) {
     const descriptor = Object.getOwnPropertyDescriptor(record, key);
     if (
       descriptor?.enumerable !== true ||
@@ -443,7 +451,7 @@ function dataValue(
     : undefined;
 }
 
-/** Requires the exact ordered key sequence for one discriminated variant. */
+/** Requires exact key membership without trusting caller insertion order. */
 function exactKeys(
   record: Readonly<Record<string, unknown>>,
   expected: readonly string[],
@@ -451,7 +459,7 @@ function exactKeys(
   const keys = Object.keys(record);
   if (
     keys.length !== expected.length ||
-    keys.some((key, index) => key !== expected[index])
+    expected.some((key) => !Object.hasOwn(record, key))
   ) {
     throw new Error(INVALID_SELECTION);
   }

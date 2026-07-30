@@ -21,5 +21,6 @@ reference those binding names.
 `PREVIEW_ACCEPTANCE_SCENARIO` and
 `PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED` are also runtime
 client-forbidden. `CLIENT_FORBIDDEN_RUNTIME_VALUES` imports the complete frozen
-eight-selector candidate vocabulary, so the dedicated foundation and AI
-selectors cannot enter a built browser asset either.
+nine-selector candidate vocabulary, so the dedicated foundation, AI, and
+synchronization-suppression selectors cannot enter a built browser asset
+either.

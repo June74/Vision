@@ -86,6 +86,34 @@ function readWorkflowStepNames(job: string): string[] {
   );
 }
 
+interface ObserverRunFixture {
+  readonly id: string;
+  readonly createdAt: string;
+}
+
+/** Models the workflow's inclusive numeric-instant observer selection contract. */
+function selectExactlyOneObserverRunFixture(
+  runs: readonly ObserverRunFixture[],
+  startedAt: string,
+  completedAt: string,
+): string {
+  const startedAtMs = Date.parse(startedAt);
+  const completedAtMs = Date.parse(completedAt);
+  if (
+    !Number.isFinite(startedAtMs) ||
+    !Number.isFinite(completedAtMs) ||
+    startedAtMs > completedAtMs
+  ) {
+    throw new Error("observer selection failed");
+  }
+  const matches = runs.filter((run) => {
+    const createdAtMs = Date.parse(run.createdAt);
+    return createdAtMs >= startedAtMs && createdAtMs <= completedAtMs;
+  });
+  if (matches.length !== 1) throw new Error("observer selection failed");
+  return matches[0]!.id;
+}
+
 describe("delivery workflow policy", () => {
   it("keeps checks, previews, and production releases safely separated", async () => {
     const [ci, preview, production, packageMetadata] = await Promise.all([
@@ -616,6 +644,94 @@ describe("preview acceptance candidate workflow", () => {
     expect(deployStep).not.toContain("--var ");
     expect(candidate).not.toContain("PREVIEW_RESTORE_DATABASE_URL");
     expect(candidate).not.toContain("PREVIEW_RESTORE_TARGET_ID");
+  });
+
+  it("selects exactly one observer by numeric instant across provider timestamp formats", () => {
+    expect(
+      selectExactlyOneObserverRunFixture(
+        [{ id: "101", createdAt: "2026-07-29T04:00:00Z" }],
+        "2026-07-29T03:59:59.999Z",
+        "2026-07-29T04:00:00.001Z",
+      ),
+    ).toBe("101");
+    expect(
+      selectExactlyOneObserverRunFixture(
+        [{ id: "102", createdAt: "2026-07-29T04:00:00Z" }],
+        "2026-07-29T04:00:00.000Z",
+        "2026-07-29T04:00:01.000Z",
+      ),
+    ).toBe("102");
+    expect(
+      selectExactlyOneObserverRunFixture(
+        [{ id: "103", createdAt: "2026-07-29T04:00:01Z" }],
+        "2026-07-29T04:00:00.000Z",
+        "2026-07-29T04:00:01.000Z",
+      ),
+    ).toBe("103");
+    expect(
+      selectExactlyOneObserverRunFixture(
+        [{ id: "104", createdAt: "2026-07-29T04:00:00Z" }],
+        "2026-07-29T04:00:00.000Z",
+        "2026-07-29T04:00:00.000Z",
+      ),
+    ).toBe("104");
+
+    expect(() =>
+      selectExactlyOneObserverRunFixture(
+        [{ id: "105", createdAt: "2026-07-29T04:00:00Z" }],
+        "2026-07-29T04:00:01.000Z",
+        "2026-07-29T04:00:00.000Z",
+      ),
+    ).toThrow(/observer selection failed/u);
+    expect(() =>
+      selectExactlyOneObserverRunFixture(
+        [],
+        "2026-07-29T04:00:00.000Z",
+        "2026-07-29T04:00:01.000Z",
+      ),
+    ).toThrow(/observer selection failed/u);
+    expect(() =>
+      selectExactlyOneObserverRunFixture(
+        [
+          { id: "106", createdAt: "2026-07-29T04:00:00Z" },
+          { id: "107", createdAt: "2026-07-29T04:00:01Z" },
+        ],
+        "2026-07-29T04:00:00.000Z",
+        "2026-07-29T04:00:01.000Z",
+      ),
+    ).toThrow(/observer selection failed/u);
+  });
+
+  it("uses numeric observer instants in the inline workflow selector", async () => {
+    const preview = await readWorkflow("preview.yml");
+    const proofStep = readWorkflowStep(
+      preview,
+      "Verify active privacy-safe observer",
+    );
+
+    expect(proofStep).toContain("def instant_millis:");
+    expect(proofStep).toContain("fromdateiso8601");
+    expect(proofStep).toContain(
+      '(?:\\\\.(?<millis>[0-9]{3}))?Z$',
+    );
+    expect(proofStep).toContain(
+      '(($instant.millis // "0") | tonumber)',
+    );
+    expect(proofStep).toContain(
+      "($started | instant_millis) as $started_ms",
+    );
+    expect(proofStep).toContain(
+      "($completed | instant_millis) as $completed_ms",
+    );
+    expect(proofStep).toContain(
+      "(.created_at | instant_millis) as $created_ms",
+    );
+    expect(proofStep).toContain(
+      "select($created_ms >= $started_ms and $created_ms <= $completed_ms)",
+    );
+    expect(proofStep).toContain("if length == 1 then");
+    expect(proofStep).not.toContain(".created_at >= $started");
+    expect(proofStep).not.toContain(".created_at <= $completed");
   });
 
   it("rechecks the exact matching observer immediately before candidate deployment", async () => {

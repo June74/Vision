@@ -564,6 +564,80 @@ describe("preview acceptance workflow input admission", () => {
     },
   );
 
+  it("rebuilds canonical output from reordered semantic context properties", () => {
+    const reordered = context({
+      observerDispatchCompletedAt: "2026-07-29T04:00:01.000Z",
+      candidateRunRef: "baseline",
+      kind: "deploy_foundation",
+      authenticatedReadsGate: "verified",
+      version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
+      observerDispatchStartedAt: "2026-07-29T04:00:00.000Z",
+      reviewedCommit: REVIEWED_COMMIT,
+      rollbackClosureRunRef: "baseline",
+    });
+
+    expect(Object.keys(reordered)).not.toEqual(Object.keys(validContexts[3]));
+    expect(serializePreviewAcceptanceContext(reordered)).toBe(
+      JSON.stringify(validContexts[3]),
+    );
+  });
+
+  it("admits an explicit zero-width observer dispatch interval", () => {
+    const zeroWidth = context({
+      ...validContexts[3],
+      observerDispatchCompletedAt:
+        validContexts[3].observerDispatchStartedAt,
+    });
+    const serialized = serializePreviewAcceptanceContext(zeroWidth);
+
+    expect(
+      parsePreviewAcceptanceContext(zeroWidth.kind, serialized).context,
+    ).toEqual(zeroWidth);
+  });
+
+  it("rejects unsafe serializer object shapes without invoking accessors", () => {
+    let getterInvoked = false;
+    const accessor = Object.defineProperty(
+      { ...validContexts[0] },
+      "reviewedCommit",
+      {
+        enumerable: true,
+        get: () => {
+          getterInvoked = true;
+          return REVIEWED_COMMIT;
+        },
+      },
+    );
+    const nonEnumerableExtra = Object.defineProperty(
+      { ...validContexts[0] },
+      "extra",
+      { value: true },
+    );
+    const symbolExtra = {
+      ...validContexts[0],
+      [Symbol("extra")]: true,
+    };
+    const customPrototype = Object.assign(
+      Object.create(null) as Record<string, unknown>,
+      validContexts[0],
+    );
+
+    for (const unsafe of [
+      accessor,
+      { ...validContexts[0], extra: true },
+      nonEnumerableExtra,
+      symbolExtra,
+      customPrototype,
+    ]) {
+      expect(() =>
+        serializePreviewAcceptanceContext(
+          unsafe as unknown as PreviewAcceptanceContext,
+        ),
+      ).toThrow(/acceptance workflow selection/i);
+    }
+    expect(getterInvoked).toBe(false);
+  });
+
   it("admits sync suppression as its own selector", () => {
     const value = validContexts.find(
       (candidate) => candidate.kind === "deploy_sync_suppression",
@@ -639,6 +713,15 @@ describe("preview acceptance workflow input admission", () => {
       JSON.stringify({
         ...validContexts[3],
         observerDispatchStartedAt: "2026-07-29T04:00:00Z",
+      }),
+    ],
+    [
+      "reversed observer dispatch interval",
+      "deploy_foundation",
+      JSON.stringify({
+        ...validContexts[3],
+        observerDispatchStartedAt: "2026-07-29T04:00:02.000Z",
+        observerDispatchCompletedAt: "2026-07-29T04:00:01.000Z",
       }),
     ],
     [

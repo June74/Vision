@@ -10,5 +10,5 @@ Server credentials, private-user identifiers, provider keys, database addresses,
 The temporary preview-restore fields, acceptance selector, and AI attestation
 belong to the runtime client-forbidden list. Their names may appear in the
 server-only Worker bundle, but neither their names nor their values may enter a
-browser asset. The complete eight-selector value vocabulary is also forbidden
+browser asset. The complete nine-selector value vocabulary is also forbidden
 from browser assets.

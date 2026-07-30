@@ -11,8 +11,8 @@ and both maintenance and daily recovery crons. It rejects a serialized
 
 `validatePreviewAcceptanceDeployConfig` separately admits one expected
 generated selector and derives its exact schedule contract. Synchronization
-suppression retains the normal two schedules; the other temporary candidates
-add the one-minute cron. Only the AI evidence selector may carry its
+suppression retains the normal two schedules; every other acceptance candidate
+adds the one-minute cron. Only the AI evidence selector may carry its
 attestation. The command entry point validates only the normal artifact and
 exits nonzero with one generic message when it is missing, malformed, or
 unsafe.

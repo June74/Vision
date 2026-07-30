@@ -25,7 +25,8 @@ private bucket, Queue behavior, and two normal schedules.
 
 Checks a generated candidate for exactly one expected selector, the exact
 selector-specific schedule set, and the AI-only attestation. Synchronization
-suppression retains only the two normal schedules.
+suppression retains only the two normal schedules; every other acceptance
+candidate adds the temporary one-minute schedule.
 
 ## `validateNormalPreviewProviderState`
 

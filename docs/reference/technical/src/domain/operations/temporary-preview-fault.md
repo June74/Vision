@@ -6,9 +6,9 @@ Maps the closed acceptance-selector union to the exact `10 | 30` lifetime used
 by both construction-time and execution-time protected-window checks.
 
 Owns the frozen six-value preview-only scenario vocabulary and pure
-`FoundationHealthFacts` overlays. A separate frozen eight-value selector
-vocabulary adds `foundation_probe` and `ai_usage` without widening the fault
-tuple.
+`FoundationHealthFacts` overlays. A separate frozen nine-value selector
+vocabulary adds `foundation_probe`, `ai_usage`, and `sync_suppression` without
+widening the fault tuple.
 
 ## `assertPreviewAcceptanceWindow`
 
@@ -41,7 +41,7 @@ the protected daily range.
 
 ## `parseTemporaryPreviewAcceptanceSelector`
 
-Returns one of the eight generated candidate selectors only in preview.
+Returns one of the nine generated candidate selectors only in preview.
 Missing remains normal; malformed, unknown, multiple, or production activation
 throws before dependency access.
 

@@ -8,7 +8,7 @@ with its canonical expiry.
 
 `RuntimeEnvSchema` checks the deployment environment, private database URL,
 root wrapping key, and server-only preview candidate bindings. It accepts only
-the `vision_app` database role and a canonical 256-bit base64url key. The eight
+the `vision_app` database role and a canonical 256-bit base64url key. The nine
 temporary selectors are preview-only. The AI selector alone requires the exact
 temporary Gateway attestation, which is rejected everywhere else. After
 checking the key, it clears the temporary mutable byte buffer that this code

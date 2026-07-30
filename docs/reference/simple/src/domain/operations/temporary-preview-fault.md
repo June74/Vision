@@ -37,7 +37,7 @@ midnight.
 ## `parseTemporaryPreviewAcceptanceSelector`
 
 Accepts one exact generated preview selector from the six faults plus the
-foundation and AI evidence candidates.
+foundation, AI evidence, and synchronization-suppression candidates.
 
 ## `parseTemporaryPreviewAcceptanceAiGatewayAttestation`
 

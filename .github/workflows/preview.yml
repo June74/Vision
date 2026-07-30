@@ -292,7 +292,15 @@ jobs:
           OBSERVER_RUN_ID="$(jq -er \
             --arg started "$OBSERVER_DISPATCH_STARTED_AT" \
             --arg completed "$OBSERVER_DISPATCH_COMPLETED_AT" \
-            '[.workflow_runs[] | select(.created_at >= $started and .created_at <= $completed)] |
+            'def instant_millis:
+               capture("^(?<whole>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2})(?:\\.(?<millis>[0-9]{3}))?Z$") as $instant |
+               (($instant.whole + "Z" | fromdateiso8601) * 1000) +
+                 (($instant.millis // "0") | tonumber);
+             ($started | instant_millis) as $started_ms |
+             ($completed | instant_millis) as $completed_ms |
+             [.workflow_runs[] |
+              (.created_at | instant_millis) as $created_ms |
+              select($created_ms >= $started_ms and $created_ms <= $completed_ms)] |
              if length == 1 then .[0].id | tostring else error("observer selection failed") end' \
             "$observer_runs_file")"
           if ! [[ "$OBSERVER_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]; then

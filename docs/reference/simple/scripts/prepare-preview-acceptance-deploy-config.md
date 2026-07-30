@@ -4,8 +4,10 @@ Builds one temporary preview acceptance deployment file from the already
 validated normal preview file. The normal file is never edited.
 
 The command accepts one approved operation plus one canonical, versioned
-context string. It creates the exact selector-specific schedule set and
-temporary bindings without editing the normal artifact.
+context string. Synchronization suppression keeps the two normal schedules;
+every other acceptance candidate adds the temporary one-minute schedule. The
+command adds the admitted temporary bindings without editing the normal
+artifact.
 
 ## `serializePreviewAcceptanceContext`
 
@@ -20,7 +22,8 @@ unsupported context and returns a deeply frozen workflow selection.
 ## `canonicalPreviewAcceptanceContext`
 
 Validates one context variant and rebuilds a new plain object in authoritative
-key order.
+key order. Candidate dispatch timestamps must be ordered; a zero-width
+interval is valid.
 
 ## `isBoundedAscii`
 
@@ -28,7 +31,8 @@ Requires printable ASCII transport no larger than 2,048 bytes.
 
 ## `exactPlainRecord`
 
-Rejects arrays, custom prototypes, symbols, and accessor-backed properties.
+Rejects arrays, custom prototypes, symbols, hidden properties, and
+accessor-backed properties.
 
 ## `dataValue`
 
@@ -36,7 +40,8 @@ Reads one own enumerable data property without invoking an accessor.
 
 ## `exactKeys`
 
-Requires the exact ordered key sequence for the selected context variant.
+Requires exact key membership without requiring the caller's insertion order.
+The parser separately rejects raw JSON whose keys are not in canonical order.
 
 ## `isCanonicalInstant`
 

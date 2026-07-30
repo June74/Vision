@@ -22,8 +22,9 @@ deeply freezes the returned selection.
 ## `canonicalPreviewAcceptanceContext`
 
 Validates the version, operation, reviewed commit, lifecycle grammar,
-timestamps, evidence outcome pairing, and fault-scenario presence before
-constructing a new ordered plain object.
+ordered candidate timestamp interval, evidence outcome pairing, and
+fault-scenario presence before constructing a new ordered plain object.
+Candidate bounds may be equal but may not be reversed.
 
 ## `isBoundedAscii`
 
@@ -39,7 +40,9 @@ Uses property descriptors to read a data value without invoking accessors.
 
 ## `exactKeys`
 
-Compares the complete ordered own-key sequence for one discriminated variant.
+Compares complete own-key membership for one discriminated variant without
+trusting caller insertion order. Raw parser input still has to match the
+canonical serializer bytes.
 
 ## `isCanonicalInstant`
 
@@ -47,9 +50,11 @@ Requires the millisecond UTC grammar and round-trip timestamp identity.
 
 ## `preparePreviewAcceptanceDeployConfig`
 
-Validates the normal artifact, performs a structured clone, adds only the
-temporary cron, canonical bounded expiry, and admitted bindings, then validates
-the complete candidate.
+Validates the normal artifact, performs a structured clone, retains only the
+two normal schedules for synchronization suppression, and adds the temporary
+one-minute cron for every other acceptance candidate. It also adds the
+canonical bounded expiry and admitted bindings before validating the complete
+candidate.
 
 ## `isRunRef`
 
