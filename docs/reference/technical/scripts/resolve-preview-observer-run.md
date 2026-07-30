@@ -1,34 +1,150 @@
 # resolve-preview-observer-run
 
-Provides bounded Actions metadata resolution using immutable commit, workflow, event, interval, and exact job-set checks.
+Provides bounded Actions metadata resolution using immutable commit, workflow,
+event, dispatch interval, and exact job-set checks. The exported
+`PREVIEW_OBSERVER_JOB_CONTRACT` is the single family-to-job-name vocabulary
+shared with the captured-state validator.
 
 ## `resolvePreviewObserverRun`
-Polls at five-second intervals and brands one positive decimal handle.
+
+Polls at five-second intervals for at most 120 seconds. It requires zero or one
+matching run per read, re-reads the selected run, validates every expected
+listener job, and returns a branded positive-decimal handle only after the same
+candidate is stable across observations.
+
 ## `readPreviewSignalObserverState`
-Uses the listener completion timestamp.
+
+Reads one non-maintenance signal job and returns its closed state plus the
+listener completion timestamp only after success.
+
 ## `readPreviewTwoJobObserverState`
-Keeps signal and uniqueness states independent.
+
+Reads one provider job snapshot and keeps suppression or restore signal and
+uniqueness states independent.
+
 ## `readPreviewMaintenanceObserverState`
-Binds closure to the scheduled tick plus 120 seconds.
+
+Requires maintenance uniqueness success to complete no earlier than the
+scheduled tick plus 120 seconds and returns a defensive copy of that tick.
+
+## `createGitHubObserverResolutionDependencies`
+
+Constructs the concrete GitHub adapter from a bounded repository name. It uses
+`execFile` argument arrays, fixed response limits, hidden child windows, and
+captured streams; it never invokes a shell or renders child output.
+
+## `invoke`
+
+Executes one metadata request, enforces captured stdout/stderr bounds, parses
+stdout as JSON, and maps every execution or parse failure to the sole resolver
+error.
+
 ## `jobsFor`
-Reads injected job metadata.
+
+Snapshots bounded job metadata returned for one opaque handle.
+
+## `exactJob`
+
+Rejects absent or duplicated exact job names.
+
+## `assertExpectedActiveJobs`
+
+Requires all jobs in the shared family contract to have one active listener
+and rejects any other in-progress `Capture ...` job.
+
+## `observerJobState`
+
+Admits only the exact active or successful job/listener pairs; completed
+non-success states become `failed`, and ambiguous provider states fail closed.
+
+## `exactListener`
+
+Requires exactly one step named `Print only allowlisted acceptance evidence`.
+
+## `snapshotRuns`
+
+Requires one ordinary `workflow_runs` array within the fixed count limit.
+
+## `snapshotRun`
+
+Copies only bounded ID, event, SHA, creation time, path, status, and conclusion
+fields and validates the positive-decimal ID.
+
+## `snapshotJobs`
+
+Copies only bounded name/status/conclusion fields and the bounded setup/listener
+step list without invoking accessors.
+
 ## `matchesRun`
-Applies the attribution predicate.
-## `assertListener`
-Enforces the sole listener step.
+
+Requires `workflow_dispatch`, the reviewed SHA, exact workflow path, active
+status, null conclusion, and creation within the inclusive dispatch interval.
+
+## `validateResolutionInput`
+
+Requires the exact preview workflow path, lowercase reviewed SHA, valid ordered
+dispatch `Date` values, a closed family, and a valid maintenance tick for the
+maintenance family.
+
+## `plainRecord`
+
+Rejects arrays, nulls, and custom prototypes at provider boundaries.
+
+## `ownData`
+
+Reads one required enumerable own data descriptor without invoking accessors.
+
+## `optionalOwnData`
+
+Reads one optional enumerable own data descriptor and rejects accessors.
+
+## `boundedString`
+
+Limits each provider-controlled string before retention.
+
+## `nullableBoundedString`
+
+Admits `null` or delegates to the bounded string check.
+
 ## `canonicalDate`
-Converts provider time to `Date`.
+
+Parses one provider timestamp to a fresh `Date`.
+
+## `validDate`
+
+Recognizes a finite `Date` instance without coercion.
+
 ## `fail`
+
 Throws the constant resolver error.
-## `main`
-Checks independently captured run and job metadata.
+
+## `parseArguments`
+
+Parses unique live flags for repository, workflow, SHA, dispatch bounds, and
+family. Only calendar maintenance admits and requires
+`--maintenance-scheduled-at`.
+
 ## `monotonicNow`
-Provides the injected fixed clock.
+
+Provides the resolution timeout clock.
+
 ## `sleep`
-Is inert for captured verification.
+
+Implements the five-second poll interval.
+
 ## `listRuns`
-Wraps the captured response.
+
+Calls the workflow-run listing endpoint through the captured adapter.
+
 ## `readRun`
-Returns the selected run.
+
+Re-reads the selected run by opaque handle.
+
 ## `listJobs`
-Returns bounded job metadata.
+
+Calls the selected run's job listing endpoint through the captured adapter.
+
+## `main`
+
+Runs the concrete resolver and deliberately discards the returned handle at the
+process boundary. It emits neither run identifiers nor provider responses.

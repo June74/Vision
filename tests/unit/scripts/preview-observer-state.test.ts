@@ -3,6 +3,7 @@ import {
   validatePreviewObserverState,
   type PreviewObserverEvidence,
 } from "../../../scripts/validate-preview-observer-state";
+import { PREVIEW_OBSERVER_JOB_CONTRACT } from "../../../scripts/resolve-preview-observer-run";
 
 const SHA = "a".repeat(40);
 const LISTENER_STEP = "Print only allowlisted acceptance evidence";
@@ -21,7 +22,7 @@ function validState(evidence: PreviewObserverEvidence = "preview_fault") {
     jobsResponse: {
       jobs: [
         {
-          name: `Capture ${evidence} safe scheduled outcome`,
+          name: PREVIEW_OBSERVER_JOB_CONTRACT[evidence][0],
           status: "in_progress",
           conclusion: null,
           steps: [

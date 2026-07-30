@@ -78,4 +78,25 @@ describe("current-workflow preview role and restore routing", () => {
     expect(source).not.toContain("R2Bucket");
     expect(source).not.toContain("Env");
   });
+
+  it("constructs the production dependency factory once and invokes restore once after admission", async () => {
+    const produced = dependencies();
+    const factory = vi.fn(() => produced as never);
+    await scheduled(
+      { cron: "* * * * *", scheduledTime: NOW.getTime() } as ScheduledController,
+      {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "restore",
+        PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-30T18:10:00.000Z",
+      } as never,
+      {} as ExecutionContext,
+      undefined,
+      factory,
+    );
+
+    expect(factory).toHaveBeenCalledTimes(1);
+    expect(produced.temporaryRestore).toHaveBeenCalledTimes(1);
+    expect(produced.temporaryRoleProbe).not.toHaveBeenCalled();
+    expect(produced.foundationProbe).not.toHaveBeenCalled();
+  });
 });

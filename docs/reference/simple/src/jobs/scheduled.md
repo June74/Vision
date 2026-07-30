@@ -2,6 +2,18 @@
 ## `temporaryRestore`
 Runs the admitted restore.
 
+## `clearTarget`
+Clears only the admitted disposable restore target.
+
+## `createTarget`
+Creates only the admitted disposable preview target.
+
+## `readTargetSnapshot`
+Reads one consistent snapshot back from the restore target.
+
+## `countReadableEvents`
+Counts readable audit events from the restored snapshot.
+
 ## `createWithWriter`
 
 Lets the temporary preview upload check replace only the final storage writer;

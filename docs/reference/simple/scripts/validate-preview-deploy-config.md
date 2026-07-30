@@ -2,6 +2,16 @@
 ## `validateTemporaryRestorePairProviderState`
 Checks the restore-pair names.
 
+## `validatePreviewProviderStateForCandidateIntent`
+Derives the normal or restore-pair check from the commit-bound candidate
+intent.
+
+## `matchesNormalProviderHealthAndSchedules`
+Checks healthy runtime and exactly the two permanent schedules.
+
+## `matchesTemporaryRestoreBinding`
+Checks one name-and-type-only temporary restore secret.
+
 Checks the generated Cloudflare deployment file before preview deployment.
 It stops deployment unless the file selects the preview environment, contains
 the required non-secret limits and redirect setting, binds `BACKUP_BUCKET` only

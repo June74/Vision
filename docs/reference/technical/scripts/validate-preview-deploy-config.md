@@ -2,6 +2,18 @@
 ## `validateTemporaryRestorePairProviderState`
 Requires exactly two additional secret names.
 
+## `validatePreviewProviderStateForCandidateIntent`
+Reads the binding profile only from the commit-bound lifecycle intent and
+selects the corresponding exact provider-state validator.
+
+## `matchesNormalProviderHealthAndSchedules`
+Requires `status=ok`, a successful schedules envelope, and exactly the two
+permanent cron expressions.
+
+## `matchesTemporaryRestoreBinding`
+Requires an ordinary exact `{ name, type }` record whose type is
+`secret_text`.
+
 `validatePreviewDeployConfig` validates the generated
 `dist/vision/wrangler.json` boundary. It requires
 `targetEnvironment=preview`, `VISION_ENV=preview`,

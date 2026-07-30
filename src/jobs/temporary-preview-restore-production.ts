@@ -13,10 +13,12 @@ export interface TemporaryPreviewRestoreProductionInput {
   readonly PREVIEW_RESTORE_DATABASE_URL: string;
   readonly PREVIEW_RESTORE_TARGET_ID: string;
   readonly BACKUP_ENCRYPTION_KEY: BackupEncryptionKey;
-  readonly BACKUP_KEY_VERSION: string;
   readonly catalogReader: BackupObjectCatalogReader;
   readonly attemptFence: Pick<RestoreAttemptStore, "claimOnce">;
-  readonly dependencies: Omit<TemporaryPreviewRestoreDependencies, "store" | "backupKey" | "attemptStore">;
+  readonly ports: Omit<
+    TemporaryPreviewRestoreDependencies,
+    "store" | "backupKey" | "attemptStore"
+  >;
 }
 
 /** Runs the fenced restore without a broad Worker environment. */
@@ -28,13 +30,12 @@ export function runProductionTemporaryPreviewRestore(
       VISION_ENV: input.VISION_ENV,
       PREVIEW_RESTORE_DATABASE_URL: input.PREVIEW_RESTORE_DATABASE_URL,
       PREVIEW_RESTORE_TARGET_ID: input.PREVIEW_RESTORE_TARGET_ID,
-      BACKUP_KEY_VERSION: input.BACKUP_KEY_VERSION,
     },
     {
-      ...input.dependencies,
+      ...input.ports,
       store: input.catalogReader,
       backupKey: input.BACKUP_ENCRYPTION_KEY,
-      attemptStore: input.attemptFence as RestoreAttemptStore,
+      attemptStore: input.attemptFence,
     },
   );
 }

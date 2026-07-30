@@ -2,29 +2,20 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import {
+  PREVIEW_OBSERVER_JOB_CONTRACT,
+  type PreviewObserverFamily,
+} from "./resolve-preview-observer-run";
 
 const INVALID = "Preview observer state is invalid.";
 const MAX_RESPONSE_BYTES = 1024 * 1024;
 const LISTENER_STEP = "Print only allowlisted acceptance evidence";
-const EVIDENCE = new Set<PreviewObserverEvidence>([
-  "calendar_maintenance",
-  "foundation_probe",
-  "ai_usage",
-  "preview_fault",
-  "role_probe",
-  "sync_suppression",
-  "restore",
-]);
+const EVIDENCE = new Set<PreviewObserverEvidence>(
+  Object.keys(PREVIEW_OBSERVER_JOB_CONTRACT) as PreviewObserverEvidence[],
+);
 
 /** Evidence families with a dedicated preview listener job. */
-export type PreviewObserverEvidence =
-  | "calendar_maintenance"
-  | "foundation_probe"
-  | "ai_usage"
-  | "preview_fault"
-  | "role_probe"
-  | "sync_suppression"
-  | "restore";
+export type PreviewObserverEvidence = PreviewObserverFamily;
 
 /** Closed input needed to bind one workflow run to its exact active listener. */
 export interface PreviewObserverState {
@@ -44,27 +35,7 @@ export function validatePreviewObserverState(
   const jobs = Array.isArray(jobsResponse?.jobs)
     ? jobsResponse.jobs
     : [];
-  const expectedJobNames =
-    input.evidence === "sync_suppression" || input.evidence === "restore"
-      ? [`Capture ${input.evidence} signal`, `Capture ${input.evidence} uniqueness`]
-      : input.evidence === "calendar_maintenance"
-        ? input.maintenanceScheduledAt === undefined
-          ? ["Capture calendar_maintenance safe scheduled outcome"]
-          : ["Capture calendar_maintenance uniqueness"]
-        : input.evidence === "role_probe"
-          ? ["Capture role_probe signal", "Capture role_probe safe scheduled outcome"]
-          : [`Capture ${input.evidence} safe scheduled outcome`];
-  const matchingJobs = jobs.filter((job) => {
-    const candidate = plainObject(job);
-    return expectedJobNames.includes(String(candidate?.name));
-  });
-  const job = plainObject(matchingJobs[0]);
-  const steps = Array.isArray(job?.steps) ? job.steps : [];
-  const matchingSteps = steps.filter((step) => {
-    const candidate = plainObject(step);
-    return candidate?.name === LISTENER_STEP;
-  });
-  const listener = plainObject(matchingSteps[0]);
+  const expectedJobNames = PREVIEW_OBSERVER_JOB_CONTRACT[input.evidence];
 
   if (
     !/^[a-f0-9]{40}$/u.test(input.expectedSha) ||
@@ -80,19 +51,52 @@ export function validatePreviewObserverState(
         run.path.startsWith(".github/workflows/preview.yml@refs/")
       )
     ) ||
-    jobs.length !== (input.evidence === "sync_suppression" || input.evidence === "restore" ? 2 : 1) ||
-    matchingJobs.length !== (input.evidence === "sync_suppression" || input.evidence === "restore" ? 2 : 1) ||
     (input.evidence === "calendar_maintenance" &&
       input.maintenanceScheduledAt !== undefined &&
-      job?.maintenanceScheduledAt !== input.maintenanceScheduledAt) ||
-    job?.status !== "in_progress" ||
-    job.conclusion !== null ||
-    matchingSteps.length !== 1 ||
-    listener?.status !== "in_progress" ||
-    listener.conclusion !== null
+      !isCanonicalInstant(input.maintenanceScheduledAt)) ||
+    !expectedJobNames.every((name) => activeExactListener(jobs, name)) ||
+    jobs.some((value) => {
+      const job = plainObject(value);
+      return (
+        typeof job?.name === "string" &&
+        job.name.startsWith("Capture ") &&
+        !(expectedJobNames as readonly string[]).includes(job.name) &&
+        job.status === "in_progress"
+      );
+    })
   ) {
     throw new Error(INVALID);
   }
+}
+
+/** Requires one independently active job and one exact listener step. */
+function activeExactListener(jobs: readonly unknown[], name: string): boolean {
+  const matchingJobs = jobs
+    .map(plainObject)
+    .filter((job) => job?.name === name);
+  if (matchingJobs.length !== 1) return false;
+  const job = matchingJobs[0];
+  const steps = Array.isArray(job?.steps) ? job.steps : [];
+  const listeners = steps
+    .map(plainObject)
+    .filter((step) => step?.name === LISTENER_STEP);
+  return (
+    job?.status === "in_progress" &&
+    job.conclusion === null &&
+    listeners.length === 1 &&
+    listeners[0]?.status === "in_progress" &&
+    listeners[0].conclusion === null
+  );
+}
+
+/** Recognizes one canonical millisecond UTC instant. */
+function isCanonicalInstant(value: string): boolean {
+  const parsed = Date.parse(value);
+  return (
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value) &&
+    Number.isFinite(parsed) &&
+    new Date(parsed).toISOString() === value
+  );
 }
 
 /** Returns only ordinary data objects without invoking custom prototypes. */

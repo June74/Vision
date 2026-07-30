@@ -12,24 +12,47 @@ const RUN_REF_PATTERN = /^(?:baseline|[1-9]\d{0,19})$/u;
 const DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
 const ISO_INSTANT_PATTERN =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
+const CANDIDATE_OPERATIONS = [
+  "deploy_foundation",
+  "deploy_sync_suppression",
+  "deploy_ai",
+  "deploy_fault",
+  "deploy_role_probe",
+  "deploy_restore",
+] as const;
+type PreviewCandidateOperation = (typeof CANDIDATE_OPERATIONS)[number];
+export type PreviewBindingProfile = "normal" | "restore_pair";
 
 export interface PreviewCandidateIntent {
   readonly evidenceType: "vision.preview-candidate-intent/v1";
   readonly candidateCommit: string;
-  readonly candidateOperation?: string;
-  readonly bindingProfile?: "normal" | "restore_pair";
+  readonly candidateOperation: PreviewCandidateOperation;
+  readonly bindingProfile: PreviewBindingProfile;
 }
 
 /** Derives the provider binding profile from an admitted operation. */
-export function derivePreviewBindingProfile(operation: unknown): "normal" | "restore_pair" {
-  if (operation === "deploy_role_probe" || operation === "deploy_restore") return "restore_pair";
-  if (["deploy_foundation", "deploy_sync_suppression", "deploy_ai", "deploy_fault"].includes(String(operation))) return "normal";
+export function derivePreviewBindingProfile(
+  operation: unknown,
+): PreviewBindingProfile {
+  if (operation === "deploy_role_probe" || operation === "deploy_restore") {
+    return "restore_pair";
+  }
+  if (
+    operation === "deploy_foundation" ||
+    operation === "deploy_sync_suppression" ||
+    operation === "deploy_ai" ||
+    operation === "deploy_fault"
+  ) {
+    return "normal";
+  }
   throw new Error(INVALID);
 }
 
 export interface PreviewRollbackRestoreProof {
   readonly evidenceType: "vision.preview-rollback-restored/v1";
   readonly candidateRunRefHash: string;
+  readonly candidateOperation: PreviewCandidateOperation;
+  readonly bindingProfile: PreviewBindingProfile;
   readonly restoredCommit: string;
   readonly normalProviderState: "verified";
   readonly restoredAt: string;
@@ -39,6 +62,8 @@ export interface PreviewRollbackRestoreProof {
 export interface PreviewRollbackClosureProof {
   readonly evidenceType: "vision.preview-rollback-closed/v1";
   readonly candidateRunRefHash: string;
+  readonly candidateOperation: PreviewCandidateOperation;
+  readonly bindingProfile: PreviewBindingProfile;
   readonly restoredCommit: string;
   readonly normalProviderState: "verified";
   readonly authenticatedReads: "verified";
@@ -53,21 +78,16 @@ export function createPreviewCandidateIntent(
   candidateCommit: unknown,
 ): PreviewCandidateIntent {
   const candidateRecord = plainObject(candidateCommit);
-  if (candidateRecord) {
-    const commit = ownDataValue(candidateRecord, "candidateCommit");
-    const operation = ownDataValue(candidateRecord, "operation");
-    if (!validCommit(commit) || typeof operation !== "string") throw new Error(INVALID);
-    return Object.freeze({
-      evidenceType: "vision.preview-candidate-intent/v1",
-      candidateCommit: commit,
-      candidateOperation: operation,
-      bindingProfile: derivePreviewBindingProfile(operation),
-    });
+  const commit = ownDataValue(candidateRecord, "candidateCommit");
+  const operation = ownDataValue(candidateRecord, "operation");
+  if (!validCommit(commit) || !validCandidateOperation(operation)) {
+    throw new Error(INVALID);
   }
-  if (!validCommit(candidateCommit)) throw new Error(INVALID);
   return Object.freeze({
     evidenceType: "vision.preview-candidate-intent/v1",
-    candidateCommit,
+    candidateCommit: commit,
+    candidateOperation: operation,
+    bindingProfile: derivePreviewBindingProfile(operation),
   });
 }
 
@@ -83,24 +103,46 @@ export function assertPreviewCandidateIntent(input: {
     !validCommit(input.expectedCommit) ||
     intent.candidateCommit !== input.expectedCommit ||
     (input.nextOperation !== undefined &&
-      !((intent.candidateOperation === "deploy_role_probe" && input.nextOperation === "deploy_restore") ||
-        (intent.candidateOperation === "deploy_restore" && input.nextOperation === "verify_cleanup")))
+      !allowedCandidateTransition(
+        intent.candidateOperation,
+        input.nextOperation,
+      ))
   ) {
     throw new Error(INVALID);
   }
 }
 
+/** Returns only the closed profile re-derived from an exact candidate intent. */
+export function readPreviewCandidateBindingProfile(input: {
+  readonly candidateIntent: unknown;
+  readonly expectedCommit: unknown;
+}): PreviewBindingProfile {
+  const intent = parseCandidateIntent(input.candidateIntent);
+  if (
+    intent === undefined ||
+    !validCommit(input.expectedCommit) ||
+    intent.candidateCommit !== input.expectedCommit
+  ) {
+    throw new Error(INVALID);
+  }
+  return derivePreviewBindingProfile(intent.candidateOperation);
+}
+
 /** Creates the normal-state proof only after the immutable rollback and provider check. */
 export function createPreviewRollbackRestoreProof(input: {
+  readonly candidateIntent: unknown;
   readonly candidateRunRef: unknown;
   readonly restoredCommit: unknown;
   readonly restoredAt: unknown;
   readonly providerVerifiedAt: unknown;
   readonly normalProviderState: unknown;
 }): PreviewRollbackRestoreProof {
+  const intent = parseCandidateIntent(input.candidateIntent);
   if (
+    intent === undefined ||
     !validRunRef(input.candidateRunRef) ||
     !validCommit(input.restoredCommit) ||
+    intent.candidateCommit !== input.restoredCommit ||
     input.normalProviderState !== "verified" ||
     !validInstant(input.restoredAt) ||
     !validInstant(input.providerVerifiedAt) ||
@@ -111,6 +153,8 @@ export function createPreviewRollbackRestoreProof(input: {
   return Object.freeze({
     evidenceType: "vision.preview-rollback-restored/v1",
     candidateRunRefHash: hashCandidateRunRef(input.candidateRunRef),
+    candidateOperation: intent.candidateOperation,
+    bindingProfile: derivePreviewBindingProfile(intent.candidateOperation),
     restoredCommit: input.restoredCommit,
     normalProviderState: "verified",
     restoredAt: input.restoredAt,
@@ -151,6 +195,8 @@ export function closePreviewRollback(input: {
   return Object.freeze({
     evidenceType: "vision.preview-rollback-closed/v1",
     candidateRunRefHash: restored.candidateRunRefHash,
+    candidateOperation: restored.candidateOperation,
+    bindingProfile: derivePreviewBindingProfile(restored.candidateOperation),
     restoredCommit: restored.restoredCommit,
     normalProviderState: "verified",
     authenticatedReads: "verified",
@@ -172,7 +218,7 @@ export function assertPreviewRollbackClosure(input: {
     input.closureProof === null &&
     input.latestCandidateRunRef === "baseline" &&
     validCommit(input.expectedCommit) &&
-    input.operation === "candidate"
+    isCandidateOperation(input.operation)
   ) {
     return;
   }
@@ -181,7 +227,7 @@ export function assertPreviewRollbackClosure(input: {
     closure === undefined ||
     !validRunRef(input.latestCandidateRunRef) ||
     !validCommit(input.expectedCommit) ||
-    (input.operation !== "candidate" && input.operation !== "cleanup") ||
+    !allowedCandidateTransition(closure.candidateOperation, input.operation) ||
     closure.candidateRunRefHash !==
       hashCandidateRunRef(input.latestCandidateRunRef) ||
     closure.restoredCommit !== input.expectedCommit ||
@@ -291,6 +337,8 @@ function parseRestoreProof(
 ): PreviewRollbackRestoreProof | undefined {
   const record = plainObject(input);
   const expectedKeys = [
+    "bindingProfile",
+    "candidateOperation",
     "candidateRunRefHash",
     "evidenceType",
     "normalProviderState",
@@ -302,6 +350,9 @@ function parseRestoreProof(
     !exactKeys(record, expectedKeys) ||
     ownDataValue(record, "evidenceType") !==
       "vision.preview-rollback-restored/v1" ||
+    !validCandidateOperation(ownDataValue(record, "candidateOperation")) ||
+    derivePreviewBindingProfile(ownDataValue(record, "candidateOperation")) !==
+      ownDataValue(record, "bindingProfile") ||
     !validDigest(ownDataValue(record, "candidateRunRefHash")) ||
     !validCommit(ownDataValue(record, "restoredCommit")) ||
     ownDataValue(record, "normalProviderState") !== "verified" ||
@@ -321,15 +372,65 @@ function parseCandidateIntent(
 ): PreviewCandidateIntent | undefined {
   const record = plainObject(input);
   if (
-    !(exactKeys(record, ["candidateCommit", "evidenceType"]) ||
-      exactKeys(record, ["bindingProfile", "candidateCommit", "candidateOperation", "evidenceType"])) ||
+    !exactKeys(record, [
+      "bindingProfile",
+      "candidateCommit",
+      "candidateOperation",
+      "evidenceType",
+    ]) ||
     ownDataValue(record, "evidenceType") !==
       "vision.preview-candidate-intent/v1" ||
-    !validCommit(ownDataValue(record, "candidateCommit"))
+    !validCommit(ownDataValue(record, "candidateCommit")) ||
+    !validCandidateOperation(ownDataValue(record, "candidateOperation"))
   ) {
     return undefined;
   }
+  try {
+    if (
+      derivePreviewBindingProfile(
+        ownDataValue(record, "candidateOperation"),
+      ) !== ownDataValue(record, "bindingProfile")
+    ) {
+      return undefined;
+    }
+  } catch {
+    return undefined;
+  }
   return record as unknown as PreviewCandidateIntent;
+}
+
+/** Enforces the only same-commit follow-on transitions. */
+function allowedCandidateTransition(
+  candidateOperation: PreviewCandidateOperation,
+  nextOperation: unknown,
+): boolean {
+  if (candidateOperation === "deploy_role_probe") {
+    return (
+      nextOperation === "deploy_restore" ||
+      nextOperation === "verify_cleanup"
+    );
+  }
+  if (candidateOperation === "deploy_restore") {
+    return nextOperation === "verify_cleanup";
+  }
+  return (
+    derivePreviewBindingProfile(candidateOperation) === "normal" &&
+    (nextOperation === "verify_cleanup" || isCandidateOperation(nextOperation))
+  );
+}
+
+/** Rejects aliases and non-string values at every transition boundary. */
+function validCandidateOperation(
+  value: unknown,
+): value is PreviewCandidateOperation {
+  return CANDIDATE_OPERATIONS.some((operation) => operation === value);
+}
+
+/** Narrows unknown workflow input without string coercion. */
+function isCandidateOperation(
+  value: unknown,
+): value is PreviewCandidateOperation {
+  return validCandidateOperation(value);
 }
 
 /** Parses an exact post-restore closure proof. */
@@ -339,6 +440,8 @@ function parseClosureProof(
   const record = plainObject(input);
   const expectedKeys = [
     "authenticatedReads",
+    "bindingProfile",
+    "candidateOperation",
     "candidateRunRefHash",
     "closedAt",
     "closureProviderVerifiedAt",
@@ -352,6 +455,9 @@ function parseClosureProof(
     !exactKeys(record, expectedKeys) ||
     ownDataValue(record, "evidenceType") !==
       "vision.preview-rollback-closed/v1" ||
+    !validCandidateOperation(ownDataValue(record, "candidateOperation")) ||
+    derivePreviewBindingProfile(ownDataValue(record, "candidateOperation")) !==
+      ownDataValue(record, "bindingProfile") ||
     !validDigest(ownDataValue(record, "candidateRunRefHash")) ||
     !validCommit(ownDataValue(record, "restoredCommit")) ||
     ownDataValue(record, "normalProviderState") !== "verified" ||
@@ -494,20 +600,30 @@ async function main(): Promise<void> {
   try {
     const [mode, ...rest] = process.argv.slice(2);
     const parsed = readPairs(rest);
-    if (mode === "--write-candidate-intent" && parsed.size === 2) {
+    if (mode === "--write-candidate-intent" && parsed.size === 3) {
       await writeJson(
         parsed.get("--output"),
-        createPreviewCandidateIntent(parsed.get("--commit")),
+        createPreviewCandidateIntent({
+          candidateCommit: parsed.get("--commit"),
+          operation: parsed.get("--operation"),
+        }),
       );
-    } else if (mode === "--verify-candidate-intent" && parsed.size === 2) {
+    } else if (
+      mode === "--verify-candidate-intent" &&
+      (parsed.size === 2 || parsed.size === 3)
+    ) {
       assertPreviewCandidateIntent({
         candidateIntent: await readJson(parsed.get("--candidate-intent")),
         expectedCommit: parsed.get("--commit"),
+        ...(parsed.has("--next-operation")
+          ? { nextOperation: parsed.get("--next-operation") }
+          : {}),
       });
-    } else if (mode === "--write-restore-proof" && parsed.size === 6) {
+    } else if (mode === "--write-restore-proof" && parsed.size === 7) {
       await writeJson(
         parsed.get("--output"),
         createPreviewRollbackRestoreProof({
+          candidateIntent: await readJson(parsed.get("--candidate-intent")),
           candidateRunRef: parsed.get("--candidate-run-ref"),
           restoredCommit: parsed.get("--commit"),
           restoredAt: parsed.get("--restored-at"),

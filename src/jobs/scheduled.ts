@@ -29,8 +29,14 @@ import {
   decryptProtectedFields,
   encryptProtectedFields,
 } from "../crypto/protected-fields";
-import { createNeonBackupSnapshotSource } from "../data/backup/neon-adapter";
+import {
+  createNeonBackupRestoreTarget,
+  createNeonBackupSnapshotSource,
+} from "../data/backup/neon-adapter";
 import { createR2BackupObjectStore } from "../data/backup/r2-object-store";
+import { createR2BackupObjectCatalogReader } from "../data/backup/r2-backup-object-reader";
+import { createR2RestoreAttemptStore } from "../data/backup/r2-restore-attempt-store";
+import { createTemporaryPreviewClearAdapter } from "../data/backup/temporary-preview-clear-adapter";
 import { createTemporaryPreviewRoleProbeAdapter } from "../data/backup/temporary-preview-role-probe-adapter";
 import { CalendarClient } from "../integrations/google-calendar/calendar-client";
 import {
@@ -43,6 +49,7 @@ import {
   type Env,
 } from "../server/env";
 import { PHASE_B_PRIVILEGE_MANIFEST } from "../domain/operations/phase-b-privilege-manifest";
+import type { BackupSnapshotV1 } from "../domain/backup/manifest";
 import {
   TEMPORARY_PREVIEW_FAULT_SCENARIOS,
   assertTemporaryPreviewAcceptanceLifetime,
@@ -93,6 +100,7 @@ import {
   type TemporaryPreviewRoleProbeDependencies,
   type TemporaryPreviewRoleProbeEvidence,
 } from "./temporary-preview-role-probe";
+import { runProductionTemporaryPreviewRestore } from "./temporary-preview-restore-production";
 
 /** Existing near-real-time repair/renewal cadence. */
 export const CALENDAR_MAINTENANCE_CRON = "*/15 * * * *";
@@ -332,11 +340,15 @@ export async function scheduled(
   controller: ScheduledController,
   environment: Env,
   _context: ExecutionContext,
-  dependencies: ScheduledEntryDependencies =
-    createProductionScheduledEntryDependencies(environment),
+  providedDependencies?: ScheduledEntryDependencies,
+  productionFactory: (
+    environment: Env,
+  ) => ScheduledEntryDependencies = createProductionScheduledEntryDependencies,
 ): Promise<void> {
   const scheduledAt = new Date(controller.scheduledTime);
   const selector = parseTemporaryPreviewAcceptanceSelector(environment);
+  const dependencies =
+    providedDependencies ?? productionFactory(environment);
   if (selector !== undefined) {
     assertTemporaryPreviewAcceptanceLifetime(
       dependencies.currentTime(),
@@ -390,7 +402,7 @@ export async function scheduled(
 }
 
 /** Creates lazy production closures only after scheduled candidate selection. */
-function createProductionScheduledEntryDependencies(
+export function createProductionScheduledEntryDependencies(
   environment: Env,
 ): ScheduledEntryDependencies {
   return {
@@ -427,7 +439,83 @@ function createProductionScheduledEntryDependencies(
     },
     /** Constructs only the gated temporary restore boundary. */
     temporaryRestore: async () => {
-      throw new Error("Temporary preview restore adapter is unavailable.");
+      if (
+        environment.VISION_ENV !== "preview" ||
+        typeof environment.PREVIEW_RESTORE_DATABASE_URL !== "string" ||
+        typeof environment.PREVIEW_RESTORE_TARGET_ID !== "string" ||
+        environment.BACKUP_BUCKET === undefined
+      ) {
+        throw new Error("Temporary preview restore adapter is unavailable.");
+      }
+      const backupEnvironment = parseBackupEnvironment(environment);
+      const backupKey = await importBackupEncryptionKey(
+        backupEnvironment.BACKUP_ENCRYPTION_KEY,
+        backupEnvironment.BACKUP_KEY_VERSION,
+      );
+      const catalogReader = createR2BackupObjectCatalogReader(
+        environment.BACKUP_BUCKET,
+      );
+      const attemptStore = createR2RestoreAttemptStore(
+        environment.BACKUP_BUCKET,
+      );
+      const databaseUrl = environment.PREVIEW_RESTORE_DATABASE_URL;
+      const targetId = environment.PREVIEW_RESTORE_TARGET_ID;
+      let readback: BackupSnapshotV1 | undefined;
+      const evidence = await runProductionTemporaryPreviewRestore({
+        VISION_ENV: "preview",
+        PREVIEW_RESTORE_DATABASE_URL: databaseUrl,
+        PREVIEW_RESTORE_TARGET_ID: targetId,
+        BACKUP_ENCRYPTION_KEY: backupKey,
+        catalogReader,
+        attemptFence: Object.freeze({
+          claimOnce: attemptStore.claimOnce.bind(attemptStore),
+        }),
+        ports: {
+          /** Clears only the admitted disposable restore target. */
+          clearTarget: async (
+            clearDatabaseUrl,
+            clearTargetId,
+            rowCounts,
+          ) =>
+            createTemporaryPreviewClearAdapter(
+              clearDatabaseUrl,
+              clearTargetId,
+            ).clear(rowCounts),
+          /** Creates only the admitted disposable preview restore target. */
+          createTarget: async (
+            restoreDatabaseUrl,
+            restoreTargetId,
+          ) =>
+            createNeonBackupRestoreTarget(restoreDatabaseUrl, {
+              environment: "preview",
+              targetId: restoreTargetId,
+              disposable: true,
+            }),
+          /** Reads one consistent snapshot back from the restore target. */
+          readTargetSnapshot: async (readDatabaseUrl) => {
+            readback = await createNeonBackupSnapshotSource(
+              readDatabaseUrl,
+            ).readConsistentSnapshot();
+            return readback;
+          },
+          /** Counts readable audit events from the restored snapshot. */
+          countReadableEvents: async (readDatabaseUrl) => {
+            const snapshot =
+              readback ??
+              await createNeonBackupSnapshotSource(
+                readDatabaseUrl,
+              ).readConsistentSnapshot();
+            return snapshot.tables.audit_events.length;
+          },
+        },
+      });
+      if (evidence === null) {
+        throw new Error("Temporary preview restore failed.");
+      }
+      console.info({ action: "backup.restore", evidence });
+      if (evidence.outcome !== "succeeded") {
+        throw new Error("Temporary preview restore failed.");
+      }
     },
     /** Builds only the preview foundation candidate's aggregate read boundaries. */
     foundationProbe: async (scheduledAt) => {

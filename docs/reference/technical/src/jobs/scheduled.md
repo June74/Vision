@@ -2,6 +2,18 @@
 ## `temporaryRestore`
 Keeps restore behind admission.
 
+## `clearTarget`
+Composes the narrow disposable-target clear adapter.
+
+## `createTarget`
+Composes the preview-only disposable Neon restore target.
+
+## `readTargetSnapshot`
+Reads and retains one consistent post-restore snapshot.
+
+## `countReadableEvents`
+Counts audit events from the retained or freshly read restored snapshot.
+
 ## `createWithWriter`
 
 Carries the `BackupObjectWriter` substitution through normal snapshot and

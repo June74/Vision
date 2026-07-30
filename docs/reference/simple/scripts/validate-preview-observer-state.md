@@ -16,6 +16,14 @@ Groups the expected commit, evidence family, run response, and jobs response.
 Requires the matching workflow run, evidence job, and single allowlisted
 listener step all to be active.
 
+## `activeExactListener`
+
+Requires one independently active job and its one exact listener step.
+
+## `isCanonicalInstant`
+
+Recognizes one canonical millisecond UTC maintenance tick.
+
 ## `plainObject`
 
 Accepts only ordinary data objects.

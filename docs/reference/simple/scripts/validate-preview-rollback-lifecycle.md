@@ -14,6 +14,11 @@ Creates the marker that must be uploaded before preview mutation.
 
 Checks that the downloaded marker belongs to the reviewed commit.
 
+## `readPreviewCandidateBindingProfile`
+
+Returns the operation-derived binding profile from an exact commit-bound
+candidate marker.
+
 ## `createPreviewRollbackRestoreProof`
 
 Creates proof only after the normal commit and provider state are restored.
@@ -41,6 +46,18 @@ Accepts only the exact restored-normal proof shape.
 ## `parseCandidateIntent`
 
 Accepts only the exact candidate marker shape.
+
+## `allowedCandidateTransition`
+
+Checks the one allowed same-commit follow-on operation.
+
+## `validCandidateOperation`
+
+Recognizes one exact candidate operation.
+
+## `isCandidateOperation`
+
+Narrows an unknown value to the same closed operation vocabulary.
 
 ## `parseClosureProof`
 

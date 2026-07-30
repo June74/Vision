@@ -11,6 +11,7 @@ import {
 } from "../../../scripts/prepare-preview-acceptance-deploy-config";
 import {
   validateNormalPreviewProviderState,
+  validatePreviewProviderStateForCandidateIntent,
   validateTemporaryRestorePairProviderState,
   validatePreviewAcceptanceDeployConfig,
   validatePreviewDeployConfig,
@@ -495,6 +496,7 @@ describe("preview acceptance workflow input admission", () => {
       reviewedCommit: REVIEWED_COMMIT,
       evidenceFamily: "foundation_probe",
       expectedOutcome: "foundation_succeeded",
+      observerClosesAt: "2026-07-29T04:02:00.000Z",
     }),
     context({
       version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
@@ -502,6 +504,7 @@ describe("preview acceptance workflow input admission", () => {
       reviewedCommit: REVIEWED_COMMIT,
       evidenceFamily: "preview_fault",
       expectedOutcome: "fault_expected",
+      observerClosesAt: "2026-07-29T04:02:00.000Z",
       faultScenario: "job_failed",
     }),
     context({
@@ -749,6 +752,7 @@ describe("preview acceptance workflow input admission", () => {
         reviewedCommit: REVIEWED_COMMIT,
         evidenceFamily: "preview_fault",
         expectedOutcome: "fault_expected",
+        observerClosesAt: "2026-07-29T04:02:00.000Z",
       }),
     ],
   ] as const)("rejects %s", (_label, operation, serialized) => {
@@ -777,6 +781,7 @@ describe("preview acceptance workflow input admission", () => {
       reviewedCommit: REVIEWED_COMMIT,
       evidenceFamily: "calendar_maintenance",
       expectedOutcome: "maintenance_repair_reserved",
+      observerClosesAt: "2026-07-30T18:17:00.000Z",
       maintenanceScheduledAt: "2026-07-30T18:15:00.000Z",
     });
 
@@ -884,6 +889,87 @@ describe("normal preview artifact validation", () => {
 });
 
 describe("normal preview live provider-state validation", () => {
+  it("selects normal or restore-pair validation only from the exact candidate intent", () => {
+    const normal = normalProviderState();
+    expect(() =>
+      validatePreviewProviderStateForCandidateIntent({
+        candidateIntent: {
+          evidenceType: "vision.preview-candidate-intent/v1",
+          candidateCommit: REVIEWED_COMMIT,
+          candidateOperation: "deploy_foundation",
+          bindingProfile: "normal",
+        },
+        expectedCommit: REVIEWED_COMMIT,
+        ...normal,
+      }),
+    ).not.toThrow();
+
+    const restorePair = normalProviderState();
+    (
+      restorePair.settingsResponse as { result: { bindings: unknown[] } }
+    ).result.bindings.push(
+      { name: "PREVIEW_RESTORE_DATABASE_URL", type: "secret_text" },
+      { name: "PREVIEW_RESTORE_TARGET_ID", type: "secret_text" },
+    );
+    expect(() =>
+      validatePreviewProviderStateForCandidateIntent({
+        candidateIntent: {
+          evidenceType: "vision.preview-candidate-intent/v1",
+          candidateCommit: REVIEWED_COMMIT,
+          candidateOperation: "deploy_restore",
+          bindingProfile: "restore_pair",
+        },
+        expectedCommit: REVIEWED_COMMIT,
+        ...restorePair,
+      }),
+    ).not.toThrow();
+
+    for (const candidateIntent of [
+      {
+        evidenceType: "vision.preview-candidate-intent/v1",
+        candidateCommit: REVIEWED_COMMIT,
+        candidateOperation: "deploy_restore",
+        bindingProfile: "normal",
+      },
+      {
+        evidenceType: "vision.preview-candidate-intent/v1",
+        candidateCommit: "b".repeat(40),
+        candidateOperation: "deploy_restore",
+        bindingProfile: "restore_pair",
+      },
+    ]) {
+      expect(() =>
+        validatePreviewProviderStateForCandidateIntent({
+          candidateIntent,
+          expectedCommit: REVIEWED_COMMIT,
+          ...restorePair,
+        }),
+      ).toThrow();
+    }
+  });
+
+  it("reuses normal health and permanent-schedule checks for the restore pair", () => {
+    const normal = normalProviderState();
+    const settings = structuredClone(normal.settingsResponse) as {
+      result: { bindings: unknown[] };
+    };
+    settings.result.bindings.push(
+      { name: "PREVIEW_RESTORE_DATABASE_URL", type: "secret_text" },
+      { name: "PREVIEW_RESTORE_TARGET_ID", type: "secret_text" },
+    );
+    for (const override of [
+      { healthResponse: { status: "failed" } },
+      { schedulesResponse: { success: true, result: [] } },
+      { schedulesResponse: { success: true, result: [{ cron: NORMAL_CRONS[0] }] } },
+      { schedulesResponse: { success: true, result: [...NORMAL_CRONS.map((cron) => ({ cron })), { cron: "* * * * *" }] } },
+    ]) {
+      expect(() => validateTemporaryRestorePairProviderState({
+        ...normal,
+        settingsResponse: settings,
+        ...override,
+      })).toThrow("Temporary restore-pair provider state is invalid.");
+    }
+  });
   it("admits only the exact two temporary secret names and types for the restore pair", () => {
     const normal = normalProviderState();
     const settings = structuredClone(normal.settingsResponse) as {

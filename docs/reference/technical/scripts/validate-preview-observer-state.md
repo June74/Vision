@@ -17,6 +17,14 @@ Carries untrusted run and jobs data with the expected commit and evidence.
 Checks event, workflow path, commit, run state, unique job identity, unique
 step identity, and active status without rendering provider responses.
 
+## `activeExactListener`
+
+Requires exactly one named job with exactly one active allowlisted listener.
+
+## `isCanonicalInstant`
+
+Requires the millisecond UTC grammar and round-trip identity.
+
 ## `plainObject`
 
 Rejects arrays, null, and custom prototypes at untrusted JSON boundaries.

@@ -12,5 +12,8 @@ Copies the body into `Uint8Array`.
 Maps provider pagination without mutation capabilities.
 ## `adapt`
 Bounds keys, etags, and custom metadata.
+## `exactMetadata`
+Reconstructs only the exact restore metadata vocabulary without accessors,
+aliases, extra keys, or invalid format/date/digest/version values.
 ## `bounded`
 Enforces string limits.

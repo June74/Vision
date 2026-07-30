@@ -28,6 +28,10 @@ All credential changes are recorded without values in
 must remain unchanged unless the project owner explicitly authorizes a
 rotation.
 
+Task 3 name-only status: `BACKUP_ENCRYPTION_KEY` was not rotated or changed,
+and the required `BACKUP_KEY_VERSION` remains `1`. No key value was read or
+recorded for this repair.
+
 The two `PREVIEW_RESTORE_*` entries are temporary, preview-only, and
 target-only. They are configured only for an approved restore window, never
 copied into GitHub secrets, workflow files, generated artifacts, documentation

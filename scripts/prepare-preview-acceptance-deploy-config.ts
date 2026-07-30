@@ -93,6 +93,7 @@ export type PreviewAcceptanceContext =
         | "restore_succeeded"
         | "maintenance_succeeded"
         | "maintenance_repair_reserved";
+      readonly observerClosesAt: string;
       readonly faultScenario?: TemporaryPreviewFaultScenario;
       readonly maintenanceScheduledAt?: string;
     })
@@ -226,6 +227,7 @@ function canonicalPreviewAcceptanceContext(
     case "observe": {
       const evidenceFamily = dataValue(record, "evidenceFamily");
       const expectedOutcome = dataValue(record, "expectedOutcome");
+      const observerClosesAt = dataValue(record, "observerClosesAt");
       const faultExpected =
         evidenceFamily === "preview_fault" &&
         expectedOutcome === "fault_expected";
@@ -242,6 +244,7 @@ function canonicalPreviewAcceptanceContext(
               "reviewedCommit",
               "evidenceFamily",
               "expectedOutcome",
+              "observerClosesAt",
               "faultScenario",
             ]
           : maintenanceExpected
@@ -251,6 +254,7 @@ function canonicalPreviewAcceptanceContext(
                 "reviewedCommit",
                 "evidenceFamily",
                 "expectedOutcome",
+                "observerClosesAt",
                 "maintenanceScheduledAt",
               ]
           : [
@@ -259,6 +263,7 @@ function canonicalPreviewAcceptanceContext(
               "reviewedCommit",
               "evidenceFamily",
               "expectedOutcome",
+              "observerClosesAt",
             ],
       );
       const matchingOutcome =
@@ -279,11 +284,15 @@ function canonicalPreviewAcceptanceContext(
       const maintenanceScheduledAt = dataValue(record, "maintenanceScheduledAt");
       if (
         !matchingOutcome ||
+        !isCanonicalInstant(observerClosesAt) ||
         (faultExpected &&
           !TEMPORARY_PREVIEW_FAULT_SCENARIOS.includes(
             faultScenario as TemporaryPreviewFaultScenario,
           )) ||
-        (maintenanceExpected && !isCanonicalInstant(maintenanceScheduledAt))
+        (maintenanceExpected &&
+          (!isCanonicalInstant(maintenanceScheduledAt) ||
+            Date.parse(observerClosesAt as string) !==
+              Date.parse(maintenanceScheduledAt as string) + 120_000))
       ) {
         throw new Error(INVALID_SELECTION);
       }
@@ -293,6 +302,7 @@ function canonicalPreviewAcceptanceContext(
         reviewedCommit,
         evidenceFamily,
         expectedOutcome,
+        observerClosesAt,
         ...(faultExpected
           ? { faultScenario: faultScenario as TemporaryPreviewFaultScenario }
           : {}),
@@ -640,7 +650,9 @@ async function main(): Promise<void> {
         context.kind === "deploy_foundation" ||
         context.kind === "deploy_sync_suppression" ||
         context.kind === "deploy_ai" ||
-        context.kind === "deploy_fault"
+        context.kind === "deploy_fault" ||
+        context.kind === "deploy_role_probe" ||
+        context.kind === "deploy_restore"
           ? context
           : undefined;
       const candidateRunRef =
@@ -658,7 +670,27 @@ async function main(): Promise<void> {
       const faultScenario =
         "faultScenario" in context ? context.faultScenario ?? "" : "";
       const evidenceFamily =
-        context.kind === "observe" ? context.evidenceFamily : "";
+        context.kind === "observe"
+          ? context.evidenceFamily
+          : selection.selector === "foundation_probe" ||
+              selection.selector === "sync_suppression" ||
+              selection.selector === "ai_usage" ||
+              selection.selector === "role_probe" ||
+              selection.selector === "restore"
+            ? selection.selector
+            : TEMPORARY_PREVIEW_FAULT_SCENARIOS.includes(
+                  selection.selector as TemporaryPreviewFaultScenario,
+                )
+              ? "preview_fault"
+              : "";
+      const expectedOutcome =
+        context.kind === "observe" ? context.expectedOutcome : "";
+      const observerClosesAt =
+        context.kind === "observe" ? context.observerClosesAt : "";
+      const maintenanceScheduledAt =
+        context.kind === "observe"
+          ? context.maintenanceScheduledAt ?? ""
+          : "";
       await appendFile(
         outputPath,
         [
@@ -669,9 +701,11 @@ async function main(): Promise<void> {
           `authenticated_reads_gate=${authenticatedReadsGate}`,
           `fault_scenario=${faultScenario}`,
           `evidence_family=${evidenceFamily}`,
+          `expected_outcome=${expectedOutcome}`,
+          `observer_closes_at=${observerClosesAt}`,
+          `maintenance_scheduled_at=${maintenanceScheduledAt}`,
           `selector=${selection.selector ?? ""}`,
           `restore_admission_gate=${selection.context.kind === "deploy_restore" ? selection.context.restoreAdmissionGate : ""}`,
-          `restoreAdmissionGate=${selection.context.kind === "deploy_restore" ? selection.context.restoreAdmissionGate : ""}`,
           `observer_dispatch_started_at=${candidateContext?.observerDispatchStartedAt ?? ""}`,
           `observer_dispatch_completed_at=${candidateContext?.observerDispatchCompletedAt ?? ""}`,
           "",

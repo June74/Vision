@@ -58,6 +58,41 @@ function dependencies(
 }
 
 describe("preview observer run resolution", () => {
+  it("filters a realistic full workflow job list and finds the named listener among setup steps", async () => {
+    const listener = job("Capture restore signal");
+    listener.steps = [
+      { name: "Checkout", status: "completed", conclusion: "success", completed_at: null },
+      { name: "Install", status: "completed", conclusion: "success", completed_at: null },
+      ...listener.steps,
+    ];
+    const uniqueness = job("Capture restore uniqueness");
+    uniqueness.steps = [
+      { name: "Checkout", status: "completed", conclusion: "success", completed_at: null },
+      ...uniqueness.steps,
+    ];
+    const deps = dependencies([run()], [
+      job("Admit one preview operation", "completed", "success"),
+      listener,
+      uniqueness,
+      job("Deploy one generated acceptance candidate", "completed", "skipped"),
+    ]);
+    await expect(resolvePreviewObserverRun({
+      expectedWorkflow: ".github/workflows/preview.yml",
+      expectedCommit: SHA,
+      dispatchStartedAt: START,
+      dispatchCompletedAt: END,
+      family: "restore",
+    }, deps)).resolves.toBe("41");
+  });
+
+  it("reports explicit failed state for terminal non-success signal jobs", async () => {
+    const deps = dependencies([run()], [
+      job("Capture role_probe signal", "completed", "failure"),
+    ]);
+    await expect(
+      readPreviewSignalObserverState("41" as never, "role_probe", deps),
+    ).resolves.toStrictEqual({ signal: "failed", signalObservedAt: null });
+  });
   it("polls every five seconds through the inclusive 120-second deadline", async () => {
     let calls = 0;
     let monotonic = 0;
@@ -204,12 +239,14 @@ describe("preview observer run resolution", () => {
   });
 
   it("accepts maintenance only after the exact tick plus 120-second close", async () => {
+    const maintenance = job(
+      "Capture calendar_maintenance uniqueness",
+      "completed",
+      "success",
+    );
+    maintenance.steps[0]!.completed_at = "2026-07-30T18:17:00.000Z";
     const deps = dependencies([run()], [
-      {
-        ...job("Capture calendar_maintenance uniqueness", "completed", "success"),
-        maintenanceScheduledAt: TICK.toISOString(),
-        closedAt: "2026-07-30T18:17:00.000Z",
-      },
+      maintenance,
     ]);
     await expect(
       readPreviewMaintenanceObserverState(

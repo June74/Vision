@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { BACKUP_TABLES } from "../../../src/domain/backup/manifest";
 import { PHASE_B_AI_USAGE_ACTION } from "../../../src/jobs/phase-b-ai-usage-evidence";
 import { createPreviewTailObserver } from "../../../scripts/print-safe-tail";
 
@@ -9,20 +10,76 @@ import { createPreviewTailObserver } from "../../../scripts/print-safe-tail";
 async function runPrintSafeTail(
   args: readonly string[],
   input: readonly string[],
-): Promise<{ readonly exitCode: number | null; readonly stdout: string }> {
+  closeAfterMilliseconds = 0,
+): Promise<{
+  readonly exitCode: number | null;
+  readonly stdout: string;
+  readonly stderr: string;
+}> {
   const child = spawn(
     process.execPath,
     ["--import", "tsx", resolve(process.cwd(), "scripts", "print-safe-tail.ts"), ...args],
     { stdio: ["pipe", "pipe", "pipe"] },
   );
   let stdout = "";
+  let stderr = "";
   child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
   child.stdout.on("data", (chunk: string) => {
     stdout += chunk;
   });
-  child.stdin.end(input.join("\n"));
+  child.stderr.on("data", (chunk: string) => {
+    stderr += chunk;
+  });
+  if (input.length > 0) child.stdin.write(`${input.join("\n")}\n`);
+  if (closeAfterMilliseconds === 0) {
+    child.stdin.end();
+  } else {
+    setTimeout(() => {
+      if (!child.stdin.destroyed) child.stdin.end();
+    }, closeAfterMilliseconds);
+  }
   const [exitCode] = (await once(child, "close")) as [number | null];
-  return { exitCode, stdout };
+  return { exitCode, stdout, stderr };
+}
+
+/** Builds the strict argument vector used by a signal observer job. */
+function signalArguments(
+  mode: string,
+  expectation: string,
+  extra: readonly string[] = [],
+): readonly string[] {
+  return [
+    mode,
+    "--expectation",
+    expectation,
+    "--closes-at",
+    new Date(Date.now() + 60_000).toISOString(),
+    ...extra,
+  ];
+}
+
+/** Builds a near-future uniqueness contract and its open-stdin duration. */
+function uniquenessArguments(
+  mode: string,
+  expectation: string,
+  extra: readonly string[] = [],
+): {
+  readonly args: readonly string[];
+  readonly closeAfterMilliseconds: number;
+} {
+  const closeAfterMilliseconds = 3_400;
+  return {
+    args: [
+      mode,
+      "--expectation",
+      expectation,
+      "--closes-at",
+      new Date(Date.now() + 3_000).toISOString(),
+      ...extra,
+    ],
+    closeAfterMilliseconds,
+  };
 }
 
 /** Builds a synthetic scheduled tail event with no provider-controlled fields. */
@@ -40,6 +97,26 @@ function restoreFailure(): unknown {
     evidenceType: "vision.preview-restore/v1",
     outcome: "failed",
     category: "restore_unknown_failure",
+  };
+}
+
+/** Builds one exact closed restore success evidence result. */
+function restoreSuccess(): unknown {
+  return {
+    evidenceType: "vision.preview-restore/v1",
+    outcome: "succeeded",
+    category: "none",
+    format: "vision-backup/v1",
+    schemaVersion: 9,
+    keyVersion: 7,
+    authoritativeTableCount: BACKUP_TABLES.length,
+    rowCounts: Object.fromEntries(BACKUP_TABLES.map((table) => [table, 0])),
+    checksumMatches: true,
+    referencesValid: true,
+    targetWasEmpty: true,
+    eventListReadable: true,
+    eventCount: 0,
+    replacedExisting: false,
   };
 }
 
@@ -151,6 +228,19 @@ function aiUsageTail(evidence: unknown): string {
   ]);
 }
 
+/** Wraps one exact suppression result in the scheduled log shape. */
+function syncSuppressionTail(): string {
+  return scheduledTail([{
+    message: [{
+      action: "acceptance.sync-suppression",
+      evidence: {
+        evidenceType: "vision.sync-suppression/v1",
+        outcome: "suppressed",
+      },
+    }],
+  }]);
+}
+
 describe("print-safe-tail", () => {
   it("keeps default mode backward compatible by emitting recovery evidence first", async () => {
     await expect(
@@ -159,36 +249,38 @@ describe("print-safe-tail", () => {
       exitCode: 0,
       stdout:
         '{"category":"none","cron":"temporary_recovery","outcome":"ok"}\n',
+      stderr: "",
     });
   });
 
-  it("ignores recovery evidence in restore-only mode until an exact restore result arrives", async () => {
+  it("retains one exact restore result until the uniqueness deadline", async () => {
+    const contract = uniquenessArguments("--restore-only", "restore_succeeded");
     await expect(
-      runPrintSafeTail(["--restore-only"], [scheduledTail(), restoreTail(restoreFailure())]),
+      runPrintSafeTail(
+        contract.args,
+        [scheduledTail(), restoreTail(restoreSuccess())],
+        contract.closeAfterMilliseconds,
+      ),
     ).resolves.toEqual({
       exitCode: 0,
-      stdout:
-        '{"evidenceType":"vision.preview-restore/v1","outcome":"failed","category":"restore_unknown_failure"}\n',
+      stdout: `${JSON.stringify(restoreSuccess())}\n`,
+      stderr: "",
     });
   });
 
-  it("emits the closed fallback when restore-only mode ends without restore evidence", async () => {
+  it("fails closed without output when restore uniqueness ends with zero terminals", async () => {
+    const contract = uniquenessArguments("--restore-only", "restore_succeeded");
     await expect(
-      runPrintSafeTail(["--restore-only"], [scheduledTail()]),
-    ).resolves.toEqual({
-      exitCode: 0,
-      stdout:
-        '{"category":"no_scheduled_event","cron":"none","outcome":"unknown"}\n',
-    });
+      runPrintSafeTail(contract.args, [scheduledTail()]),
+    ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
   });
 
   it("emits only role-probe evidence in role-probe-only mode", async () => {
     await expect(
       runPrintSafeTail(
-        ["--role-probe-only"],
+        signalArguments("--role-probe-only", "role_probe_succeeded"),
         [
           scheduledTail(),
-          restoreTail(restoreFailure()),
           roleProbeTail(roleProbeSuccess()),
         ],
       ),
@@ -196,95 +288,92 @@ describe("print-safe-tail", () => {
       exitCode: 0,
       stdout:
         '{"category":"none","evidenceType":"vision.preview-role-probe/v1","outcome":"succeeded","roleMatches":true}\n',
+      stderr: "",
     });
   });
 
-  it("emits the fixed fallback when role-probe-only mode sees only recovery and restore evidence", async () => {
+  it("fails closed without output when role-probe signal sees no accepting terminal", async () => {
     await expect(
       runPrintSafeTail(
-        ["--role-probe-only"],
+        signalArguments("--role-probe-only", "role_probe_succeeded"),
         [scheduledTail(), restoreTail(restoreFailure())],
       ),
-    ).resolves.toEqual({
-      exitCode: 0,
-      stdout:
-        '{"category":"no_scheduled_event","cron":"none","outcome":"unknown"}\n',
-    });
+    ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
   });
 
   it("emits only permanent maintenance evidence in calendar-maintenance-only mode", async () => {
+    const contract = uniquenessArguments(
+      "--calendar-maintenance-only",
+      "maintenance_repair_reserved",
+      ["--maintenance-scheduled-at", "2026-07-30T18:15:00.000Z"],
+    );
     await expect(
       runPrintSafeTail(
-        ["--calendar-maintenance-only"],
+        contract.args,
         [
           scheduledTail(),
-          restoreTail(restoreFailure()),
-          roleProbeTail(roleProbeSuccess()),
           maintenanceTail(maintenanceSuccess()),
         ],
+        contract.closeAfterMilliseconds,
       ),
     ).resolves.toEqual({
       exitCode: 0,
       stdout:
         '{"category":"none","evidenceType":"vision.calendar-maintenance/v2","maintenanceScheduledAt":"2026-07-30T18:15:00.000Z","outcome":"succeeded","renewalOutcome":"completed","repairOutcome":"reserved"}\n',
+      stderr: "",
     });
   });
 
-  it("emits the fixed fallback when calendar-maintenance-only mode sees no maintenance result", async () => {
+  it("fails closed without output when maintenance uniqueness sees no terminal", async () => {
+    const contract = uniquenessArguments(
+      "--calendar-maintenance-only",
+      "maintenance_repair_reserved",
+      ["--maintenance-scheduled-at", "2026-07-30T18:15:00.000Z"],
+    );
     await expect(
       runPrintSafeTail(
-        ["--calendar-maintenance-only"],
+        contract.args,
         [scheduledTail(), restoreTail(restoreFailure())],
       ),
-    ).resolves.toEqual({
-      exitCode: 0,
-      stdout:
-        '{"category":"no_scheduled_event","cron":"none","outcome":"unknown"}\n',
-    });
+    ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
   });
 
   it("emits only foundation evidence in foundation-probe-only mode", async () => {
     const result = await runPrintSafeTail(
-      ["--foundation-probe-only"],
+      signalArguments("--foundation-probe-only", "foundation_succeeded"),
       [
-        restoreTail(restoreFailure()),
-        roleProbeTail(roleProbeSuccess()),
-        maintenanceTail(maintenanceSuccess()),
+        scheduledTail(),
         foundationTail(foundationSuccess()),
       ],
     );
 
     expect(result.exitCode).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual(foundationSuccess());
+    expect(result.stderr).toBe("");
   });
 
-  it("emits the fixed fallback when foundation-probe-only mode sees no foundation result", async () => {
+  it("fails closed without output when foundation signal sees no result", async () => {
     await expect(
       runPrintSafeTail(
-        ["--foundation-probe-only"],
+        signalArguments("--foundation-probe-only", "foundation_succeeded"),
         [restoreTail(restoreFailure()), roleProbeTail(roleProbeSuccess())],
       ),
-    ).resolves.toEqual({
-      exitCode: 0,
-      stdout:
-        '{"category":"no_scheduled_event","cron":"none","outcome":"unknown"}\n',
-    });
+    ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
   });
 
   it("emits only AI evidence in ai-usage-only mode", async () => {
     const evidence = aiUsageSuccess();
     const result = await runPrintSafeTail(
-      ["--ai-usage-only"],
+      signalArguments("--ai-usage-only", "ai_succeeded"),
       [
-        restoreTail(restoreFailure()),
-        roleProbeTail(roleProbeSuccess()),
-        foundationTail(foundationSuccess()),
+        scheduledTail(),
         aiUsageTail(evidence),
       ],
     );
 
     expect(result.exitCode).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual(evidence);
+    expect(result.stderr).toBe("");
   });
 
   it("emits only one exact preview-fault record in preview-fault-only mode", async () => {
@@ -295,7 +384,11 @@ describe("print-safe-tail", () => {
       category: "backup_storage_write_failed",
     };
     const result = await runPrintSafeTail(
-      ["--preview-fault-only"],
+      signalArguments(
+        "--preview-fault-only",
+        "fault_expected",
+        ["--scenario", "r2_upload_failed"],
+      ),
       [
         scheduledTail(),
         scheduledTail([
@@ -306,31 +399,140 @@ describe("print-safe-tail", () => {
 
     expect(result.exitCode).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual(evidence);
+    expect(result.stderr).toBe("");
   });
 
-  it("emits the fixed fallback when ai-usage-only mode sees no AI result", async () => {
+  it("fails closed without output when AI signal sees no result", async () => {
     await expect(
       runPrintSafeTail(
-        ["--ai-usage-only"],
+        signalArguments("--ai-usage-only", "ai_succeeded"),
         [restoreTail(restoreFailure()), foundationTail(foundationSuccess())],
       ),
-    ).resolves.toEqual({
+    ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
+  });
+
+  it("runs both real suppression workflow flags and keeps signal output-free", async () => {
+    const uniqueness = uniquenessArguments(
+      "--sync-suppression-only",
+      "sync_suppressed",
+    );
+    await expect(
+      runPrintSafeTail(
+        signalArguments(
+          "--sync-suppression-signal-only",
+          "sync_suppressed",
+        ),
+        [syncSuppressionTail()],
+      ),
+    ).resolves.toEqual({ exitCode: 0, stdout: "", stderr: "" });
+    const unique = await runPrintSafeTail(
+      uniqueness.args,
+      [syncSuppressionTail()],
+      uniqueness.closeAfterMilliseconds,
+    );
+    expect(unique).toEqual({
       exitCode: 0,
       stdout:
-        '{"category":"no_scheduled_event","cron":"none","outcome":"unknown"}\n',
+        '{"evidenceType":"vision.sync-suppression/v1","outcome":"suppressed"}\n',
+      stderr: "",
     });
+  });
+
+  it("runs the real restore signal flag without output", async () => {
+    await expect(
+      runPrintSafeTail(
+        signalArguments("--restore-signal-only", "restore_succeeded"),
+        [restoreTail(restoreSuccess())],
+      ),
+    ).resolves.toEqual({ exitCode: 0, stdout: "", stderr: "" });
+  });
+
+  it("rejects canonical but nonaccepting restore and fault outcomes", async () => {
+    await expect(
+      runPrintSafeTail(
+        signalArguments("--restore-signal-only", "restore_succeeded"),
+        [restoreTail(restoreFailure())],
+      ),
+    ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
+    await expect(
+      runPrintSafeTail(
+        signalArguments(
+          "--preview-fault-only",
+          "fault_expected",
+          ["--scenario", "queue_delayed"],
+        ),
+        [scheduledTail([{
+          message: [{
+            action: "acceptance.preview-fault",
+            evidence: {
+              evidenceType: "vision.preview-fault/v1",
+              scenario: "r2_upload_failed",
+              outcome: "failed",
+              category: "backup_storage_write_failed",
+            },
+          }],
+        }])],
+      ),
+    ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
+  });
+
+  it("rejects duplicate, malformed, and premature restore uniqueness streams", async () => {
+    const duplicate = uniquenessArguments("--restore-only", "restore_succeeded");
+    await expect(
+      runPrintSafeTail(
+        duplicate.args,
+        [restoreTail(restoreSuccess()), restoreTail(restoreSuccess())],
+      ),
+    ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
+
+    const malformed = uniquenessArguments("--restore-only", "restore_succeeded");
+    await expect(
+      runPrintSafeTail(
+        malformed.args,
+        [
+          restoreTail({ ...restoreSuccess() as object, unexpected: true }),
+          restoreTail(restoreSuccess()),
+        ],
+      ),
+    ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
+
+    const premature = uniquenessArguments("--restore-only", "restore_succeeded");
+    await expect(
+      runPrintSafeTail(premature.args, [restoreTail(restoreSuccess())]),
+    ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
+  });
+
+  it("requires close and maintenance instants for real uniqueness flags", async () => {
+    await expect(
+      runPrintSafeTail(
+        ["--sync-suppression-only", "--expectation", "sync_suppressed"],
+        [],
+      ),
+    ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
+    await expect(
+      runPrintSafeTail(
+        [
+          "--calendar-maintenance-only",
+          "--expectation",
+          "maintenance_repair_reserved",
+          "--closes-at",
+          "2026-07-30T18:17:00.000Z",
+        ],
+        [maintenanceTail(maintenanceSuccess())],
+      ),
+    ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
   });
 
   it("rejects unknown arguments without emitting recovery evidence", async () => {
     await expect(
       runPrintSafeTail(["--unrecognized"], [scheduledTail()]),
-    ).resolves.toEqual({ exitCode: 1, stdout: "" });
+    ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
   });
 
   it("rejects restore-only mode with extra arguments without emitting recovery evidence", async () => {
     await expect(
       runPrintSafeTail(["--restore-only", "extra"], [scheduledTail()]),
-    ).resolves.toEqual({ exitCode: 1, stdout: "" });
+    ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
   });
 
   it("rejects combined observer modes without emitting evidence", async () => {
@@ -339,7 +541,7 @@ describe("print-safe-tail", () => {
         ["--restore-only", "--role-probe-only"],
         [roleProbeTail(roleProbeSuccess())],
       ),
-    ).resolves.toEqual({ exitCode: 1, stdout: "" });
+    ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
   });
 
   it("rejects combined maintenance and recovery observer modes", async () => {
@@ -348,7 +550,7 @@ describe("print-safe-tail", () => {
         ["--calendar-maintenance-only", "--restore-only"],
         [maintenanceTail(maintenanceSuccess())],
       ),
-    ).resolves.toEqual({ exitCode: 1, stdout: "" });
+    ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
   });
 
   it("rejects combined foundation and recovery observer modes", async () => {
@@ -357,7 +559,7 @@ describe("print-safe-tail", () => {
         ["--foundation-probe-only", "--role-probe-only"],
         [foundationTail(foundationSuccess())],
       ),
-    ).resolves.toEqual({ exitCode: 1, stdout: "" });
+    ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
   });
 
   it("rejects combined AI and foundation observer modes", async () => {
@@ -366,7 +568,7 @@ describe("print-safe-tail", () => {
         ["--ai-usage-only", "--foundation-probe-only"],
         [aiUsageTail(aiUsageSuccess())],
       ),
-    ).resolves.toEqual({ exitCode: 1, stdout: "" });
+    ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
   });
 });
 

@@ -8,6 +8,7 @@ import {
 } from "../src/server/ai-pricing-binding-contract";
 import { TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS } from "../src/domain/operations/temporary-preview-fault";
 import type { PreviewAcceptanceSelector } from "./prepare-preview-acceptance-deploy-config";
+import { readPreviewCandidateBindingProfile } from "./validate-preview-rollback-lifecycle";
 
 const INVALID_NORMAL = "Preview deployment configuration is invalid.";
 const INVALID_ACCEPTANCE =
@@ -101,31 +102,10 @@ export function validatePreviewDeployConfig(candidate: unknown): void {
 export function validateNormalPreviewProviderState(
   input: NormalPreviewProviderState,
 ): void {
-  const health = isPlainDataObject(input.healthResponse)
-    ? input.healthResponse
-    : {};
-  const schedules = isPlainDataObject(input.schedulesResponse)
-    ? input.schedulesResponse
-    : {};
-  const scheduleResult = ownDataValue(schedules, "result");
   const bindings = readProviderBindings(input.settingsResponse);
-  const scheduleCrons =
-    Array.isArray(scheduleResult) &&
-    scheduleResult.every(
-      (entry) =>
-        isPlainDataObject(entry) &&
-        typeof ownDataValue(entry, "cron") === "string",
-    )
-      ? scheduleResult
-          .map((entry) => ownDataValue(entry, "cron") as string)
-          .sort()
-      : [];
-  const expectedCrons = [...NORMAL_CRONS].sort();
 
   if (
-    ownDataValue(health, "status") !== "ok" ||
-    ownDataValue(schedules, "success") !== true ||
-    !exactStringArray(scheduleCrons, expectedCrons) ||
+    !matchesNormalProviderHealthAndSchedules(input) ||
     bindings === undefined ||
     !matchesNormalProviderBindingContract(bindings)
   ) {
@@ -138,6 +118,9 @@ export function validateTemporaryRestorePairProviderState(
   input: NormalPreviewProviderState,
 ): void {
   try {
+    if (!matchesNormalProviderHealthAndSchedules(input)) {
+      throw new Error(INVALID_RESTORE_PROVIDER_STATE);
+    }
     const bindings = readProviderBindings(input.settingsResponse);
     if (
       bindings === undefined ||
@@ -158,14 +141,89 @@ export function validateTemporaryRestorePairProviderState(
     if (
       temporary.length !== 2 ||
       !["PREVIEW_RESTORE_DATABASE_URL", "PREVIEW_RESTORE_TARGET_ID"].every(
-        (name) => temporary.some((binding) =>
-          ownDataValue(binding as Record<string, unknown>, "name") === name &&
-          ownDataValue(binding as Record<string, unknown>, "type") === "secret_text"),
+        (name) =>
+          temporary.some((binding) =>
+            matchesTemporaryRestoreBinding(binding, name)
+          ),
       )
     ) throw new Error(INVALID_RESTORE_PROVIDER_STATE);
   } catch {
     throw new Error(INVALID_RESTORE_PROVIDER_STATE);
   }
+}
+
+/** Selects a provider validator only from a commit-bound lifecycle artifact. */
+export function validatePreviewProviderStateForCandidateIntent(input: {
+  readonly candidateIntent: unknown;
+  readonly expectedCommit: unknown;
+  readonly healthResponse: unknown;
+  readonly schedulesResponse: unknown;
+  readonly settingsResponse: unknown;
+}): void {
+  const profile = readPreviewCandidateBindingProfile({
+    candidateIntent: input.candidateIntent,
+    expectedCommit: input.expectedCommit,
+  });
+  const providerState = {
+    healthResponse: input.healthResponse,
+    schedulesResponse: input.schedulesResponse,
+    settingsResponse: input.settingsResponse,
+  };
+  if (profile === "restore_pair") {
+    validateTemporaryRestorePairProviderState(providerState);
+    return;
+  }
+  validateNormalPreviewProviderState(providerState);
+}
+
+/** Reuses the normal runtime health and exact permanent schedule contract. */
+function matchesNormalProviderHealthAndSchedules(
+  input: NormalPreviewProviderState,
+): boolean {
+  const health = isPlainDataObject(input.healthResponse)
+    ? input.healthResponse
+    : {};
+  const schedules = isPlainDataObject(input.schedulesResponse)
+    ? input.schedulesResponse
+    : {};
+  const scheduleResult = ownDataValue(schedules, "result");
+  const scheduleCrons =
+    Array.isArray(scheduleResult) &&
+    scheduleResult.every(
+      (entry) =>
+        isPlainDataObject(entry) &&
+        typeof ownDataValue(entry, "cron") === "string",
+    )
+      ? scheduleResult
+          .map((entry) => ownDataValue(entry, "cron") as string)
+          .sort()
+      : [];
+  return (
+    ownDataValue(health, "status") === "ok" &&
+    ownDataValue(schedules, "success") === true &&
+    exactStringArray(scheduleCrons, [...NORMAL_CRONS].sort())
+  );
+}
+
+/** Requires one name/type-only temporary secret binding without accessors. */
+function matchesTemporaryRestoreBinding(
+  value: unknown,
+  expectedName: string,
+): boolean {
+  if (!isPlainDataObject(value)) return false;
+  const keys = Reflect.ownKeys(value);
+  if (
+    keys.length !== 2 ||
+    keys.some((key) => typeof key !== "string") ||
+    !keys.includes("name") ||
+    !keys.includes("type")
+  ) {
+    return false;
+  }
+  return (
+    ownDataValue(value, "name") === expectedName &&
+    ownDataValue(value, "type") === "secret_text"
+  );
 }
 
 /** Requires every normal binding exactly once with its authoritative provider type. */
@@ -447,12 +505,18 @@ async function main(): Promise<void> {
   const providerMode = arguments_[0] === "--verify-provider-state";
   const restoreProviderMode =
     arguments_[0] === "--verify-restore-pair-provider-state";
+  const candidateProviderMode =
+    arguments_[0] === "--verify-candidate-provider-state";
   try {
-    if (providerMode || restoreProviderMode) {
-      if (arguments_.length !== 4) throw new Error(INVALID_PROVIDER_STATE);
+    if (providerMode || restoreProviderMode || candidateProviderMode) {
+      const expectedLength = candidateProviderMode ? 6 : 4;
+      if (arguments_.length !== expectedLength) {
+        throw new Error(INVALID_PROVIDER_STATE);
+      }
+      const offset = candidateProviderMode ? 3 : 1;
       const [healthResponse, schedulesResponse, settingsResponse] =
         await Promise.all(
-          arguments_.slice(1).map(async (path) =>
+          arguments_.slice(offset).map(async (path) =>
             JSON.parse(await readFile(resolve(path), "utf8")),
           ),
         );
@@ -461,8 +525,19 @@ async function main(): Promise<void> {
         schedulesResponse,
         settingsResponse,
       };
-      if (restoreProviderMode) validateTemporaryRestorePairProviderState(input);
-      else validateNormalPreviewProviderState(input);
+      if (candidateProviderMode) {
+        validatePreviewProviderStateForCandidateIntent({
+          candidateIntent: JSON.parse(
+            await readFile(resolve(arguments_[1]!), "utf8"),
+          ) as unknown,
+          expectedCommit: arguments_[2],
+          ...input,
+        });
+      } else if (restoreProviderMode) {
+        validateTemporaryRestorePairProviderState(input);
+      } else {
+        validateNormalPreviewProviderState(input);
+      }
       process.stdout.write("Normal preview provider state is valid.\n");
       return;
     }
@@ -474,7 +549,7 @@ async function main(): Promise<void> {
     validatePreviewDeployConfig(JSON.parse(serialized));
   } catch {
     process.stderr.write(
-      `${restoreProviderMode ? INVALID_RESTORE_PROVIDER_STATE : providerMode ? INVALID_PROVIDER_STATE : INVALID_NORMAL}\n`,
+      `${restoreProviderMode ? INVALID_RESTORE_PROVIDER_STATE : providerMode || candidateProviderMode ? INVALID_PROVIDER_STATE : INVALID_NORMAL}\n`,
     );
     process.exitCode = 1;
   }

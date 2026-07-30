@@ -12,5 +12,7 @@ Reads one object copy.
 Lists a bounded page.
 ## `adapt`
 Copies safe metadata.
+## `exactMetadata`
+Requires the exact four restore metadata fields as ordinary bounded strings.
 ## `bounded`
 Rejects oversized strings.

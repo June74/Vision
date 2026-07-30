@@ -86,34 +86,6 @@ function readWorkflowStepNames(job: string): string[] {
   );
 }
 
-interface ObserverRunFixture {
-  readonly id: string;
-  readonly createdAt: string;
-}
-
-/** Models the workflow's inclusive numeric-instant observer selection contract. */
-function selectExactlyOneObserverRunFixture(
-  runs: readonly ObserverRunFixture[],
-  startedAt: string,
-  completedAt: string,
-): string {
-  const startedAtMs = Date.parse(startedAt);
-  const completedAtMs = Date.parse(completedAt);
-  if (
-    !Number.isFinite(startedAtMs) ||
-    !Number.isFinite(completedAtMs) ||
-    startedAtMs > completedAtMs
-  ) {
-    throw new Error("observer selection failed");
-  }
-  const matches = runs.filter((run) => {
-    const createdAtMs = Date.parse(run.createdAt);
-    return createdAtMs >= startedAtMs && createdAtMs <= completedAtMs;
-  });
-  if (matches.length !== 1) throw new Error("observer selection failed");
-  return matches[0]!.id;
-}
-
 describe("delivery workflow policy", () => {
   it("keeps checks, previews, and production releases safely separated", async () => {
     const [ci, preview, production, packageMetadata] = await Promise.all([
@@ -568,6 +540,37 @@ describe("preview acceptance candidate workflow", () => {
     expect(tailStep).not.toContain("actions/upload-artifact");
   });
 
+  it("binds every observer to the reviewed commit and an exact semantic window", async () => {
+    const preview = await readWorkflow("preview.yml");
+    const observerJobs = [
+      "tail",
+      "suppression_signal",
+      "restore_signal",
+      "role_signal",
+      "suppression_uniqueness",
+      "restore_uniqueness",
+      "maintenance_uniqueness",
+    ];
+    for (const jobName of observerJobs) {
+      const observer = readWorkflowJob(preview, jobName);
+      expect(observer).toContain(
+        "REVIEWED_SHA: ${{ needs.selection.outputs.reviewed_commit }}",
+      );
+      expect(observer).toContain('[[ "$actual_sha" == "$EXPECTED_SHA" ]]');
+      expect(observer).toContain('[[ "$actual_sha" == "$REVIEWED_SHA" ]]');
+      expect(observer).toContain("set -o pipefail");
+      expect(observer).not.toContain("set +o pipefail");
+      expect(observer).toContain('--expectation "$EXPECTED_OUTCOME"');
+      expect(observer).toContain('--closes-at "$OBSERVER_CLOSES_AT"');
+    }
+    expect(readWorkflowJob(preview, "maintenance_uniqueness")).toContain(
+      '--maintenance-scheduled-at "$MAINTENANCE_SCHEDULED_AT"',
+    );
+    expect(readWorkflowJob(preview, "tail")).toContain(
+      '--scenario "$FAULT_SCENARIO"',
+    );
+  });
+
   it("requires live observer proof before deploying an isolated generated candidate", async () => {
     const preview = await readWorkflow("preview.yml");
     const candidate = readWorkflowJob(preview, "deploy_acceptance_candidate");
@@ -592,42 +595,29 @@ describe("preview acceptance candidate workflow", () => {
         "inputs.acceptance_operation == 'deploy_sync_suppression'",
       ),
     ).toBe(true);
-    expect(proofStep).toContain("LISTENER_WORKFLOW_NUMBER");
-    expect(proofStep).toContain("actions/runs/$LISTENER_WORKFLOW_NUMBER");
-    expect(proofStep).toContain("head_sha");
-    expect(proofStep).toContain("in_progress");
     expect(proofStep).toContain(
-      '.path == ".github/workflows/preview.yml" or',
+      "scripts/resolve-preview-observer-run.ts",
     );
+    expect(proofStep).toContain('--repository "$GITHUB_REPOSITORY"');
     expect(proofStep).toContain(
-      '(.path | startswith(".github/workflows/preview.yml@refs/"))',
-    );
-    expect(proofStep).not.toContain(
-      'startswith(".github/workflows/preview.yml")',
+      '--workflow ".github/workflows/preview.yml"',
     );
     expect(proofStep).toContain(
       "VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}",
     );
     expect(proofStep).not.toContain("VERIFIED_SHA: ${{ github.sha }}");
     expect(proofStep).toContain(
-      'deploy_foundation) expected_observer_evidence="foundation_probe"',
+      '--dispatch-started-at "$OBSERVER_DISPATCH_STARTED_AT"',
     );
     expect(proofStep).toContain(
-      'deploy_ai) expected_observer_evidence="ai_usage"',
+      '--dispatch-completed-at "$OBSERVER_DISPATCH_COMPLETED_AT"',
     );
-    expect(proofStep).toContain(
-      'deploy_fault) expected_observer_evidence="preview_fault"',
-    );
-    expect(proofStep).toContain(
-      "scripts/validate-preview-observer-state.ts",
-    );
-    expect(proofStep).toContain("--run-file \"$run_file\"");
-    expect(proofStep).toContain("--jobs-file \"$jobs_file\"");
     expect(proofStep).toContain("--sha \"$VERIFIED_SHA\"");
-    expect(proofStep).toContain(
-      "--evidence \"$expected_observer_evidence\"",
-    );
-    expect(proofStep).not.toContain("any(.jobs[]");
+    expect(proofStep).toContain('--family "$OBSERVER_EVIDENCE"');
+    expect(proofStep).not.toContain("LISTENER_WORKFLOW_NUMBER");
+    expect(proofStep).not.toContain("jq ");
+    expect(proofStep).not.toContain("mktemp");
+    expect(proofStep).not.toContain("GITHUB_OUTPUT");
     expect(readWorkflowJob(preview, "tail")).toContain(
       "name: Capture ${{ needs.selection.outputs.evidence_family }} signal",
     );
@@ -648,92 +638,23 @@ describe("preview acceptance candidate workflow", () => {
     expect(candidate).not.toContain("PREVIEW_RESTORE_TARGET_ID");
   });
 
-  it("selects exactly one observer by numeric instant across provider timestamp formats", () => {
-    expect(
-      selectExactlyOneObserverRunFixture(
-        [{ id: "101", createdAt: "2026-07-29T04:00:00Z" }],
-        "2026-07-29T03:59:59.999Z",
-        "2026-07-29T04:00:00.001Z",
-      ),
-    ).toBe("101");
-    expect(
-      selectExactlyOneObserverRunFixture(
-        [{ id: "102", createdAt: "2026-07-29T04:00:00Z" }],
-        "2026-07-29T04:00:00.000Z",
-        "2026-07-29T04:00:01.000Z",
-      ),
-    ).toBe("102");
-    expect(
-      selectExactlyOneObserverRunFixture(
-        [{ id: "103", createdAt: "2026-07-29T04:00:01Z" }],
-        "2026-07-29T04:00:00.000Z",
-        "2026-07-29T04:00:01.000Z",
-      ),
-    ).toBe("103");
-    expect(
-      selectExactlyOneObserverRunFixture(
-        [{ id: "104", createdAt: "2026-07-29T04:00:00Z" }],
-        "2026-07-29T04:00:00.000Z",
-        "2026-07-29T04:00:00.000Z",
-      ),
-    ).toBe("104");
-
-    expect(() =>
-      selectExactlyOneObserverRunFixture(
-        [{ id: "105", createdAt: "2026-07-29T04:00:00Z" }],
-        "2026-07-29T04:00:01.000Z",
-        "2026-07-29T04:00:00.000Z",
-      ),
-    ).toThrow(/observer selection failed/u);
-    expect(() =>
-      selectExactlyOneObserverRunFixture(
-        [],
-        "2026-07-29T04:00:00.000Z",
-        "2026-07-29T04:00:01.000Z",
-      ),
-    ).toThrow(/observer selection failed/u);
-    expect(() =>
-      selectExactlyOneObserverRunFixture(
-        [
-          { id: "106", createdAt: "2026-07-29T04:00:00Z" },
-          { id: "107", createdAt: "2026-07-29T04:00:01Z" },
-        ],
-        "2026-07-29T04:00:00.000Z",
-        "2026-07-29T04:00:01.000Z",
-      ),
-    ).toThrow(/observer selection failed/u);
-  });
-
-  it("uses numeric observer instants in the inline workflow selector", async () => {
+  it("delegates numeric observer resolution to one bounded executable", async () => {
     const preview = await readWorkflow("preview.yml");
     const proofStep = readWorkflowStep(
       preview,
       "Verify active privacy-safe observer",
     );
 
-    expect(proofStep).toContain("def instant_millis:");
-    expect(proofStep).toContain("fromdateiso8601");
+    expect(proofStep).toContain("scripts/resolve-preview-observer-run.ts");
     expect(proofStep).toContain(
-      '(?:\\\\.(?<millis>[0-9]{3}))?Z$',
+      '--dispatch-started-at "$OBSERVER_DISPATCH_STARTED_AT"',
     );
     expect(proofStep).toContain(
-      '(($instant.millis // "0") | tonumber)',
+      '--dispatch-completed-at "$OBSERVER_DISPATCH_COMPLETED_AT"',
     );
-    expect(proofStep).toContain(
-      "($started | instant_millis) as $started_ms",
-    );
-    expect(proofStep).toContain(
-      "($completed | instant_millis) as $completed_ms",
-    );
-    expect(proofStep).toContain(
-      "(.created_at | instant_millis) as $created_ms",
-    );
-    expect(proofStep).toContain(
-      "select($created_ms >= $started_ms and $created_ms <= $completed_ms)",
-    );
-    expect(proofStep).toContain("if length == 1 then");
-    expect(proofStep).not.toContain(".created_at >= $started");
-    expect(proofStep).not.toContain(".created_at <= $completed");
+    expect(proofStep).not.toContain("instant_millis");
+    expect(proofStep).not.toContain("workflow_runs");
+    expect(proofStep).not.toContain("actions/runs/");
   });
 
   it("rechecks the exact matching observer immediately before candidate deployment", async () => {
@@ -754,27 +675,21 @@ describe("preview acceptance candidate workflow", () => {
     expect(names[finalProofIndex + 1]).toBe(
       "Recheck daily recovery overlap immediately before deploy",
     );
-    expect(finalProof).toContain("actions/runs/$LISTENER_WORKFLOW_NUMBER");
+    expect(finalProof).toContain("scripts/resolve-preview-observer-run.ts");
     expect(finalProof).toContain(
       "VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}",
     );
-    expect(finalProof).toContain(".head_sha == $sha");
     expect(finalProof).toContain(
-      "scripts/validate-preview-observer-state.ts",
+      '--dispatch-started-at "$OBSERVER_DISPATCH_STARTED_AT"',
     );
-    expect(finalProof).toContain("--run-file \"$run_file\"");
-    expect(finalProof).toContain("--jobs-file \"$jobs_file\"");
+    expect(finalProof).toContain(
+      '--dispatch-completed-at "$OBSERVER_DISPATCH_COMPLETED_AT"',
+    );
+    expect(finalProof).toContain('--family "$OBSERVER_EVIDENCE"');
     expect(finalProof).toContain("--sha \"$VERIFIED_SHA\"");
-    expect(finalProof).toContain(
-      "--evidence \"$expected_observer_evidence\"",
-    );
-    expect(finalProof).not.toContain("any(.jobs[]");
-    expect(finalProof).toContain(
-      '.path == ".github/workflows/preview.yml" or',
-    );
-    expect(finalProof).toContain(
-      '(.path | startswith(".github/workflows/preview.yml@refs/"))',
-    );
+    expect(finalProof).not.toContain("LISTENER_WORKFLOW_NUMBER");
+    expect(finalProof).not.toContain("actions/runs/");
+    expect(finalProof).not.toContain("GITHUB_OUTPUT");
   });
 
   it("runs the read-only Gateway verifier only for AI stop or dedicated AI evidence", async () => {
@@ -846,6 +761,10 @@ describe("preview acceptance candidate workflow", () => {
       preview,
       "Verify rollback targets the latest candidate intent",
     );
+    const rollbackProfile = readWorkflowStep(
+      preview,
+      "Verify candidate-profile provider state before rollback",
+    );
     const deployStep = readWorkflowStep(
       preview,
       "Deploy immutable normal preview Worker",
@@ -874,11 +793,17 @@ describe("preview acceptance candidate workflow", () => {
       preview,
       "Verify rollback closure before provider cleanup",
     );
+    const cleanupProvider = readWorkflowStep(
+      preview,
+      "Verify temporary names absent and strict normal provider state",
+    );
 
     expect(candidateClosure).toContain(
       "scripts/validate-preview-rollback-lifecycle.ts --verify-closure",
     );
-    expect(candidateClosure).toContain('--operation "candidate"');
+    expect(candidateClosure).toContain(
+      '--operation "${{ inputs.acceptance_operation }}"',
+    );
     expect(candidateClosure).toContain(
       'gh run download "$ROLLBACK_CLOSURE_RUN_ID" --name vision-preview-rollback-closed',
     );
@@ -907,6 +832,11 @@ describe("preview acceptance candidate workflow", () => {
     expect(rollbackCandidate).toContain(
       "scripts/validate-preview-rollback-lifecycle.ts --verify-latest-candidate",
     );
+    expect(rollbackProfile).toContain(
+      "--verify-candidate-provider-state",
+    );
+    expect(rollbackProfile).toContain("preview-candidate-intent.json");
+    expect(rollbackProfile).not.toContain("bindingProfile");
     expect(deployStep).toContain("--config dist/vision/wrangler.json");
     expect(deployStep).not.toContain("wrangler.acceptance.json");
     expect(deployStep).not.toContain("--var ");
@@ -968,7 +898,13 @@ describe("preview acceptance candidate workflow", () => {
     expect(cleanupClosure).toContain(
       "scripts/validate-preview-rollback-lifecycle.ts --verify-closure",
     );
-    expect(cleanupClosure).toContain('--operation "cleanup"');
+    expect(cleanupClosure).toContain('--operation "verify_cleanup"');
+    expect(cleanupProvider).toContain("--verify-provider-state");
+    expect(cleanupProvider).toContain("schedules");
+    expect(cleanupProvider).toContain("settings");
+    expect(cleanupProvider).not.toContain(
+      "--verify-restore-pair-provider-state",
+    );
     expect(preview).toContain(
       "Provider cleanup remains forbidden until the post-restore closure gate succeeds.",
     );
@@ -1090,8 +1026,8 @@ describe("preview acceptance candidate workflow", () => {
     expect(preview).toContain("--verify-restore-pair-provider-state");
     expect(preview).toContain("--verify-provider-state");
     expect(preview).not.toMatch(/binding_profile:\s*\$\{\{\s*inputs\./u);
-    expect(preview).toContain("restoreAdmissionGate");
+    expect(preview).toContain("restore_admission_gate");
     expect(preview).toContain("github.sha");
-    expect(preview).toContain("head_sha");
+    expect(preview).toContain('--sha "$VERIFIED_SHA"');
   });
 });

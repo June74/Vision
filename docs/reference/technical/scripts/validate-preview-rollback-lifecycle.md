@@ -16,6 +16,11 @@ Returns the frozen v1 intent after validating the complete commit digest.
 Parses the exact intent and requires equality with the workflow's verified
 commit.
 
+## `readPreviewCandidateBindingProfile`
+
+Parses the exact commit-bound intent and returns only the binding profile
+derived from its operation.
+
 ## `createPreviewRollbackRestoreProof`
 
 Hashes the candidate run reference and records the restored commit plus ordered
@@ -52,6 +57,19 @@ instants.
 ## `parseCandidateIntent`
 
 Validates the exact v1 intent keys and complete commit.
+
+## `allowedCandidateTransition`
+
+Enforces the closed role-to-restore-or-cleanup, restore-to-cleanup, and
+normal-profile transition graph.
+
+## `validCandidateOperation`
+
+Requires exact membership in the candidate-operation vocabulary.
+
+## `isCandidateOperation`
+
+Narrows unknown workflow input without string coercion.
 
 ## `parseClosureProof`
 

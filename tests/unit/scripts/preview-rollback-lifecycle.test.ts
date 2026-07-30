@@ -7,6 +7,7 @@ import {
   createPreviewRollbackRestoreProof,
   derivePreviewBindingProfile,
   readLatestPreviewCandidateRunRef,
+  readPreviewCandidateBindingProfile,
   validateCompletedPreviewLifecycleRun,
 } from "../../../scripts/validate-preview-rollback-lifecycle";
 
@@ -14,8 +15,12 @@ const COMMIT = "a".repeat(40);
 const OTHER_COMMIT = "b".repeat(40);
 const CANDIDATE_RUN_REF = "1201";
 
-function restoreProof() {
+function restoreProof(operation = "deploy_foundation") {
   return createPreviewRollbackRestoreProof({
+    candidateIntent: createPreviewCandidateIntent({
+      candidateCommit: COMMIT,
+      operation,
+    }),
     candidateRunRef: CANDIDATE_RUN_REF,
     restoredCommit: COMMIT,
     restoredAt: "2026-07-29T07:00:00.000Z",
@@ -24,9 +29,9 @@ function restoreProof() {
   });
 }
 
-function closureProof() {
+function closureProof(operation = "deploy_foundation") {
   return closePreviewRollback({
-    restoreProof: restoreProof(),
+    restoreProof: restoreProof(operation),
     candidateRunRef: CANDIDATE_RUN_REF,
     restoredCommit: COMMIT,
     authenticatedReadsGate: "verified",
@@ -69,6 +74,13 @@ describe("preview rollback lifecycle", () => {
       assertPreviewCandidateIntent({
         candidateIntent: roleIntent,
         expectedCommit: COMMIT,
+        nextOperation: "verify_cleanup",
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertPreviewCandidateIntent({
+        candidateIntent: roleIntent,
+        expectedCommit: COMMIT,
         nextOperation: "deploy_restore",
       }),
     ).not.toThrow();
@@ -93,15 +105,52 @@ describe("preview rollback lifecycle", () => {
         nextOperation: "verify_cleanup",
       }),
     ).not.toThrow();
+    expect(() =>
+      assertPreviewRollbackClosure({
+        closureProof: closureProof("deploy_role_probe"),
+        latestCandidateRunRef: CANDIDATE_RUN_REF,
+        expectedCommit: COMMIT,
+        operation: "deploy_restore",
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertPreviewRollbackClosure({
+        closureProof: closureProof("deploy_role_probe"),
+        latestCandidateRunRef: CANDIDATE_RUN_REF,
+        expectedCommit: COMMIT,
+        operation: "deploy_foundation",
+      }),
+    ).toThrow("Preview rollback lifecycle proof is invalid.");
+    expect(() =>
+      assertPreviewRollbackClosure({
+        closureProof: closureProof("deploy_restore"),
+        latestCandidateRunRef: CANDIDATE_RUN_REF,
+        expectedCommit: COMMIT,
+        operation: "verify_cleanup",
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertPreviewRollbackClosure({
+        closureProof: closureProof("deploy_restore"),
+        latestCandidateRunRef: CANDIDATE_RUN_REF,
+        expectedCommit: COMMIT,
+        operation: "deploy_role_probe",
+      }),
+    ).toThrow("Preview rollback lifecycle proof is invalid.");
   });
   it("binds candidate intent, restored commit, normal provider proof, post-restore authenticated reads, and closure", () => {
-    const intent = createPreviewCandidateIntent(COMMIT);
+    const intent = createPreviewCandidateIntent({
+      candidateCommit: COMMIT,
+      operation: "deploy_foundation",
+    });
     const restored = restoreProof();
     const closed = closureProof();
 
     expect(intent).toEqual({
       evidenceType: "vision.preview-candidate-intent/v1",
       candidateCommit: COMMIT,
+      candidateOperation: "deploy_foundation",
+      bindingProfile: "normal",
     });
     expect(() =>
       assertPreviewCandidateIntent({
@@ -118,6 +167,8 @@ describe("preview rollback lifecycle", () => {
     expect(restored).toEqual({
       evidenceType: "vision.preview-rollback-restored/v1",
       candidateRunRefHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      candidateOperation: "deploy_foundation",
+      bindingProfile: "normal",
       restoredCommit: COMMIT,
       normalProviderState: "verified",
       restoredAt: "2026-07-29T07:00:00.000Z",
@@ -126,6 +177,8 @@ describe("preview rollback lifecycle", () => {
     expect(closed).toEqual({
       evidenceType: "vision.preview-rollback-closed/v1",
       candidateRunRefHash: restored.candidateRunRefHash,
+      candidateOperation: "deploy_foundation",
+      bindingProfile: "normal",
       restoredCommit: COMMIT,
       normalProviderState: "verified",
       authenticatedReads: "verified",
@@ -139,7 +192,7 @@ describe("preview rollback lifecycle", () => {
         closureProof: closed,
         latestCandidateRunRef: CANDIDATE_RUN_REF,
         expectedCommit: COMMIT,
-        operation: "candidate",
+        operation: "deploy_ai",
       }),
     ).not.toThrow();
     expect(() =>
@@ -147,9 +200,24 @@ describe("preview rollback lifecycle", () => {
         closureProof: closed,
         latestCandidateRunRef: CANDIDATE_RUN_REF,
         expectedCommit: COMMIT,
-        operation: "cleanup",
+        operation: "verify_cleanup",
       }),
     ).not.toThrow();
+    expect(
+      readPreviewCandidateBindingProfile({
+        candidateIntent: intent,
+        expectedCommit: COMMIT,
+      }),
+    ).toBe("normal");
+    expect(
+      readPreviewCandidateBindingProfile({
+        candidateIntent: createPreviewCandidateIntent({
+          candidateCommit: COMMIT,
+          operation: "deploy_restore",
+        }),
+        expectedCommit: COMMIT,
+      }),
+    ).toBe("restore_pair");
   });
 
   it("cannot turn a pre-deploy-only assertion into rollback closure", () => {
@@ -196,7 +264,7 @@ describe("preview rollback lifecycle", () => {
         closureProof: null,
         latestCandidateRunRef: "baseline",
         expectedCommit: COMMIT,
-        operation: "candidate",
+        operation: "deploy_foundation",
       }),
     ).not.toThrow();
     expect(() =>
@@ -204,7 +272,7 @@ describe("preview rollback lifecycle", () => {
         closureProof: null,
         latestCandidateRunRef: "baseline",
         expectedCommit: COMMIT,
-        operation: "cleanup",
+        operation: "verify_cleanup",
       }),
     ).toThrow("Preview rollback lifecycle proof is invalid.");
     expect(() =>
@@ -212,7 +280,7 @@ describe("preview rollback lifecycle", () => {
         closureProof: null,
         latestCandidateRunRef: CANDIDATE_RUN_REF,
         expectedCommit: COMMIT,
-        operation: "candidate",
+        operation: "deploy_foundation",
       }),
     ).toThrow("Preview rollback lifecycle proof is invalid.");
   });
@@ -239,7 +307,7 @@ describe("preview rollback lifecycle", () => {
     candidateRunRef,
     commit,
   ) => {
-    for (const operation of ["candidate", "cleanup"] as const) {
+    for (const operation of ["deploy_foundation", "verify_cleanup"] as const) {
       expect(() =>
         assertPreviewRollbackClosure({
           closureProof: proof,

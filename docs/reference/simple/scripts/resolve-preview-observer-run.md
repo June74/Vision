@@ -1,34 +1,137 @@
 # resolve-preview-observer-run
 
-Finds exactly one current preview workflow observer without printing its identifier or provider data.
+Finds exactly one current preview workflow observer without printing its
+identifier or provider data. One shared family-to-job contract keeps the
+workflow, resolver, and state validator on the same exact names.
 
 ## `resolvePreviewObserverRun`
-Waits for one correctly attributed observer.
+
+Polls every five seconds for one correctly attributed observer and requires
+the same active run to be observed twice within the two-minute resolution
+window.
+
 ## `readPreviewSignalObserverState`
+
 Checks the fast signal.
+
 ## `readPreviewTwoJobObserverState`
+
 Checks signal and uniqueness separately.
+
 ## `readPreviewMaintenanceObserverState`
-Checks one maintenance tick.
+
+Checks maintenance uniqueness and binds it to the requested scheduled tick.
+
+## `createGitHubObserverResolutionDependencies`
+
+Builds the live GitHub metadata adapter with argument-array subprocess calls,
+bounded captured output, and no shell.
+
+## `invoke`
+
+Runs one captured metadata command and returns parsed JSON; every child,
+size, or parse failure becomes the fixed resolver error.
+
 ## `jobsFor`
+
 Reads the observer jobs.
+
+## `exactJob`
+
+Requires exactly one job with the requested name.
+
+## `assertExpectedActiveJobs`
+
+Requires every job for the family to be independently active and rejects an
+unexpected active capture job.
+
+## `observerJobState`
+
+Reduces one job and its listener to `listening`, `succeeded`, or `failed`.
+
+## `exactListener`
+
+Requires one exact allowlisted evidence-printing step.
+
+## `snapshotRuns`
+
+Copies only a bounded provider run list.
+
+## `snapshotRun`
+
+Copies the allowlisted fields of one provider run.
+
+## `snapshotJobs`
+
+Copies bounded job and listener-step metadata.
+
 ## `matchesRun`
+
 Checks workflow attribution.
-## `assertListener`
-Checks the safe listener step.
+
+## `validateResolutionInput`
+
+Checks the workflow path, reviewed commit, dispatch interval, family, and
+required maintenance tick before provider reads.
+
+## `plainRecord`
+
+Accepts only ordinary provider objects.
+
+## `ownData`
+
+Reads one required own data property without invoking a getter.
+
+## `optionalOwnData`
+
+Reads one optional own data property without invoking a getter.
+
+## `boundedString`
+
+Bounds provider-controlled strings.
+
+## `nullableBoundedString`
+
+Accepts a bounded provider string or `null`.
+
 ## `canonicalDate`
+
 Parses a timestamp.
+
+## `validDate`
+
+Checks one real `Date` without coercion.
+
 ## `fail`
+
 Returns one safe error.
-## `main`
-Validates a captured observer without output.
+
+## `parseArguments`
+
+Accepts only the exact live resolver flags; calendar maintenance alone
+requires the scheduled-tick flag.
+
 ## `monotonicNow`
-Uses a fixed captured-state clock.
+
+Supplies the poll clock.
+
 ## `sleep`
-Does not poll captured state.
+
+Waits between bounded metadata reads.
+
 ## `listRuns`
-Supplies the captured run.
+
+Lists workflow-dispatch runs.
+
 ## `readRun`
-Reads the captured run.
+
+Reads one selected run again for stable attribution.
+
 ## `listJobs`
-Supplies captured jobs.
+
+Lists the selected run's jobs.
+
+## `main`
+
+Runs the live resolver and keeps the opaque run handle process-local. Success
+and failure both produce no provider metadata.

@@ -1,29 +1,66 @@
 # `scripts/print-safe-tail.ts`
 
 ## `createPreviewTailObserver`
-Separates signals from uniqueness closure.
+
+Creates one clocked observer in `accepting_signal`, restore/suppression signal,
+restore/suppression uniqueness, or maintenance uniqueness mode. It evaluates
+the complete semantic expectation rather than only the evidence marker.
+
 ## `result`
-Builds the safe result.
+
+Builds the frozen `{ done, succeeded, output }` state.
+
 ## `push`
-Rejects invalid terminals.
+
+Rejects expectation mismatches, late terminals, and duplicate uniqueness
+terminals. Generic accepting signals return the reconstructed safe evidence;
+restore and suppression signals return no evidence.
+
 ## `finish`
-Requires one terminal.
 
-## `--ai-usage-only`
+Succeeds only at or after `closesAt` with exactly one previously admitted
+terminal.
 
-Filters the safe-tail observer to the exact `vision.ai-usage/v1` record.
+## `parseObserverConfiguration`
 
-Streams Wrangler's JSON output through `createSafeTailAccumulator` and exits
-after the first allowlisted scheduled-event classification. The fixed
-`--restore-only` option accepts only reconstructed
-`vision.preview-restore/v1` evidence, ignoring recovery classifications while
-the stream remains open. The fixed `--role-probe-only` option accepts only
-reconstructed `vision.preview-role-probe/v1` evidence and ignores both recovery
-and restore results. The fixed `--calendar-maintenance-only` option accepts
-only reconstructed `vision.calendar-maintenance/v1` evidence from the normal
-15-minute cron. The fixed `--foundation-probe-only` option accepts only
-reconstructed `vision.phase-b-foundation-probe/v1` evidence from a one-minute
-observation. If no accepted result arrives before input closes, it emits a
-fixed closed-vocabulary result. Raw input is never written to standard output.
-Every argument vector other than no option or one exact fixed option exits
-nonzero without output.
+Parses one closed mode plus unique flag/value pairs. It requires canonical
+`--closes-at`, exact mode/expectation agreement, a fault scenario only for
+`fault_expected`, and `--maintenance-scheduled-at` only for the two
+maintenance outcomes.
+
+## `isCanonicalInstant`
+
+Requires the millisecond UTC grammar and round-trip byte identity.
+
+## `isRejectedTerminalEvent`
+
+Recognizes a parsed target-marker line rejected by `createSafeTailAccumulator`
+so a malformed terminal fails immediately without being rendered.
+
+## `runLegacyTail`
+
+Runs only when the executable receives no arguments. It retains the bounded
+recovery diagnostic and its fixed no-event fallback.
+
+## `runObserverTail`
+
+Feeds reconstructed safe records into the configured observer, installs the
+true uniqueness deadline, and never echoes raw input. A closed stdin before a
+valid signal or before successful uniqueness is a failure.
+
+## `complete`
+
+Makes completion idempotent, clears the timer, optionally serializes one
+allowlisted record, destroys stdin, and sets only the success/failure exit
+status.
+
+## `main`
+
+Separates the legacy no-argument path from strict observer commands. Invalid
+argument vectors exit nonzero with empty stdout and stderr.
+
+Observer modes cover the exact safe-tail evidence families. Maintenance is
+bound to `vision.calendar-maintenance/v2` and its requested scheduled tick;
+fault evidence is bound to the requested scenario. Signal jobs return
+immediately, while uniqueness jobs remain open through the caller-supplied
+close instant.
