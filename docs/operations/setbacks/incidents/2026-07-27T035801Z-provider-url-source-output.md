@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T03:58:01Z
-- **Last observed:** 2026-07-29T18:31:14Z
+- **Last observed:** 2026-07-30T03:07:03.8217300Z
 - **Phase/task:** Phase B production-environment protection audit
 - **Environment:** Local Phase B worktree
-- **Version/commit:** `1d6ad12`
+- **Version/commit:** `1d6ad12`; `d24e24d`
 
 ## Symptom
 
@@ -50,7 +50,9 @@ accessed and no external state changed.
 - **Correction:** Use exact path checks that emit only booleans, counts, and
   line numbers for remaining policy inspection.
 - **Prevention:** Treat URL-bearing source files as sensitive-output surfaces
-  during restore work even when their contents are committed.
+  during restore work even when their contents are committed. Run future Git
+  pushes with quiet output and verify the local/remote commit equality
+  separately with boolean-only output.
 - **Owner:** Codex and project owner.
 - **Project-owner disposition:** The standing owner instruction is to record
   every setback in this ledger and continue Phase B. This historical
@@ -67,6 +69,10 @@ interfaces without emitting URL contents.
 The 2026-07-29 Task 7 recurrence was closed by a bounded three-file inspection
 that emitted only file count, URL-literal match count, raw-value count, and a
 pass category. It reported zero raw values.
+
+The 2026-07-30 push recurrence was closed by a separate local/remote reference
+comparison that emitted only `remote_matches_reviewed_head=True` and
+`tracked_worktree_clean=True`.
 
 ## Recurrence history
 
@@ -115,3 +121,14 @@ pass category. It reported zero raw values.
   was involved. Raw source-context inspection of URL-bearing configuration
   stopped; remaining freeze evidence is limited to redacted summaries,
   booleans, counts, and exit statuses.
+- 2026-07-30T03:03:09Z: Recurred when the successful reviewed-branch push used
+  Git's default output, which printed the public repository location. No secret,
+  token, database value, account identifier, callback value, protected row, or
+  provider-service mutation was exposed. The push itself completed as intended.
+  Future pushes use quiet output, followed by a separate boolean-only
+  local/remote reference comparison.
+- 2026-07-30T03:07:03.8217300Z: A read-only acceptance-order audit entered
+  prior-run memory and rendered one previously recorded non-authenticated
+  preview location. The lookup stopped immediately. No secret, token, provider
+  identifier, email, repository content, or external state was accessed or
+  changed. The audit was constrained to repository files afterward.

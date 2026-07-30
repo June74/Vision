@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T19:45:30Z
-- **Last observed:** 2026-07-30T00:16:54.4369723Z
+- **Last observed:** 2026-07-30T03:07:03.8217300Z
 - **Phase/task:** Phase B acceptance instrumentation Task 7 final re-review
 - **Environment:** Local Phase B worktree
-- **Version/commit:** Working changes based on `41d3e74`
+- **Version/commit:** Working changes based on `41d3e74`; `d24e24d`
 
 ## Symptom
 
@@ -85,3 +85,9 @@ facts.
   already-committed public redirect literal during a bounded source trace.
   It stopped immediately; no credential, authorization-bearing value,
   provider-private data, or repository/provider mutation was involved.
+- 2026-07-30T03:07:03.8217300Z: A read-only preflight audit broadly read the
+  deployment-config validator and rendered one tracked public redirect value
+  plus non-secret configuration values. Inspection stopped immediately. No
+  credential, provider identifier, user identifier, network call, repository
+  mutation, or provider mutation was involved. The audit issued no readiness
+  verdict and will not resume with raw source output.

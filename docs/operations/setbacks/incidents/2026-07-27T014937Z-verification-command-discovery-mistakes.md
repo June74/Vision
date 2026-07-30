@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:47:00Z
-- **Last observed:** 2026-07-30T00:43:39.1517844Z
+- **Last observed:** 2026-07-30T03:07:03.8217300Z
 - **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 3
 - **Environment:** Local worktree
-- **Version/commit:** `50569e6`
+- **Version/commit:** `50569e6`; `d24e24d`
 
 ## Symptom
 
@@ -56,6 +56,8 @@ deployment state changed, and no private value was exposed.
 
 At 2026-07-27T01:50Z, the repository's `docs:check` script and
 `git diff --check` both passed.
+
+At 2026-07-30T03:07Z, the same two checks passed after the current recurrence.
 
 ## Recurrence history
 
@@ -174,3 +176,8 @@ path, policy-pattern, and diff-check counts. This closes the recurrence.
   included the large ignored SDD directory and exceeded its local time limit.
   It emitted only truncated path rows, changed no state, and is replaced by a
   search over tracked text paths plus specifically named reports.
+- 2026-07-30T03:07:03.8217300Z: The controller repeated the original reversed
+  package-script name instead of first reading `package.json`. The command
+  stopped with a missing-script category and changed no file or external state.
+  Reading only the declared script names supplied `docs:check`; that command
+  and the repository-configured diff check then exited zero.

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T04:02:13Z
-- **Last observed:** 2026-07-30T02:56:25.4759565Z
+- **Last observed:** 2026-07-30T03:07:03.8217300Z
 - **Phase/task:** Phase B acceptance instrumentation formal final review
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `4420f6d`
@@ -130,3 +130,8 @@ this incident was recorded.
   handoff incident. Documentation validation had exited zero; the warning
   remained expected Windows normalization metadata, and no external state or
   semantic content changed.
+- 2026-07-30T03:07:03.8217300Z: Recurred while verifying the current
+  setback-only documentation delta. The repository-configured documentation
+  validator and diff check both exited zero. The warning remained expected
+  Windows normalization metadata; no formatting rewrite or external action
+  occurred.
