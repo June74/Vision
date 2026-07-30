@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T00:25:50Z
-- **Last observed:** 2026-07-28T00:25:50Z
-- **Phase/task:** Listener-first restore retry Task 2 implementation
+- **Last observed:** 2026-07-30T01:58:36.5078652Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 5
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `ff6a767`
 
@@ -55,3 +55,10 @@ generated dependency links and reported one missing generated directory.
 
 The new incident files and index rows are present, and subsequent preflight
 inspection uses bounded tracked-file queries.
+
+## Recurrence history
+
+- 2026-07-30T01:58:36.5078652Z: Wave 5 followed the generic helper name as
+  though it were repository-relative. The direct help probe failed before any
+  write. Bounded discovery confirmed the helper belongs to the skill directory,
+  while this repository still requires the documented manual fallback.

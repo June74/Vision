@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-07-30T01:27:57.1549724Z
-- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 4
+- **Last observed:** 2026-07-30T02:41:31.5864131Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 5
 - **Environment:** Local managed sandbox
 - **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`
 
@@ -159,5 +159,29 @@ security validation passed.
   because the task-local diagnostic setting was omitted. The optional log
   writes were denied, while the command still exited zero with 1,180
   unit/integration/security tests passed and one intentional skip, 179
+  contract tests passed, 94 Worker tests passed, and typecheck, documentation,
+  build, and release security validation passing.
+- 2026-07-30T02:10:46.3155513Z: Recurred during the wave-5 aggregate gate
+  because the task-local diagnostic setting was omitted. The optional log
+  writes were denied, while the command still exited zero with 1,181
+  unit/integration/security tests passed and one intentional skip, 179
+  contract tests passed, 94 Worker tests passed, and typecheck, documentation,
+  build, and release security validation passing.
+- 2026-07-30T02:28:21.0621287Z: Recurred during the fresh hardened wave-5
+  aggregate because the task-local diagnostic setting was omitted. The
+  optional log writes were denied, while the command still exited zero with
+  1,181 unit/integration/security tests passed and one intentional skip, 179
+  contract tests passed, 94 Worker tests passed, and typecheck, documentation,
+  build, and release security validation passing.
+- 2026-07-30T02:36:01.8815351Z: Recurred during the final path-scoped wave-5
+  aggregate because the task-local diagnostic setting was omitted. The
+  optional log writes were denied, while the command still exited zero with
+  1,181 unit/integration/security tests passed and one intentional skip, 179
+  contract tests passed, 94 Worker tests passed, and typecheck, documentation,
+  build, and release security validation passing.
+- 2026-07-30T02:41:31.5864131Z: Recurred during the definitive post-review
+  wave-5 aggregate because the task-local diagnostic setting was omitted. The
+  optional log writes were denied, while the command still exited zero with
+  1,181 unit/integration/security tests passed and one intentional skip, 179
   contract tests passed, 94 Worker tests passed, and typecheck, documentation,
   build, and release security validation passing.

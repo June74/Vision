@@ -49,7 +49,7 @@ identifiers, or provider-controlled URLs.
 | 2026-07-28 | Task 1 candidate | Local | Permanent calendar-maintenance evidence, strict safe-tail classification, and immutable-ref observer policy | Pass: 755 unit/integration tests with one intentional skip, 179 contract tests, 75 Worker tests, TypeScript, documentation, build, and security scan |
 | 2026-07-29 | Task 6 candidate | Local | Generated candidate isolation, exact operator selection, same-run AI attestation, separate rollback, security scans, and permanent cleanup contract | Pass: typecheck; 1,017 unit/integration/security tests with two intentional skips; 179 contract; 94 Worker; documentation, build, normal preview artifact validation, release security scan, zero migration diff, and zero secret-inventory diff. Fresh live exercises remain pending |
 | 2026-07-29 | `d4de4de` | Local Task 7 freeze | Full focused and aggregate gates, generated normal/foundation/AI/six-fault candidate matrix, safe-tail observer shapes, workflow/client/secret checks, and pre-cleanup residue contract | Pass with a documented plan-wording concern: 1,040 unit/integration/security tests with one intentional skip; 179 contract; 94 Worker; 35 browser; TypeScript, documentation, build, release security scan, normal preview validation, eight generated candidates, nine exact printer shapes, zero migration diff, and zero acceptance-range production delete-call additions. Strict future cleanup mode remains intentionally RED for exactly 48 dedicated and 34 shared temporary paths. No live acceptance or provider mutation was performed |
-| 2026-07-29 | Pending post-push identifier | Local final-fix wave 2 | Parser-backed workflow reachability, post-restore closure, exact AI pricing policy, full-lifetime recovery exclusion, expanded Task 8 inventory, explicit preview/production artifact validation, and nondeploy dry-runs | Pass: 1,170 unit/integration/security tests with one intentional skip; 179 contract; 94 Worker; 35 browser; TypeScript, documentation, build, release security scan, real YAML parsing, 40 immutable action references, preview and production build-validation-attestation-dry-run chains, eight generated candidates, 62 safe-tail assertions, zero migration paths, zero added Google event writes, zero added source delete calls, and exit-zero diff check. Strict cleanup remains intentionally RED while exactly 56 dedicated and 35 shared paths remain. No live acceptance, provider mutation, push, or deployment was performed |
+| 2026-07-29 | Pending post-push identifier | Local final-fix wave 2 | Parser-backed workflow reachability, post-restore closure, exact AI pricing policy, the then-tested candidate-window recovery exclusion, expanded Task 8 inventory, explicit preview/production artifact validation, and nondeploy dry-runs | Pass: 1,170 unit/integration/security tests with one intentional skip; 179 contract; 94 Worker; 35 browser; TypeScript, documentation, build, release security scan, real YAML parsing, 40 immutable action references, preview and production build-validation-attestation-dry-run chains, eight generated candidates, 62 safe-tail assertions, zero migration paths, zero added Google event writes, zero added source delete calls, and exit-zero diff check. The wave-2 build, validation, attestation, and nondeploy dry-run evidence remains valid; its full-lifetime recovery-exclusion claim was incomplete for the 06:05 route and is superseded by wave 3. Strict cleanup remains intentionally RED while exactly 56 dedicated and 35 shared paths remain. No live acceptance, provider mutation, push, or deployment was performed |
 | 2026-07-29 | Pending post-push identifier | Local final-fix wave 3 | Candidate lifetime and AI-attestation admission once at the scheduled entry point before every cron-specific route | Pass: 1,180 unit/integration/security tests with one intentional skip; 179 contract; 94 Worker; 40 scheduled-handler tests; and 35 browser E2E tests. The requested wave-3 preview and production Wrangler dry-runs were safety-denied before process start and were not executed; the wave-2 dry-run result above remains historical. No live acceptance, provider mutation, push, or deployment was performed |
 
 The live preview schema is current through migration 0009. The normal daily
@@ -98,17 +98,22 @@ delayed delivery cannot extend the lifetime. Normal non-candidate dispatch,
 purge, permanent recovery, and cleanup behavior remain unchanged. After the
 acceptance matrix, source cleanup must be reviewed, deployed, and verified
 before any provider cleanup. The
-permanent cleanup contract names the exact 60 dedicated deletions plus 35 shared
+permanent cleanup contract names the exact 60 dedicated deletions plus 39 shared
 active-residue files spanning runtime bindings, observer modes, routes,
 selectors, scheduler branches, references, and tests. The dedicated inventory
 now includes the observer validator and test, acceptance-window script and
 test, rollback-lifecycle validator and test, and both simple/technical
-references for every validator. The shared inventory explicitly retains normal
-health warnings, their tests, and the OAuth `database_unavailable` category. It
-also retains recovery/import tooling, `backups/v1/`, key version 1, permanent
-security scans, maintenance evidence, measured usage warnings, bounded observer
-behavior, and historical plans, setbacks, credential history, and release
-evidence.
+references for every validator. The shared inventory separately maps the active
+cleanup instructions in `cost-review.md`, `environments.md`,
+`incident-runbook.md`, and `secrets.md` by their exact content markers. It
+explicitly retains normal health warnings, their tests, and the OAuth
+`database_unavailable` category. It also retains recovery/import tooling,
+`backups/v1/`, key version 1, permanent security scans, maintenance evidence,
+measured usage warnings, and bounded observer behavior. Operations history and
+evidence, including `restore-drill.md`, credential history, release evidence,
+and the setback tree, is classified separately and remains permanent.
+Operator-only offline restore variables in `backup-and-restore.md` likewise
+remain documented after their temporary Worker inventory is removed.
 
 Before every candidate, the guarded workflow requires live preview health,
 exactly the two normal schedules, and an explicit provider binding array with

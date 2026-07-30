@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:24:05.647183Z
-- **Last observed:** 2026-07-30T01:27:57.1549724Z
-- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 4
+- **Last observed:** 2026-07-30T02:41:31.5864131Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 5
 - **Environment:** Local managed sandbox Worker test pool
 - **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`
 
@@ -120,3 +120,23 @@ documentation, typecheck, and security validation also passed.
   command exited zero with 1,180 unit/integration/security tests passed and one
   intentional skip, 179 contract tests passed, and typecheck, documentation,
   build, and release security validation passing.
+- 2026-07-30T02:10:46.3155513Z: The wave-5 aggregate repeated the same
+  sandbox-only analyzer warning and passed all 94 Worker assertions. The
+  command exited zero with 1,181 unit/integration/security tests passed and one
+  intentional skip, 179 contract tests passed, and typecheck, documentation,
+  build, and release security validation passing.
+- 2026-07-30T02:28:21.0621287Z: The fresh hardened wave-5 aggregate repeated
+  the same sandbox-only analyzer warning and passed all 94 Worker assertions.
+  The command exited zero with 1,181 unit/integration/security tests passed and
+  one intentional skip, 179 contract tests passed, and typecheck,
+  documentation, build, and release security validation passing.
+- 2026-07-30T02:36:01.8815351Z: The final path-scoped wave-5 aggregate
+  repeated the same sandbox-only analyzer warning and passed all 94 Worker
+  assertions. The command exited zero with 1,181 unit/integration/security
+  tests passed and one intentional skip, 179 contract tests passed, and
+  typecheck, documentation, build, and release security validation passing.
+- 2026-07-30T02:41:31.5864131Z: The definitive post-review wave-5 aggregate
+  repeated the same sandbox-only analyzer warning and passed all 94 Worker
+  assertions. The command exited zero with 1,181 unit/integration/security
+  tests passed and one intentional skip, 179 contract tests passed, and
+  typecheck, documentation, build, and release security validation passing.
