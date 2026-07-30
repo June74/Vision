@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T23:54:32Z
-- **Last observed:** 2026-07-30T00:21:28.0141470Z
-- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 3
+- **Last observed:** 2026-07-30T01:36:33.4050170Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 4
 - **Environment:** Local Phase B worktree
 - **Version/commit:** Post-implementation reporting after `8bf5d4a`
 
@@ -57,3 +57,7 @@ the five safe repository-relative paths without misclassification.
 - 2026-07-30T00:19:33.7014177Z: A wave-3 preflight status counter used a
   wildcard instead of a literal `??` prefix test. The displayed paths remained
   accurate, but the category counts were discarded pending a corrected probe.
+- 2026-07-30T01:36:33.4050170Z: A wave-4 ignored-report whitespace probe used
+  PowerShell's backtick notation inside a regex character class, so it counted
+  lines ending in the letter `t`. The false count was discarded; the corrected
+  regex uses `[ \t]+$` and scans the appended wave-4 section explicitly.
