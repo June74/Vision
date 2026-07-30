@@ -191,7 +191,7 @@
 | [SB-20260727-034029-safe-tail-reference-paths-omitted](incidents/2026-07-27T034029Z-safe-tail-reference-paths-omitted.md) | closed | 2026-07-28T02:21:26.5488258Z | Preview database role probe Task 1 full gate | Safe-tail reference updates were omitted |
 | [SB-20260727-035801-provider-url-source-output](incidents/2026-07-27T035801Z-provider-url-source-output.md) | closed | 2026-07-29T18:31:14Z | Phase B production-environment protection audit | Provider URL entered command output |
 | [SB-20260727-040624-task3-security-scope-omitted](incidents/2026-07-27T040624Z-task3-security-scope-omitted.md) | closed | 2026-07-27T04:45:35Z | Phase B restore Task 3 | Task 3 plan omitted required security-boundary files |
-| [SB-20260727-040213-git-line-ending-normalization](incidents/2026-07-27T040213Z-git-line-ending-normalization.md) | closed | 2026-07-30T00:07:26.8684156Z | Phase B acceptance instrumentation Task 7 final re-review package | Git reported line-ending normalization |
+| [SB-20260727-040213-git-line-ending-normalization](incidents/2026-07-27T040213Z-git-line-ending-normalization.md) | closed | 2026-07-30T02:56:25.4759565Z | Phase B acceptance instrumentation formal final review | Git reported line-ending normalization |
 | [SB-20260727-040409-task3-pre-edit-run-interrupted](incidents/2026-07-27T040409Z-task3-pre-edit-run-interrupted.md) | closed | 2026-07-27T04:04:09Z | Phase B restore Task 3 | Task 3 pre-edit run was interrupted |
 | [SB-20260727-040611-client-runtime-binding-classification](incidents/2026-07-27T040611Z-client-runtime-binding-classification.md) | contained | 2026-07-27T04:06:11Z | Phase B restore Task 3 | Temporary runtime secrets were outside the runtime classification |
 | [SB-20260727-045312-promotion-error-test-regression](incidents/2026-07-27T045312Z-promotion-error-test-regression.md) | closed | 2026-07-27T04:53:12Z | Phase B restore Task 3 verification | Older promotion test missed typed-error change |
@@ -236,6 +236,7 @@
 | [SB-20260729-195145-openai-doc-selector-brittle](incidents/2026-07-29T195145Z-openai-doc-selector-brittle.md) | closed | 2026-07-29T19:51:45Z | Phase B consolidated final-fix AI pricing contract | Official model-page selector depended on one search hierarchy |
 | [SB-20260729-232134-final-fix-aggregate-timeout](incidents/2026-07-29T232134Z-final-fix-aggregate-timeout.md) | closed | 2026-07-29T23:21:34.4164787Z | Phase B acceptance instrumentation Task 7 final-fix wave 2 | Aggregate gate process budget was too short |
 | [SB-20260730-001654-select-string-recurse-unsupported](incidents/2026-07-30T001654Z-select-string-recurse-unsupported.md) | closed | 2026-07-30T00:16:54.4369723Z | Phase B acceptance instrumentation Task 7 final re-review | Select-String rejected a recurse parameter |
+| [SB-20260730-025511-final-review-handoff-read-contract](incidents/2026-07-30T025511Z-final-review-handoff-read-contract.md) | closed | 2026-07-30T02:55:11.7230018Z | Phase B acceptance instrumentation formal final review | Final review handoff blocked its own file reads |
 
 ## Legacy history
 

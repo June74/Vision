@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T04:02:13Z
-- **Last observed:** 2026-07-30T00:07:26.8684156Z
-- **Phase/task:** Phase B acceptance instrumentation Task 7 final re-review package
+- **Last observed:** 2026-07-30T02:56:25.4759565Z
+- **Phase/task:** Phase B acceptance instrumentation formal final review
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `4420f6d`
 
@@ -124,5 +124,9 @@ this incident was recorded.
   or semantic content changed.
 - 2026-07-30T00:07:26.8684156Z: Recurred while staging the final-review
   setback records. Documentation validation had exited zero; the warning
+  remained expected Windows normalization metadata, and no external state or
+  semantic content changed.
+- 2026-07-30T02:56:25.4759565Z: Recurred while staging the final formal-review
+  handoff incident. Documentation validation had exited zero; the warning
   remained expected Windows normalization metadata, and no external state or
   semantic content changed.
