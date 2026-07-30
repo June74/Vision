@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T19:44:17Z
-- **Last observed:** 2026-07-29T23:35:05.5454395Z
-- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
+- **Last observed:** 2026-07-30T00:05:36.3524779Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final re-review
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `41d3e74` base with tracked setback recurrences
 
@@ -55,3 +55,8 @@ The same command returned a clean worktree at the required base commit.
   user-excludes warning. Git still returned complete safe aggregate path and
   pattern counts plus an exit-zero diff check; no repository or persistent
   Git configuration changed.
+- 2026-07-30T00:05:36.3524779Z: The whole-branch reviewer reproduced the same
+  warning during a read-only clean-status check, and the Task 7 reviewer
+  reproduced it while confirming the package header mismatch. Git returned the
+  expected branch state, neither package diff was inspected, and no repository
+  or provider state changed.

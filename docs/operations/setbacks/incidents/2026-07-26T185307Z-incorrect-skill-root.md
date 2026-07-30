@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T18:53:07.263429Z
-- **Last observed:** 2026-07-29T21:48:32.2142290Z
-- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
+- **Last observed:** 2026-07-30T00:04:59.1318088Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final re-review
 - **Environment:** Local Codex workspace
 - **Version/commit:** `codex/phase-b-foundation`
 
@@ -81,3 +81,8 @@ The correct skill file was read successfully in the same run.
   lookup failed before implementation work, the catalog-mapped path was then
   read successfully, no private data entered the output, and repository and
   provider state were unchanged.
+- 2026-07-30T00:04:59.1318088Z: The independent Task 7 reviewer used the
+  `r0` root for two catalog-declared `r1` skills. Both read-only lookups
+  reported missing paths before the reviewer opened the immutable package.
+  Review paused, no project or provider state changed, and the reviewer was
+  redirected to expand the declared root aliases.

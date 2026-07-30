@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T02:42:45Z
-- **Last observed:** 2026-07-28T02:44:00Z
-- **Phase/task:** Preview database role probe Task 2 handoff
+- **Last observed:** 2026-07-30T00:05:36.3524779Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final re-review
 - **Environment:** Local worktree
 - **Version/commit:** `e2d85ce0f63de1f29fffe0368fcf5d4e06cdf121`
 
@@ -64,3 +64,12 @@ and no private value was exposed.
 
 At 2026-07-28T02:42:45Z, the exact reviewed commit resolved locally and both
 local `HEAD` and `origin/codex/phase-b-foundation` matched it.
+
+## Recurrence history
+
+- 2026-07-30T00:05:36.3524779Z: The controller again manually expanded a
+  seven-character commit prefix when dispatching both final reviewers. The
+  reviewers independently resolved the real object ID while still at the
+  package header and stopped before reading the diff. Both reviews paused, no
+  provider or repository state changed, and future reviewer prompts use only a
+  Git-resolved full object ID.
