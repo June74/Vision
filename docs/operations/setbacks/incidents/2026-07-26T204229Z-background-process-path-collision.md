@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:42:29.7633250Z
-- **Last observed:** 2026-07-26T23:07:19Z
+- **Last observed:** 2026-07-30T18:56:43.8315896Z
 - **Phase/task:** Phase B clean-room verification
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** `9f5a0d5`
@@ -65,3 +65,9 @@ background quality gate ran to completion.
 - 2026-07-26T23:07:19Z: Recurred when `Start-Process` was mistakenly reused
   for the complete release-gate reproduction. No child process started; the
   retry uses the documented lower-level Windows process API.
+- 2026-07-30T18:56:43.8315896Z: Recurred when the Phase B closure baseline
+  mistakenly reused `Start-Process` for the unit suite. The duplicate `Path`
+  category occurred before process creation, the returned process identifier
+  was null, and no test or provider action started. The retry uses the
+  resumable execution tool instead of PowerShell's environment-copying
+  launcher.

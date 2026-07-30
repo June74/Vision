@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T20:54:20Z
-- **Last observed:** 2026-07-29T22:34:16.5141180Z
-- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
+- **Last observed:** 2026-07-30T18:29:01.6004342Z
+- **Phase/task:** Phase B live-acceptance implementation planning
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `d27859e`
 
@@ -97,3 +97,24 @@ continues using discovered files only.
 - 2026-07-29T22:34:16.5141180Z: The recurrence note lookup then omitted the
   tracked filename's `Z` suffix. No state changed; the exact path from the
   setback index was used immediately.
+- 2026-07-30T04:46:27.3042061Z: Recurred when the controller assumed the
+  setback helper lived under the repository's `scripts/` directory. The
+  read-only lookup changed no state. The helper was then discovered under the
+  installed skill directory before invocation; future skill helpers are
+  discovered from the selected skill folder rather than inferred in the repo.
+- 2026-07-30T04:47:45.5331812Z: Recurred when a retention-test inspection used
+  a conventional purge-test filename that is not tracked. No state changed.
+  `git ls-files` then returned the exact backup, retention, and purge test
+  inventory before the corrected read.
+- 2026-07-30T05:52:54.3627451Z: Recurred when planning guessed a workflow-input
+  validator filename instead of discovering the tracked validator first. The
+  read-only lookup changed no repository or external state. The validator is
+  discovered from `git ls-files` before the workflow-input contract is read.
+- 2026-07-30T18:28:47.667028Z: Recurred when the setback helper was invoked
+  from a guessed repository-relative `scripts/` path even though it belongs to
+  the installed setback skill. The read-only invocation changed no state. The
+  helper path was then discovered from the already-selected skill directory.
+- 2026-07-30T18:29:01.6004342Z: The first correction used a broad recursive
+  repository search that entered dependency links and emitted read errors.
+  No file or external state changed. Discovery was narrowed to the exact
+  installed skill directory and succeeded.

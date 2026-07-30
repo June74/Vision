@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T18:43:38Z
-- **Last observed:** 2026-07-27T18:43:38Z
+- **Last observed:** 2026-07-30T18:04:44.3067546Z
 - **Phase/task:** Phase B restore Task 4 setback logging
 - **Environment:** Local repository documentation
 - **Version/commit:** Uncommitted live-acceptance evidence update
@@ -52,6 +52,14 @@ value or provider-controlled content was involved.
 The corrected index resolves to the existing incident; the full documentation
 check remains required before commit.
 
+The recurrence correction resolved all 237 indexed incident links with zero
+missing targets.
+
 ## Recurrence history
 
 - 2026-07-27T18:43:38Z: First observed and corrected before commit.
+- 2026-07-30T18:04:44.3067546Z: Recurred when the line-ending incident's
+  timestamp was updated and its unchanged `2026-07-27T040213Z` link was
+  accidentally transcribed as `2026-07-30T040213Z`. The incident file itself
+  was not renamed. The exact existing filename was restored before staging,
+  commit, or push.

@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T02:32:27Z
-- **Last observed:** 2026-07-29T03:40:00Z
-- **Phase/task:** Phase B acceptance instrumentation Task 5 safe-tail RED
+- **Last observed:** 2026-07-30T18:45:10.2706640Z
+- **Phase/task:** Phase B live-acceptance implementation-plan self-review
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `36f9df2`
 
@@ -107,3 +107,31 @@ The retry must modify only the intended plan paragraph and pass
 - 2026-07-29T03:40:00Z: A large safe-tail reference restoration patch had one
   malformed added line. It was rejected atomically; no documentation changed.
   The retry uses concise exact-heading restoration patches.
+- 2026-07-30T04:59:44.7681467Z: Recurred when one combined implementation-plan
+  consistency patch used a context block that did not exactly match the
+  generated Task 5 text. The patch was rejected atomically and changed no file.
+  The current Task 4 and Task 5 sections were reread; retries use small exact
+  hunks.
+- 2026-07-30T05:22:14.1104599Z: Recurred when a combined AI observer-window
+  plan patch used stale Task 4 line wrapping. The patch was rejected atomically
+  and changed no file. The retry uses exact bounded reads and small hunks.
+- 2026-07-30T17:37:28.5621632Z: Recurred when the controller implementation
+  paragraph was patched with context from before the new RED step insertion.
+  The patch was rejected atomically and changed no file. The retry uses the
+  exact current bounded lines and a shorter anchor.
+- 2026-07-30T18:05:11.1098965Z: Recurred when a combined setback correction
+  used the incident heading as the index title. The patch was rejected
+  atomically and changed no file. The exact current index rows were read before
+  separate minimal retries.
+- 2026-07-30T18:05:57.8089561Z: Recurred when two independently verified index
+  rows were still combined in one patch and the second hunk was rejected. The
+  patch was atomic and changed no file. Each row is retried as its own
+  one-line patch.
+- 2026-07-30T18:38:54.9161685Z: Recurred when a combined maintenance-binding
+  plan patch used one stale wrapped controller sentence. The patch was rejected
+  atomically and changed no file. The exact current sections were reread and
+  the correction is split into small verified hunks.
+- 2026-07-30T18:45:10.2706640Z: Recurred when a combined design-spec
+  consistency patch assumed one paragraph wrapped differently. The patch was
+  rejected atomically and changed no file. All remaining spec corrections use
+  one exact hunk per patch.

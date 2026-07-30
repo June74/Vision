@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T19:48:39Z
-- **Last observed:** 2026-07-30T00:59:58.8828765Z
+- **Last observed:** 2026-07-30T18:02:55.9410304Z
 - **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 3
 - **Environment:** Local Phase B worktree
 - **Version/commit:** Working changes based on `e3c1272`
@@ -44,8 +44,16 @@ repository mutation, or provider action occurred.
 - 2026-07-30T00:59:58.8828765Z: The retry used a task-specific counter and
   returned the complete JSON audit with zero strict sensitive-value matches,
   closing the recurrence.
+- 2026-07-30T18:02:55.9410304Z: A read-only plan code-block parser reused
+  `$error`, which collides case-insensitively with PowerShell's read-only
+  automatic `$Error` variable. The helper stopped after its first parsed block;
+  no plan, repository, provider, or private state changed. The retry uses
+  `$parseIssue`.
 
 ## Verification and related work
 
 Closure of action pinning still requires four successful official-ref results
 and workflow tests asserting the immutable references.
+
+The corrected plan helper used task-specific parser variable names and parsed
+all 29 PowerShell code blocks with zero syntax errors.

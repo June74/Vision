@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T03:58:01Z
-- **Last observed:** 2026-07-30T03:07:03.8217300Z
-- **Phase/task:** Phase B production-environment protection audit
+- **Last observed:** 2026-07-30T04:53:23.7871797Z
+- **Phase/task:** Phase B live-acceptance implementation planning
 - **Environment:** Local Phase B worktree
-- **Version/commit:** `1d6ad12`; `d24e24d`
+- **Version/commit:** `1d6ad12`; `d24e24d`; `c8879b2`
 
 ## Symptom
 
@@ -132,3 +132,13 @@ comparison that emitted only `remote_matches_reviewed_head=True` and
   preview location. The lookup stopped immediately. No secret, token, provider
   identifier, email, repository content, or external state was accessed or
   changed. The audit was constrained to repository files afterward.
+- 2026-07-30T04:44:15.1970641Z: Recurred when a broad source read used for
+  live-acceptance plan mapping printed one checked-in callback location. The
+  read stopped immediately. No credential, token, account identifier, database
+  value, protected row, or provider action was involved. Remaining mapping uses
+  redacted structure, bounded counts, function names, and line numbers only.
+- 2026-07-30T04:53:23.7871797Z: A read-only AI planning subagent reported that
+  one broad excerpt printed checked-in configuration literals. It contained no
+  runtime credential, token, account identifier, database value, protected row,
+  or provider action. The subagent stopped broad reads; controller mapping uses
+  redacted structure and bounded output.

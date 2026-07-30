@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T19:44:17Z
-- **Last observed:** 2026-07-30T00:05:36.3524779Z
+- **Last observed:** 2026-07-30T17:35:24.7550264Z
 - **Phase/task:** Phase B acceptance instrumentation Task 7 final re-review
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `41d3e74` base with tracked setback recurrences
@@ -60,3 +60,7 @@ The same command returned a clean worktree at the required base commit.
   reproduced it while confirming the package header mismatch. Git returned the
   expected branch state, neither package diff was inspected, and no repository
   or provider state changed.
+- 2026-07-30T17:35:24.7550264Z: The resumed plan-review status check repeated
+  the same warning. Git still returned the complete modified/untracked path
+  list, branch name, and exact commit; exact-path staging remains the
+  prevention, and no provider or persistent Git configuration changed.

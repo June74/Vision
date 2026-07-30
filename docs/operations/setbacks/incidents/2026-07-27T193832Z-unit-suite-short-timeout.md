@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T19:38:32Z
-- **Last observed:** 2026-07-29T18:34:29Z
+- **Last observed:** 2026-07-30T18:36:59.5276737Z
 - **Phase/task:** Phase B restore Task 4 diagnosis
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `9bbc4be`
@@ -50,3 +50,13 @@ test-coverage incident; the timeout workaround itself is verified.
 The exact Task 7 unit project rerun completed with exit zero: 78 files passed,
 1 file was intentionally skipped, 1,040 tests passed, and 1 test was
 intentionally skipped. This closes the recurrence.
+- 2026-07-30T18:36:59.5276737Z: Recurred during the Phase B closure baseline
+  when the complete unit project exceeded a 120-second command-wrapper
+  deadline before Vitest emitted any final result. No assertion failure,
+  repository change, provider access, or external mutation was observed. The
+  unchanged suite will be rerun with a resumable hidden-process poll and a
+  longer process budget.
+- 2026-07-30T19:00:40Z: The resumable rerun completed with exit zero after
+  180.3 seconds: 86 test files and 1,181 tests passed, with one file and one
+  test intentionally skipped. This verifies the timeout workaround and closes
+  the baseline recurrence.

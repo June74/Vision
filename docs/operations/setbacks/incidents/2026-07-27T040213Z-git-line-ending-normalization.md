@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T04:02:13Z
-- **Last observed:** 2026-07-30T03:07:03.8217300Z
+- **Last observed:** 2026-07-30T18:08:07.1088786Z
 - **Phase/task:** Phase B acceptance instrumentation formal final review
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `4420f6d`
@@ -135,3 +135,10 @@ this incident was recorded.
   validator and diff check both exited zero. The warning remained expected
   Windows normalization metadata; no formatting rewrite or external action
   occurred.
+- 2026-07-30T18:04:07.7440842Z: Recurred during the live-acceptance plan freeze
+  check across edited plan/spec and setback Markdown. Documentation validation
+  and `git diff --check` exited zero; no formatting rewrite, provider action, or
+  semantic-content change was performed.
+- 2026-07-30T18:08:07.1088786Z: Recurred during the final post-review plan
+  whitespace check after exact-path staging instructions were added. The check
+  exited zero; the warnings remained Windows normalization metadata only.
