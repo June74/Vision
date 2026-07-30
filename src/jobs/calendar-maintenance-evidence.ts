@@ -1,6 +1,7 @@
 /** Permanent value-free evidence for the normal calendar-maintenance cron. */
 export interface CalendarMaintenanceEvidence {
-  readonly evidenceType: "vision.calendar-maintenance/v1";
+  readonly evidenceType: "vision.calendar-maintenance/v2";
+  readonly maintenanceScheduledAt: string;
   readonly outcome: "succeeded" | "failed";
   readonly category:
     | "none"
@@ -27,6 +28,7 @@ export interface CalendarMaintenanceEvidenceEntry {
 
 /** Reconstructs the closed five-key evidence object from the two terminal sides. */
 export function createCalendarMaintenanceEvidence(
+  maintenanceScheduledAt: Date,
   repairOutcome: CalendarMaintenanceRepairOutcome,
   renewalOutcome: CalendarMaintenanceRenewalOutcome,
 ): CalendarMaintenanceEvidence {
@@ -40,13 +42,29 @@ export function createCalendarMaintenanceEvidence(
         : renewalFailed
           ? "renewal_failed"
           : "none";
+  const scheduledAt = canonicalScheduledInstant(maintenanceScheduledAt);
   return Object.freeze({
-    evidenceType: "vision.calendar-maintenance/v1",
+    evidenceType: "vision.calendar-maintenance/v2",
+    maintenanceScheduledAt: scheduledAt,
     outcome: repairFailed || renewalFailed ? "failed" : "succeeded",
     category,
     repairOutcome,
     renewalOutcome,
   });
+}
+
+/** Converts the admitted scheduled controller time to canonical UTC. */
+function canonicalScheduledInstant(value: Date): string {
+  let instant: number;
+  try {
+    instant = Date.prototype.getTime.call(value);
+  } catch {
+    throw new Error("Calendar maintenance evidence is invalid.");
+  }
+  if (!Number.isFinite(instant)) {
+    throw new Error("Calendar maintenance evidence is invalid.");
+  }
+  return new Date(instant).toISOString();
 }
 
 /** Emits only the fixed maintenance action and already-closed evidence. */

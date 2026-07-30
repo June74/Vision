@@ -5,6 +5,7 @@ import {
   closePreviewRollback,
   createPreviewCandidateIntent,
   createPreviewRollbackRestoreProof,
+  derivePreviewBindingProfile,
   readLatestPreviewCandidateRunRef,
   validateCompletedPreviewLifecycleRun,
 } from "../../../scripts/validate-preview-rollback-lifecycle";
@@ -35,6 +36,64 @@ function closureProof() {
 }
 
 describe("preview rollback lifecycle", () => {
+  it.each([
+    ["deploy_role_probe", "restore_pair"],
+    ["deploy_restore", "restore_pair"],
+    ["deploy_foundation", "normal"],
+    ["deploy_sync_suppression", "normal"],
+    ["deploy_ai", "normal"],
+    ["deploy_fault", "normal"],
+  ] as const)("derives %s binding profile without accepting caller selection", (operation, profile) => {
+    expect(derivePreviewBindingProfile(operation)).toBe(profile);
+  });
+
+  it("allows only same-commit role closure to restore and restore closure to cleanup", () => {
+    const roleIntent = createPreviewCandidateIntent({
+      candidateCommit: COMMIT,
+      operation: "deploy_role_probe",
+    });
+    const restoreIntent = createPreviewCandidateIntent({
+      candidateCommit: COMMIT,
+      operation: "deploy_restore",
+    });
+    expect(roleIntent).toMatchObject({
+      candidateCommit: COMMIT,
+      candidateOperation: "deploy_role_probe",
+      bindingProfile: "restore_pair",
+    });
+    expect(restoreIntent).toMatchObject({
+      candidateOperation: "deploy_restore",
+      bindingProfile: "restore_pair",
+    });
+    expect(() =>
+      assertPreviewCandidateIntent({
+        candidateIntent: roleIntent,
+        expectedCommit: COMMIT,
+        nextOperation: "deploy_restore",
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertPreviewCandidateIntent({
+        candidateIntent: roleIntent,
+        expectedCommit: OTHER_COMMIT,
+        nextOperation: "deploy_restore",
+      }),
+    ).toThrow("Preview rollback lifecycle proof is invalid.");
+    expect(() =>
+      assertPreviewCandidateIntent({
+        candidateIntent: restoreIntent,
+        expectedCommit: COMMIT,
+        nextOperation: "deploy_foundation",
+      }),
+    ).toThrow("Preview rollback lifecycle proof is invalid.");
+    expect(() =>
+      assertPreviewCandidateIntent({
+        candidateIntent: restoreIntent,
+        expectedCommit: COMMIT,
+        nextOperation: "verify_cleanup",
+      }),
+    ).not.toThrow();
+  });
   it("binds candidate intent, restored commit, normal provider proof, post-restore authenticated reads, and closure", () => {
     const intent = createPreviewCandidateIntent(COMMIT);
     const restored = restoreProof();

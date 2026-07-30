@@ -48,8 +48,77 @@ describe("preview observer state validation", () => {
     "foundation_probe",
     "ai_usage",
     "preview_fault",
+    "role_probe",
   ] as const)("accepts only the exact active %s listener step", (evidence) => {
     expect(() => validatePreviewObserverState(validState(evidence))).not.toThrow();
+  });
+
+  it.each(["sync_suppression", "restore"] as const)(
+    "requires signal plus uniqueness listeners for %s",
+    (evidence) => {
+      const input = validState(evidence);
+      input.jobsResponse.jobs = [
+        {
+          name: `Capture ${evidence} signal`,
+          status: "in_progress",
+          conclusion: null,
+          steps: [
+            {
+              name: LISTENER_STEP,
+              status: "in_progress",
+              conclusion: null,
+            },
+          ],
+        },
+        {
+          name: `Capture ${evidence} uniqueness`,
+          status: "in_progress",
+          conclusion: null,
+          steps: [
+            {
+              name: LISTENER_STEP,
+              status: "in_progress",
+              conclusion: null,
+            },
+          ],
+        },
+      ];
+      expect(() => validatePreviewObserverState(input)).not.toThrow();
+      input.jobsResponse.jobs.pop();
+      expect(() => validatePreviewObserverState(input)).toThrow(
+        "Preview observer state is invalid.",
+      );
+    },
+  );
+
+  it("requires maintenance uniqueness only at the exact canonical scheduled instant", () => {
+    const input: any = {
+      ...validState("calendar_maintenance"),
+      maintenanceScheduledAt: "2026-07-30T18:15:00.000Z",
+    };
+    input.jobsResponse.jobs = [
+      {
+        name: "Capture calendar_maintenance uniqueness",
+        status: "in_progress",
+        conclusion: null,
+        maintenanceScheduledAt: "2026-07-30T18:15:00.000Z",
+        steps: [
+          {
+            name: LISTENER_STEP,
+            status: "in_progress",
+            conclusion: null,
+          },
+        ],
+      },
+    ];
+    expect(() => validatePreviewObserverState(input)).not.toThrow();
+    input.jobsResponse.jobs.push({
+      ...input.jobsResponse.jobs[0]!,
+      name: "Capture calendar_maintenance signal",
+    });
+    expect(() => validatePreviewObserverState(input)).toThrow(
+      "Preview observer state is invalid.",
+    );
   });
 
   it.each([

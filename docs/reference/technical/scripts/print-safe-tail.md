@@ -1,5 +1,14 @@
 # `scripts/print-safe-tail.ts`
 
+## `createPreviewTailObserver`
+Separates signals from uniqueness closure.
+## `result`
+Builds the safe result.
+## `push`
+Rejects invalid terminals.
+## `finish`
+Requires one terminal.
+
 ## `--ai-usage-only`
 
 Filters the safe-tail observer to the exact `vision.ai-usage/v1` record.

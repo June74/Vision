@@ -36,6 +36,11 @@ restore succeeds, read-back verification succeeds, and the normal Worker is
 redeployed. A pending credential-log row is added only when configuration
 actually occurs; preparing this local candidate does not create one.
 
+The guarded workflow validates only the two names and their `secret_text`
+provider types. It never reads, renders, or transports either value. The
+role-probe and restore lifecycle derives this `restore_pair` profile from the
+admitted operation; callers cannot select it directly.
+
 ## Technical controls
 
 - Bind a secret to the narrowest GitHub environment and require review for `production`.

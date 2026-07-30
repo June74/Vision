@@ -25,7 +25,7 @@ import {
   BACKUP_OBJECT_PREFIX,
   readVerifiedStoredBackup,
   type BackupObjectHead,
-  type BackupObjectStore,
+  type BackupObjectCatalogReader,
 } from "./create-daily-backup";
 import { validatedBackupObjectDate } from "./purge-expired-backups";
 
@@ -64,7 +64,7 @@ export interface TemporaryRestoreEvidence {
 
 /** Injected storage and database boundaries for the temporary preview-only engine. */
 export interface TemporaryPreviewRestoreDependencies {
-  readonly store: BackupObjectStore;
+  readonly store: BackupObjectCatalogReader;
   readonly backupKey: BackupEncryptionKey;
   readonly attemptStore: RestoreAttemptStore;
   readonly clearTarget: (
@@ -239,7 +239,7 @@ export async function runTemporaryPreviewRestore(
 
 /** Lists every fixed-prefix page and selects the sole validated newest UTC-date object. */
 async function selectBackupCandidate(
-  store: BackupObjectStore,
+  store: BackupObjectCatalogReader,
   expectedKeyVersion: number,
 ): Promise<SelectedBackupCandidate> {
   let cursor: string | undefined;

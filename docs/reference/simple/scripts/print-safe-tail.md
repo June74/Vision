@@ -1,5 +1,14 @@
 # print-safe-tail
 
+## `createPreviewTailObserver`
+Creates a signal or uniqueness observer.
+## `result`
+Returns its fixed state.
+## `push`
+Admits one terminal.
+## `finish`
+Closes at the deadline.
+
 ## `--ai-usage-only`
 
 Prints only one exact AI-usage acceptance record.

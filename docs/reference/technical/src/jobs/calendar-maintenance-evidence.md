@@ -1,4 +1,6 @@
 # `src/jobs/calendar-maintenance-evidence.ts`
+## `canonicalScheduledInstant`
+Requires canonical scheduled UTC.
 
 Defines the closed `vision.calendar-maintenance/v1` schema used by the
 production scheduler and safe-tail observer. The schema carries only outcome

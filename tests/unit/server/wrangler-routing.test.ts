@@ -11,6 +11,7 @@ import {
 } from "../../../scripts/prepare-preview-acceptance-deploy-config";
 import {
   validateNormalPreviewProviderState,
+  validateTemporaryRestorePairProviderState,
   validatePreviewAcceptanceDeployConfig,
   validatePreviewDeployConfig,
 } from "../../../scripts/validate-preview-deploy-config";
@@ -34,6 +35,8 @@ const ACCEPTANCE_SELECTORS = [
   "foundation_probe",
   "ai_usage",
   "sync_suppression",
+  "role_probe",
+  "restore",
 ] as const;
 const REVIEWED_COMMIT = "a".repeat(40);
 const NORMAL_PREVIEW_PROVIDER_BINDINGS = [
@@ -754,7 +757,74 @@ describe("preview acceptance workflow input admission", () => {
     ).toThrow(/acceptance workflow selection/i);
   });
 
-  it("keeps the exact nine-value selector vocabulary frozen", () => {
+  it("atomically admits current-workflow role/restore and maintenance contexts", () => {
+    const role = context({
+      version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
+      kind: "deploy_role_probe",
+      reviewedCommit: REVIEWED_COMMIT,
+      ...candidateLifecycle,
+    });
+    const restore = context({
+      version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
+      kind: "deploy_restore",
+      reviewedCommit: REVIEWED_COMMIT,
+      ...candidateLifecycle,
+      restoreAdmissionGate: "verified",
+    });
+    const maintenance = context({
+      version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
+      kind: "observe",
+      reviewedCommit: REVIEWED_COMMIT,
+      evidenceFamily: "calendar_maintenance",
+      expectedOutcome: "maintenance_repair_reserved",
+      maintenanceScheduledAt: "2026-07-30T18:15:00.000Z",
+    });
+
+    expect(
+      parsePreviewAcceptanceContext(
+        role.kind,
+        serializePreviewAcceptanceContext(role),
+      ),
+    ).toMatchObject({ operation: "deploy_role_probe", selector: "role_probe" });
+    expect(
+      parsePreviewAcceptanceContext(
+        restore.kind,
+        serializePreviewAcceptanceContext(restore),
+      ),
+    ).toMatchObject({ operation: "deploy_restore", selector: "restore" });
+    expect(
+      parsePreviewAcceptanceContext(
+        maintenance.kind,
+        serializePreviewAcceptanceContext(maintenance),
+      ).context,
+    ).toEqual(maintenance);
+  });
+
+  it("rejects restore gates and maintenance timestamps on every other context", () => {
+    expect(() =>
+      parsePreviewAcceptanceContext(
+        "deploy_role_probe" as never,
+        JSON.stringify({
+          version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
+          kind: "deploy_role_probe",
+          reviewedCommit: REVIEWED_COMMIT,
+          ...candidateLifecycle,
+          restoreAdmissionGate: "verified",
+        }),
+      ),
+    ).toThrow(/acceptance workflow selection/i);
+    expect(() =>
+      parsePreviewAcceptanceContext(
+        "observe",
+        JSON.stringify({
+          ...validContexts[1],
+          maintenanceScheduledAt: "2026-07-30T18:15:00.000Z",
+        }),
+      ),
+    ).toThrow(/acceptance workflow selection/i);
+  });
+
+  it("keeps the exact eleven-value selector vocabulary frozen", () => {
     const selected = ACCEPTANCE_SELECTORS.map((selector) =>
       preparePreviewAcceptanceDeployConfig({
         normalConfig: previewArtifact(),
@@ -766,7 +836,7 @@ describe("preview acceptance workflow input admission", () => {
       }),
     );
 
-    expect(selected).toHaveLength(9);
+    expect(selected).toHaveLength(11);
   });
 });
 
@@ -814,6 +884,43 @@ describe("normal preview artifact validation", () => {
 });
 
 describe("normal preview live provider-state validation", () => {
+  it("admits only the exact two temporary secret names and types for the restore pair", () => {
+    const normal = normalProviderState();
+    const settings = structuredClone(normal.settingsResponse) as {
+      result: { bindings: unknown[] };
+    };
+    settings.result.bindings.push(
+      { name: "PREVIEW_RESTORE_DATABASE_URL", type: "secret_text" },
+      { name: "PREVIEW_RESTORE_TARGET_ID", type: "secret_text" },
+    );
+    expect(() =>
+      validateTemporaryRestorePairProviderState({
+        ...normal,
+        settingsResponse: settings,
+      }),
+    ).not.toThrow();
+
+    for (const bindings of [
+      settings.result.bindings.slice(0, -1),
+      [
+        ...settings.result.bindings.slice(0, -2),
+        { name: "PREVIEW_RESTORE_DATABASE_URL", type: "plain_text" },
+        { name: "PREVIEW_RESTORE_TARGET_ID", type: "secret_text" },
+      ],
+      [
+        ...settings.result.bindings,
+        { name: "PREVIEW_RESTORE_TARGET_ID", type: "secret_text" },
+      ],
+      [...settings.result.bindings, { name: "EXTRA", type: "secret_text" }],
+    ]) {
+      expect(() =>
+        validateTemporaryRestorePairProviderState({
+          ...normal,
+          settingsResponse: { result: { bindings } },
+        }),
+      ).toThrow("Temporary restore-pair provider state is invalid.");
+    }
+  });
   it("accepts healthy runtime, exactly two normal schedules, and the exact complete binding inventory", () => {
     expect(() =>
       validateNormalPreviewProviderState(normalProviderState()),

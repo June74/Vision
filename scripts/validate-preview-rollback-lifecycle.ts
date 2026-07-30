@@ -16,6 +16,15 @@ const ISO_INSTANT_PATTERN =
 export interface PreviewCandidateIntent {
   readonly evidenceType: "vision.preview-candidate-intent/v1";
   readonly candidateCommit: string;
+  readonly candidateOperation?: string;
+  readonly bindingProfile?: "normal" | "restore_pair";
+}
+
+/** Derives the provider binding profile from an admitted operation. */
+export function derivePreviewBindingProfile(operation: unknown): "normal" | "restore_pair" {
+  if (operation === "deploy_role_probe" || operation === "deploy_restore") return "restore_pair";
+  if (["deploy_foundation", "deploy_sync_suppression", "deploy_ai", "deploy_fault"].includes(String(operation))) return "normal";
+  throw new Error(INVALID);
 }
 
 export interface PreviewRollbackRestoreProof {
@@ -43,6 +52,18 @@ export interface PreviewRollbackClosureProof {
 export function createPreviewCandidateIntent(
   candidateCommit: unknown,
 ): PreviewCandidateIntent {
+  const candidateRecord = plainObject(candidateCommit);
+  if (candidateRecord) {
+    const commit = ownDataValue(candidateRecord, "candidateCommit");
+    const operation = ownDataValue(candidateRecord, "operation");
+    if (!validCommit(commit) || typeof operation !== "string") throw new Error(INVALID);
+    return Object.freeze({
+      evidenceType: "vision.preview-candidate-intent/v1",
+      candidateCommit: commit,
+      candidateOperation: operation,
+      bindingProfile: derivePreviewBindingProfile(operation),
+    });
+  }
   if (!validCommit(candidateCommit)) throw new Error(INVALID);
   return Object.freeze({
     evidenceType: "vision.preview-candidate-intent/v1",
@@ -54,12 +75,16 @@ export function createPreviewCandidateIntent(
 export function assertPreviewCandidateIntent(input: {
   readonly candidateIntent: unknown;
   readonly expectedCommit: unknown;
+  readonly nextOperation?: unknown;
 }): void {
   const intent = parseCandidateIntent(input.candidateIntent);
   if (
     intent === undefined ||
     !validCommit(input.expectedCommit) ||
-    intent.candidateCommit !== input.expectedCommit
+    intent.candidateCommit !== input.expectedCommit ||
+    (input.nextOperation !== undefined &&
+      !((intent.candidateOperation === "deploy_role_probe" && input.nextOperation === "deploy_restore") ||
+        (intent.candidateOperation === "deploy_restore" && input.nextOperation === "verify_cleanup")))
   ) {
     throw new Error(INVALID);
   }
@@ -296,7 +321,8 @@ function parseCandidateIntent(
 ): PreviewCandidateIntent | undefined {
   const record = plainObject(input);
   if (
-    !exactKeys(record, ["candidateCommit", "evidenceType"]) ||
+    !(exactKeys(record, ["candidateCommit", "evidenceType"]) ||
+      exactKeys(record, ["bindingProfile", "candidateCommit", "candidateOperation", "evidenceType"])) ||
     ownDataValue(record, "evidenceType") !==
       "vision.preview-candidate-intent/v1" ||
     !validCommit(ownDataValue(record, "candidateCommit"))

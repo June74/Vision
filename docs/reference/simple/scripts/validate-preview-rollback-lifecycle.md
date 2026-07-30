@@ -1,4 +1,6 @@
 # validate-preview-rollback-lifecycle
+## `derivePreviewBindingProfile`
+Derives normal or restore-pair bindings.
 
 Enforces the candidate, rollback, signed-in recheck, and closure sequence across
 separate preview workflow runs. Its files contain only hashes, timestamps,

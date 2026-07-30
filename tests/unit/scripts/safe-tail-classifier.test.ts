@@ -8,6 +8,7 @@ import {
   classifyTemporaryPreviewRoleProbeEvidence,
   classifyTemporaryRestoreEvidence,
   createSafeTailAccumulator,
+  matchesPreviewAcceptanceExpectation,
 } from "../../../scripts/safe-tail-classifier";
 import { BACKUP_TABLES } from "../../../src/domain/backup/manifest";
 import type {
@@ -98,7 +99,8 @@ function maintenanceEvidence(
   const repairFailed = repairOutcome === "failed";
   const renewalFailed = renewalOutcome === "failed";
   return {
-    evidenceType: "vision.calendar-maintenance/v1",
+    evidenceType: "vision.calendar-maintenance/v2",
+    maintenanceScheduledAt: "2026-07-30T18:15:00.000Z",
     outcome: repairFailed || renewalFailed ? "failed" : "succeeded",
     category:
       repairFailed && renewalFailed
@@ -468,6 +470,7 @@ describe("safe Cloudflare tail classification", () => {
       expect(Object.keys(classified ?? {})).toEqual([
         "category",
         "evidenceType",
+        "maintenanceScheduledAt",
         "outcome",
         "renewalOutcome",
         "repairOutcome",
@@ -516,7 +519,8 @@ describe("safe Cloudflare tail classification", () => {
   it("rejects maintenance accessors, symbols, hidden keys, and non-plain prototypes without invoking them", () => {
     let getterCalls = 0;
     const accessor = {
-      evidenceType: "vision.calendar-maintenance/v1",
+      evidenceType: "vision.calendar-maintenance/v2",
+      maintenanceScheduledAt: "2026-07-30T18:15:00.000Z",
       outcome: "succeeded",
       category: "none",
       get repairOutcome() {
@@ -1116,5 +1120,94 @@ describe("safe Cloudflare tail classification", () => {
         ]),
       ),
     ).toBeNull();
+  });
+});
+
+describe("closed preview acceptance outcomes", () => {
+  it("accepts only the exact synchronization-suppression terminal", () => {
+    expect(
+      matchesPreviewAcceptanceExpectation(
+        {
+          evidenceType: "vision.sync-suppression/v1",
+          outcome: "suppressed",
+        },
+        { kind: "sync_suppressed" },
+      ),
+    ).toBe(true);
+    expect(
+      matchesPreviewAcceptanceExpectation(
+        {
+          evidenceType: "vision.sync-suppression/v1",
+          outcome: "suppressed",
+          extra: true,
+        } as never,
+        { kind: "sync_suppressed" },
+      ),
+    ).toBe(false);
+  });
+
+  it("requires the requested fault scenario and its deterministic terminal state", () => {
+    expect(
+      matchesPreviewAcceptanceExpectation(
+        {
+          evidenceType: "vision.preview-fault/v1",
+          scenario: "r2_upload_failed",
+          outcome: "failed",
+          category: "backup_storage_write_failed",
+        },
+        { kind: "fault_expected", scenario: "r2_upload_failed" },
+      ),
+    ).toBe(true);
+    expect(
+      matchesPreviewAcceptanceExpectation(
+        {
+          evidenceType: "vision.preview-fault/v1",
+          scenario: "r2_upload_failed",
+          outcome: "succeeded",
+          category: "none",
+        },
+        { kind: "fault_expected", scenario: "r2_upload_failed" },
+      ),
+    ).toBe(false);
+  });
+
+  it("requires exact family success invariants instead of structural validity", () => {
+    expect(
+      matchesPreviewAcceptanceExpectation(
+        {
+          evidenceType: "vision.preview-role-probe/v1",
+          outcome: "succeeded",
+          category: "none",
+          roleMatches: true,
+        },
+        { kind: "role_probe_succeeded" },
+      ),
+    ).toBe(true);
+    expect(
+      matchesPreviewAcceptanceExpectation(
+        {
+          evidenceType: "vision.preview-restore/v1",
+          outcome: "failed",
+          category: "restore_unknown_failure",
+        },
+        { kind: "restore_succeeded" },
+      ),
+    ).toBe(false);
+    expect(
+      matchesPreviewAcceptanceExpectation(
+        {
+          evidenceType: "vision.calendar-maintenance/v2",
+          maintenanceScheduledAt: "2026-07-30T18:15:00.000Z",
+          outcome: "succeeded",
+          category: "none",
+          repairOutcome: "no_work",
+          renewalOutcome: "completed",
+        },
+        {
+          kind: "maintenance_repair_reserved",
+          maintenanceScheduledAt: "2026-07-30T18:15:00.000Z",
+        },
+      ),
+    ).toBe(false);
   });
 });

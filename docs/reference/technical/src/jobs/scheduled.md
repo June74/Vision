@@ -1,4 +1,6 @@
 # `src/jobs/scheduled.ts`
+## `temporaryRestore`
+Keeps restore behind admission.
 
 ## `createWithWriter`
 

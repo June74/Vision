@@ -15,6 +15,8 @@ on:
           - deploy_sync_suppression
           - deploy_ai
           - deploy_fault
+          - deploy_role_probe
+          - deploy_restore
           - rollback
           - close_rollback
           - verify_cleanup
@@ -49,6 +51,8 @@ jobs:
       fault_scenario: ${{ steps.acceptance-selection.outputs.fault_scenario }}
       evidence_family: ${{ steps.acceptance-selection.outputs.evidence_family }}
       selector: ${{ steps.acceptance-selection.outputs.selector }}
+      restore_admission_gate: ${{ steps.acceptance-selection.outputs.restore_admission_gate }}
+      restoreAdmissionGate: ${{ steps.acceptance-selection.outputs.restoreAdmissionGate }}
       observer_dispatch_started_at: ${{ steps.acceptance-selection.outputs.observer_dispatch_started_at }}
       observer_dispatch_completed_at: ${{ steps.acceptance-selection.outputs.observer_dispatch_completed_at }}
     steps:
@@ -122,6 +126,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
+          ACCEPTANCE_OPERATION: ${{ inputs.acceptance_operation }}
         run: |
           if [[ -z "$CLOUDFLARE_API_TOKEN" ]]; then
             echo "## Preview deployment blocked" >> "$GITHUB_STEP_SUMMARY"
@@ -158,8 +163,8 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
 
   tail:
-    name: Capture ${{ needs.selection.outputs.evidence_family }} safe scheduled outcome
-    if: ${{ inputs.acceptance_operation == 'observe' && inputs.configure_ai_budget == false }}
+    name: Capture ${{ needs.selection.outputs.evidence_family }} signal
+    if: ${{ inputs.acceptance_operation == 'observe' && inputs.configure_ai_budget == false && !contains(fromJSON('["calendar_maintenance","sync_suppression","restore","role_probe"]'), needs.selection.outputs.evidence_family) }}
     needs: selection
     runs-on: ubuntu-latest
     environment: preview
@@ -200,9 +205,145 @@ jobs:
           timeout 16m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |
             pnpm exec tsx scripts/print-safe-tail.ts "$evidence_flag"
 
+  suppression_signal:
+    name: Capture sync_suppression signal
+    if: ${{ inputs.acceptance_operation == 'observe' && needs.selection.outputs.evidence_family == 'sync_suppression' }}
+    needs: selection
+    runs-on: ubuntu-latest
+    environment: preview
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with: { ref: "${{ github.sha }}" }
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Print only allowlisted acceptance evidence
+        run: |
+          set +o pipefail
+          timeout 16m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |
+            pnpm exec tsx scripts/print-safe-tail.ts --sync-suppression-signal-only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
+
+  restore_signal:
+    name: Capture restore signal
+    if: ${{ inputs.acceptance_operation == 'observe' && needs.selection.outputs.evidence_family == 'restore' }}
+    needs: selection
+    runs-on: ubuntu-latest
+    environment: preview
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with: { ref: "${{ github.sha }}" }
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Print only allowlisted acceptance evidence
+        run: |
+          set +o pipefail
+          timeout 16m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |
+            pnpm exec tsx scripts/print-safe-tail.ts --restore-signal-only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
+
+  role_signal:
+    name: Capture role_probe signal
+    if: ${{ inputs.acceptance_operation == 'observe' && needs.selection.outputs.evidence_family == 'role_probe' }}
+    needs: selection
+    runs-on: ubuntu-latest
+    environment: preview
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with: { ref: "${{ github.sha }}" }
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Print only allowlisted acceptance evidence
+        run: |
+          set +o pipefail
+          timeout 16m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |
+            pnpm exec tsx scripts/print-safe-tail.ts --role-probe-only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
+
+  suppression_uniqueness:
+    name: Capture sync_suppression uniqueness
+    if: ${{ inputs.acceptance_operation == 'observe' && needs.selection.outputs.evidence_family == 'sync_suppression' }}
+    needs: selection
+    runs-on: ubuntu-latest
+    environment: preview
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ github.sha }}
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Print only allowlisted acceptance evidence
+        run: |
+          set +o pipefail
+          timeout 3m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |
+            pnpm exec tsx scripts/print-safe-tail.ts --sync-suppression-only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
+
+  restore_uniqueness:
+    name: Capture restore uniqueness
+    if: ${{ inputs.acceptance_operation == 'observe' && needs.selection.outputs.evidence_family == 'restore' }}
+    needs: selection
+    runs-on: ubuntu-latest
+    environment: preview
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with: { ref: "${{ github.sha }}" }
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Print only allowlisted acceptance evidence
+        run: |
+          set +o pipefail
+          timeout 3m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |
+            pnpm exec tsx scripts/print-safe-tail.ts --restore-only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
+
+  maintenance_uniqueness:
+    name: Capture calendar_maintenance uniqueness
+    if: ${{ inputs.acceptance_operation == 'observe' && needs.selection.outputs.evidence_family == 'calendar_maintenance' }}
+    needs: selection
+    runs-on: ubuntu-latest
+    environment: preview
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with: { ref: "${{ github.sha }}" }
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Print only allowlisted acceptance evidence
+        run: |
+          set +o pipefail
+          timeout 3m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |
+            pnpm exec tsx scripts/print-safe-tail.ts --calendar-maintenance-only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
+
   deploy_acceptance_candidate:
     name: Deploy one generated acceptance candidate
-    if: ${{ inputs.acceptance_operation == 'deploy_foundation' || inputs.acceptance_operation == 'deploy_sync_suppression' || inputs.acceptance_operation == 'deploy_ai' || inputs.acceptance_operation == 'deploy_fault' }}
+    if: ${{ inputs.acceptance_operation == 'deploy_foundation' || inputs.acceptance_operation == 'deploy_sync_suppression' || inputs.acceptance_operation == 'deploy_ai' || inputs.acceptance_operation == 'deploy_fault' || inputs.acceptance_operation == 'deploy_role_probe' || inputs.acceptance_operation == 'deploy_restore' }}
     needs: [selection, verify]
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -289,7 +430,7 @@ jobs:
         run: |
           observer_runs_file="$(mktemp)"
           gh api "repos/$GITHUB_REPOSITORY/actions/workflows/preview.yml/runs?event=workflow_dispatch&per_page=100" > "$observer_runs_file"
-          OBSERVER_RUN_ID="$(jq -er \
+          LISTENER_WORKFLOW_NUMBER="$(jq -er \
             --arg started "$OBSERVER_DISPATCH_STARTED_AT" \
             --arg completed "$OBSERVER_DISPATCH_COMPLETED_AT" \
             'def instant_millis:
@@ -303,20 +444,23 @@ jobs:
               select($created_ms >= $started_ms and $created_ms <= $completed_ms)] |
              if length == 1 then .[0].id | tostring else error("observer selection failed") end' \
             "$observer_runs_file")"
-          if ! [[ "$OBSERVER_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]; then
+          if ! [[ "$LISTENER_WORKFLOW_NUMBER" =~ ^[1-9][0-9]{0,19}$ ]]; then
             exit 1
           fi
           case "$ACCEPTANCE_OPERATION" in
             deploy_foundation) expected_observer_evidence="foundation_probe" ;;
             deploy_ai) expected_observer_evidence="ai_usage" ;;
             deploy_fault) expected_observer_evidence="preview_fault" ;;
+            deploy_role_probe) expected_observer_evidence="role_probe" ;;
+            deploy_restore) expected_observer_evidence="restore" ;;
+            deploy_sync_suppression) expected_observer_evidence="sync_suppression" ;;
             *) exit 1 ;;
           esac
           run_file="$(mktemp)"
           jobs_file="$(mktemp)"
           trap 'rm -f "$observer_runs_file" "$run_file" "$jobs_file"' EXIT
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$OBSERVER_RUN_ID" > "$run_file"
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$OBSERVER_RUN_ID/jobs" > "$jobs_file"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$LISTENER_WORKFLOW_NUMBER" > "$run_file"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$LISTENER_WORKFLOW_NUMBER/jobs" > "$jobs_file"
           jq -e --arg sha "$VERIFIED_SHA" '
             .event == "workflow_dispatch" and
             .status == "in_progress" and
@@ -332,12 +476,18 @@ jobs:
             --jobs-file "$jobs_file" \
             --sha "$VERIFIED_SHA" \
             --evidence "$expected_observer_evidence"
-          echo "run_id=$OBSERVER_RUN_ID" >> "$GITHUB_OUTPUT"
+          pnpm exec tsx scripts/resolve-preview-observer-run.ts \
+            --run-file "$run_file" \
+            --jobs-file "$jobs_file" \
+            --sha "$VERIFIED_SHA" \
+            --evidence "$expected_observer_evidence"
+          echo "run_id=$LISTENER_WORKFLOW_NUMBER" >> "$GITHUB_OUTPUT"
       - name: Verify live preview is normal before candidate deployment
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
+          ACCEPTANCE_OPERATION: ${{ inputs.acceptance_operation }}
         run: |
           health_file="$(mktemp)"
           schedules_file="$(mktemp)"
@@ -351,8 +501,13 @@ jobs:
           curl --fail --silent --show-error \
             --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/vision-preview/settings" > "$settings_file"
-          pnpm exec tsx scripts/validate-preview-deploy-config.ts \
-            --verify-provider-state "$health_file" "$schedules_file" "$settings_file"
+          if [[ "$ACCEPTANCE_OPERATION" == "deploy_role_probe" || "$ACCEPTANCE_OPERATION" == "deploy_restore" ]]; then
+            pnpm exec tsx scripts/validate-preview-deploy-config.ts \
+              --verify-restore-pair-provider-state "$health_file" "$schedules_file" "$settings_file"
+          else
+            pnpm exec tsx scripts/validate-preview-deploy-config.ts \
+              --verify-provider-state "$health_file" "$schedules_file" "$settings_file"
+          fi
       - name: Build normal preview artifact
         run: pnpm build
         env:
@@ -401,10 +556,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ACCEPTANCE_OPERATION: ${{ inputs.acceptance_operation }}
-          OBSERVER_RUN_ID: ${{ steps.observer-state.outputs.run_id }}
+          LISTENER_WORKFLOW_NUMBER: ${{ steps.observer-state.outputs.run_id }}
           VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}
         run: |
-          if ! [[ "$OBSERVER_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]; then
+          if ! [[ "$LISTENER_WORKFLOW_NUMBER" =~ ^[1-9][0-9]{0,19}$ ]]; then
             exit 1
           fi
           case "$ACCEPTANCE_OPERATION" in
@@ -416,8 +571,8 @@ jobs:
           run_file="$(mktemp)"
           jobs_file="$(mktemp)"
           trap 'rm -f "$run_file" "$jobs_file"' EXIT
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$OBSERVER_RUN_ID" > "$run_file"
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$OBSERVER_RUN_ID/jobs" > "$jobs_file"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$LISTENER_WORKFLOW_NUMBER" > "$run_file"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$LISTENER_WORKFLOW_NUMBER/jobs" > "$jobs_file"
           jq -e --arg sha "$VERIFIED_SHA" '
             .event == "workflow_dispatch" and
             .status == "in_progress" and

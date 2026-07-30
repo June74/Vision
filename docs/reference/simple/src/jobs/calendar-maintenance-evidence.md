@@ -1,4 +1,6 @@
 # `src/jobs/calendar-maintenance-evidence.ts`
+## `canonicalScheduledInstant`
+Records scheduled UTC.
 
 Creates one permanent, value-free result for the normal 15-minute calendar
 maintenance schedule.

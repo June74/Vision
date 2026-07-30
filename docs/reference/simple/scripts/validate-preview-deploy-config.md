@@ -1,4 +1,6 @@
 # validate-preview-deploy-config
+## `validateTemporaryRestorePairProviderState`
+Checks the restore-pair names.
 
 Checks the generated Cloudflare deployment file before preview deployment.
 It stops deployment unless the file selects the preview environment, contains

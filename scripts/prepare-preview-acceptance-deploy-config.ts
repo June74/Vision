@@ -36,6 +36,8 @@ export const PREVIEW_ACCEPTANCE_OPERATIONS = Object.freeze([
   "deploy_sync_suppression",
   "deploy_ai",
   "deploy_fault",
+  "deploy_role_probe",
+  "deploy_restore",
   "rollback",
   "close_rollback",
   "verify_cleanup",
@@ -60,7 +62,9 @@ interface PreviewAcceptanceCandidateContext
     | "deploy_foundation"
     | "deploy_sync_suppression"
     | "deploy_ai"
-    | "deploy_fault";
+    | "deploy_fault"
+    | "deploy_role_probe"
+    | "deploy_restore";
   readonly authenticatedReadsGate: "verified";
   readonly candidateRunRef: string;
   readonly rollbackClosureRunRef: string;
@@ -76,23 +80,36 @@ export type PreviewAcceptanceContext =
         | "foundation_probe"
         | "preview_fault"
         | "ai_usage"
-        | "sync_suppression";
+        | "sync_suppression"
+        | "role_probe"
+        | "restore"
+        | "calendar_maintenance";
       readonly expectedOutcome:
         | "foundation_succeeded"
         | "fault_expected"
         | "ai_succeeded"
-        | "sync_suppressed";
+        | "sync_suppressed"
+        | "role_probe_succeeded"
+        | "restore_succeeded"
+        | "maintenance_succeeded"
+        | "maintenance_repair_reserved";
       readonly faultScenario?: TemporaryPreviewFaultScenario;
+      readonly maintenanceScheduledAt?: string;
     })
   | (PreviewAcceptanceCandidateContext & {
       readonly kind:
         | "deploy_foundation"
         | "deploy_sync_suppression"
-        | "deploy_ai";
+        | "deploy_ai"
+        | "deploy_role_probe";
     })
   | (PreviewAcceptanceCandidateContext & {
       readonly kind: "deploy_fault";
       readonly faultScenario: TemporaryPreviewFaultScenario;
+    })
+  | (PreviewAcceptanceCandidateContext & {
+      readonly kind: "deploy_restore";
+      readonly restoreAdmissionGate: "verified";
     })
   | (PreviewAcceptanceContextBase & {
       readonly kind: "rollback";
@@ -165,6 +182,10 @@ export function parsePreviewAcceptanceContext(
             ? "ai_usage"
             : context.kind === "deploy_fault"
               ? context.faultScenario
+              : context.kind === "deploy_role_probe"
+                ? "role_probe"
+                : context.kind === "deploy_restore"
+                  ? "restore"
               : undefined;
     return Object.freeze({
       operation,
@@ -208,6 +229,10 @@ function canonicalPreviewAcceptanceContext(
       const faultExpected =
         evidenceFamily === "preview_fault" &&
         expectedOutcome === "fault_expected";
+      const maintenanceExpected =
+        evidenceFamily === "calendar_maintenance" &&
+        (expectedOutcome === "maintenance_succeeded" ||
+          expectedOutcome === "maintenance_repair_reserved");
       exactKeys(
         record,
         faultExpected
@@ -219,6 +244,15 @@ function canonicalPreviewAcceptanceContext(
               "expectedOutcome",
               "faultScenario",
             ]
+          : maintenanceExpected
+            ? [
+                "version",
+                "kind",
+                "reviewedCommit",
+                "evidenceFamily",
+                "expectedOutcome",
+                "maintenanceScheduledAt",
+              ]
           : [
               "version",
               "kind",
@@ -235,14 +269,21 @@ function canonicalPreviewAcceptanceContext(
         (evidenceFamily === "ai_usage" &&
           expectedOutcome === "ai_succeeded") ||
         (evidenceFamily === "sync_suppression" &&
-          expectedOutcome === "sync_suppressed");
+          expectedOutcome === "sync_suppressed") ||
+        (evidenceFamily === "role_probe" &&
+          expectedOutcome === "role_probe_succeeded") ||
+        (evidenceFamily === "restore" &&
+          expectedOutcome === "restore_succeeded") ||
+        maintenanceExpected;
       const faultScenario = dataValue(record, "faultScenario");
+      const maintenanceScheduledAt = dataValue(record, "maintenanceScheduledAt");
       if (
         !matchingOutcome ||
         (faultExpected &&
           !TEMPORARY_PREVIEW_FAULT_SCENARIOS.includes(
             faultScenario as TemporaryPreviewFaultScenario,
-          ))
+          )) ||
+        (maintenanceExpected && !isCanonicalInstant(maintenanceScheduledAt))
       ) {
         throw new Error(INVALID_SELECTION);
       }
@@ -255,12 +296,17 @@ function canonicalPreviewAcceptanceContext(
         ...(faultExpected
           ? { faultScenario: faultScenario as TemporaryPreviewFaultScenario }
           : {}),
+        ...(maintenanceExpected
+          ? { maintenanceScheduledAt: maintenanceScheduledAt as string }
+          : {}),
       }) as PreviewAcceptanceContext;
     }
     case "deploy_foundation":
     case "deploy_sync_suppression":
     case "deploy_ai":
-    case "deploy_fault": {
+    case "deploy_fault":
+    case "deploy_role_probe":
+    case "deploy_restore": {
       exactKeys(record, [
         "version",
         "kind",
@@ -271,6 +317,7 @@ function canonicalPreviewAcceptanceContext(
         "observerDispatchStartedAt",
         "observerDispatchCompletedAt",
         ...(kind === "deploy_fault" ? ["faultScenario"] : []),
+        ...(kind === "deploy_restore" ? ["restoreAdmissionGate"] : []),
       ]);
       const authenticatedReadsGate = dataValue(
         record,
@@ -295,6 +342,7 @@ function canonicalPreviewAcceptanceContext(
       const closedPair =
         isRunRef(candidateRunRef) && isRunRef(rollbackClosureRunRef);
       const faultScenario = dataValue(record, "faultScenario");
+      const restoreAdmissionGate = dataValue(record, "restoreAdmissionGate");
       const orderedDispatchInterval =
         isCanonicalInstant(observerDispatchStartedAt) &&
         isCanonicalInstant(observerDispatchCompletedAt) &&
@@ -307,7 +355,8 @@ function canonicalPreviewAcceptanceContext(
         (kind === "deploy_fault" &&
           !TEMPORARY_PREVIEW_FAULT_SCENARIOS.includes(
             faultScenario as TemporaryPreviewFaultScenario,
-          ))
+          )) ||
+        (kind === "deploy_restore" && restoreAdmissionGate !== "verified")
       ) {
         throw new Error(INVALID_SELECTION);
       }
@@ -322,6 +371,9 @@ function canonicalPreviewAcceptanceContext(
         observerDispatchCompletedAt,
         ...(kind === "deploy_fault"
           ? { faultScenario: faultScenario as TemporaryPreviewFaultScenario }
+          : {}),
+        ...(kind === "deploy_restore"
+          ? { restoreAdmissionGate: "verified" as const }
           : {}),
       }) as PreviewAcceptanceContext;
     }
@@ -618,6 +670,8 @@ async function main(): Promise<void> {
           `fault_scenario=${faultScenario}`,
           `evidence_family=${evidenceFamily}`,
           `selector=${selection.selector ?? ""}`,
+          `restore_admission_gate=${selection.context.kind === "deploy_restore" ? selection.context.restoreAdmissionGate : ""}`,
+          `restoreAdmissionGate=${selection.context.kind === "deploy_restore" ? selection.context.restoreAdmissionGate : ""}`,
           `observer_dispatch_started_at=${candidateContext?.observerDispatchStartedAt ?? ""}`,
           `observer_dispatch_completed_at=${candidateContext?.observerDispatchCompletedAt ?? ""}`,
           "",

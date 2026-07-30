@@ -11,6 +11,9 @@ const EVIDENCE = new Set<PreviewObserverEvidence>([
   "foundation_probe",
   "ai_usage",
   "preview_fault",
+  "role_probe",
+  "sync_suppression",
+  "restore",
 ]);
 
 /** Evidence families with a dedicated preview listener job. */
@@ -18,7 +21,10 @@ export type PreviewObserverEvidence =
   | "calendar_maintenance"
   | "foundation_probe"
   | "ai_usage"
-  | "preview_fault";
+  | "preview_fault"
+  | "role_probe"
+  | "sync_suppression"
+  | "restore";
 
 /** Closed input needed to bind one workflow run to its exact active listener. */
 export interface PreviewObserverState {
@@ -26,6 +32,7 @@ export interface PreviewObserverState {
   readonly evidence: PreviewObserverEvidence;
   readonly runResponse: unknown;
   readonly jobsResponse: unknown;
+  readonly maintenanceScheduledAt?: string;
 }
 
 /** Rejects any run, job, or listener step that is not the exact active observer. */
@@ -37,10 +44,19 @@ export function validatePreviewObserverState(
   const jobs = Array.isArray(jobsResponse?.jobs)
     ? jobsResponse.jobs
     : [];
-  const expectedJobName = `Capture ${input.evidence} safe scheduled outcome`;
+  const expectedJobNames =
+    input.evidence === "sync_suppression" || input.evidence === "restore"
+      ? [`Capture ${input.evidence} signal`, `Capture ${input.evidence} uniqueness`]
+      : input.evidence === "calendar_maintenance"
+        ? input.maintenanceScheduledAt === undefined
+          ? ["Capture calendar_maintenance safe scheduled outcome"]
+          : ["Capture calendar_maintenance uniqueness"]
+        : input.evidence === "role_probe"
+          ? ["Capture role_probe signal", "Capture role_probe safe scheduled outcome"]
+          : [`Capture ${input.evidence} safe scheduled outcome`];
   const matchingJobs = jobs.filter((job) => {
     const candidate = plainObject(job);
-    return candidate?.name === expectedJobName;
+    return expectedJobNames.includes(String(candidate?.name));
   });
   const job = plainObject(matchingJobs[0]);
   const steps = Array.isArray(job?.steps) ? job.steps : [];
@@ -64,7 +80,11 @@ export function validatePreviewObserverState(
         run.path.startsWith(".github/workflows/preview.yml@refs/")
       )
     ) ||
-    matchingJobs.length !== 1 ||
+    jobs.length !== (input.evidence === "sync_suppression" || input.evidence === "restore" ? 2 : 1) ||
+    matchingJobs.length !== (input.evidence === "sync_suppression" || input.evidence === "restore" ? 2 : 1) ||
+    (input.evidence === "calendar_maintenance" &&
+      input.maintenanceScheduledAt !== undefined &&
+      job?.maintenanceScheduledAt !== input.maintenanceScheduledAt) ||
     job?.status !== "in_progress" ||
     job.conclusion !== null ||
     matchingSteps.length !== 1 ||

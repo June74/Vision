@@ -1,6 +1,7 @@
 /** Parses only closed recovery and temporary-restore evidence from Wrangler JSON. */
 import { BACKUP_TABLES } from "../src/domain/backup/manifest";
 import type { CalendarMaintenanceEvidence } from "../src/jobs/calendar-maintenance-evidence";
+import type { TemporarySyncSuppressionEvidence } from "../src/server/webhooks/temporary-preview-sync-suppression";
 import type {
   TemporaryRestoreEvidence,
   TemporaryRestoreFailureCategory,
@@ -62,7 +63,28 @@ export type SafeTailResult =
   | TemporaryPreviewRoleProbeEvidence
   | PhaseBFoundationProbeEvidence
   | PhaseBAiUsageEvidence
-  | TemporaryPreviewFaultEvidence;
+  | TemporaryPreviewFaultEvidence
+  | TemporarySyncSuppressionEvidence;
+
+/** Closed acceptance result required after structural evidence classification. */
+export type PreviewObserverAcceptanceExpectation =
+  | { readonly kind: "sync_suppressed" }
+  | { readonly kind: "foundation_succeeded" }
+  | {
+      readonly kind: "fault_expected";
+      readonly scenario: TemporaryPreviewFaultScenario;
+    }
+  | { readonly kind: "role_probe_succeeded" }
+  | { readonly kind: "restore_succeeded" }
+  | {
+      readonly kind: "maintenance_succeeded";
+      readonly maintenanceScheduledAt: string;
+    }
+  | {
+      readonly kind: "maintenance_repair_reserved";
+      readonly maintenanceScheduledAt: string;
+    }
+  | { readonly kind: "ai_succeeded" };
 
 const FAILURE_MARKERS = Object.freeze([
   ["Backup creation failed.", "backup_creation_failed"],
@@ -121,6 +143,7 @@ const ROLE_PROBE_KEYS = Object.freeze([
 const CALENDAR_MAINTENANCE_KEYS = Object.freeze([
   "category",
   "evidenceType",
+  "maintenanceScheduledAt",
   "outcome",
   "renewalOutcome",
   "repairOutcome",
@@ -187,7 +210,7 @@ const TEMPORARY_PREVIEW_FAULT_KEYS = Object.freeze([
 const TERMINAL_IDENTITIES = Object.freeze([
   {
     action: "calendar.maintenance",
-    evidenceType: "vision.calendar-maintenance/v1",
+    evidenceType: "vision.calendar-maintenance/v2",
     kind: "calendar_maintenance",
   },
   {
@@ -214,6 +237,11 @@ const TERMINAL_IDENTITIES = Object.freeze([
     action: TEMPORARY_PREVIEW_FAULT_ACTION,
     evidenceType: "vision.preview-fault/v1",
     kind: "temporary_preview_fault",
+  },
+  {
+    action: "acceptance.sync-suppression",
+    evidenceType: "vision.sync-suppression/v1",
+    kind: "sync_suppression",
   },
 ] as const);
 type TerminalKind = (typeof TERMINAL_IDENTITIES)[number]["kind"];
@@ -299,6 +327,12 @@ export function classifySafeTailLine(line: string): SafeTailResult | null {
     return cron === "temporary_recovery" ? restore.evidence : null;
   }
   if (restore.seen) return null;
+
+  const suppression = locateSyncSuppressionEvidence(tail.logs);
+  if (suppression.evidence) {
+    return cron === "temporary_recovery" ? suppression.evidence : null;
+  }
+  if (suppression.seen) return null;
 
   const marker = findFailureMarker(candidate);
   const outcome = normalizeOutcome(tail.outcome);
@@ -517,7 +551,8 @@ export function classifyCalendarMaintenanceEvidence(
   if (
     !evidence ||
     !hasExactKeys(evidence, CALENDAR_MAINTENANCE_KEYS) ||
-    evidence.evidenceType !== "vision.calendar-maintenance/v1"
+    evidence.evidenceType !== "vision.calendar-maintenance/v2" ||
+    !canonicalInstant(evidence.maintenanceScheduledAt)
   ) {
     return null;
   }
@@ -558,11 +593,130 @@ export function classifyCalendarMaintenanceEvidence(
   }
   return Object.freeze({
     category: expectedCategory,
-    evidenceType: "vision.calendar-maintenance/v1",
+    evidenceType: "vision.calendar-maintenance/v2",
+    maintenanceScheduledAt: evidence.maintenanceScheduledAt as string,
     outcome: expectedOutcome,
     renewalOutcome,
     repairOutcome,
   });
+}
+
+/** Requires semantic acceptance success after exact structural classification. */
+export function matchesPreviewAcceptanceExpectation(
+  evidence: SafeTailResult,
+  expectation: PreviewObserverAcceptanceExpectation,
+): boolean {
+  const candidate = snapshotOwnEnumerableData(evidence);
+  if (!candidate) return false;
+  switch (expectation.kind) {
+    case "sync_suppressed":
+      return (
+        hasExactKeys(candidate, ["evidenceType", "outcome"] as const) &&
+        candidate.evidenceType === "vision.sync-suppression/v1" &&
+        candidate.outcome === "suppressed"
+      );
+    case "foundation_succeeded":
+      return (
+        candidate.evidenceType === "vision.phase-b-foundation-probe/v1" &&
+        candidate.outcome === "succeeded" &&
+        candidate.category === "none"
+      );
+    case "fault_expected": {
+      const expected = createTemporaryPreviewFaultEvidence(expectation.scenario);
+      return JSON.stringify(candidate) === JSON.stringify(expected);
+    }
+    case "role_probe_succeeded":
+      return (
+        candidate.evidenceType === "vision.preview-role-probe/v1" &&
+        candidate.outcome === "succeeded" &&
+        candidate.category === "none" &&
+        candidate.roleMatches === true
+      );
+    case "restore_succeeded":
+      return (
+        candidate.evidenceType === "vision.preview-restore/v1" &&
+        candidate.outcome === "succeeded" &&
+        candidate.category === "none"
+      );
+    case "maintenance_succeeded":
+      return (
+        candidate.evidenceType === "vision.calendar-maintenance/v2" &&
+        candidate.maintenanceScheduledAt === expectation.maintenanceScheduledAt &&
+        candidate.outcome === "succeeded" &&
+        candidate.category === "none" &&
+        candidate.repairOutcome !== "failed" &&
+        candidate.renewalOutcome !== "failed"
+      );
+    case "maintenance_repair_reserved":
+      return (
+        candidate.evidenceType === "vision.calendar-maintenance/v2" &&
+        candidate.maintenanceScheduledAt === expectation.maintenanceScheduledAt &&
+        candidate.outcome === "succeeded" &&
+        candidate.category === "none" &&
+        candidate.repairOutcome === "reserved" &&
+        candidate.renewalOutcome !== "failed"
+      );
+    case "ai_succeeded":
+      return (
+        candidate.evidenceType === "vision.ai-usage/v1" &&
+        candidate.outcome === "succeeded" &&
+        candidate.category === "none"
+      );
+  }
+}
+
+/** Locates one exact synchronization-suppression terminal. */
+function locateSyncSuppressionEvidence(candidate: unknown): {
+  readonly seen: boolean;
+  readonly evidence: TemporarySyncSuppressionEvidence | null;
+} {
+  if (!Array.isArray(candidate)) return { seen: false, evidence: null };
+  let seen = false;
+  let evidence: TemporarySyncSuppressionEvidence | null = null;
+  let invalid = false;
+  for (const logCandidate of candidate) {
+    const log = snapshotOwnEnumerableData(logCandidate);
+    if (!log || !Array.isArray(log.message)) continue;
+    for (const messageCandidate of log.message) {
+      const message = snapshotOwnEnumerableData(messageCandidate);
+      if (!message) continue;
+      const body = snapshotOwnEnumerableData(message.evidence);
+      const like =
+        message.action === "acceptance.sync-suppression" ||
+        body?.evidenceType === "vision.sync-suppression/v1";
+      if (!like) continue;
+      if (seen) invalid = true;
+      seen = true;
+      if (
+        message.action !== "acceptance.sync-suppression" ||
+        !hasExactKeys(message, ["action", "evidence"] as const) ||
+        !body ||
+        !hasExactKeys(body, ["evidenceType", "outcome"] as const) ||
+        body.evidenceType !== "vision.sync-suppression/v1" ||
+        body.outcome !== "suppressed"
+      ) {
+        invalid = true;
+        continue;
+      }
+      evidence = Object.freeze({
+        evidenceType: "vision.sync-suppression/v1",
+        outcome: "suppressed",
+      });
+    }
+  }
+  return { seen, evidence: seen && !invalid ? evidence : null };
+}
+
+/** Recognizes one canonical millisecond UTC instant. */
+function canonicalInstant(value: unknown): value is string {
+  if (
+    typeof value !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value)
+  ) {
+    return false;
+  }
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString() === value;
 }
 
 /** Reconstructs one exact closed role-probe result and rejects all shape or value drift. */

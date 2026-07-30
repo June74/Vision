@@ -10,6 +10,7 @@ const NOW = new Date("2026-07-24T16:15:00.000Z");
 const EVIDENCE_KEYS = [
   "category",
   "evidenceType",
+  "maintenanceScheduledAt",
   "outcome",
   "renewalOutcome",
   "repairOutcome",
@@ -25,12 +26,14 @@ describe("calendar maintenance evidence", () => {
     "reconstructs one exact five-key success for repair %s and renewal %s",
     (repairOutcome, renewalOutcome) => {
       const evidence = createCalendarMaintenanceEvidence(
+        NOW,
         repairOutcome,
         renewalOutcome,
       );
 
       expect(evidence).toStrictEqual({
-        evidenceType: "vision.calendar-maintenance/v1",
+        evidenceType: "vision.calendar-maintenance/v2",
+        maintenanceScheduledAt: NOW.toISOString(),
         outcome: "succeeded",
         category: "none",
         repairOutcome,
@@ -96,12 +99,14 @@ describe("calendar maintenance evidence", () => {
     "reconstructs one exact five-key failure for repair %s and renewal %s",
     (repairOutcome, renewalOutcome, expected) => {
       const evidence = createCalendarMaintenanceEvidence(
+        NOW,
         repairOutcome,
         renewalOutcome,
       );
 
       expect(evidence).toStrictEqual({
-        evidenceType: "vision.calendar-maintenance/v1",
+        evidenceType: "vision.calendar-maintenance/v2",
+        maintenanceScheduledAt: NOW.toISOString(),
         ...expected,
       });
       expect(Object.keys(evidence).sort()).toEqual(EVIDENCE_KEYS);
@@ -111,7 +116,11 @@ describe("calendar maintenance evidence", () => {
 
   it("emits only the fixed maintenance action and closed evidence", () => {
     const write = vi.fn();
-    const evidence = createCalendarMaintenanceEvidence("reserved", "no_work");
+    const evidence = createCalendarMaintenanceEvidence(
+      NOW,
+      "reserved",
+      "no_work",
+    );
 
     emitCalendarMaintenanceEvidence(evidence, write);
 
@@ -156,7 +165,8 @@ describe("scheduled calendar maintenance evidence", () => {
       expect(writeEvidence).toHaveBeenCalledWith({
         action: "calendar.maintenance",
         evidence: {
-          evidenceType: "vision.calendar-maintenance/v1",
+          evidenceType: "vision.calendar-maintenance/v2",
+          maintenanceScheduledAt: NOW.toISOString(),
           outcome: "succeeded",
           category: "none",
           repairOutcome,
@@ -228,7 +238,8 @@ describe("scheduled calendar maintenance evidence", () => {
         failures.repairFailure !== undefined;
       const renewalFailed = failures.renewalFailure !== undefined;
       expect(entry.evidence).toStrictEqual({
-        evidenceType: "vision.calendar-maintenance/v1",
+        evidenceType: "vision.calendar-maintenance/v2",
+        maintenanceScheduledAt: NOW.toISOString(),
         outcome: "failed",
         category: repairFailed
           ? renewalFailed
@@ -260,7 +271,8 @@ describe("scheduled calendar maintenance evidence", () => {
       | CalendarMaintenanceEvidence
       | undefined;
     expect(evidence).toStrictEqual({
-      evidenceType: "vision.calendar-maintenance/v1",
+      evidenceType: "vision.calendar-maintenance/v2",
+      maintenanceScheduledAt: NOW.toISOString(),
       outcome: "failed",
       category: "repair_failed",
       repairOutcome: "failed",
@@ -288,7 +300,8 @@ describe("scheduled calendar maintenance evidence", () => {
     expect(writeEvidence).toHaveBeenCalledWith({
       action: "calendar.maintenance",
       evidence: {
-        evidenceType: "vision.calendar-maintenance/v1",
+        evidenceType: "vision.calendar-maintenance/v2",
+        maintenanceScheduledAt: NOW.toISOString(),
         outcome: "succeeded",
         category: "none",
         repairOutcome: "reserved",

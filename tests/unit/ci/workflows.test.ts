@@ -395,7 +395,7 @@ describe("preview live diagnostics policy", () => {
       "if: ${{ inputs.acceptance_operation != 'observe' && inputs.configure_ai_budget == false }}",
     );
     expect(preview).toContain(
-      "if: ${{ inputs.acceptance_operation == 'observe' && inputs.configure_ai_budget == false }}",
+      "if: ${{ inputs.acceptance_operation == 'observe'",
     );
     expect(preview).toContain(
       "if: ${{ inputs.configure_ai_budget == true && inputs.acceptance_operation == 'none' }}",
@@ -500,6 +500,8 @@ describe("preview acceptance candidate workflow", () => {
       "deploy_sync_suppression",
       "deploy_ai",
       "deploy_fault",
+      "deploy_role_probe",
+      "deploy_restore",
       "rollback",
       "close_rollback",
       "verify_cleanup",
@@ -590,8 +592,8 @@ describe("preview acceptance candidate workflow", () => {
         "inputs.acceptance_operation == 'deploy_sync_suppression'",
       ),
     ).toBe(true);
-    expect(proofStep).toContain("OBSERVER_RUN_ID");
-    expect(proofStep).toContain("actions/runs/$OBSERVER_RUN_ID");
+    expect(proofStep).toContain("LISTENER_WORKFLOW_NUMBER");
+    expect(proofStep).toContain("actions/runs/$LISTENER_WORKFLOW_NUMBER");
     expect(proofStep).toContain("head_sha");
     expect(proofStep).toContain("in_progress");
     expect(proofStep).toContain(
@@ -627,7 +629,7 @@ describe("preview acceptance candidate workflow", () => {
     );
     expect(proofStep).not.toContain("any(.jobs[]");
     expect(readWorkflowJob(preview, "tail")).toContain(
-      "name: Capture ${{ needs.selection.outputs.evidence_family }} safe scheduled outcome",
+      "name: Capture ${{ needs.selection.outputs.evidence_family }} signal",
     );
     expect(buildStep).toContain(
       "scripts/prepare-preview-acceptance-deploy-config.ts",
@@ -752,7 +754,7 @@ describe("preview acceptance candidate workflow", () => {
     expect(names[finalProofIndex + 1]).toBe(
       "Recheck daily recovery overlap immediately before deploy",
     );
-    expect(finalProof).toContain("actions/runs/$OBSERVER_RUN_ID");
+    expect(finalProof).toContain("actions/runs/$LISTENER_WORKFLOW_NUMBER");
     expect(finalProof).toContain(
       "VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}",
     );
@@ -1063,5 +1065,33 @@ describe("preview acceptance candidate workflow", () => {
     ).toBe(
       names.indexOf("Deploy generated acceptance candidate") - 1,
     );
+  });
+
+  it("uses family-exact current-workflow observers and interval-only candidate resolution", async () => {
+    const preview = await readWorkflow("preview.yml");
+    for (const operation of ["deploy_role_probe", "deploy_restore"]) {
+      expect(preview).toContain(`- ${operation}`);
+    }
+    expect(preview).toContain("Capture sync_suppression signal");
+    expect(preview).toContain("Capture sync_suppression uniqueness");
+    expect(preview).toContain("Capture restore signal");
+    expect(preview).toContain("Capture restore uniqueness");
+    expect(preview).toContain("Capture role_probe signal");
+    expect(preview).toContain("Capture calendar_maintenance uniqueness");
+    expect(preview).not.toContain("Capture calendar_maintenance signal");
+    expect(preview).toContain("scripts/resolve-preview-observer-run.ts");
+    expect(preview).not.toMatch(/observer_run_(?:id|ref|handle)/iu);
+    expect(preview).toContain("OBSERVER_DISPATCH_STARTED_AT");
+    expect(preview).toContain("OBSERVER_DISPATCH_COMPLETED_AT");
+  });
+
+  it("derives restore-pair validation only from admitted role/restore lifecycle", async () => {
+    const preview = await readWorkflow("preview.yml");
+    expect(preview).toContain("--verify-restore-pair-provider-state");
+    expect(preview).toContain("--verify-provider-state");
+    expect(preview).not.toMatch(/binding_profile:\s*\$\{\{\s*inputs\./u);
+    expect(preview).toContain("restoreAdmissionGate");
+    expect(preview).toContain("github.sha");
+    expect(preview).toContain("head_sha");
   });
 });

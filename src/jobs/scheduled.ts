@@ -104,6 +104,7 @@ export interface ScheduledJobDependencies {
   readonly maintenance: (now: Date) => Promise<void>;
   readonly recovery: (now: Date) => Promise<void>;
   readonly temporaryRoleProbe: (now: Date) => Promise<void>;
+  readonly temporaryRestore?: (now: Date) => Promise<void>;
   /**
    * Typed candidate boundary only. Task 6 owns its future generated selector
    * and one-minute routing; normal committed schedules never dispatch it.
@@ -308,6 +309,7 @@ export async function runScheduledCalendarMaintenance(
     }
   }
   const evidence = createCalendarMaintenanceEvidence(
+    now,
     cleanupFailure !== undefined || repairFailure !== undefined
       ? "failed"
       : repairOutcome,
@@ -367,15 +369,19 @@ export async function scheduled(
       await dependencies.foundationProbe(scheduledAt);
       return;
     }
-    if (selector === "ai_usage" && gatewayLimitMatches) {
-      await dependencies.aiUsageEvidence(scheduledAt);
+    if (selector === "role_probe") {
+      await dependencies.temporaryRoleProbe(scheduledAt);
       return;
     }
-    if (
-      environment.VISION_ENV === "preview" &&
-      typeof environment.PREVIEW_RESTORE_DATABASE_URL === "string"
-    ) {
-      await dependencies.temporaryRoleProbe(scheduledAt);
+    if (selector === "restore") {
+      if (!dependencies.temporaryRestore) {
+        throw new Error("Temporary preview candidate is invalid.");
+      }
+      await dependencies.temporaryRestore(scheduledAt);
+      return;
+    }
+    if (selector === "ai_usage" && gatewayLimitMatches) {
+      await dependencies.aiUsageEvidence(scheduledAt);
       return;
     }
     throw new Error("Temporary preview candidate is invalid.");
@@ -418,6 +424,10 @@ function createProductionScheduledEntryDependencies(
       if (evidence.outcome !== "succeeded") {
         throw new Error("Temporary preview role probe failed.");
       }
+    },
+    /** Constructs only the gated temporary restore boundary. */
+    temporaryRestore: async () => {
+      throw new Error("Temporary preview restore adapter is unavailable.");
     },
     /** Builds only the preview foundation candidate's aggregate read boundaries. */
     foundationProbe: async (scheduledAt) => {

@@ -1,4 +1,6 @@
 # `scripts/validate-preview-deploy-config.ts`
+## `validateTemporaryRestorePairProviderState`
+Requires exactly two additional secret names.
 
 `validatePreviewDeployConfig` validates the generated
 `dist/vision/wrangler.json` boundary. It requires

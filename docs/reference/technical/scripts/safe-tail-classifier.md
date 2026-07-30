@@ -1,4 +1,10 @@
 # `scripts/safe-tail-classifier.ts`
+## `matchesPreviewAcceptanceExpectation`
+Applies the closed expectation union.
+## `locateSyncSuppressionEvidence`
+Enforces suppression identity.
+## `canonicalInstant`
+Requires canonical UTC.
 
 Provides the closed projection used for normal maintenance, daily recovery,
 temporary restore/role-probe candidates, and Phase B foundation, AI-usage, and

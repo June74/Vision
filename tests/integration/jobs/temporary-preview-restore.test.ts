@@ -313,8 +313,13 @@ async function restoreFixture(options?: {
     return memoryManagedTarget(state, close);
   });
   const readback = options?.readback ?? cloneSnapshot;
+  const catalogReader = Object.freeze({
+    head: store.head.bind(store),
+    get: store.get.bind(store),
+    list: store.list.bind(store),
+  });
   const dependencies: TemporaryPreviewRestoreDependencies = {
-    store,
+    store: catalogReader,
     backupKey: key,
     attemptStore: { claimOnce },
     clearTarget,
@@ -332,6 +337,13 @@ async function restoreFixture(options?: {
         return state.snapshot.tables.audit_events.length;
       }),
   };
+  expect(Object.keys(dependencies.store).sort()).toEqual([
+    "get",
+    "head",
+    "list",
+  ]);
+  expect("delete" in dependencies.store).toBe(false);
+  expect("putIfAbsent" in dependencies.store).toBe(false);
 
   return {
     environment: {

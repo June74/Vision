@@ -1,4 +1,6 @@
 # `src/jobs/scheduled.ts`
+## `temporaryRestore`
+Runs the admitted restore.
 
 ## `createWithWriter`
 

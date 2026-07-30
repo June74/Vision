@@ -3,6 +3,7 @@ import { once } from "node:events";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PHASE_B_AI_USAGE_ACTION } from "../../../src/jobs/phase-b-ai-usage-evidence";
+import { createPreviewTailObserver } from "../../../scripts/print-safe-tail";
 
 /** Runs the safe-tail executable against synthetic, non-sensitive input. */
 async function runPrintSafeTail(
@@ -69,7 +70,8 @@ function roleProbeTail(evidence: unknown): string {
 /** Builds one exact permanent maintenance success result. */
 function maintenanceSuccess(): unknown {
   return {
-    evidenceType: "vision.calendar-maintenance/v1",
+    evidenceType: "vision.calendar-maintenance/v2",
+    maintenanceScheduledAt: "2026-07-30T18:15:00.000Z",
     outcome: "succeeded",
     category: "none",
     repairOutcome: "reserved",
@@ -224,7 +226,7 @@ describe("print-safe-tail", () => {
     ).resolves.toEqual({
       exitCode: 0,
       stdout:
-        '{"category":"none","evidenceType":"vision.calendar-maintenance/v1","outcome":"succeeded","renewalOutcome":"completed","repairOutcome":"reserved"}\n',
+        '{"category":"none","evidenceType":"vision.calendar-maintenance/v2","maintenanceScheduledAt":"2026-07-30T18:15:00.000Z","outcome":"succeeded","renewalOutcome":"completed","repairOutcome":"reserved"}\n',
     });
   });
 
@@ -365,5 +367,97 @@ describe("print-safe-tail", () => {
         [aiUsageTail(aiUsageSuccess())],
       ),
     ).resolves.toEqual({ exitCode: 1, stdout: "" });
+  });
+});
+
+describe("bounded preview-tail observer modes", () => {
+  const suppression = {
+    evidenceType: "vision.sync-suppression/v1" as const,
+    outcome: "suppressed" as const,
+  };
+
+  it("makes suppression signal-only success immediate and output-free", () => {
+    const observer = createPreviewTailObserver({
+      mode: "sync_suppression_signal",
+      expectation: { kind: "sync_suppressed" },
+      closesAt: new Date("2026-07-30T18:02:00.000Z"),
+    });
+    expect(
+      observer.push(suppression, new Date("2026-07-30T18:00:01.000Z")),
+    ).toStrictEqual({ done: true, succeeded: true, output: null });
+  });
+
+  it("retains exactly one suppression terminal until the true 120-second close", () => {
+    const observer = createPreviewTailObserver({
+      mode: "sync_suppression_uniqueness",
+      expectation: { kind: "sync_suppressed" },
+      closesAt: new Date("2026-07-30T18:02:00.000Z"),
+    });
+    expect(
+      observer.push(suppression, new Date("2026-07-30T18:00:01.000Z")),
+    ).toStrictEqual({ done: false, succeeded: false, output: null });
+    expect(
+      observer.finish(new Date("2026-07-30T18:01:59.999Z")),
+    ).toStrictEqual({ done: true, succeeded: false, output: null });
+
+    const exact = createPreviewTailObserver({
+      mode: "sync_suppression_uniqueness",
+      expectation: { kind: "sync_suppressed" },
+      closesAt: new Date("2026-07-30T18:02:00.000Z"),
+    });
+    exact.push(suppression, new Date("2026-07-30T18:00:01.000Z"));
+    expect(exact.finish(new Date("2026-07-30T18:02:00.000Z"))).toStrictEqual({
+      done: true,
+      succeeded: true,
+      output: suppression,
+    });
+  });
+
+  it("rejects duplicate, mixed, nonaccepting, and zero-terminal uniqueness", () => {
+    const duplicate = createPreviewTailObserver({
+      mode: "sync_suppression_uniqueness",
+      expectation: { kind: "sync_suppressed" },
+      closesAt: new Date("2026-07-30T18:02:00.000Z"),
+    });
+    duplicate.push(suppression, new Date("2026-07-30T18:00:01.000Z"));
+    expect(
+      duplicate.push(suppression, new Date("2026-07-30T18:00:02.000Z")),
+    ).toStrictEqual({ done: true, succeeded: false, output: null });
+
+    const zero = createPreviewTailObserver({
+      mode: "restore_uniqueness",
+      expectation: { kind: "restore_succeeded" },
+      closesAt: new Date("2026-07-30T18:02:00.000Z"),
+    });
+    expect(zero.finish(new Date("2026-07-30T18:02:00.000Z"))).toStrictEqual({
+      done: true,
+      succeeded: false,
+      output: null,
+    });
+  });
+
+  it("binds maintenance uniqueness to one exact canonical scheduled instant", () => {
+    const observer = createPreviewTailObserver({
+      mode: "maintenance_uniqueness",
+      expectation: {
+        kind: "maintenance_succeeded",
+        maintenanceScheduledAt: "2026-07-30T18:15:00.000Z",
+      },
+      closesAt: new Date("2026-07-30T18:17:00.000Z"),
+    });
+    observer.push(
+      {
+        evidenceType: "vision.calendar-maintenance/v2",
+        maintenanceScheduledAt: "2026-07-30T18:15:00.000Z",
+        outcome: "succeeded",
+        category: "none",
+        repairOutcome: "no_work",
+        renewalOutcome: "completed",
+      },
+      new Date("2026-07-30T18:15:01.000Z"),
+    );
+    expect(
+      observer.finish(new Date("2026-07-30T18:17:00.000Z")),
+    ).toMatchObject({ done: true, succeeded: true });
   });
 });

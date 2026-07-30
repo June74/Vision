@@ -69,6 +69,8 @@ const NORMAL_PROVIDER_BINDING_CONTRACT: readonly ProviderBindingContract[] =
   Object.freeze({ name: "VISION_ENV", type: "plain_text" }),
   Object.freeze({ name: "VISION_USER_TIME_ZONE", type: "secret_text" }),
   ]);
+const INVALID_RESTORE_PROVIDER_STATE =
+  "Temporary restore-pair provider state is invalid.";
 
 /** Flattened Cloudflare Vite output used by normal and acceptance deployments. */
 export interface PreviewDeployConfig {
@@ -128,6 +130,41 @@ export function validateNormalPreviewProviderState(
     !matchesNormalProviderBindingContract(bindings)
   ) {
     throw new Error(INVALID_PROVIDER_STATE);
+  }
+}
+
+/** Requires normal bindings plus exactly two temporary restore secrets. */
+export function validateTemporaryRestorePairProviderState(
+  input: NormalPreviewProviderState,
+): void {
+  try {
+    const bindings = readProviderBindings(input.settingsResponse);
+    if (
+      bindings === undefined ||
+      bindings.length !== NORMAL_PROVIDER_BINDING_CONTRACT.length + 2 ||
+      !matchesNormalProviderBindingContract(
+        bindings.filter((binding) => {
+          if (!isPlainDataObject(binding)) return true;
+          const name = ownDataValue(binding, "name");
+          return name !== "PREVIEW_RESTORE_DATABASE_URL" &&
+            name !== "PREVIEW_RESTORE_TARGET_ID";
+        }),
+      )
+    ) throw new Error(INVALID_RESTORE_PROVIDER_STATE);
+    const temporary = bindings.filter((binding) =>
+      isPlainDataObject(binding) &&
+      (ownDataValue(binding, "name") === "PREVIEW_RESTORE_DATABASE_URL" ||
+        ownDataValue(binding, "name") === "PREVIEW_RESTORE_TARGET_ID"));
+    if (
+      temporary.length !== 2 ||
+      !["PREVIEW_RESTORE_DATABASE_URL", "PREVIEW_RESTORE_TARGET_ID"].every(
+        (name) => temporary.some((binding) =>
+          ownDataValue(binding as Record<string, unknown>, "name") === name &&
+          ownDataValue(binding as Record<string, unknown>, "type") === "secret_text"),
+      )
+    ) throw new Error(INVALID_RESTORE_PROVIDER_STATE);
+  } catch {
+    throw new Error(INVALID_RESTORE_PROVIDER_STATE);
   }
 }
 
@@ -408,8 +445,10 @@ function isPlainDataObject(value: unknown): value is Record<string, unknown> {
 async function main(): Promise<void> {
   const arguments_ = process.argv.slice(2);
   const providerMode = arguments_[0] === "--verify-provider-state";
+  const restoreProviderMode =
+    arguments_[0] === "--verify-restore-pair-provider-state";
   try {
-    if (providerMode) {
+    if (providerMode || restoreProviderMode) {
       if (arguments_.length !== 4) throw new Error(INVALID_PROVIDER_STATE);
       const [healthResponse, schedulesResponse, settingsResponse] =
         await Promise.all(
@@ -417,11 +456,13 @@ async function main(): Promise<void> {
             JSON.parse(await readFile(resolve(path), "utf8")),
           ),
         );
-      validateNormalPreviewProviderState({
+      const input = {
         healthResponse,
         schedulesResponse,
         settingsResponse,
-      });
+      };
+      if (restoreProviderMode) validateTemporaryRestorePairProviderState(input);
+      else validateNormalPreviewProviderState(input);
       process.stdout.write("Normal preview provider state is valid.\n");
       return;
     }
@@ -433,7 +474,7 @@ async function main(): Promise<void> {
     validatePreviewDeployConfig(JSON.parse(serialized));
   } catch {
     process.stderr.write(
-      `${providerMode ? INVALID_PROVIDER_STATE : INVALID_NORMAL}\n`,
+      `${restoreProviderMode ? INVALID_RESTORE_PROVIDER_STATE : providerMode ? INVALID_PROVIDER_STATE : INVALID_NORMAL}\n`,
     );
     process.exitCode = 1;
   }

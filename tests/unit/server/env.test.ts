@@ -25,6 +25,14 @@ function expectPrivateValuesAbsent(
 }
 
 describe("RuntimeEnvSchema", () => {
+  it.each(["role_probe", "restore"] as const)(
+    "admits the dedicated preview acceptance selector %s",
+    (selector) => {
+      expect(
+        RuntimeEnvSchema.shape.PREVIEW_ACCEPTANCE_SCENARIO.parse(selector),
+      ).toBe(selector);
+    },
+  );
   it("rejects a missing deployment environment", () => {
     expect(() => RuntimeEnvSchema.parse({})).toThrow();
   });

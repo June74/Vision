@@ -31,12 +31,22 @@ function facts(): FoundationHealthFacts {
 }
 
 describe("temporary preview fault scenario admission", () => {
+  it("keeps role probe and restore outside the six-fault tuple", () => {
+    expect(TEMPORARY_PREVIEW_FAULT_SCENARIOS).not.toContain("role_probe");
+    expect(TEMPORARY_PREVIEW_FAULT_SCENARIOS).not.toContain("restore");
+    expect(TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS).toContain("role_probe");
+    expect(TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS).toContain("restore");
+    expect(previewAcceptanceMaxLifetimeMinutes("role_probe")).toBe(30);
+    expect(previewAcceptanceMaxLifetimeMinutes("restore")).toBe(30);
+  });
   it("keeps evidence and suppression selectors separate from the strict fault tuple", () => {
     expect(TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS).toEqual([
       ...TEMPORARY_PREVIEW_FAULT_SCENARIOS,
       "foundation_probe",
       "ai_usage",
       "sync_suppression",
+      "role_probe",
+      "restore",
     ]);
     expect(TEMPORARY_PREVIEW_FAULT_SCENARIOS).not.toContain(
       "sync_suppression",

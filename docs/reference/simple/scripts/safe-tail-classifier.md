@@ -1,4 +1,10 @@
 # `scripts/safe-tail-classifier.ts`
+## `matchesPreviewAcceptanceExpectation`
+Checks the requested outcome.
+## `locateSyncSuppressionEvidence`
+Finds suppression evidence.
+## `canonicalInstant`
+Checks UTC.
 
 Turns Cloudflare scheduled-event logs into small, privacy-safe evidence records.
 It never returns a raw log line. It accepts only known schedules, exact actions,

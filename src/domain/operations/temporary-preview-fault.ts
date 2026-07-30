@@ -18,6 +18,8 @@ export const TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS = Object.freeze([
   "foundation_probe",
   "ai_usage",
   "sync_suppression",
+  "role_probe",
+  "restore",
 ] as const);
 
 /** Closed scenario vocabulary shared by the scheduler, observer, and diagnostics overlay. */

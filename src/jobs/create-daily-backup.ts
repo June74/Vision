@@ -52,14 +52,7 @@ export interface BackupObjectReader {
   >;
 }
 
-/** Narrow object-storage port shared by backup creation and retention. */
-export interface BackupObjectStore extends BackupObjectReader {
-  putIfAbsent(
-    key: string,
-    body: Uint8Array,
-    customMetadata: BackupObjectMetadata,
-    bodySha256: string,
-  ): Promise<boolean>;
+export interface BackupObjectCatalogReader extends BackupObjectReader {
   list(
     prefix: string,
     cursor?: string,
@@ -67,6 +60,16 @@ export interface BackupObjectStore extends BackupObjectReader {
     readonly objects: readonly BackupObjectHead[];
     readonly cursor?: string;
   }>;
+}
+
+/** Narrow object-storage port shared by backup creation and retention. */
+export interface BackupObjectStore extends BackupObjectCatalogReader {
+  putIfAbsent(
+    key: string,
+    body: Uint8Array,
+    customMetadata: BackupObjectMetadata,
+    bodySha256: string,
+  ): Promise<boolean>;
   delete(key: string): Promise<void>;
 }
 

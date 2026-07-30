@@ -19,6 +19,7 @@ import { createR2BackupObjectStore } from "../../../src/data/backup/r2-object-st
 import {
   BACKUP_OBJECT_PREFIX,
   createDailyBackup,
+  type BackupObjectCatalogReader,
 } from "../../../src/jobs/create-daily-backup";
 import {
   runTemporaryPreviewFault,
@@ -33,6 +34,19 @@ import {
 import { TEMPORARY_PREVIEW_ROLE_PROBE_CRON } from "../../../src/jobs/temporary-preview-role-probe";
 import { parseBackupEnvironment } from "../../../src/server/env";
 import { MemoryBackupObjectStore } from "./backup-test-helpers";
+
+describe("backup object capability split", () => {
+  it("models catalog reads without backup-object write or delete methods", () => {
+    const catalog: BackupObjectCatalogReader = {
+      head: async () => null,
+      get: async () => null,
+      list: async () => ({ objects: [] }),
+    };
+    expect(Object.keys(catalog).sort()).toEqual(["get", "head", "list"]);
+    expect("putIfAbsent" in catalog).toBe(false);
+    expect("delete" in catalog).toBe(false);
+  });
+});
 
 const NOW = new Date("2026-07-25T06:05:00.000Z");
 const SENTINEL = "VISION_BACKUP_SENTINEL_TASK2";

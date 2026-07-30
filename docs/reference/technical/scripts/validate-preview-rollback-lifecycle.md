@@ -1,4 +1,6 @@
 # `scripts/validate-preview-rollback-lifecycle.ts`
+## `derivePreviewBindingProfile`
+Prevents caller-selected profiles.
 
 Implements a file-based state machine for the cross-run preview lifecycle:
 candidate intent, immutable-normal restore proof, post-restore provider and

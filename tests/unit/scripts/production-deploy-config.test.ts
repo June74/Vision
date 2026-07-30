@@ -47,6 +47,20 @@ function productionArtifact() {
 }
 
 describe("production deploy artifact validation", () => {
+  it.each(["role_probe", "restore"] as const)(
+    "rejects the temporary %s selector in production",
+    (selector) => {
+      const candidate = productionArtifact();
+      candidate.vars = {
+        ...candidate.vars,
+        PREVIEW_ACCEPTANCE_SCENARIO: selector,
+        PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-30T18:10:00.000Z",
+      } as typeof candidate.vars;
+      expect(() => validateProductionDeployConfig(candidate)).toThrow(
+        /production deployment configuration/i,
+      );
+    },
+  );
   it("accepts the explicit generated production artifact", () => {
     expect(() => validateProductionDeployConfig(productionArtifact())).not.toThrow();
   });

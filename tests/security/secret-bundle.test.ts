@@ -22,6 +22,16 @@ afterEach(async () => {
 });
 
 describe("client secret-bundle boundary", () => {
+  it("keeps current-workflow role/restore selectors and temporary names server-only", () => {
+    expect(TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS).toContain("role_probe");
+    expect(TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS).toContain("restore");
+    expect(CLIENT_FORBIDDEN_BINDING_NAMES).toContain(
+      "PREVIEW_RESTORE_DATABASE_URL",
+    );
+    expect(CLIENT_FORBIDDEN_BINDING_NAMES).toContain(
+      "PREVIEW_RESTORE_TARGET_ID",
+    );
+  });
   it.each(CLIENT_FORBIDDEN_BINDING_NAMES)(
     "rejects server-only binding %s in a built client asset",
     async (binding) => {

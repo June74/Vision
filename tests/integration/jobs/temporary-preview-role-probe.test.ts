@@ -163,12 +163,20 @@ describe("temporary preview role probe job", () => {
       ),
     ]);
 
-    for (const source of [job, adapter, scheduler]) {
+    for (const source of [job, adapter]) {
       expect(source).not.toContain("PREVIEW_RESTORE_TARGET_ID");
       expect(source).not.toContain("temporary-preview-restore");
       expect(source).not.toContain("temporary-preview-clear-adapter");
       expect(source).not.toContain("createR2RestoreAttemptStore");
     }
+    const roleBranch = scheduler.match(
+      /selector === "role_probe"[\s\S]*?return;/u,
+    )?.[0];
+    expect(roleBranch).toBeDefined();
+    expect(roleBranch).not.toContain("PREVIEW_RESTORE_TARGET_ID");
+    expect(roleBranch).not.toContain("temporary-preview-restore");
+    expect(roleBranch).not.toContain("temporary-preview-clear-adapter");
+    expect(roleBranch).not.toContain("createR2RestoreAttemptStore");
     for (const source of [job, adapter]) {
       expect(source).not.toContain("BACKUP_ENCRYPTION_KEY");
       expect(source).not.toContain("BACKUP_BUCKET");
