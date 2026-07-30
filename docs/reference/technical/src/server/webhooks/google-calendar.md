@@ -4,7 +4,7 @@ Google notifications are not cryptographically signed. Authenticity comes from a
 
 ## `registerGoogleCalendarWebhook`
 
-Parses the closed header set, hashes the supplied token, resolves a connected channel by ID plus digest, repeats a constant-time digest comparison, and checks resource identity and expiry. Authenticated `not_exists` lifecycle notices are acknowledged without a sync job. Other accepted states reserve PostgreSQL work before Queue send, then mark the send. Sequential duplicate HTTP signals do not enqueue twice; uncertain sends remain recoverable by replay.
+Parses the closed header set, hashes the supplied token, resolves a connected channel by ID plus digest, repeats a constant-time digest comparison, and checks resource identity and expiry. Authenticated `not_exists` lifecycle notices are acknowledged without a sync job. After stable opaque message derivation, the route performs a read-only replay inspection and reads a fresh suppression-only clock. Only a verified active-channel `exists` signal that is both new and covered by the active preview selector emits the fixed terminal and returns before reservation. Replays, `sync`, expired or inactive selectors, and all other accepted states reserve PostgreSQL work before Queue send, then mark the send using the original channel-check timestamp. Sequential duplicate HTTP signals do not enqueue twice; uncertain sends remain recoverable by replay.
 
 ## `createProductionGoogleCalendarWebhookDependencies`
 
@@ -12,7 +12,7 @@ Requires the Queue binding and constructs the least-privileged database reposito
 
 ## `now`
 
-Provides a fresh time for channel expiry.
+Provides the channel-expiry time and a separate post-replay suppression time. The second read cannot alter normal reservation timestamps.
 
 ## `parseGoogleNotificationHeaders`
 

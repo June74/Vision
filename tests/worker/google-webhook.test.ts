@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Env } from "../../src/server/env";
 import type {
   CalendarJobRepository,
@@ -48,16 +48,22 @@ class MemoryWebhookRepository implements CalendarJobRepository {
     };
   }
 
-  async reserveWebhookJob(
-    message: CalendarSyncMessage,
-  ): Promise<ReserveWebhookJobResult> {
+  inspect = vi.fn<
+    (message: CalendarSyncMessage) => Promise<"new" | "replay">
+  >(async (message) => (this.jobs.has(message.jobId) ? "replay" : "new"));
+
+  inspectWebhookReplay = this.inspect;
+
+  reserveWebhookJob = vi.fn<
+    (message: CalendarSyncMessage) => Promise<ReserveWebhookJobResult>
+  >(async (message) => {
     const existing = this.jobs.get(message.jobId);
     if (existing) return { message: existing, shouldEnqueue: false };
     this.jobs.set(message.jobId, message);
     return { message, shouldEnqueue: true };
-  }
+  });
 
-  async markEnqueued(): Promise<void> {}
+  markEnqueued = vi.fn(async () => undefined);
 
   async claimJob(): Promise<{ outcome: "missing" }> {
     return { outcome: "missing" };
@@ -98,6 +104,8 @@ function headers(overrides: Record<string, string | undefined> = {}): Headers {
 function harness(options: {
   channel?: Partial<GoogleWebhookChannel>;
   lookupMissing?: boolean;
+  environment?: Partial<Env>;
+  now?: () => Date;
 } = {}) {
   const repository = new MemoryWebhookRepository();
   Object.assign(repository.channel, options.channel);
@@ -107,17 +115,23 @@ function harness(options: {
     googleCalendarWebhook: {
       repository,
       queue: { send },
-      now: () => NOW,
+      now: options.now ?? (() => NOW),
     },
     createRequestId: () => "req_webhook",
     logger: vi.fn(),
   });
-  return { app, repository, send };
+  return {
+    app,
+    repository,
+    send,
+    environment: (options.environment ?? {}) as Env,
+  };
 }
 
 async function post(
   app: ReturnType<typeof createApp>,
   webhookHeaders: Headers,
+  environment: Env = {} as Env,
 ): Promise<Response> {
   return app.fetch(
     new Request("https://vision.example.test/webhooks/google/calendar", {
@@ -125,9 +139,13 @@ async function post(
       headers: webhookHeaders,
       body: "ignored-provider-body",
     }),
-    {} as Env,
+    environment,
   );
 }
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("Google Calendar notification webhook", () => {
   it.each([
@@ -296,5 +314,245 @@ describe("Google Calendar notification webhook", () => {
     expect(serialized).not.toContain(CHANNEL_ID);
     expect(serialized).not.toContain(RESOURCE_ID);
     expect(serialized).not.toContain("x-goog");
+  });
+
+  it("suppresses one fully verified new exists signal without durable or Queue mutation", async () => {
+    const { app, repository, send, environment } = harness({
+      environment: {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "sync_suppression",
+        PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-24T16:00:30.000Z",
+      },
+    });
+    const write = vi.spyOn(console, "info").mockImplementation(() => undefined);
+
+    const response = await post(app, headers(), environment);
+
+    expect(response.status).toBe(204);
+    expect(repository.inspect).toHaveBeenCalledOnce();
+    expect(repository.reserveWebhookJob).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+    expect(repository.markEnqueued).not.toHaveBeenCalled();
+    expect(write).toHaveBeenCalledOnce();
+    const entry = write.mock.calls[0]![0];
+    expect(entry).toEqual({
+      action: "acceptance.sync-suppression",
+      evidence: {
+        evidenceType: "vision.sync-suppression/v1",
+        outcome: "suppressed",
+      },
+    });
+    expect(Object.isFrozen(entry)).toBe(true);
+    expect(Object.isFrozen(entry.evidence)).toBe(true);
+    const serialized = JSON.stringify(entry);
+    for (const prohibited of [
+      TOKEN,
+      CHANNEL_ID,
+      RESOURCE_ID,
+      "42",
+      "ignored-provider-body",
+      "owner-1",
+      "calendar-1",
+      "x-goog",
+    ]) {
+      expect(serialized).not.toContain(prohibited);
+    }
+  });
+
+  it.each([
+    ["sync", { "x-goog-resource-state": "sync" }],
+    ["not_exists", { "x-goog-resource-state": "not_exists" }],
+  ])("never suppresses a verified %s notification", async (_name, override) => {
+    const { app, repository, environment } = harness({
+      environment: {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "sync_suppression",
+        PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-24T16:00:30.000Z",
+      },
+    });
+    const write = vi.spyOn(console, "info").mockImplementation(() => undefined);
+
+    const response = await post(app, headers(override), environment);
+
+    expect(response.status).toBe(204);
+    expect(write).not.toHaveBeenCalled();
+    if (_name === "sync") {
+      expect(repository.reserveWebhookJob).toHaveBeenCalledOnce();
+    } else {
+      expect(repository.inspect).not.toHaveBeenCalled();
+      expect(repository.reserveWebhookJob).not.toHaveBeenCalled();
+    }
+  });
+
+  it("never suppresses pending non-sync traffic", async () => {
+    const { app, repository, send, environment } = harness({
+      channel: { providerResourceId: null, lifecycle: "pending" },
+      environment: {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "sync_suppression",
+        PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-24T16:00:30.000Z",
+      },
+    });
+    const write = vi.spyOn(console, "info").mockImplementation(() => undefined);
+
+    const response = await post(app, headers(), environment);
+
+    expect(response.status).toBe(204);
+    expect(write).not.toHaveBeenCalled();
+    expect(repository.inspect).not.toHaveBeenCalled();
+    expect(repository.reserveWebhookJob).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("never suppresses malformed or unverified traffic", async () => {
+    const write = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const activeEnvironment = {
+      VISION_ENV: "preview",
+      PREVIEW_ACCEPTANCE_SCENARIO: "sync_suppression",
+      PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-24T16:00:30.000Z",
+    } as Env;
+    const malformed = harness({ environment: activeEnvironment });
+    const unverified = harness({
+      lookupMissing: true,
+      environment: activeEnvironment,
+    });
+
+    const malformedResponse = await post(
+      malformed.app,
+      headers({ "x-goog-channel-token": undefined }),
+      malformed.environment,
+    );
+    const unverifiedResponse = await post(
+      unverified.app,
+      headers(),
+      unverified.environment,
+    );
+
+    expect(malformedResponse.status).toBe(400);
+    expect(unverifiedResponse.status).toBe(204);
+    expect(write).not.toHaveBeenCalled();
+    expect(malformed.repository.inspect).not.toHaveBeenCalled();
+    expect(unverified.repository.inspect).not.toHaveBeenCalled();
+  });
+
+  it("does not suppress a durable replay", async () => {
+    const { app, repository, send, environment } = harness({
+      environment: {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "sync_suppression",
+        PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-24T16:00:30.000Z",
+      },
+    });
+    repository.inspect.mockResolvedValue("replay");
+    repository.reserveWebhookJob.mockImplementation(async (message) => ({
+      message,
+      shouldEnqueue: false,
+    }));
+    const write = vi.spyOn(console, "info").mockImplementation(() => undefined);
+
+    const response = await post(app, headers(), environment);
+
+    expect(response.status).toBe(204);
+    expect(repository.inspect).toHaveBeenCalledOnce();
+    expect(write).not.toHaveBeenCalled();
+    expect(repository.reserveWebhookJob).toHaveBeenCalledOnce();
+    expect(send).not.toHaveBeenCalled();
+    expect(repository.markEnqueued).not.toHaveBeenCalled();
+  });
+
+  it("uses an expired valid selector only on the normal durable path", async () => {
+    const { app, repository, send, environment } = harness({
+      environment: {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "sync_suppression",
+        PREVIEW_ACCEPTANCE_EXPIRES_AT: NOW.toISOString(),
+      },
+    });
+    const write = vi.spyOn(console, "info").mockImplementation(() => undefined);
+
+    const response = await post(app, headers(), environment);
+
+    expect(response.status).toBe(204);
+    expect(write).not.toHaveBeenCalled();
+    expect(repository.reserveWebhookJob).toHaveBeenCalledOnce();
+    expect(send).toHaveBeenCalledOnce();
+    expect(repository.markEnqueued).toHaveBeenCalledOnce();
+  });
+
+  it("fails closed on a malformed temporary selector pair", async () => {
+    const { app, repository, send, environment } = harness({
+      environment: {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "sync_suppression",
+      },
+    });
+    const write = vi.spyOn(console, "info").mockImplementation(() => undefined);
+
+    const response = await post(app, headers(), environment);
+
+    expect(response.status).toBe(500);
+    expect(repository.inspect).toHaveBeenCalledOnce();
+    expect(write).not.toHaveBeenCalled();
+    expect(repository.reserveWebhookJob).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+    expect(repository.markEnqueued).not.toHaveBeenCalled();
+  });
+
+  it("uses a fresh post-replay clock only for suppression and preserves reservation timestamps", async () => {
+    const freshNow = new Date(NOW.getTime() + 20_000);
+    const now = vi
+      .fn<() => Date>()
+      .mockReturnValueOnce(NOW)
+      .mockReturnValueOnce(freshNow);
+    const { app, repository, environment } = harness({
+      now,
+      environment: {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "sync_suppression",
+        PREVIEW_ACCEPTANCE_EXPIRES_AT: new Date(
+          NOW.getTime() + 10_000,
+        ).toISOString(),
+      },
+    });
+    const write = vi.spyOn(console, "info").mockImplementation(() => undefined);
+
+    const response = await post(app, headers(), environment);
+
+    expect(response.status).toBe(204);
+    expect(now).toHaveBeenCalledTimes(2);
+    expect(repository.inspect).toHaveBeenCalledOnce();
+    expect(write).not.toHaveBeenCalled();
+    expect(repository.reserveWebhookJob).toHaveBeenCalledWith(
+      expect.any(Object),
+      NOW,
+    );
+    expect(repository.markEnqueued).toHaveBeenCalledWith(
+      expect.any(String),
+      NOW,
+    );
+  });
+
+  it("treats concurrent new inspections as inconclusive because duplicate terminals may be emitted", async () => {
+    const { app, repository, send, environment } = harness({
+      environment: {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "sync_suppression",
+        PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-24T16:00:30.000Z",
+      },
+    });
+    repository.inspect.mockResolvedValue("new");
+    const write = vi.spyOn(console, "info").mockImplementation(() => undefined);
+
+    const responses = await Promise.all([
+      post(app, headers(), environment),
+      post(app, headers(), environment),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([204, 204]);
+    expect(repository.inspect).toHaveBeenCalledTimes(2);
+    expect(write).toHaveBeenCalledTimes(2);
+    expect(repository.reserveWebhookJob).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+    expect(repository.markEnqueued).not.toHaveBeenCalled();
   });
 });

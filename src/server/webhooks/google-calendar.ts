@@ -8,6 +8,10 @@ import {
   type CalendarJobRepository,
 } from "../../data/repositories/job-repository";
 import type { CalendarSyncMessage } from "../../jobs/queue-message";
+import {
+  emitTemporarySyncSuppressionEvidence,
+  resolveTemporarySyncSuppressionState,
+} from "./temporary-preview-sync-suppression";
 
 const MAX_MESSAGE_NUMBER = 18_446_744_073_709_551_615n;
 const textEncoder = new TextEncoder();
@@ -100,6 +104,19 @@ export function registerGoogleCalendarWebhook(
       calendarId: channel.calendarId,
       reason: "push" as const,
     });
+    const replay = await resolved.repository.inspectWebhookReplay(message);
+    const suppressionState = resolveTemporarySyncSuppressionState(
+      resolved.now?.() ?? new Date(),
+      context.env,
+    );
+    if (
+      parsed.resourceState === "exists" &&
+      replay === "new" &&
+      suppressionState === "active"
+    ) {
+      emitTemporarySyncSuppressionEvidence();
+      return context.body(null, 204);
+    }
     const reserved = await resolved.repository.reserveWebhookJob(message, now);
     if (reserved.shouldEnqueue) {
       await resolved.queue.send(reserved.message);

@@ -35,6 +35,7 @@ const MESSAGE: CalendarSyncMessage = {
 };
 let pglite: PGlite;
 let repository: CalendarJobRepository;
+let database: VisionDatabase;
 
 beforeEach(async () => {
   pglite = new PGlite();
@@ -51,9 +52,8 @@ beforeEach(async () => {
       await readFile(resolve(process.cwd(), "migrations", migration), "utf8"),
     );
   }
-  repository = createCalendarJobRepository(
-    drizzle(pglite) as unknown as VisionDatabase,
-  );
+  database = drizzle(pglite) as unknown as VisionDatabase;
+  repository = createCalendarJobRepository(database);
   await repository.reserveWebhookJob(MESSAGE, NOW);
   await repository.markEnqueued(MESSAGE.jobId, NOW);
 });
@@ -160,6 +160,58 @@ function eventSyncClient(): EventSyncClient {
 }
 
 describe("calendar queue deduplication", () => {
+  it("classifies a missing opaque webhook job as new with one read-only lookup", async () => {
+    const execute = vi.spyOn(database, "execute");
+    const missing = {
+      ...MESSAGE,
+      jobId: "job_2222222222222222222222222222222222222222222",
+    };
+
+    await expect(repository.inspectWebhookReplay(missing)).resolves.toBe("new");
+
+    expect(execute).toHaveBeenCalledOnce();
+    expect(
+      (
+        await pglite.query(
+          `select count(*)::integer as count from calendar_sync_jobs`,
+        )
+      ).rows,
+    ).toEqual([{ count: 1 }]);
+  });
+
+  it("classifies an exact owner, fixed-provider, calendar, and reason match as replay", async () => {
+    await expect(repository.inspectWebhookReplay(MESSAGE)).resolves.toBe(
+      "replay",
+    );
+    expect(
+      (
+        await pglite.query(
+          `select status, updated_at from calendar_sync_jobs where job_id = $1`,
+          [MESSAGE.jobId],
+        )
+      ).rows,
+    ).toEqual([{ status: "enqueued", updated_at: NOW }]);
+  });
+
+  it.each([
+    ["owner", `update calendar_sync_jobs set owner_id = 'owner-2'`],
+    [
+      "calendar",
+      `update calendar_sync_jobs set provider_calendar_id = 'calendar-2'`,
+    ],
+    ["reason", `update calendar_sync_jobs set reason = 'repair'`],
+    ["provider", `update calendar_sync_jobs set provider = 'other-provider'`],
+  ])(
+    "rejects a %s identity collision with one constant safe error",
+    async (_field, statement) => {
+      await pglite.query(statement);
+
+      await expect(repository.inspectWebhookReplay(MESSAGE)).rejects.toThrowError(
+        "Notification job identity conflict.",
+      );
+    },
+  );
+
   it("does not enqueue a valid channel notification after its checkpoint disconnects", async () => {
     await pglite.query(`delete from calendar_sync_jobs`);
     const token = "valid-channel-token";

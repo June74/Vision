@@ -10,6 +10,10 @@ Queries `sync_channels` with provider, channel ID, and the SHA-256 token digest,
 
 Atomically attaches the initial authenticated `sync` resource only while the digest-backed row is pending and connected.
 
+## `inspectWebhookReplay`
+
+Performs one parameterized read-only lookup by opaque job ID. A missing row is `new`; an exact owner, fixed `google-calendar` provider, calendar, and reason match is `replay`. Every collision throws the same content-free identity error, and no row or provider value crosses the repository boundary.
+
 ## `reserveWebhookJob`
 
 Inserts `pending_enqueue` with a stable job ID. A conflict is accepted only when owner, calendar, provider, and reason exactly match. A still-pending winner can be sent again after an uncertain Queue call.

@@ -10,6 +10,10 @@ Finds a channel only when its Google channel ID and hashed secret token both mat
 
 Binds Google's first authenticated `sync` resource to a pending channel.
 
+## `inspectWebhookReplay`
+
+Checks whether an opaque notification job already exists without changing it. It returns only `new` or `replay` and rejects an identity collision.
+
 ## `reserveWebhookJob`
 
 Creates one durable job for a notification or returns the existing job for the same signal.

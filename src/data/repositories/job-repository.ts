@@ -8,6 +8,9 @@ import type {
   SyncResult,
 } from "../../jobs/sync-calendar";
 
+const NOTIFICATION_JOB_IDENTITY_CONFLICT =
+  "Notification job identity conflict.";
+
 /** Queryable, content-free Google channel facts required to authenticate a notification. */
 export interface GoogleWebhookChannel {
   readonly ownerId: string;
@@ -61,6 +64,9 @@ export interface CalendarJobRepository {
     verificationTokenHash: string,
     providerResourceId: string,
   ): Promise<GoogleWebhookChannel | undefined>;
+  inspectWebhookReplay(
+    message: CalendarSyncMessage,
+  ): Promise<"new" | "replay">;
   reserveWebhookJob(
     message: CalendarSyncMessage,
     now?: Date,
@@ -159,6 +165,33 @@ class DrizzleCalendarJobRepository implements CalendarJobRepository {
     return result.rows[0] ? decodeChannel(result.rows[0]) : undefined;
   }
 
+  /** Reads one opaque job identity without inserting or updating durable state. */
+  async inspectWebhookReplay(
+    message: CalendarSyncMessage,
+  ): Promise<"new" | "replay"> {
+    const result = await this.database.execute<Record<string, unknown>>(sql`
+      select
+        owner_id as "ownerId",
+        provider,
+        provider_calendar_id as "calendarId",
+        reason
+      from calendar_sync_jobs
+      where job_id = ${message.jobId}
+      limit 1
+    `);
+    const existing = result.rows[0];
+    if (!existing) return "new";
+    if (
+      existing.ownerId !== message.ownerId ||
+      existing.provider !== "google-calendar" ||
+      existing.calendarId !== message.calendarId ||
+      existing.reason !== message.reason
+    ) {
+      throw new Error(NOTIFICATION_JOB_IDENTITY_CONFLICT);
+    }
+    return "replay";
+  }
+
   /** Inserts one stable notification job or returns its exact existing winner. */
   async reserveWebhookJob(
     message: CalendarSyncMessage,
@@ -195,7 +228,9 @@ class DrizzleCalendarJobRepository implements CalendarJobRepository {
         and reason = ${message.reason}
       limit 1
     `);
-    if (!existing.rows[0]) throw new Error("Notification job identity conflict.");
+    if (!existing.rows[0]) {
+      throw new Error(NOTIFICATION_JOB_IDENTITY_CONFLICT);
+    }
     const winner = decodeMessage(existing.rows[0]);
     return {
       message: winner,
