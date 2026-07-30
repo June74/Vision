@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T19:45:30Z
-- **Last observed:** 2026-07-29T22:46:45.9890985Z
-- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
+- **Last observed:** 2026-07-30T00:16:54.4369723Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final re-review
 - **Environment:** Local Phase B worktree
 - **Version/commit:** Working changes based on `41d3e74`
 
@@ -81,3 +81,7 @@ facts.
   committed policy and threshold numbers while deriving the exact closed
   production contract. No credential, provider-private data, or state change
   was involved. Subsequent verification emits only pass/fail counts.
+- 2026-07-30T00:16:54.4369723Z: A whole-branch review helper rendered one
+  already-committed public redirect literal during a bounded source trace.
+  It stopped immediately; no credential, authorization-bearing value,
+  provider-private data, or repository/provider mutation was involved.

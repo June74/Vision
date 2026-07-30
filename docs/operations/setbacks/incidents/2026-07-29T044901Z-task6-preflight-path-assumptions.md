@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T04:46:00Z
-- **Last observed:** 2026-07-29T04:49:01.3790480Z
-- **Phase/task:** Phase B acceptance instrumentation Task 6 preflight
+- **Last observed:** 2026-07-30T00:34:21.6346321Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 3
 - **Environment:** Local Phase B linked worktree
 - **Version/commit:** `1c7f89b`
 
@@ -63,4 +63,13 @@ browser, or network state changed, and no private value was read or recorded.
 
 The authoritative plan path, linked-worktree path, branch
 `codex/phase-b-foundation`, and base `1c7f89b` were all confirmed by the
-corrected bounded preflight.
+corrected bounded preflight. For the current recurrence, bounded tracked-file
+discovery confirmed `.github/workflows/preview.yml` as the exact workflow
+path.
+
+## Recurrence history
+
+- 2026-07-30T00:33:50.2150076Z: A wave-3 artifact-check lookup assumed the
+  nonexistent `.github/workflows/deploy-preview.yml` filename. The read-only
+  lookup failed before any candidate generation or deployment action. No
+  project, provider, or private state changed.

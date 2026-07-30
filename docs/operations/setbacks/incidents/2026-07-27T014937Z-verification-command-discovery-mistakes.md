@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:47:00Z
-- **Last observed:** 2026-07-29T23:11:04.7507139Z
-- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
+- **Last observed:** 2026-07-30T00:43:39.1517844Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 3
 - **Environment:** Local worktree
 - **Version/commit:** `50569e6`
 
@@ -138,6 +138,21 @@ At 2026-07-27T01:50Z, the repository's `docs:check` script and
   time. No child process, candidate generation, provider action, or external
   mutation occurred. The retry removes inline JavaScript and uses one fixed
   command line that preserves the empty scalar.
+
+- 2026-07-30T00:38:07.8037054Z: The wave-3 eight-candidate verifier repeated
+  the inline Node launcher mistake by embedding backslash-escaped quotes in a
+  PowerShell single-quoted string. The launcher stopped before the first
+  candidate artifact was written; exact cleanup confirmed the output path was
+  absent. No provider, deployment, source, or private state changed.
+- 2026-07-30T00:42:27.8183348Z: A follow-up inline Node argument-shape
+  diagnostic again lost JavaScript string quotes at the PowerShell native
+  boundary and stopped before producing evidence. No file, provider, or
+  private state changed. Remaining verification uses fixed repository scripts
+  and repository-relative paths only.
+- 2026-07-30T00:43:39.1517844Z: The fixed `cmd.exe` candidate commands and
+  repository-relative validators completed all eight generation, lifetime,
+  shape, and pricing-artifact checks. Every exclusive candidate artifact was
+  removed, closing the recurrence.
 
 The fixed command generated and internally validated the foundation candidate
 with exit zero, then removed the ephemeral artifact. This closes the

@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T18:53:07.263429Z
-- **Last observed:** 2026-07-30T00:04:59.1318088Z
-- **Phase/task:** Phase B acceptance instrumentation Task 7 final re-review
+- **Last observed:** 2026-07-30T00:21:28.0141470Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 3
 - **Environment:** Local Codex workspace
 - **Version/commit:** `codex/phase-b-foundation`
 
@@ -17,18 +17,21 @@ No project or provider state changed; the release workflow paused briefly while 
 
 ## Reproduction conditions
 
-Read `scope-gate/SKILL.md` using the `r0` skill root even though the available-skills
-catalog maps that skill to `r1`.
+Read `scope-gate/SKILL.md` and `trace-live-call-path/SKILL.md` using the `r0`
+skill root even though the available-skills catalog maps both skills to `r1`.
 
 ## Safe evidence
 
-The configured skill catalog maps `scope-gate` to
-`C:\Users\2006i\.agents\skills`, and the retry from that root succeeded.
+The configured skill catalog maps both affected skills to
+`C:\Users\2006i\.agents\skills`, and both corrective reads succeeded.
 
 ## Attempts and outcomes
 
 - The first read from the `r0` root failed with a file-not-found error.
 - The retry from the catalog-declared `r1` root succeeded.
+- The wave-3 combined read repeated the same root-expansion mistake for
+  `scope-gate` and `trace-live-call-path`; no implementation action preceded
+  the failure.
 
 ## Cause classification
 
@@ -41,7 +44,8 @@ The configured skill catalog maps `scope-gate` to
 
 ## Correction and prevention
 
-- **Correction:** Resolved the `r1` root from the catalog and completed the read.
+- **Correction:** Resolved the `r1` root from the catalog and completed both
+  corrective reads before repository investigation continued.
 - **Prevention:** Expand each skill's declared root alias before accessing its
   files; do not infer roots from neighboring skills.
 - **Owner:** Codex and project owner.
@@ -49,7 +53,9 @@ The configured skill catalog maps `scope-gate` to
 
 ## Verification and related work
 
-The correct skill file was read successfully in the same run.
+The complete `scope-gate` and `trace-live-call-path` skill files were read
+successfully from their catalog-declared `r1` paths before the live scheduled
+path investigation began.
 
 ## Recurrence history
 
@@ -86,3 +92,7 @@ The correct skill file was read successfully in the same run.
   reported missing paths before the reviewer opened the immutable package.
   Review paused, no project or provider state changed, and the reviewer was
   redirected to expand the declared root aliases.
+- 2026-07-30T00:19:33.7014177Z: The wave-3 implementer again used `r0` for
+  `scope-gate` and `trace-live-call-path`, both catalog-declared `r1` skills.
+  The read-only failures occurred before implementation work; no project,
+  provider, or private state changed.

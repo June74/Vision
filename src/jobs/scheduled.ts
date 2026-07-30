@@ -129,7 +129,7 @@ export interface ScheduledRecoveryDependencies {
 
 /** Injected scheduled-entry boundaries keep candidate dispatch testable without provider I/O. */
 export interface ScheduledEntryDependencies extends ScheduledJobDependencies {
-  /** Execution clock used only to enforce a temporary candidate's real lifetime. */
+  /** Execution clock used to enforce every temporary candidate invocation's real lifetime. */
   readonly currentTime: () => Date;
   readonly temporaryFaultR2Upload: (
     now: Date,
@@ -334,16 +334,19 @@ export async function scheduled(
     createProductionScheduledEntryDependencies(environment),
 ): Promise<void> {
   const scheduledAt = new Date(controller.scheduledTime);
+  const selector = parseTemporaryPreviewAcceptanceSelector(environment);
+  if (selector !== undefined) {
+    assertTemporaryPreviewAcceptanceLifetime(
+      dependencies.currentTime(),
+      environment,
+    );
+  } else if (environment.PREVIEW_ACCEPTANCE_EXPIRES_AT !== undefined) {
+    throw new Error("Temporary preview acceptance candidate is invalid.");
+  }
+  const gatewayLimitMatches =
+    parseTemporaryPreviewAcceptanceAiGatewayAttestation(environment);
+
   if (controller.cron === TEMPORARY_PREVIEW_FAULT_CRON) {
-    const selector = parseTemporaryPreviewAcceptanceSelector(environment);
-    if (selector !== undefined) {
-      assertTemporaryPreviewAcceptanceLifetime(
-        dependencies.currentTime(),
-        environment,
-      );
-    }
-    const gatewayLimitMatches =
-      parseTemporaryPreviewAcceptanceAiGatewayAttestation(environment);
     if (
       TEMPORARY_PREVIEW_FAULT_SCENARIOS.includes(
         selector as TemporaryPreviewFaultScenario,

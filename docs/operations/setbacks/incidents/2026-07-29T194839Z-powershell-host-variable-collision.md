@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T19:48:39Z
-- **Last observed:** 2026-07-29T19:48:39Z
-- **Phase/task:** Phase B consolidated final-fix action pinning
+- **Last observed:** 2026-07-30T00:59:58.8828765Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 3
 - **Environment:** Local Phase B worktree
 - **Version/commit:** Working changes based on `e3c1272`
 
@@ -33,6 +33,17 @@ repository mutation, or provider action occurred.
 - **Owner:** Codex.
 - **Next diagnostic step:** Resolve all four tags independently from their
   official repositories.
+
+## Recurrence history
+
+- 2026-07-30T00:58:57.9225467Z: The final wave-3 audit reused PowerShell's
+  automatic `$Matches` variable as a numeric privacy counter. Later regex
+  checks replaced it with the automatic match hashtable, so JSON serialization
+  failed after the read-only checks. No match content, private value, file
+  change, or external action occurred. The retry uses a task-specific counter.
+- 2026-07-30T00:59:58.8828765Z: The retry used a task-specific counter and
+  returned the complete JSON audit with zero strict sensitive-value matches,
+  closing the recurrence.
 
 ## Verification and related work
 

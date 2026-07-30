@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:24:05.647183Z
-- **Last observed:** 2026-07-29T17:00:08Z
-- **Phase/task:** Phase B acceptance instrumentation Task 6 final gate
+- **Last observed:** 2026-07-30T00:56:44.4364200Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 3
 - **Environment:** Local managed sandbox Worker test pool
 - **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`
 
@@ -105,3 +105,13 @@ documentation, typecheck, and security validation also passed.
 - 2026-07-29T17:00:08Z: The Task 6 final Worker gate repeated the same
   sandbox-only analyzer warning and passed all 94 Worker assertions. Contract,
   documentation, build, and release security gates also exited zero.
+- 2026-07-30T00:32:15.7041949Z: The wave-3 aggregate gate repeated the same
+  sandbox-only analyzer warning and passed all 94 Worker assertions. The
+  aggregate command exited zero with 1,179 unit/integration/security tests
+  passed and one intentional skip, 179 contract tests passed, and typecheck,
+  documentation, build, and release security validation passing.
+- 2026-07-30T00:56:44.4364200Z: The fresh final wave-3 aggregate repeated the
+  same sandbox-only analyzer warning and passed all 94 Worker assertions. The
+  command exited zero with 1,180 unit/integration/security tests passed and
+  one intentional skip, 179 contract tests passed, and typecheck,
+  documentation, build, and release security validation passing.

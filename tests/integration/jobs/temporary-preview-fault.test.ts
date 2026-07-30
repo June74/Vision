@@ -7,7 +7,7 @@ import {
   runTemporaryPreviewFault,
   type TemporaryPreviewFaultEntry,
 } from "../../../src/jobs/temporary-preview-fault";
-import { scheduled } from "../../../src/jobs/scheduled";
+import { DAILY_BACKUP_CRON, scheduled } from "../../../src/jobs/scheduled";
 import type { Env } from "../../../src/server/env";
 
 const NOW = new Date("2026-07-28T12:00:00.000Z");
@@ -322,6 +322,156 @@ describe("temporary preview fault scheduled entry", () => {
     expect(delayedDependencies.temporaryFaultR2Upload).not.toHaveBeenCalled();
     expectNoUnrelatedCandidateCalls(delayedDependencies);
   });
+
+  it.each([
+    {
+      label: "expired still-deployed",
+      scheduledAt: "2026-07-28T06:05:00.000Z",
+      currentTime: "2026-07-28T06:05:00.000Z",
+      environment: {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "foundation_probe",
+        PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-28T05:00:00.000Z",
+      },
+      expectedError: "Preview acceptance timing is unavailable.",
+    },
+    {
+      label: "delayed-delivery",
+      scheduledAt: "2026-07-28T04:59:59.999Z",
+      currentTime: "2026-07-28T05:00:00.001Z",
+      environment: {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "foundation_probe",
+        PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-28T05:00:00.000Z",
+      },
+      expectedError: "Preview acceptance timing is unavailable.",
+    },
+    {
+      label: "protected-window",
+      scheduledAt: "2026-07-28T05:34:59.999Z",
+      currentTime: "2026-07-28T05:34:59.999Z",
+      environment: {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "foundation_probe",
+        PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-28T05:35:00.001Z",
+      },
+      expectedError: "Preview acceptance timing is unavailable.",
+    },
+    {
+      label: "missing-lifetime-attestation",
+      scheduledAt: "2026-07-28T04:00:00.000Z",
+      currentTime: "2026-07-28T04:00:00.000Z",
+      environment: {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "foundation_probe",
+      },
+      expectedError: "Preview acceptance timing is unavailable.",
+    },
+    {
+      label: "malformed-lifetime-attestation",
+      scheduledAt: "2026-07-28T04:00:00.000Z",
+      currentTime: "2026-07-28T04:00:00.000Z",
+      environment: {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "foundation_probe",
+        PREVIEW_ACCEPTANCE_EXPIRES_AT: "malformed",
+      },
+      expectedError: "Preview acceptance timing is unavailable.",
+    },
+    {
+      label: "orphaned-lifetime-attestation",
+      scheduledAt: "2026-07-28T04:00:00.000Z",
+      currentTime: "2026-07-28T04:00:00.000Z",
+      environment: {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-28T04:30:00.000Z",
+      },
+      expectedError: "Temporary preview acceptance candidate is invalid.",
+    },
+    {
+      label: "missing-AI-attestation",
+      scheduledAt: "2026-07-28T04:00:00.000Z",
+      currentTime: "2026-07-28T04:00:00.000Z",
+      environment: {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "ai_usage",
+        PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-28T04:30:00.000Z",
+      },
+      expectedError:
+        "Temporary preview AI Gateway attestation is invalid.",
+    },
+    {
+      label: "malformed-AI-attestation",
+      scheduledAt: "2026-07-28T04:00:00.000Z",
+      currentTime: "2026-07-28T04:00:00.000Z",
+      environment: {
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "ai_usage",
+        PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-28T04:30:00.000Z",
+        PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: true,
+      },
+      expectedError:
+        "Temporary preview AI Gateway attestation is invalid.",
+    },
+  ])(
+    "rejects a $label candidate before daily recovery",
+    async ({ scheduledAt, currentTime, environment, expectedError }) => {
+      const { dependencies } = scheduledDependencies();
+      const dailyCron = {
+        ...CONTROLLER,
+        cron: DAILY_BACKUP_CRON,
+        scheduledTime: new Date(scheduledAt).getTime(),
+      } as ScheduledController;
+      const guardedDependencies = {
+        ...dependencies,
+        currentTime: () => new Date(currentTime),
+        recovery: vi.fn(async () => {
+          throw new Error("Normal recovery boundary reached.");
+        }),
+      };
+
+      await expect(
+        scheduledWithDependencies(
+          dailyCron,
+          environment as Env,
+          {} as ExecutionContext,
+          guardedDependencies,
+        ),
+      ).rejects.toThrow(expectedError);
+
+      expect(guardedDependencies.recovery).not.toHaveBeenCalled();
+      expectNoUnrelatedCandidateCalls(guardedDependencies);
+    },
+  );
+
+  it.each(["preview", "production"] as const)(
+    "preserves normal %s non-candidate daily recovery",
+    async (visionEnvironment) => {
+      const { dependencies } = scheduledDependencies();
+      const dailyCron = {
+        ...CONTROLLER,
+        cron: DAILY_BACKUP_CRON,
+        scheduledTime: new Date("2026-07-28T06:05:00.000Z").getTime(),
+      } as ScheduledController;
+
+      await expect(
+        scheduledWithDependencies(
+          dailyCron,
+          { VISION_ENV: visionEnvironment } as Env,
+          {} as ExecutionContext,
+          dependencies,
+        ),
+      ).resolves.toBeUndefined();
+
+      expect(dependencies.recovery).toHaveBeenCalledExactlyOnceWith(
+        new Date("2026-07-28T06:05:00.000Z"),
+      );
+      expect(dependencies.maintenance).not.toHaveBeenCalled();
+      expect(dependencies.temporaryRoleProbe).not.toHaveBeenCalled();
+      expect(dependencies.foundationProbe).not.toHaveBeenCalled();
+      expect(dependencies.aiUsageEvidence).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     "queue_delayed",
