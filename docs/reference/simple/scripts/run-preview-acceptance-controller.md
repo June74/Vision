@@ -46,6 +46,11 @@ Reads one closed observer state and optional signal timestamp.
 
 Requires the candidate run to be attributed before an action can continue.
 
+## `admitRestore`
+
+Rechecks the immediately preceding same-commit role-probe closure through the
+private driver and returns the controller-created restore attestation.
+
 ## `requestApproval`
 
 Requests approval for user-mediated families and accepts only one canonical
@@ -78,7 +83,9 @@ dispatches rollback, and verifies closure.
 ## `waitForSignal`
 
 Polls the active observer every five seconds until success or a bounded
-failure, retaining both local detection time and the provider listener time.
+failure. The absolute limit is the earlier of action completion plus two
+minutes or candidate expiry minus one minute, even when the action driver
+returns late.
 
 ## `assertPreActionIdleDeadline`
 
@@ -97,8 +104,8 @@ temporary maintenance candidate.
 
 ## `createObserveContext`
 
-Builds the exact observe context, including close time and the maintenance tick
-when applicable.
+Builds the exact observe context. Only maintenance carries a scheduled tick
+and fixed close; other families start uniqueness at their admitted terminal.
 
 ## `createCandidateContext`
 

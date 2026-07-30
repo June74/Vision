@@ -87,6 +87,11 @@ export interface PreviewAcceptanceControllerDependencies {
     readonly operation: PreviewAcceptanceOperation;
     readonly reviewedCommit: string;
   }): Promise<void>;
+  admitRestore(input: {
+    readonly priorCandidateRunRef: string;
+    readonly rollbackClosureRunRef: string;
+    readonly reviewedCommit: string;
+  }): Promise<"verified">;
   requestApproval(input: PreviewAcceptanceApprovalInput): Promise<Date>;
   performAction(input: PreviewAcceptanceActionInput): Promise<Date>;
   verifyClosure(input: PreviewAcceptanceClosureInput): Promise<void>;
@@ -100,7 +105,6 @@ export interface PreviewAcceptanceControllerInput {
   readonly expectation: PreviewObserverAcceptanceExpectation;
   readonly priorCandidateRunRef?: string;
   readonly rollbackClosureRunRef?: string;
-  readonly restoreAdmissionGate?: "verified";
 }
 
 export interface PreviewAcceptanceActionInput {
@@ -276,6 +280,17 @@ export function createPreviewControllerSubprocessDependencies(input: {
         attribution.operation,
         attribution.reviewedCommit,
       ]),
+    /** Privately re-admits the immediately preceding role-probe closure. */
+    admitRestore: async (admission) => {
+      const record = exactRecord(
+        await invokeDriver("admit-restore", [
+          serializeDriverInput(admission),
+        ]),
+        ["attestation"],
+      );
+      if (ownData(record, "attestation") !== "verified") fail();
+      return "verified";
+    },
     /** Requests approval and returns only its canonical instant. */
     requestApproval: async (action) =>
       readDriverDate(
@@ -377,7 +392,7 @@ export async function runPreviewAcceptanceController(
     const observerClosesAt =
       input.family === "calendar_maintenance"
         ? maintenanceObserverClosesAt(input.expectation)
-        : new Date(observerStartedAt.getTime() + UNIQUENESS_MILLISECONDS);
+        : undefined;
     const observeContext = createObserveContext(
       input,
       reviewedCommit,
@@ -390,12 +405,13 @@ export async function runPreviewAcceptanceController(
       expectedCommit: reviewedCommit,
       dispatchStartedAt: observerStartedAt,
       dispatchCompletedAt: observerCompletedAt,
-      observerClosesAt,
+      ...(observerClosesAt === undefined ? {} : { observerClosesAt }),
       expectation: input.expectation,
     });
     dependencies.writeStatus("observer_ready");
 
     if (input.family === "calendar_maintenance") {
+      if (observerClosesAt === undefined) fail();
       await waitForMaintenanceUniqueness(
         observer,
         observerClosesAt,
@@ -406,15 +422,18 @@ export async function runPreviewAcceptanceController(
     }
 
     const operation = candidateOperation(input.family);
-    const candidate = await dispatch(
-      createCandidateContext(
-        input,
-        operation,
-        reviewedCommit,
-        observerStartedAt,
-        observerCompletedAt,
-      ),
-    );
+    const restoreAdmission =
+      operation === "deploy_restore"
+        ? await admitRestore(input, reviewedCommit, dependencies)
+        : undefined;
+    const candidate = await dispatch(createCandidateContext(
+      input,
+      operation,
+      reviewedCommit,
+      observerStartedAt,
+      observerCompletedAt,
+      restoreAdmission,
+    ));
     const candidateDispatchReturnedAt = safeNow(dependencies.wallNow());
     candidateRunRef = candidate.runRef;
     await dependencies.verifyCandidateAttribution({
@@ -475,24 +494,24 @@ export async function runPreviewAcceptanceController(
         fail();
       }
     }
-    const actionCompletedMonotonic = safeMonotonic(
-      dependencies.monotonicNow(),
-    );
-    const noSignalDuration = Math.min(
-      UNIQUENESS_MILLISECONDS,
-      expiresAt.getTime() -
-        EXPIRY_BUFFER_MILLISECONDS -
-        actionCompletedAt.getTime(),
-    );
-    if (noSignalDuration <= 0) fail();
+    const sampledWall = safeNow(dependencies.wallNow());
+    const sampledMonotonic = safeMonotonic(dependencies.monotonicNow());
+    const absoluteNoSignalDeadline = new Date(Math.min(
+      actionCompletedAt.getTime() + UNIQUENESS_MILLISECONDS,
+      expiresAt.getTime() - EXPIRY_BUFFER_MILLISECONDS,
+    ));
+    const remainingNoSignalMilliseconds =
+      absoluteNoSignalDeadline.getTime() - sampledWall.getTime();
+    if (remainingNoSignalMilliseconds < 0) fail();
     const noSignalDeadline =
-      actionCompletedMonotonic + noSignalDuration;
+      sampledMonotonic + remainingNoSignalMilliseconds;
 
     const signal = await waitForSignal(
       observer,
       actionCompletedAt,
-      actionCompletedMonotonic,
+      sampledMonotonic,
       noSignalDeadline,
+      absoluteNoSignalDeadline,
       dependencies,
     );
     dependencies.writeStatus("candidate_signal_seen");
@@ -503,11 +522,14 @@ export async function runPreviewAcceptanceController(
 
     if (isTwoJobFamily(input.family)) {
       let state = signal.state;
+      const uniquenessClosesAt = new Date(
+        signal.providerObservedAt.getTime() + UNIQUENESS_MILLISECONDS,
+      );
       while (state.uniqueness !== "succeeded") {
         if (
           state.uniqueness === "failed" ||
           safeNow(dependencies.wallNow()).getTime() >
-            observerClosesAt.getTime() + POLL_MILLISECONDS
+            uniquenessClosesAt.getTime() + POLL_MILLISECONDS
         ) {
           fail();
         }
@@ -534,6 +556,7 @@ async function waitForSignal(
   actionCompletedAt: Date,
   actionCompletedMonotonic: number,
   noSignalDeadline: number,
+  absoluteNoSignalDeadline: Date,
   dependencies: PreviewAcceptanceControllerDependencies,
 ): Promise<{
   readonly state: Awaited<ReturnType<
@@ -544,17 +567,25 @@ async function waitForSignal(
 }> {
   for (;;) {
     const state = await dependencies.readObserverState(observer);
+    const detectedAtWall = safeNow(dependencies.wallNow());
+    const detectedAtMonotonic = safeMonotonic(
+      dependencies.monotonicNow(),
+    );
+    if (
+      detectedAtWall.getTime() > absoluteNoSignalDeadline.getTime() ||
+      detectedAtMonotonic > noSignalDeadline
+    ) {
+      fail();
+    }
     if (state.signal === "failed" || state.uniqueness === "failed") fail();
     if (state.signal === "succeeded") {
       const observedAt = safeNow(state.signalObservedAt);
-      const detectedAtMonotonic = safeMonotonic(
-        dependencies.monotonicNow(),
-      );
       const providerElapsed =
         observedAt.getTime() - actionCompletedAt.getTime();
       if (
         detectedAtMonotonic < actionCompletedMonotonic ||
-        providerElapsed < 0
+        providerElapsed < 0 ||
+        observedAt.getTime() > absoluteNoSignalDeadline.getTime()
       ) {
         fail();
       }
@@ -634,7 +665,7 @@ async function waitForMaintenanceUniqueness(
 function createObserveContext(
   input: PreviewAcceptanceControllerInput,
   reviewedCommit: string,
-  observerClosesAt: Date,
+  observerClosesAt: Date | undefined,
 ): PreviewAcceptanceContext {
   const expectedOutcome = input.expectation.kind;
   const base = {
@@ -643,7 +674,6 @@ function createObserveContext(
     reviewedCommit,
     evidenceFamily: input.family,
     expectedOutcome,
-    observerClosesAt: observerClosesAt.toISOString(),
   };
   if (input.expectation.kind === "fault_expected") {
     if (input.family !== "preview_fault") fail();
@@ -660,6 +690,7 @@ function createObserveContext(
   ) {
     if (
       input.family !== "calendar_maintenance" ||
+      observerClosesAt === undefined ||
       Date.parse(input.expectation.maintenanceScheduledAt) + 120_000 !==
         observerClosesAt.getTime()
     ) {
@@ -669,6 +700,7 @@ function createObserveContext(
       ...base,
       evidenceFamily: "calendar_maintenance",
       expectedOutcome: input.expectation.kind,
+      observerClosesAt: observerClosesAt.toISOString(),
       maintenanceScheduledAt: input.expectation.maintenanceScheduledAt,
     });
   }
@@ -695,6 +727,7 @@ function createCandidateContext(
   reviewedCommit: string,
   observerStartedAt: Date,
   observerCompletedAt: Date,
+  restoreAdmission: "verified" | undefined,
 ): PreviewAcceptanceContext {
   const base = {
     version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
@@ -715,7 +748,7 @@ function createCandidateContext(
     });
   }
   if (operation === "deploy_restore") {
-    if (input.restoreAdmissionGate !== "verified") fail();
+    if (restoreAdmission !== "verified") fail();
     return Object.freeze({
       ...base,
       kind: "deploy_restore",
@@ -723,6 +756,27 @@ function createCandidateContext(
     });
   }
   return Object.freeze(base) as PreviewAcceptanceContext;
+}
+
+/** Derives restore admission from a fresh private role-probe closure check. */
+async function admitRestore(
+  input: PreviewAcceptanceControllerInput,
+  reviewedCommit: string,
+  dependencies: PreviewAcceptanceControllerDependencies,
+): Promise<"verified"> {
+  if (
+    !validRunRef(input.priorCandidateRunRef) ||
+    !validRunRef(input.rollbackClosureRunRef)
+  ) {
+    fail();
+  }
+  const attestation = await dependencies.admitRestore({
+    priorCandidateRunRef: input.priorCandidateRunRef,
+    rollbackClosureRunRef: input.rollbackClosureRunRef,
+    reviewedCommit,
+  });
+  if (attestation !== "verified") fail();
+  return "verified";
 }
 
 /** Maps each non-maintenance family to one closed candidate operation. */
@@ -915,14 +969,17 @@ function snapshotObserverResolutionInput(
   readonly dispatchCompletedAt: Date;
   readonly maintenanceScheduledAt: Date | null;
 } {
-  const record = exactRecord(value, [
-    "dispatchCompletedAt",
-    "dispatchStartedAt",
-    "expectation",
-    "expectedCommit",
-    "family",
-    "observerClosesAt",
-  ]);
+  const record = exactRecordWithOptional(
+    value,
+    [
+      "dispatchCompletedAt",
+      "dispatchStartedAt",
+      "expectation",
+      "expectedCommit",
+      "family",
+    ],
+    ["observerClosesAt"],
+  );
   const family = ownData(record, "family");
   if (!isControllerFamily(family)) fail();
   const expectation = snapshotExpectation(
@@ -935,14 +992,16 @@ function snapshotObserverResolutionInput(
   const dispatchCompletedAt = safeNow(
     ownData(record, "dispatchCompletedAt") as Date,
   );
-  const observerClosesAt = safeNow(
-    ownData(record, "observerClosesAt") as Date,
-  );
+  const rawObserverClosesAt = optionalOwnData(record, "observerClosesAt");
+  const observerClosesAt =
+    rawObserverClosesAt === undefined
+      ? null
+      : safeNow(rawObserverClosesAt as Date);
   if (
     dispatchCompletedAt.getTime() < dispatchStartedAt.getTime() ||
-    (family !== "calendar_maintenance" &&
-      observerClosesAt.getTime() !==
-        dispatchStartedAt.getTime() + UNIQUENESS_MILLISECONDS)
+    (family === "calendar_maintenance"
+      ? observerClosesAt === null
+      : observerClosesAt !== null)
   ) {
     fail();
   }
@@ -953,7 +1012,7 @@ function snapshotObserverResolutionInput(
       : null;
   if (
     maintenanceScheduledAt !== null &&
-    observerClosesAt.getTime() !==
+    observerClosesAt?.getTime() !==
       maintenanceScheduledAt.getTime() + UNIQUENESS_MILLISECONDS
   ) {
     fail();
@@ -1005,7 +1064,6 @@ function snapshotControllerInput(
     ["expiresAt", "expectation", "family", "reviewedCommit"],
     [
       "priorCandidateRunRef",
-      "restoreAdmissionGate",
       "rollbackClosureRunRef",
     ],
   );
@@ -1023,18 +1081,11 @@ function snapshotControllerInput(
     record,
     "rollbackClosureRunRef",
   );
-  const restoreAdmissionGate = optionalOwnData(
-    record,
-    "restoreAdmissionGate",
-  );
   if (
     (priorCandidateRunRef !== undefined &&
       !validLifecycleRunRef(priorCandidateRunRef)) ||
     (rollbackClosureRunRef !== undefined &&
-      !validLifecycleRunRef(rollbackClosureRunRef)) ||
-    (family === "restore"
-      ? restoreAdmissionGate !== "verified"
-      : restoreAdmissionGate !== undefined)
+      !validLifecycleRunRef(rollbackClosureRunRef))
   ) {
     fail();
   }
@@ -1052,9 +1103,6 @@ function snapshotControllerInput(
     ...(rollbackClosureRunRef === undefined
       ? {}
       : { rollbackClosureRunRef }),
-    ...(restoreAdmissionGate === undefined
-      ? {}
-      : { restoreAdmissionGate: "verified" as const }),
   });
 }
 

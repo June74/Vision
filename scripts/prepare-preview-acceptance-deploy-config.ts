@@ -93,7 +93,7 @@ export type PreviewAcceptanceContext =
         | "restore_succeeded"
         | "maintenance_succeeded"
         | "maintenance_repair_reserved";
-      readonly observerClosesAt: string;
+      readonly observerClosesAt?: string;
       readonly faultScenario?: TemporaryPreviewFaultScenario;
       readonly maintenanceScheduledAt?: string;
     })
@@ -244,7 +244,6 @@ function canonicalPreviewAcceptanceContext(
               "reviewedCommit",
               "evidenceFamily",
               "expectedOutcome",
-              "observerClosesAt",
               "faultScenario",
             ]
           : maintenanceExpected
@@ -263,7 +262,6 @@ function canonicalPreviewAcceptanceContext(
               "reviewedCommit",
               "evidenceFamily",
               "expectedOutcome",
-              "observerClosesAt",
             ],
       );
       const matchingOutcome =
@@ -284,7 +282,6 @@ function canonicalPreviewAcceptanceContext(
       const maintenanceScheduledAt = dataValue(record, "maintenanceScheduledAt");
       if (
         !matchingOutcome ||
-        !isCanonicalInstant(observerClosesAt) ||
         (faultExpected &&
           !TEMPORARY_PREVIEW_FAULT_SCENARIOS.includes(
             faultScenario as TemporaryPreviewFaultScenario,
@@ -302,7 +299,9 @@ function canonicalPreviewAcceptanceContext(
         reviewedCommit,
         evidenceFamily,
         expectedOutcome,
-        observerClosesAt,
+        ...(maintenanceExpected
+          ? { observerClosesAt: observerClosesAt as string }
+          : {}),
         ...(faultExpected
           ? { faultScenario: faultScenario as TemporaryPreviewFaultScenario }
           : {}),

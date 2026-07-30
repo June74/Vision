@@ -53,8 +53,6 @@ function signalArguments(
     mode,
     "--expectation",
     expectation,
-    "--closes-at",
-    new Date(Date.now() + 60_000).toISOString(),
     ...extra,
   ];
 }
@@ -68,14 +66,12 @@ function uniquenessArguments(
   readonly args: readonly string[];
   readonly closeAfterMilliseconds: number;
 } {
-  const closeAfterMilliseconds = 3_400;
+  const closeAfterMilliseconds = 0;
   return {
     args: [
       mode,
       "--expectation",
       expectation,
-      "--closes-at",
-      new Date(Date.now() + 3_000).toISOString(),
       ...extra,
     ],
     closeAfterMilliseconds,
@@ -145,10 +141,12 @@ function roleProbeTail(evidence: unknown): string {
 }
 
 /** Builds one exact permanent maintenance success result. */
-function maintenanceSuccess(): unknown {
+function maintenanceSuccess(
+  maintenanceScheduledAt = "2026-07-30T18:15:00.000Z",
+): unknown {
   return {
     evidenceType: "vision.calendar-maintenance/v2",
-    maintenanceScheduledAt: "2026-07-30T18:15:00.000Z",
+    maintenanceScheduledAt,
     outcome: "succeeded",
     category: "none",
     repairOutcome: "reserved",
@@ -254,17 +252,20 @@ describe("print-safe-tail", () => {
   });
 
   it("retains one exact restore result until the uniqueness deadline", async () => {
-    const contract = uniquenessArguments("--restore-only", "restore_succeeded");
-    await expect(
-      runPrintSafeTail(
-        contract.args,
-        [scheduledTail(), restoreTail(restoreSuccess())],
-        contract.closeAfterMilliseconds,
-      ),
-    ).resolves.toEqual({
-      exitCode: 0,
-      stdout: `${JSON.stringify(restoreSuccess())}\n`,
-      stderr: "",
+    const observer = createPreviewTailObserver({
+      mode: "restore_uniqueness",
+      expectation: { kind: "restore_succeeded" },
+    });
+    const admittedAt = new Date("2026-07-30T18:00:37.000Z");
+    expect(observer.push(restoreSuccess() as never, admittedAt)).toMatchObject({
+      done: false,
+    });
+    expect(
+      observer.finish(new Date(admittedAt.getTime() + 120_000)),
+    ).toMatchObject({
+      done: true,
+      succeeded: true,
+      output: restoreSuccess(),
     });
   });
 
@@ -302,26 +303,31 @@ describe("print-safe-tail", () => {
   });
 
   it("emits only permanent maintenance evidence in calendar-maintenance-only mode", async () => {
-    const contract = uniquenessArguments(
-      "--calendar-maintenance-only",
-      "maintenance_repair_reserved",
-      ["--maintenance-scheduled-at", "2026-07-30T18:15:00.000Z"],
+    const closesAt = new Date(Date.now() + 3_000);
+    const scheduledAt = new Date(closesAt.getTime() - 120_000).toISOString();
+    const contract = {
+      args: [
+        "--calendar-maintenance-only",
+        "--expectation",
+        "maintenance_repair_reserved",
+        "--closes-at",
+        closesAt.toISOString(),
+        "--maintenance-scheduled-at",
+        scheduledAt,
+      ],
+      closeAfterMilliseconds: 3_400,
+    };
+    const result = await runPrintSafeTail(
+      contract.args,
+      [
+        scheduledTail(),
+        maintenanceTail(maintenanceSuccess(scheduledAt)),
+      ],
+      contract.closeAfterMilliseconds,
     );
-    await expect(
-      runPrintSafeTail(
-        contract.args,
-        [
-          scheduledTail(),
-          maintenanceTail(maintenanceSuccess()),
-        ],
-        contract.closeAfterMilliseconds,
-      ),
-    ).resolves.toEqual({
-      exitCode: 0,
-      stdout:
-        '{"category":"none","evidenceType":"vision.calendar-maintenance/v2","maintenanceScheduledAt":"2026-07-30T18:15:00.000Z","outcome":"succeeded","renewalOutcome":"completed","repairOutcome":"reserved"}\n',
-      stderr: "",
-    });
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual(maintenanceSuccess(scheduledAt));
+    expect(result.stderr).toBe("");
   });
 
   it("fails closed without output when maintenance uniqueness sees no terminal", async () => {
@@ -337,6 +343,26 @@ describe("print-safe-tail", () => {
       ),
     ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
   });
+
+  it.each([-1, 1])(
+    "rejects a maintenance close %i ms from scheduled tick plus 120 seconds",
+    async (offset) => {
+      const scheduledAt = "2026-07-30T18:15:00.000Z";
+      await expect(runPrintSafeTail([
+        "--calendar-maintenance-only",
+        "--expectation",
+        "maintenance_repair_reserved",
+        "--closes-at",
+        new Date(Date.parse(scheduledAt) + 120_000 + offset).toISOString(),
+        "--maintenance-scheduled-at",
+        scheduledAt,
+      ], [maintenanceTail(maintenanceSuccess())])).resolves.toEqual({
+        exitCode: 1,
+        stdout: "",
+        stderr: "",
+      });
+    },
+  );
 
   it("emits only foundation evidence in foundation-probe-only mode", async () => {
     const result = await runPrintSafeTail(
@@ -431,9 +457,8 @@ describe("print-safe-tail", () => {
       uniqueness.closeAfterMilliseconds,
     );
     expect(unique).toEqual({
-      exitCode: 0,
-      stdout:
-        '{"evidenceType":"vision.sync-suppression/v1","outcome":"suppressed"}\n',
+      exitCode: 1,
+      stdout: "",
       stderr: "",
     });
   });
@@ -502,11 +527,17 @@ describe("print-safe-tail", () => {
     ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
   });
 
-  it("requires close and maintenance instants for real uniqueness flags", async () => {
+  it("forbids non-maintenance close instants and requires the maintenance pair", async () => {
     await expect(
       runPrintSafeTail(
-        ["--sync-suppression-only", "--expectation", "sync_suppressed"],
-        [],
+        [
+          "--sync-suppression-signal-only",
+          "--expectation",
+          "sync_suppressed",
+          "--closes-at",
+          new Date(Date.now() + 60_000).toISOString(),
+        ],
+        [syncSuppressionTail()],
       ),
     ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
     await expect(
@@ -593,22 +624,20 @@ describe("bounded preview-tail observer modes", () => {
     const observer = createPreviewTailObserver({
       mode: "sync_suppression_uniqueness",
       expectation: { kind: "sync_suppressed" },
-      closesAt: new Date("2026-07-30T18:02:00.000Z"),
     });
     expect(
-      observer.push(suppression, new Date("2026-07-30T18:00:01.000Z")),
+      observer.push(suppression, new Date("2026-07-30T18:00:37.000Z")),
     ).toStrictEqual({ done: false, succeeded: false, output: null });
     expect(
-      observer.finish(new Date("2026-07-30T18:01:59.999Z")),
+      observer.finish(new Date("2026-07-30T18:02:36.999Z")),
     ).toStrictEqual({ done: true, succeeded: false, output: null });
 
     const exact = createPreviewTailObserver({
       mode: "sync_suppression_uniqueness",
       expectation: { kind: "sync_suppressed" },
-      closesAt: new Date("2026-07-30T18:02:00.000Z"),
     });
-    exact.push(suppression, new Date("2026-07-30T18:00:01.000Z"));
-    expect(exact.finish(new Date("2026-07-30T18:02:00.000Z"))).toStrictEqual({
+    exact.push(suppression, new Date("2026-07-30T18:00:37.000Z"));
+    expect(exact.finish(new Date("2026-07-30T18:02:37.000Z"))).toStrictEqual({
       done: true,
       succeeded: true,
       output: suppression,

@@ -104,10 +104,7 @@ export async function resolvePreviewObserverRun(
       if (detailed.id !== handle || !matchesRun(detailed, input)) fail();
       const jobs = await jobsFor(handle, deps);
       assertExpectedActiveJobs(jobs, input.family);
-      if (
-        candidate === handle ||
-        deps.monotonicNow() - started >= RESOLUTION_MILLISECONDS
-      ) {
+      if (deps.monotonicNow() - started >= RESOLUTION_MILLISECONDS) {
         return handle;
       }
       candidate = handle;
@@ -182,7 +179,7 @@ export async function readPreviewMaintenanceObserverState(
   );
   if (
     state.state === "succeeded" &&
-    canonicalDate(state.listener.completedAt).getTime() <
+    canonicalDate(state.listener.completedAt).getTime() !==
       tick.getTime() + RESOLUTION_MILLISECONDS
   ) {
     fail();
@@ -291,7 +288,10 @@ function assertExpectedActiveJobs(
     if (
       job.name.startsWith("Capture ") &&
       !expected.includes(job.name as never) &&
-      job.status === "in_progress"
+      !(
+        job.status === "completed" &&
+        job.conclusion === "skipped"
+      )
     ) {
       fail();
     }

@@ -129,6 +129,64 @@ describe("preview observer run resolution", () => {
     expect(deps.sleep).toHaveBeenCalledWith(5_000);
   });
 
+  it("retains one stable identity through the deadline and rejects a last-poll duplicate", async () => {
+    let monotonic = 0;
+    let calls = 0;
+    const deps: PreviewObserverResolutionDependencies = {
+      monotonicNow: () => monotonic,
+      sleep: vi.fn(async (milliseconds) => {
+        monotonic += milliseconds;
+      }),
+      listRuns: vi.fn(async () => ({
+        workflow_runs:
+          ++calls === 25 ? [run("41"), run("42")] : [run("41")],
+      })),
+      readRun: vi.fn(async (handle) => run(String(handle))),
+      listJobs: vi.fn(async () => ({
+        jobs: [job("Capture foundation_probe signal")],
+      })),
+    };
+    await expect(resolvePreviewObserverRun({
+      expectedWorkflow: ".github/workflows/preview.yml",
+      expectedCommit: SHA,
+      dispatchStartedAt: START,
+      dispatchCompletedAt: END,
+      family: "foundation_probe",
+    }, deps)).rejects.toThrow("Preview observer metadata is invalid.");
+    expect(deps.sleep).toHaveBeenCalledTimes(24);
+  });
+
+  it.each(["success", "failure", "cancelled", "timed_out"])(
+    "rejects an unexpected completed Capture job with %s",
+    async (conclusion) => {
+      const deps = dependencies([run()], [
+        job("Capture foundation_probe signal"),
+        job("Capture restore signal", "completed", conclusion),
+      ]);
+      await expect(resolvePreviewObserverRun({
+        expectedWorkflow: ".github/workflows/preview.yml",
+        expectedCommit: SHA,
+        dispatchStartedAt: START,
+        dispatchCompletedAt: END,
+        family: "foundation_probe",
+      }, deps)).rejects.toThrow("Preview observer metadata is invalid.");
+    },
+  );
+
+  it("allows only an unexpected completed skipped Capture job", async () => {
+    const deps = dependencies([run()], [
+      job("Capture foundation_probe signal"),
+      job("Capture restore signal", "completed", "skipped"),
+    ]);
+    await expect(resolvePreviewObserverRun({
+      expectedWorkflow: ".github/workflows/preview.yml",
+      expectedCommit: SHA,
+      dispatchStartedAt: START,
+      dispatchCompletedAt: END,
+      family: "foundation_probe",
+    }, deps)).resolves.toBe("41");
+  });
+
   it.each([
     [[]],
     [[run("41"), run("42")]],
@@ -259,5 +317,25 @@ describe("preview observer run resolution", () => {
       uniqueness: "succeeded",
       maintenanceScheduledAt: TICK,
     });
+  });
+
+  it.each([-1, 1])("rejects maintenance completion %i ms from the exact close", async (offset) => {
+    const maintenance = job(
+      "Capture calendar_maintenance uniqueness",
+      "completed",
+      "success",
+    );
+    maintenance.steps[0]!.completed_at = new Date(
+      TICK.getTime() + 120_000 + offset,
+    ).toISOString();
+    const deps = dependencies([run()], [maintenance]);
+    await expect(
+      readPreviewMaintenanceObserverState(
+        "41" as never,
+        "calendar_maintenance",
+        TICK,
+        deps,
+      ),
+    ).rejects.toThrow("Preview observer metadata is invalid.");
   });
 });

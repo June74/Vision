@@ -19,9 +19,13 @@ export function createPreviewTailObserver(input: {
     "sync_suppression_uniqueness" | "restore_signal" |
     "restore_uniqueness" | "maintenance_uniqueness";
   readonly expectation: PreviewObserverAcceptanceExpectation;
-  readonly closesAt: Date;
+  readonly closesAt?: Date;
 }) {
   let terminal: SafeTailResult | null = null;
+  let uniquenessClosesAt: Date | null =
+    input.mode === "maintenance_uniqueness" && input.closesAt instanceof Date
+      ? new Date(input.closesAt.getTime())
+      : null;
   let failed = false;
   /** Creates the fixed observer result shape. */
   const result = (done: boolean, succeeded: boolean, output: SafeTailResult | null) =>
@@ -29,8 +33,12 @@ export function createPreviewTailObserver(input: {
   return Object.freeze({
     /** Admits one accepting terminal. */
     push(evidence: SafeTailResult, observedAt: Date) {
-      if (failed || observedAt.getTime() > input.closesAt.getTime() ||
-          !matchesPreviewAcceptanceExpectation(evidence, input.expectation)) {
+      if (
+        failed ||
+        (uniquenessClosesAt !== null &&
+          observedAt.getTime() > uniquenessClosesAt.getTime()) ||
+        !matchesPreviewAcceptanceExpectation(evidence, input.expectation)
+      ) {
         failed = true;
         return result(true, false, null);
       }
@@ -46,11 +54,19 @@ export function createPreviewTailObserver(input: {
         return result(true, false, null);
       }
       terminal = evidence;
+      if (uniquenessClosesAt === null) {
+        uniquenessClosesAt = new Date(observedAt.getTime() + 120_000);
+      }
       return result(false, false, null);
     },
     /** Closes uniqueness only at or after the true deadline. */
     finish(now: Date) {
-      if (failed || now.getTime() < input.closesAt.getTime() || terminal === null) {
+      if (
+        failed ||
+        uniquenessClosesAt === null ||
+        now.getTime() < uniquenessClosesAt.getTime() ||
+        terminal === null
+      ) {
         return result(true, false, null);
       }
       return result(true, true, terminal);
@@ -84,7 +100,7 @@ type TailObserverMode = Parameters<typeof createPreviewTailObserver>[0]["mode"];
 interface ObserverConfiguration {
   readonly mode: TailObserverMode;
   readonly expectation: PreviewObserverAcceptanceExpectation;
-  readonly closesAt: Date;
+  readonly closesAt?: Date;
   readonly outputSignalEvidence: boolean;
 }
 const EXPECTATIONS = Object.freeze([
@@ -133,20 +149,18 @@ function parseObserverConfiguration(
     | ExpectationKind
     | undefined;
   const closesAtValue = values.get("--closes-at");
-  if (
-    !expectationKind ||
-    !EXPECTATIONS.includes(expectationKind) ||
-    !isCanonicalInstant(closesAtValue)
-  ) {
+  if (!expectationKind || !EXPECTATIONS.includes(expectationKind)) {
     throw new Error("invalid");
   }
-  const closesAt = new Date(closesAtValue);
+  const closesAt = isCanonicalInstant(closesAtValue)
+    ? new Date(closesAtValue)
+    : undefined;
   let expectation: PreviewObserverAcceptanceExpectation;
   let observerMode: TailObserverMode;
   let outputSignalEvidence = true;
   switch (mode) {
     case RESTORE_ONLY_ARGUMENT:
-      if (expectationKind !== "restore_succeeded" || values.size !== 2) {
+      if (expectationKind !== "restore_succeeded" || values.size !== 1) {
         throw new Error("invalid");
       }
       expectation = { kind: "restore_succeeded" };
@@ -154,7 +168,7 @@ function parseObserverConfiguration(
       outputSignalEvidence = false;
       break;
     case RESTORE_SIGNAL_ONLY_ARGUMENT:
-      if (expectationKind !== "restore_succeeded" || values.size !== 2) {
+      if (expectationKind !== "restore_succeeded" || values.size !== 1) {
         throw new Error("invalid");
       }
       expectation = { kind: "restore_succeeded" };
@@ -162,7 +176,7 @@ function parseObserverConfiguration(
       outputSignalEvidence = false;
       break;
     case SYNC_SUPPRESSION_ONLY_ARGUMENT:
-      if (expectationKind !== "sync_suppressed" || values.size !== 2) {
+      if (expectationKind !== "sync_suppressed" || values.size !== 1) {
         throw new Error("invalid");
       }
       expectation = { kind: "sync_suppressed" };
@@ -170,7 +184,7 @@ function parseObserverConfiguration(
       outputSignalEvidence = false;
       break;
     case SYNC_SUPPRESSION_SIGNAL_ONLY_ARGUMENT:
-      if (expectationKind !== "sync_suppressed" || values.size !== 2) {
+      if (expectationKind !== "sync_suppressed" || values.size !== 1) {
         throw new Error("invalid");
       }
       expectation = { kind: "sync_suppressed" };
@@ -178,21 +192,21 @@ function parseObserverConfiguration(
       outputSignalEvidence = false;
       break;
     case ROLE_PROBE_ONLY_ARGUMENT:
-      if (expectationKind !== "role_probe_succeeded" || values.size !== 2) {
+      if (expectationKind !== "role_probe_succeeded" || values.size !== 1) {
         throw new Error("invalid");
       }
       expectation = { kind: "role_probe_succeeded" };
       observerMode = "accepting_signal";
       break;
     case FOUNDATION_PROBE_ONLY_ARGUMENT:
-      if (expectationKind !== "foundation_succeeded" || values.size !== 2) {
+      if (expectationKind !== "foundation_succeeded" || values.size !== 1) {
         throw new Error("invalid");
       }
       expectation = { kind: "foundation_succeeded" };
       observerMode = "accepting_signal";
       break;
     case AI_USAGE_ONLY_ARGUMENT:
-      if (expectationKind !== "ai_succeeded" || values.size !== 2) {
+      if (expectationKind !== "ai_succeeded" || values.size !== 1) {
         throw new Error("invalid");
       }
       expectation = { kind: "ai_succeeded" };
@@ -204,7 +218,7 @@ function parseObserverConfiguration(
         | undefined;
       if (
         expectationKind !== "fault_expected" ||
-        values.size !== 3 ||
+        values.size !== 2 ||
         !scenario ||
         !TEMPORARY_PREVIEW_FAULT_SCENARIOS.includes(scenario)
       ) {
@@ -220,7 +234,9 @@ function parseObserverConfiguration(
         (expectationKind !== "maintenance_succeeded" &&
           expectationKind !== "maintenance_repair_reserved") ||
         values.size !== 3 ||
-        !isCanonicalInstant(scheduledAt)
+        !isCanonicalInstant(scheduledAt) ||
+        closesAt === undefined ||
+        closesAt.getTime() !== Date.parse(scheduledAt) + 120_000
       ) {
         throw new Error("invalid");
       }
@@ -236,7 +252,7 @@ function parseObserverConfiguration(
   return Object.freeze({
     mode: observerMode,
     expectation,
-    closesAt,
+    ...(closesAt === undefined ? {} : { closesAt }),
     outputSignalEvidence,
   });
 }
@@ -306,12 +322,15 @@ function runObserverTail(configuration: ObserverConfiguration): void {
     lines.close();
     process.stdin.destroy();
   };
-  const delay = configuration.closesAt.getTime() - Date.now();
-  if (delay <= 0) {
-    complete(false);
-    return;
-  }
-  if (!configuration.mode.endsWith("_signal")) {
+  if (
+    configuration.mode === "maintenance_uniqueness" &&
+    configuration.closesAt !== undefined
+  ) {
+    const delay = configuration.closesAt.getTime() - Date.now();
+    if (delay <= 0) {
+      complete(false);
+      return;
+    }
     timer = setTimeout(() => {
       const result = observer.finish(new Date());
       complete(result.succeeded, result.output);
@@ -325,7 +344,18 @@ function runObserverTail(configuration: ObserverConfiguration): void {
       return;
     }
     if (!("evidenceType" in evidence)) return;
-    const result = observer.push(evidence, new Date());
+    const observedAt = new Date();
+    const result = observer.push(evidence, observedAt);
+    if (
+      !result.done &&
+      timer === undefined &&
+      !configuration.mode.endsWith("_signal")
+    ) {
+      timer = setTimeout(() => {
+        const finished = observer.finish(new Date());
+        complete(finished.succeeded, finished.output);
+      }, 120_000);
+    }
     if (result.done) {
       complete(
         result.succeeded,

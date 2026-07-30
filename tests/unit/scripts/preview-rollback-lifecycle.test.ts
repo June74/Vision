@@ -283,6 +283,30 @@ describe("preview rollback lifecycle", () => {
         operation: "deploy_foundation",
       }),
     ).toThrow("Preview rollback lifecycle proof is invalid.");
+    expect(() =>
+      assertPreviewRollbackClosure({
+        closureProof: null,
+        latestCandidateRunRef: "baseline",
+        expectedCommit: COMMIT,
+        operation: "deploy_restore",
+      }),
+    ).toThrow("Preview rollback lifecycle proof is invalid.");
+    expect(() =>
+      assertPreviewRollbackClosure({
+        closureProof: closureProof("deploy_foundation"),
+        latestCandidateRunRef: CANDIDATE_RUN_REF,
+        expectedCommit: COMMIT,
+        operation: "deploy_restore",
+      }),
+    ).toThrow("Preview rollback lifecycle proof is invalid.");
+    expect(() =>
+      assertPreviewRollbackClosure({
+        closureProof: closureProof("deploy_role_probe"),
+        latestCandidateRunRef: CANDIDATE_RUN_REF,
+        expectedCommit: COMMIT,
+        operation: "deploy_restore",
+      }),
+    ).not.toThrow();
   });
 
   it.each([

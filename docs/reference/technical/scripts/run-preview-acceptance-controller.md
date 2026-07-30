@@ -52,6 +52,12 @@ uniqueness, and optional canonical listener timestamp fields.
 
 Sends the candidate run/commit pair and requires the exact acknowledgement.
 
+## `admitRestore`
+
+Invokes the closed `admit-restore` driver operation with the non-baseline
+candidate/closure references and reviewed commit. The controller accepts only
+the exact derived `verified` attestation and never accepts it from input.
+
 ## `requestApproval`
 
 Serializes the closed approval input and admits only an exact canonical
@@ -91,9 +97,10 @@ retry an ambiguous mutation.
 
 ## `waitForSignal`
 
-Polls every five seconds, fails on a closed failure state, and returns the
-successful state with a freshly captured local monotonic detection instant
-plus the canonical provider listener instant.
+Polls every five seconds against paired wall/monotonic samples and the absolute
+earlier of action completion plus 120 seconds or expiry minus 60 seconds. It
+rejects local or provider timestamps one millisecond late while admitting the
+exact boundary.
 
 ## `assertPreActionIdleDeadline`
 
@@ -114,8 +121,8 @@ requires success for the requested scheduled tick before expiry.
 ## `createObserveContext`
 
 Builds the canonical `observe` context with exact family/outcome pairing,
-observer close, fault scenario when required, and maintenance scheduled tick
-when required.
+fault scenario when required, and maintenance-only scheduled tick plus fixed
+close. Non-maintenance setup/deploy time cannot consume uniqueness.
 
 ## `createCandidateContext`
 

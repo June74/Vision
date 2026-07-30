@@ -192,4 +192,35 @@ describe("preview observer state validation", () => {
       "Preview observer state is invalid.",
     );
   });
+
+  it.each(["success", "failure", "cancelled", "timed_out"])(
+    "rejects an unexpected completed Capture job with %s",
+    (conclusion) => {
+      const input: any = validState();
+      input.jobsResponse.jobs.push({
+        name: "Capture restore signal",
+        status: "completed",
+        conclusion,
+        steps: [{
+          name: LISTENER_STEP,
+          status: "completed",
+          conclusion,
+        }],
+      });
+      expect(() => validatePreviewObserverState(input)).toThrow(
+        "Preview observer state is invalid.",
+      );
+    },
+  );
+
+  it("allows an unexpected completed skipped Capture job from the full workflow", () => {
+    const input: any = validState();
+    input.jobsResponse.jobs.push({
+      name: "Capture restore signal",
+      status: "completed",
+      conclusion: "skipped",
+      steps: [],
+    });
+    expect(() => validatePreviewObserverState(input)).not.toThrow();
+  });
 });

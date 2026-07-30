@@ -63,6 +63,11 @@ Validates the exact v1 intent keys and complete commit.
 Enforces the closed role-to-restore-or-cleanup, restore-to-cleanup, and
 normal-profile transition graph.
 
+## `isNonRestoreCandidateOperation`
+
+Narrows baseline and normal-closure successors to normal candidates or the
+role probe, excluding direct restore before any provider action.
+
 ## `validCandidateOperation`
 
 Requires exact membership in the candidate-operation vocabulary.

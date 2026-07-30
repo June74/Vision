@@ -51,6 +51,11 @@ Accepts only the exact candidate marker shape.
 
 Checks the one allowed same-commit follow-on operation.
 
+## `isNonRestoreCandidateOperation`
+
+Allows a baseline or normal closure to start a normal candidate or role probe,
+but never a restore.
+
 ## `validCandidateOperation`
 
 Recognizes one exact candidate operation.

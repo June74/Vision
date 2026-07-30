@@ -198,7 +198,6 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
           OBSERVER_EVIDENCE: ${{ needs.selection.outputs.evidence_family }}
           EXPECTED_OUTCOME: ${{ needs.selection.outputs.expected_outcome }}
-          OBSERVER_CLOSES_AT: ${{ needs.selection.outputs.observer_closes_at }}
           FAULT_SCENARIO: ${{ needs.selection.outputs.fault_scenario }}
         run: |
           case "$OBSERVER_EVIDENCE" in
@@ -212,12 +211,10 @@ jobs:
           if [[ "$OBSERVER_EVIDENCE" == "preview_fault" ]]; then
             scenario_args=(--scenario "$FAULT_SCENARIO")
           fi
-          set -o pipefail
-          timeout 16m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |
-            pnpm exec tsx scripts/print-safe-tail.ts "$evidence_flag" \
-              --expectation "$EXPECTED_OUTCOME" \
-              --closes-at "$OBSERVER_CLOSES_AT" \
-              "${scenario_args[@]}"
+          timeout 16m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+            "$evidence_flag" \
+            --expectation "$EXPECTED_OUTCOME" \
+            "${scenario_args[@]}"
 
   suppression_signal:
     name: Capture sync_suppression signal
@@ -243,16 +240,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Print only allowlisted acceptance evidence
         run: |
-          set -o pipefail
-          timeout 16m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |
-            pnpm exec tsx scripts/print-safe-tail.ts --sync-suppression-signal-only \
-              --expectation "$EXPECTED_OUTCOME" \
-              --closes-at "$OBSERVER_CLOSES_AT"
+          timeout 16m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+            --sync-suppression-signal-only \
+            --expectation "$EXPECTED_OUTCOME"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
           EXPECTED_OUTCOME: ${{ needs.selection.outputs.expected_outcome }}
-          OBSERVER_CLOSES_AT: ${{ needs.selection.outputs.observer_closes_at }}
 
   restore_signal:
     name: Capture restore signal
@@ -278,16 +272,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Print only allowlisted acceptance evidence
         run: |
-          set -o pipefail
-          timeout 16m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |
-            pnpm exec tsx scripts/print-safe-tail.ts --restore-signal-only \
-              --expectation "$EXPECTED_OUTCOME" \
-              --closes-at "$OBSERVER_CLOSES_AT"
+          timeout 16m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+            --restore-signal-only \
+            --expectation "$EXPECTED_OUTCOME"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
           EXPECTED_OUTCOME: ${{ needs.selection.outputs.expected_outcome }}
-          OBSERVER_CLOSES_AT: ${{ needs.selection.outputs.observer_closes_at }}
 
   role_signal:
     name: Capture role_probe signal
@@ -313,16 +304,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Print only allowlisted acceptance evidence
         run: |
-          set -o pipefail
-          timeout 16m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |
-            pnpm exec tsx scripts/print-safe-tail.ts --role-probe-only \
-              --expectation "$EXPECTED_OUTCOME" \
-              --closes-at "$OBSERVER_CLOSES_AT"
+          timeout 16m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+            --role-probe-only \
+            --expectation "$EXPECTED_OUTCOME"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
           EXPECTED_OUTCOME: ${{ needs.selection.outputs.expected_outcome }}
-          OBSERVER_CLOSES_AT: ${{ needs.selection.outputs.observer_closes_at }}
 
   suppression_uniqueness:
     name: Capture sync_suppression uniqueness
@@ -350,16 +338,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Print only allowlisted acceptance evidence
         run: |
-          set -o pipefail
-          timeout 3m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |
-            pnpm exec tsx scripts/print-safe-tail.ts --sync-suppression-only \
-              --expectation "$EXPECTED_OUTCOME" \
-              --closes-at "$OBSERVER_CLOSES_AT"
+          timeout 3m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+            --sync-suppression-only \
+            --expectation "$EXPECTED_OUTCOME"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
           EXPECTED_OUTCOME: ${{ needs.selection.outputs.expected_outcome }}
-          OBSERVER_CLOSES_AT: ${{ needs.selection.outputs.observer_closes_at }}
 
   restore_uniqueness:
     name: Capture restore uniqueness
@@ -386,16 +371,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Print only allowlisted acceptance evidence
         run: |
-          set -o pipefail
-          timeout 3m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |
-            pnpm exec tsx scripts/print-safe-tail.ts --restore-only \
-              --expectation "$EXPECTED_OUTCOME" \
-              --closes-at "$OBSERVER_CLOSES_AT"
+          timeout 3m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+            --restore-only \
+            --expectation "$EXPECTED_OUTCOME"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
           EXPECTED_OUTCOME: ${{ needs.selection.outputs.expected_outcome }}
-          OBSERVER_CLOSES_AT: ${{ needs.selection.outputs.observer_closes_at }}
 
   maintenance_uniqueness:
     name: Capture calendar_maintenance uniqueness
@@ -422,12 +404,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Print only allowlisted acceptance evidence
         run: |
-          set -o pipefail
-          timeout 3m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |
-            pnpm exec tsx scripts/print-safe-tail.ts --calendar-maintenance-only \
-              --expectation "$EXPECTED_OUTCOME" \
-              --closes-at "$OBSERVER_CLOSES_AT" \
-              --maintenance-scheduled-at "$MAINTENANCE_SCHEDULED_AT"
+          timeout 3m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+            --calendar-maintenance-only \
+            --expectation "$EXPECTED_OUTCOME" \
+            --closes-at "$OBSERVER_CLOSES_AT" \
+            --maintenance-scheduled-at "$MAINTENANCE_SCHEDULED_AT"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
@@ -616,6 +597,34 @@ jobs:
             --family "$OBSERVER_EVIDENCE"
       - name: Recheck daily recovery overlap immediately before deploy
         run: pnpm exec tsx scripts/validate-preview-acceptance-window.ts --candidate dist/vision/wrangler.acceptance.json
+      - name: Re-admit same-commit role-probe closure immediately before restore
+        if: ${{ inputs.acceptance_operation == 'deploy_restore' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_RUN_REF: ${{ needs.selection.outputs.candidate_run_ref }}
+          ROLLBACK_CLOSURE_RUN_ID: ${{ needs.selection.outputs.rollback_closure_run_ref }}
+          VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}
+        run: |
+          closure_run_file="$(mktemp)"
+          closure_jobs_file="$(mktemp)"
+          closure_dir="$(mktemp -d)"
+          trap 'rm -f "$closure_run_file" "$closure_jobs_file"; rm -rf "$closure_dir"' EXIT
+          [[ "$CANDIDATE_RUN_REF" != "baseline" ]]
+          [[ "$ROLLBACK_CLOSURE_RUN_ID" != "baseline" ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ROLLBACK_CLOSURE_RUN_ID" > "$closure_run_file"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ROLLBACK_CLOSURE_RUN_ID/jobs" > "$closure_jobs_file"
+          pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-run \
+            --run-file "$closure_run_file" \
+            --jobs-file "$closure_jobs_file" \
+            --commit "$VERIFIED_SHA" \
+            --job-name "Close restored normal preview"
+          gh run download "$ROLLBACK_CLOSURE_RUN_ID" --name vision-preview-rollback-closed --dir "$closure_dir" > /dev/null
+          pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-closure \
+            --closure-proof "$closure_dir/preview-rollback-closure.json" \
+            --candidate-run-ref "$CANDIDATE_RUN_REF" \
+            --commit "$VERIFIED_SHA" \
+            --operation deploy_restore
       - name: Deploy generated acceptance candidate
         if: ${{ steps.acceptance-token.outputs.deploy == 'true' }}
         run: pnpm exec wrangler deploy --config dist/vision/wrangler.acceptance.json --name vision-preview

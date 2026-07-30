@@ -218,7 +218,7 @@ export function assertPreviewRollbackClosure(input: {
     input.closureProof === null &&
     input.latestCandidateRunRef === "baseline" &&
     validCommit(input.expectedCommit) &&
-    isCandidateOperation(input.operation)
+    isNonRestoreCandidateOperation(input.operation)
   ) {
     return;
   }
@@ -415,8 +415,16 @@ function allowedCandidateTransition(
   }
   return (
     derivePreviewBindingProfile(candidateOperation) === "normal" &&
-    (nextOperation === "verify_cleanup" || isCandidateOperation(nextOperation))
+    (nextOperation === "verify_cleanup" ||
+      isNonRestoreCandidateOperation(nextOperation))
   );
+}
+
+/** Allows normal candidates and the role probe, but never direct restore. */
+function isNonRestoreCandidateOperation(
+  value: unknown,
+): value is Exclude<PreviewCandidateOperation, "deploy_restore"> {
+  return validCandidateOperation(value) && value !== "deploy_restore";
 }
 
 /** Rejects aliases and non-string values at every transition boundary. */

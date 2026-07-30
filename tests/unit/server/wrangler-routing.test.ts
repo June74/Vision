@@ -496,7 +496,6 @@ describe("preview acceptance workflow input admission", () => {
       reviewedCommit: REVIEWED_COMMIT,
       evidenceFamily: "foundation_probe",
       expectedOutcome: "foundation_succeeded",
-      observerClosesAt: "2026-07-29T04:02:00.000Z",
     }),
     context({
       version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
@@ -504,7 +503,6 @@ describe("preview acceptance workflow input admission", () => {
       reviewedCommit: REVIEWED_COMMIT,
       evidenceFamily: "preview_fault",
       expectedOutcome: "fault_expected",
-      observerClosesAt: "2026-07-29T04:02:00.000Z",
       faultScenario: "job_failed",
     }),
     context({
@@ -752,7 +750,6 @@ describe("preview acceptance workflow input admission", () => {
         reviewedCommit: REVIEWED_COMMIT,
         evidenceFamily: "preview_fault",
         expectedOutcome: "fault_expected",
-        observerClosesAt: "2026-07-29T04:02:00.000Z",
       }),
     ],
   ] as const)("rejects %s", (_label, operation, serialized) => {

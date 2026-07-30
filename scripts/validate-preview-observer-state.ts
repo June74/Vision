@@ -61,7 +61,10 @@ export function validatePreviewObserverState(
         typeof job?.name === "string" &&
         job.name.startsWith("Capture ") &&
         !(expectedJobNames as readonly string[]).includes(job.name) &&
-        job.status === "in_progress"
+        !(
+          job.status === "completed" &&
+          job.conclusion === "skipped"
+        )
       );
     })
   ) {

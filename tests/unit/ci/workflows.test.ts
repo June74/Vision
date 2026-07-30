@@ -391,12 +391,11 @@ describe("preview live diagnostics policy", () => {
     expect(tailJob).not.toContain("gateway:configure:preview");
     expect(tailJob).not.toContain("actions/upload-artifact");
     expect(tailStep).toContain(
-      "timeout 16m pnpm exec wrangler tail vision-preview --format json 2>/dev/null |\n" +
-        '            pnpm exec tsx scripts/print-safe-tail.ts "$evidence_flag"',
+      "timeout 16m pnpm exec tsx scripts/run-preview-tail-supervisor.ts",
     );
     expect(tailStep).not.toContain("--restore-only");
     expect(tailStep).not.toContain("--role-probe-only");
-    expect(tailStep).toContain("--format json 2>/dev/null");
+    expect(tailStep).not.toContain("wrangler tail");
     expect(tailStep).toContain(
       "CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}",
     );
@@ -536,7 +535,8 @@ describe("preview acceptance candidate workflow", () => {
     expect(observer).not.toContain("wrangler deploy");
     expect(observer).not.toContain("gateway:configure:preview");
     expect(tailStep).toContain("timeout 16m");
-    expect(tailStep).toContain("--format json 2>/dev/null");
+    expect(tailStep).toContain("scripts/run-preview-tail-supervisor.ts");
+    expect(tailStep).not.toContain("wrangler tail");
     expect(tailStep).not.toContain("actions/upload-artifact");
   });
 
@@ -558,10 +558,18 @@ describe("preview acceptance candidate workflow", () => {
       );
       expect(observer).toContain('[[ "$actual_sha" == "$EXPECTED_SHA" ]]');
       expect(observer).toContain('[[ "$actual_sha" == "$REVIEWED_SHA" ]]');
-      expect(observer).toContain("set -o pipefail");
-      expect(observer).not.toContain("set +o pipefail");
+      expect(observer).toContain(
+        "scripts/run-preview-tail-supervisor.ts",
+      );
+      expect(observer).not.toContain("set -o pipefail");
+      expect(observer).not.toContain("wrangler tail vision-preview --format json 2>/dev/null |");
       expect(observer).toContain('--expectation "$EXPECTED_OUTCOME"');
-      expect(observer).toContain('--closes-at "$OBSERVER_CLOSES_AT"');
+      if (jobName === "maintenance_uniqueness") {
+        expect(observer).toContain('--closes-at "$OBSERVER_CLOSES_AT"');
+      } else {
+        expect(observer).not.toContain("--closes-at");
+        expect(observer).not.toContain("OBSERVER_CLOSES_AT:");
+      }
     }
     expect(readWorkflowJob(preview, "maintenance_uniqueness")).toContain(
       '--maintenance-scheduled-at "$MAINTENANCE_SCHEDULED_AT"',
@@ -671,9 +679,12 @@ describe("preview acceptance candidate workflow", () => {
     const deployIndex = names.indexOf("Deploy generated acceptance candidate");
 
     expect(finalProofIndex).toBeGreaterThan(-1);
-    expect(deployIndex).toBe(finalProofIndex + 2);
+    expect(deployIndex).toBe(finalProofIndex + 3);
     expect(names[finalProofIndex + 1]).toBe(
       "Recheck daily recovery overlap immediately before deploy",
+    );
+    expect(names[finalProofIndex + 2]).toBe(
+      "Re-admit same-commit role-probe closure immediately before restore",
     );
     expect(finalProof).toContain("scripts/resolve-preview-observer-run.ts");
     expect(finalProof).toContain(
@@ -998,8 +1009,8 @@ describe("preview acceptance candidate workflow", () => {
     );
     expect(
       names.indexOf("Recheck daily recovery overlap immediately before deploy"),
-    ).toBe(
-      names.indexOf("Deploy generated acceptance candidate") - 1,
+    ).toBeLessThan(
+      names.indexOf("Deploy generated acceptance candidate"),
     );
   });
 

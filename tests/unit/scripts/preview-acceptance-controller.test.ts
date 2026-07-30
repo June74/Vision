@@ -80,6 +80,7 @@ function harness(
         signalObservedAt: new Date("2026-07-30T18:00:06.000Z"),
       }),
     verifyCandidateAttribution: vi.fn(async () => undefined),
+    admitRestore: vi.fn(async () => "verified" as const),
     requestApproval: vi.fn(async () => {
       wall += 1_000;
       return new Date(wall);
@@ -329,7 +330,8 @@ describe("preview acceptance controller", () => {
         reviewedCommit: SHA,
         expiresAt: "2026-07-30T18:10:00.000Z",
         expectation: { kind: "restore_succeeded" },
-        restoreAdmissionGate: "verified",
+        priorCandidateRunRef: "41",
+        rollbackClosureRunRef: "42",
       },
       fixture.dependencies,
     );
@@ -450,7 +452,8 @@ describe("preview acceptance controller", () => {
         reviewedCommit: SHA,
         expiresAt: "2026-07-30T18:10:00.000Z",
         expectation: { kind: "restore_succeeded" },
-        restoreAdmissionGate: "verified",
+        priorCandidateRunRef: "41",
+        rollbackClosureRunRef: "42",
       },
       fixture.dependencies,
     );
@@ -541,6 +544,126 @@ describe("preview acceptance controller", () => {
     expect(fixture.currentMonotonic() - actionMonotonic[0]!).toBe(120_000);
     expect(fixture.dispatches.map(({ operation }) => operation)).toContain(
       "rollback",
+    );
+  });
+
+  it("subtracts delayed driver return time from the absolute no-signal deadline", async () => {
+    const fixture = harness({
+      readObserverState: vi.fn(async () => ({
+        signal: "listening" as const,
+        uniqueness: "listening" as const,
+        signalObservedAt: null,
+      })),
+    });
+    let slept = 0;
+    vi.mocked(fixture.dependencies.sleep).mockImplementation(async (milliseconds) => {
+      slept += milliseconds;
+      fixture.advanceTime(milliseconds);
+    });
+    vi.mocked(fixture.dependencies.performAction).mockImplementation(async () => {
+      const completed = fixture.currentWall();
+      fixture.advanceTime(30_000);
+      return completed;
+    });
+    await expect(runPreviewAcceptanceController({
+      family: "foundation_probe",
+      reviewedCommit: SHA,
+      expiresAt: "2026-07-30T18:10:00.000Z",
+      expectation: { kind: "foundation_succeeded" },
+    }, fixture.dependencies)).rejects.toThrow(
+      "Preview acceptance controller failed closed.",
+    );
+    expect(slept).toBe(90_000);
+    expect(fixture.dispatches.map(({ operation }) => operation)).toContain(
+      "rollback",
+    );
+  });
+
+  it.each([
+    ["exact boundary", 40_000, true],
+    ["one millisecond late", 40_001, false],
+  ] as const)("enforces the absolute expiry-derived signal boundary: %s", async (
+    _label,
+    elapsed,
+    accepted,
+  ) => {
+    let actionCompletedAt = START;
+    const fixture = harness();
+    vi.mocked(fixture.dependencies.performAction).mockImplementation(async () => {
+      actionCompletedAt = fixture.currentWall();
+      return actionCompletedAt;
+    });
+    vi.mocked(fixture.dependencies.readObserverState)
+      .mockReset()
+      .mockImplementation(
+      async () => {
+        fixture.advanceTime(
+          elapsed === 40_000 ? 39_999 : elapsed,
+          elapsed,
+        );
+        return {
+          signal: "succeeded" as const,
+          uniqueness: "succeeded" as const,
+          signalObservedAt: new Date(actionCompletedAt.getTime() + elapsed),
+        };
+      },
+    );
+    const run = runPreviewAcceptanceController({
+      family: "foundation_probe",
+      reviewedCommit: SHA,
+      expiresAt: "2026-07-30T18:01:42.000Z",
+      expectation: { kind: "foundation_succeeded" },
+    }, fixture.dependencies);
+    if (accepted) {
+      await expect(run).resolves.toBeUndefined();
+    } else {
+      await expect(run).rejects.toThrow(
+        "Preview acceptance controller failed closed.",
+      );
+    }
+    expect(fixture.dispatches.map(({ operation }) => operation)).toContain(
+      "rollback",
+    );
+  });
+
+  it("rejects caller-asserted restore admission and derives it from a fresh private check", async () => {
+    const asserted = harness();
+    await expect(runPreviewAcceptanceController({
+      family: "restore",
+      reviewedCommit: SHA,
+      expiresAt: "2026-07-30T18:10:00.000Z",
+      expectation: { kind: "restore_succeeded" },
+      priorCandidateRunRef: "41",
+      rollbackClosureRunRef: "42",
+      restoreAdmissionGate: "verified",
+    } as never, asserted.dependencies)).rejects.toThrow(
+      "Preview acceptance controller failed closed.",
+    );
+    expect(asserted.dispatches).toEqual([]);
+
+    const order: string[] = [];
+    const derived = harness({
+      dispatch: vi.fn(async (operation, context) => {
+        order.push(operation);
+        return { runRef: operation === "observe" ? "41" : "42" };
+      }),
+      ...({
+        admitRestore: vi.fn(async () => {
+          order.push("restore_admitted");
+          return "verified";
+        }),
+      } as object),
+    } as never);
+    await expect(runPreviewAcceptanceController({
+      family: "restore",
+      reviewedCommit: SHA,
+      expiresAt: "2026-07-30T18:10:00.000Z",
+      expectation: { kind: "restore_succeeded" },
+      priorCandidateRunRef: "41",
+      rollbackClosureRunRef: "42",
+    }, derived.dependencies)).resolves.toBeUndefined();
+    expect(order.indexOf("restore_admitted")).toBe(
+      order.indexOf("deploy_restore") - 1,
     );
   });
 
