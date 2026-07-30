@@ -176,6 +176,35 @@ describe("Google Calendar notification webhook", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["wrong resource", { providerResourceId: "other-resource" }],
+    ["expired channel", { expiresAt: new Date(NOW.getTime() - 1) }],
+  ])(
+    "rejects a %s before replay inspection or active suppression evidence",
+    async (_name, channel) => {
+      const { app, repository, send, environment } = harness({
+        channel,
+        environment: {
+          VISION_ENV: "preview",
+          PREVIEW_ACCEPTANCE_SCENARIO: "sync_suppression",
+          PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-24T16:00:30.000Z",
+        },
+      });
+      const write = vi
+        .spyOn(console, "info")
+        .mockImplementation(() => undefined);
+
+      const response = await post(app, headers(), environment);
+
+      expect(response.status).toBe(204);
+      expect(write).not.toHaveBeenCalled();
+      expect(repository.inspect).not.toHaveBeenCalled();
+      expect(repository.reserveWebhookJob).not.toHaveBeenCalled();
+      expect(send).not.toHaveBeenCalled();
+      expect(repository.markEnqueued).not.toHaveBeenCalled();
+    },
+  );
+
   it.each(["sync", "exists"])(
     "durably reserves and enqueues a valid %s signal without fetching events inline",
     async (state) => {
