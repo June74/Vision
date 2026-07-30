@@ -3,32 +3,66 @@
 Builds one temporary preview acceptance deployment file from the already
 validated normal preview file. The normal file is never edited.
 
-The command accepts only one approved acceptance operation and its matching
-fault choice. It adds one one-minute schedule and one exact temporary selector.
-The AI evidence candidate also requires a same-run, read-only AI Gateway budget
-verification before the generated file may contain its temporary attestation.
+The command accepts one approved operation plus one canonical, versioned
+context string. It creates the exact selector-specific schedule set and
+temporary bindings without editing the normal artifact.
 
-## `validatePreviewAcceptanceWorkflowInputs`
+## `serializePreviewAcceptanceContext`
 
-Maps an exact operator operation and fault choice to one acceptance selector.
-Invalid or mixed choices fail before any deployment.
+Builds whitespace-free ASCII JSON with the exact ordered keys for one closed
+context variant.
+
+## `parsePreviewAcceptanceContext`
+
+Rejects noncanonical, oversized, reordered, duplicated, mismatched, or
+unsupported context and returns a deeply frozen workflow selection.
+
+## `canonicalPreviewAcceptanceContext`
+
+Validates one context variant and rebuilds a new plain object in authoritative
+key order.
+
+## `isBoundedAscii`
+
+Requires printable ASCII transport no larger than 2,048 bytes.
+
+## `exactPlainRecord`
+
+Rejects arrays, custom prototypes, symbols, and accessor-backed properties.
+
+## `dataValue`
+
+Reads one own enumerable data property without invoking an accessor.
+
+## `exactKeys`
+
+Requires the exact ordered key sequence for the selected context variant.
+
+## `isCanonicalInstant`
+
+Accepts only byte-stable UTC timestamps.
 
 ## `preparePreviewAcceptanceDeployConfig`
 
 Returns a new validated candidate with one bounded expiry while leaving the
 normal input unchanged.
 
-## `isRunId`
+## `isRunRef`
 
-Accepts only a positive workflow-run identifier used by lifecycle operations.
+Accepts only a positive decimal lifecycle reference without a leading zero.
 
 ## `readArguments`
 
 Accepts only unique named flag pairs. Aliases, repeats, missing values, and
 positional values fail closed.
 
+## `readWorkflowSelectionFromEnvironment`
+
+Parses context from the step environment and requires both the dispatch commit
+and checked-out commit to equal the reviewed commit.
+
 ## `main`
 
-Supports the workflow-input verification mode and the fixed generated-file
-build mode. It writes only `dist/vision/wrangler.acceptance.json` and refuses
-to overwrite an existing file.
+Supports canonical workflow-input verification and the fixed generated-file
+build mode. It never accepts the context as a shell argument, writes only the
+fixed acceptance artifact, and refuses to overwrite an existing file.

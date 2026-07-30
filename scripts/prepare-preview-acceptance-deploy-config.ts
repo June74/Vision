@@ -1,8 +1,13 @@
 /** Builds one reviewed preview-only acceptance artifact from the normal build output. */
-import { readFile, writeFile } from "node:fs/promises";
+import { appendFile, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { TEMPORARY_PREVIEW_FAULT_SCENARIOS } from "../src/domain/operations/temporary-preview-fault";
+import {
+  TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS,
+  TEMPORARY_PREVIEW_FAULT_SCENARIOS,
+  type TemporaryPreviewAcceptanceSelector,
+  type TemporaryPreviewFaultScenario,
+} from "../src/domain/operations/temporary-preview-fault";
 import {
   validatePreviewAcceptanceDeployConfig,
   validatePreviewDeployConfig,
@@ -17,26 +22,18 @@ const NORMAL_INPUT = "dist/vision/wrangler.json";
 const ACCEPTANCE_OUTPUT = "dist/vision/wrangler.acceptance.json";
 const ACCEPTANCE_CRON = "* * * * *";
 
-/** Dedicated evidence selectors remain outside the frozen six-fault tuple. */
-export const PREVIEW_ACCEPTANCE_EVIDENCE_SELECTORS = Object.freeze([
-  "foundation_probe",
-  "ai_usage",
-] as const);
+/** The domain module owns the one exact selector vocabulary. */
+export const PREVIEW_ACCEPTANCE_SELECTORS =
+  TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS;
 
-/** The exact selector vocabulary accepted by the generated artifact builder. */
-export const PREVIEW_ACCEPTANCE_SELECTORS = Object.freeze([
-  ...TEMPORARY_PREVIEW_FAULT_SCENARIOS,
-  ...PREVIEW_ACCEPTANCE_EVIDENCE_SELECTORS,
-] as const);
-
-export type PreviewAcceptanceSelector =
-  (typeof PREVIEW_ACCEPTANCE_SELECTORS)[number];
+export type PreviewAcceptanceSelector = TemporaryPreviewAcceptanceSelector;
 
 /** Exact operator modes exposed by the guarded workflow. */
 export const PREVIEW_ACCEPTANCE_OPERATIONS = Object.freeze([
   "none",
   "observe",
   "deploy_foundation",
+  "deploy_sync_suppression",
   "deploy_ai",
   "deploy_fault",
   "rollback",
@@ -47,135 +44,424 @@ export const PREVIEW_ACCEPTANCE_OPERATIONS = Object.freeze([
 export type PreviewAcceptanceOperation =
   (typeof PREVIEW_ACCEPTANCE_OPERATIONS)[number];
 
-/** Operator attestation state for authenticated post-deploy read checks. */
-export type PreviewAuthenticatedReadsGate = "not_verified" | "verified";
+/** Versioned canonical workflow context shared by every acceptance operation. */
+export const PREVIEW_ACCEPTANCE_CONTEXT_VERSION =
+  "vision.preview-acceptance-context/v1" as const;
 
-/** Closed result used by both workflow verification and candidate generation. */
+interface PreviewAcceptanceContextBase {
+  readonly version: typeof PREVIEW_ACCEPTANCE_CONTEXT_VERSION;
+  readonly kind: PreviewAcceptanceOperation;
+  readonly reviewedCommit: string;
+}
+
+interface PreviewAcceptanceCandidateContext
+  extends PreviewAcceptanceContextBase {
+  readonly kind:
+    | "deploy_foundation"
+    | "deploy_sync_suppression"
+    | "deploy_ai"
+    | "deploy_fault";
+  readonly authenticatedReadsGate: "verified";
+  readonly candidateRunRef: string;
+  readonly rollbackClosureRunRef: string;
+  readonly observerDispatchStartedAt: string;
+  readonly observerDispatchCompletedAt: string;
+}
+
+export type PreviewAcceptanceContext =
+  | (PreviewAcceptanceContextBase & { readonly kind: "none" })
+  | (PreviewAcceptanceContextBase & {
+      readonly kind: "observe";
+      readonly evidenceFamily:
+        | "foundation_probe"
+        | "preview_fault"
+        | "ai_usage"
+        | "sync_suppression";
+      readonly expectedOutcome:
+        | "foundation_succeeded"
+        | "fault_expected"
+        | "ai_succeeded"
+        | "sync_suppressed";
+      readonly faultScenario?: TemporaryPreviewFaultScenario;
+    })
+  | (PreviewAcceptanceCandidateContext & {
+      readonly kind:
+        | "deploy_foundation"
+        | "deploy_sync_suppression"
+        | "deploy_ai";
+    })
+  | (PreviewAcceptanceCandidateContext & {
+      readonly kind: "deploy_fault";
+      readonly faultScenario: TemporaryPreviewFaultScenario;
+    })
+  | (PreviewAcceptanceContextBase & {
+      readonly kind: "rollback";
+      readonly candidateRunRef: string;
+    })
+  | (PreviewAcceptanceContextBase & {
+      readonly kind: "close_rollback";
+      readonly candidateRunRef: string;
+      readonly rollbackRunRef: string;
+      readonly authenticatedReadsGate: "verified";
+    })
+  | (PreviewAcceptanceContextBase & {
+      readonly kind: "verify_cleanup";
+      readonly candidateRunRef: string;
+      readonly rollbackClosureRunRef: string;
+    });
+
+/** Closed result used by workflow admission and candidate generation. */
 export interface PreviewAcceptanceWorkflowSelection {
   readonly operation: PreviewAcceptanceOperation;
-  readonly authenticatedReadsGate: PreviewAuthenticatedReadsGate;
-  readonly faultScenario:
-    | "none"
-    | (typeof TEMPORARY_PREVIEW_FAULT_SCENARIOS)[number];
-  readonly candidateRunRef: string;
-  readonly rollbackRunId: string;
-  readonly rollbackClosureRunId: string;
+  readonly context: PreviewAcceptanceContext;
   readonly selector?: PreviewAcceptanceSelector;
 }
 
-/** Accepts only a positive decimal workflow-run identifier. */
-function isRunId(value: unknown): value is string {
+const CANONICAL_INSTANT =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
+const REVIEWED_COMMIT = /^[0-9a-f]{40}$/u;
+
+/** Accepts only a positive decimal workflow-run reference. */
+function isRunRef(value: unknown): value is string {
   return typeof value === "string" && /^[1-9][0-9]*$/u.test(value);
 }
 
-/** Validates the one allowed operation/fault combination without coercion. */
-export function validatePreviewAcceptanceWorkflowInputs(
-  operation: unknown,
-  faultScenario: unknown,
-  authenticatedReadsGate: unknown,
-  candidateRunRef: unknown,
-  rollbackRunId: unknown,
-  rollbackClosureRunId: unknown,
+/** Emits one ASCII-only canonical representation with authoritative key order. */
+export function serializePreviewAcceptanceContext(
+  context: PreviewAcceptanceContext,
+): string {
+  const canonical = canonicalPreviewAcceptanceContext(context);
+  const serialized = JSON.stringify(canonical);
+  if (!isBoundedAscii(serialized)) throw new Error(INVALID_SELECTION);
+  return serialized;
+}
+
+/** Parses one byte-exact context and derives only its admitted selector. */
+export function parsePreviewAcceptanceContext(
+  operation: PreviewAcceptanceOperation,
+  serialized: string,
 ): PreviewAcceptanceWorkflowSelection {
-  if (
-    typeof operation !== "string" ||
-    typeof faultScenario !== "string" ||
-    typeof candidateRunRef !== "string" ||
-    typeof rollbackRunId !== "string" ||
-    typeof rollbackClosureRunId !== "string" ||
-    (authenticatedReadsGate !== "not_verified" &&
-      authenticatedReadsGate !== "verified") ||
-    !PREVIEW_ACCEPTANCE_OPERATIONS.includes(
-      operation as PreviewAcceptanceOperation,
-    )
-  ) {
-    throw new Error(INVALID_SELECTION);
-  }
-  const admittedOperation = operation as PreviewAcceptanceOperation;
-  const candidateOperation =
-    admittedOperation === "deploy_foundation" ||
-    admittedOperation === "deploy_ai" ||
-    admittedOperation === "deploy_fault";
-  const exactLifecycleInputs =
-    ((admittedOperation === "none" || admittedOperation === "observe") &&
-      authenticatedReadsGate === "not_verified" &&
-      candidateRunRef === "" &&
-      rollbackRunId === "" &&
-      rollbackClosureRunId === "") ||
-    (candidateOperation &&
-      authenticatedReadsGate === "verified" &&
-      rollbackRunId === "" &&
-      ((candidateRunRef === "baseline" &&
-        rollbackClosureRunId === "baseline") ||
-        (isRunId(candidateRunRef) && isRunId(rollbackClosureRunId)))) ||
-    (admittedOperation === "rollback" &&
-      authenticatedReadsGate === "not_verified" &&
-      isRunId(candidateRunRef) &&
-      rollbackRunId === "" &&
-      rollbackClosureRunId === "") ||
-    (admittedOperation === "close_rollback" &&
-      authenticatedReadsGate === "verified" &&
-      isRunId(candidateRunRef) &&
-      isRunId(rollbackRunId) &&
-      rollbackClosureRunId === "") ||
-    (admittedOperation === "verify_cleanup" &&
-      authenticatedReadsGate === "not_verified" &&
-      isRunId(candidateRunRef) &&
-      rollbackRunId === "" &&
-      isRunId(rollbackClosureRunId));
-  if (!exactLifecycleInputs) {
-    throw new Error(INVALID_SELECTION);
-  }
-  const lifecycle = {
-    candidateRunRef,
-    rollbackRunId,
-    rollbackClosureRunId,
-  } as const;
-  if (admittedOperation === "deploy_fault") {
+  try {
     if (
-      !TEMPORARY_PREVIEW_FAULT_SCENARIOS.includes(
-        faultScenario as (typeof TEMPORARY_PREVIEW_FAULT_SCENARIOS)[number],
-      )
+      !PREVIEW_ACCEPTANCE_OPERATIONS.includes(operation) ||
+      !isBoundedAscii(serialized)
     ) {
       throw new Error(INVALID_SELECTION);
     }
+    const parsed = JSON.parse(serialized) as unknown;
+    const context = canonicalPreviewAcceptanceContext(parsed);
+    if (
+      context.kind !== operation ||
+      JSON.stringify(context) !== serialized
+    ) {
+      throw new Error(INVALID_SELECTION);
+    }
+    const selector =
+      context.kind === "deploy_foundation"
+        ? "foundation_probe"
+        : context.kind === "deploy_sync_suppression"
+          ? "sync_suppression"
+          : context.kind === "deploy_ai"
+            ? "ai_usage"
+            : context.kind === "deploy_fault"
+              ? context.faultScenario
+              : undefined;
     return Object.freeze({
-      operation: admittedOperation,
-      authenticatedReadsGate,
-      faultScenario:
-        faultScenario as (typeof TEMPORARY_PREVIEW_FAULT_SCENARIOS)[number],
-      ...lifecycle,
-      selector:
-        faultScenario as (typeof TEMPORARY_PREVIEW_FAULT_SCENARIOS)[number],
+      operation,
+      context,
+      ...(selector === undefined ? {} : { selector }),
     });
-  }
-  if (faultScenario !== "none") {
+  } catch {
     throw new Error(INVALID_SELECTION);
   }
-  if (admittedOperation === "deploy_foundation") {
-    return Object.freeze({
-      operation: admittedOperation,
-      authenticatedReadsGate,
-      faultScenario: "none",
-      ...lifecycle,
-      selector: "foundation_probe",
-    });
+}
+
+/** Rebuilds one validated context without retaining caller-owned object state. */
+function canonicalPreviewAcceptanceContext(
+  candidate: unknown,
+): PreviewAcceptanceContext {
+  const record = exactPlainRecord(candidate);
+  const version = dataValue(record, "version");
+  const kind = dataValue(record, "kind");
+  const reviewedCommit = dataValue(record, "reviewedCommit");
+  if (
+    version !== PREVIEW_ACCEPTANCE_CONTEXT_VERSION ||
+    typeof kind !== "string" ||
+    !PREVIEW_ACCEPTANCE_OPERATIONS.includes(
+      kind as PreviewAcceptanceOperation,
+    ) ||
+    typeof reviewedCommit !== "string" ||
+    !REVIEWED_COMMIT.test(reviewedCommit)
+  ) {
+    throw new Error(INVALID_SELECTION);
   }
-  if (admittedOperation === "deploy_ai") {
-    return Object.freeze({
-      operation: admittedOperation,
-      authenticatedReadsGate,
-      faultScenario: "none",
-      ...lifecycle,
-      selector: "ai_usage",
-    });
+  const admittedKind = kind as PreviewAcceptanceOperation;
+  const base = { version } as const;
+  switch (admittedKind) {
+    case "none": {
+      exactKeys(record, ["version", "kind", "reviewedCommit"]);
+      return Object.freeze({ ...base, kind: admittedKind, reviewedCommit });
+    }
+    case "observe": {
+      const evidenceFamily = dataValue(record, "evidenceFamily");
+      const expectedOutcome = dataValue(record, "expectedOutcome");
+      const faultExpected =
+        evidenceFamily === "preview_fault" &&
+        expectedOutcome === "fault_expected";
+      exactKeys(
+        record,
+        faultExpected
+          ? [
+              "version",
+              "kind",
+              "reviewedCommit",
+              "evidenceFamily",
+              "expectedOutcome",
+              "faultScenario",
+            ]
+          : [
+              "version",
+              "kind",
+              "reviewedCommit",
+              "evidenceFamily",
+              "expectedOutcome",
+            ],
+      );
+      const matchingOutcome =
+        (evidenceFamily === "foundation_probe" &&
+          expectedOutcome === "foundation_succeeded") ||
+        (evidenceFamily === "preview_fault" &&
+          expectedOutcome === "fault_expected") ||
+        (evidenceFamily === "ai_usage" &&
+          expectedOutcome === "ai_succeeded") ||
+        (evidenceFamily === "sync_suppression" &&
+          expectedOutcome === "sync_suppressed");
+      const faultScenario = dataValue(record, "faultScenario");
+      if (
+        !matchingOutcome ||
+        (faultExpected &&
+          !TEMPORARY_PREVIEW_FAULT_SCENARIOS.includes(
+            faultScenario as TemporaryPreviewFaultScenario,
+          ))
+      ) {
+        throw new Error(INVALID_SELECTION);
+      }
+      return Object.freeze({
+        ...base,
+        kind: admittedKind,
+        reviewedCommit,
+        evidenceFamily,
+        expectedOutcome,
+        ...(faultExpected
+          ? { faultScenario: faultScenario as TemporaryPreviewFaultScenario }
+          : {}),
+      }) as PreviewAcceptanceContext;
+    }
+    case "deploy_foundation":
+    case "deploy_sync_suppression":
+    case "deploy_ai":
+    case "deploy_fault": {
+      exactKeys(record, [
+        "version",
+        "kind",
+        "reviewedCommit",
+        "authenticatedReadsGate",
+        "candidateRunRef",
+        "rollbackClosureRunRef",
+        "observerDispatchStartedAt",
+        "observerDispatchCompletedAt",
+        ...(kind === "deploy_fault" ? ["faultScenario"] : []),
+      ]);
+      const authenticatedReadsGate = dataValue(
+        record,
+        "authenticatedReadsGate",
+      );
+      const candidateRunRef = dataValue(record, "candidateRunRef");
+      const rollbackClosureRunRef = dataValue(
+        record,
+        "rollbackClosureRunRef",
+      );
+      const observerDispatchStartedAt = dataValue(
+        record,
+        "observerDispatchStartedAt",
+      );
+      const observerDispatchCompletedAt = dataValue(
+        record,
+        "observerDispatchCompletedAt",
+      );
+      const baselinePair =
+        candidateRunRef === "baseline" &&
+        rollbackClosureRunRef === "baseline";
+      const closedPair =
+        isRunRef(candidateRunRef) && isRunRef(rollbackClosureRunRef);
+      const faultScenario = dataValue(record, "faultScenario");
+      if (
+        authenticatedReadsGate !== "verified" ||
+        (!baselinePair && !closedPair) ||
+        !isCanonicalInstant(observerDispatchStartedAt) ||
+        !isCanonicalInstant(observerDispatchCompletedAt) ||
+        (kind === "deploy_fault" &&
+          !TEMPORARY_PREVIEW_FAULT_SCENARIOS.includes(
+            faultScenario as TemporaryPreviewFaultScenario,
+          ))
+      ) {
+        throw new Error(INVALID_SELECTION);
+      }
+      return Object.freeze({
+        ...base,
+        kind: admittedKind,
+        reviewedCommit,
+        authenticatedReadsGate,
+        candidateRunRef,
+        rollbackClosureRunRef,
+        observerDispatchStartedAt,
+        observerDispatchCompletedAt,
+        ...(kind === "deploy_fault"
+          ? { faultScenario: faultScenario as TemporaryPreviewFaultScenario }
+          : {}),
+      }) as PreviewAcceptanceContext;
+    }
+    case "rollback": {
+      exactKeys(record, [
+        "version",
+        "kind",
+        "reviewedCommit",
+        "candidateRunRef",
+      ]);
+      const candidateRunRef = dataValue(record, "candidateRunRef");
+      if (!isRunRef(candidateRunRef)) throw new Error(INVALID_SELECTION);
+      return Object.freeze({
+        ...base,
+        kind: admittedKind,
+        reviewedCommit,
+        candidateRunRef,
+      });
+    }
+    case "close_rollback": {
+      exactKeys(record, [
+        "version",
+        "kind",
+        "reviewedCommit",
+        "candidateRunRef",
+        "rollbackRunRef",
+        "authenticatedReadsGate",
+      ]);
+      const candidateRunRef = dataValue(record, "candidateRunRef");
+      const rollbackRunRef = dataValue(record, "rollbackRunRef");
+      const authenticatedReadsGate = dataValue(
+        record,
+        "authenticatedReadsGate",
+      );
+      if (
+        !isRunRef(candidateRunRef) ||
+        !isRunRef(rollbackRunRef) ||
+        authenticatedReadsGate !== "verified"
+      ) {
+        throw new Error(INVALID_SELECTION);
+      }
+      return Object.freeze({
+        ...base,
+        kind: admittedKind,
+        reviewedCommit,
+        candidateRunRef,
+        rollbackRunRef,
+        authenticatedReadsGate,
+      });
+    }
+    case "verify_cleanup": {
+      exactKeys(record, [
+        "version",
+        "kind",
+        "reviewedCommit",
+        "candidateRunRef",
+        "rollbackClosureRunRef",
+      ]);
+      const candidateRunRef = dataValue(record, "candidateRunRef");
+      const rollbackClosureRunRef = dataValue(
+        record,
+        "rollbackClosureRunRef",
+      );
+      if (
+        !isRunRef(candidateRunRef) ||
+        !isRunRef(rollbackClosureRunRef)
+      ) {
+        throw new Error(INVALID_SELECTION);
+      }
+      return Object.freeze({
+        ...base,
+        kind: admittedKind,
+        reviewedCommit,
+        candidateRunRef,
+        rollbackClosureRunRef,
+      });
+    }
   }
-  return Object.freeze({
-    operation: admittedOperation,
-    authenticatedReadsGate,
-    faultScenario: "none",
-    ...lifecycle,
-  });
+  throw new Error(INVALID_SELECTION);
+}
+
+/** Restricts context transport to at most 2,048 printable ASCII bytes. */
+function isBoundedAscii(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length <= 2_048 &&
+    /^[\x20-\x7e]*$/u.test(value)
+  );
+}
+
+/** Returns one ordinary record with enumerable data properties only. */
+function exactPlainRecord(value: unknown): Readonly<Record<string, unknown>> {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype ||
+    Reflect.ownKeys(value).some((key) => typeof key !== "string")
+  ) {
+    throw new Error(INVALID_SELECTION);
+  }
+  const record = value as Readonly<Record<string, unknown>>;
+  for (const key of Object.keys(record)) {
+    const descriptor = Object.getOwnPropertyDescriptor(record, key);
+    if (
+      descriptor?.enumerable !== true ||
+      !("value" in descriptor)
+    ) {
+      throw new Error(INVALID_SELECTION);
+    }
+  }
+  return record;
+}
+
+/** Reads one own enumerable data property without invoking accessors. */
+function dataValue(
+  record: Readonly<Record<string, unknown>>,
+  key: string,
+): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(record, key);
+  return descriptor?.enumerable === true && "value" in descriptor
+    ? descriptor.value
+    : undefined;
+}
+
+/** Requires the exact ordered key sequence for one discriminated variant. */
+function exactKeys(
+  record: Readonly<Record<string, unknown>>,
+  expected: readonly string[],
+): void {
+  const keys = Object.keys(record);
+  if (
+    keys.length !== expected.length ||
+    keys.some((key, index) => key !== expected[index])
+  ) {
+    throw new Error(INVALID_SELECTION);
+  }
+}
+
+/** Accepts only byte-stable canonical UTC instants. */
+function isCanonicalInstant(value: unknown): value is string {
+  if (typeof value !== "string" || !CANONICAL_INSTANT.test(value)) return false;
+  const instant = Date.parse(value);
+  return Number.isFinite(instant) && new Date(instant).toISOString() === value;
 }
 
 /** Returns a new exact candidate and leaves the pre-validated normal input untouched. */
@@ -199,6 +485,13 @@ export function preparePreviewAcceptanceDeployConfig(input: {
   }
 
   const normal = structuredClone(input.normalConfig) as PreviewDeployConfig;
+  const normalCrons = [
+    ...((normal.triggers as { readonly crons: readonly string[] }).crons),
+  ];
+  const candidateCrons =
+    input.selector === "sync_suppression"
+      ? normalCrons
+      : [...normalCrons, ACCEPTANCE_CRON];
   const candidate: PreviewDeployConfig = {
     ...normal,
     vars: {
@@ -206,6 +499,7 @@ export function preparePreviewAcceptanceDeployConfig(input: {
       PREVIEW_ACCEPTANCE_SCENARIO: input.selector,
       PREVIEW_ACCEPTANCE_EXPIRES_AT: createPreviewAcceptanceDeadline(
         input.activatedAt ?? new Date(),
+        input.selector,
       ),
       ...(input.selector === "ai_usage"
         ? {
@@ -214,10 +508,7 @@ export function preparePreviewAcceptanceDeployConfig(input: {
         : {}),
     },
     triggers: {
-      crons: [
-        ...((normal.triggers as { readonly crons: readonly string[] }).crons),
-        ACCEPTANCE_CRON,
-      ],
+      crons: candidateCrons,
     },
   };
   validatePreviewAcceptanceDeployConfig(candidate, input.selector);
@@ -244,29 +535,95 @@ function readArguments(arguments_: readonly string[]): ReadonlyMap<string, strin
   return parsed;
 }
 
+/** Reads canonical context only from the workflow step environment. */
+function readWorkflowSelectionFromEnvironment(): PreviewAcceptanceWorkflowSelection {
+  const operation = process.env.ACCEPTANCE_OPERATION;
+  const serialized = process.env.ACCEPTANCE_CONTEXT;
+  const dispatchSha = process.env.DISPATCH_SHA;
+  const checkedOutSha = process.env.CHECKED_OUT_SHA;
+  if (
+    typeof operation !== "string" ||
+    typeof serialized !== "string" ||
+    typeof dispatchSha !== "string" ||
+    typeof checkedOutSha !== "string"
+  ) {
+    throw new Error(INVALID_SELECTION);
+  }
+  const selection = parsePreviewAcceptanceContext(
+    operation as PreviewAcceptanceOperation,
+    serialized,
+  );
+  if (
+    dispatchSha !== selection.context.reviewedCommit ||
+    checkedOutSha !== selection.context.reviewedCommit
+  ) {
+    throw new Error(INVALID_SELECTION);
+  }
+  return selection;
+}
+
 /** Executes the workflow verifier or writes the single ephemeral candidate path. */
 async function main(): Promise<void> {
   try {
     const arguments_ = process.argv.slice(2);
-    const verifyOnly = arguments_[0] === "--verify-workflow-inputs";
-    const parsed = readArguments(verifyOnly ? arguments_.slice(1) : arguments_);
-    const selection = validatePreviewAcceptanceWorkflowInputs(
-      parsed.get("--operation"),
-      parsed.get("--fault-scenario"),
-      parsed.get("--authenticated-reads-gate"),
-      parsed.get("--candidate-run-ref"),
-      parsed.get("--rollback-run-id"),
-      parsed.get("--rollback-closure-run-id"),
-    );
+    const verifyOnly =
+      arguments_.length === 1 &&
+      arguments_[0] === "--verify-workflow-inputs";
+    const selection = readWorkflowSelectionFromEnvironment();
     if (verifyOnly) {
-      if (parsed.size !== 6) throw new Error(INVALID_SELECTION);
+      const outputPath = process.env.GITHUB_OUTPUT;
+      if (typeof outputPath !== "string" || outputPath.length === 0) {
+        throw new Error(INVALID_SELECTION);
+      }
+      const context = selection.context;
+      const candidateContext =
+        context.kind === "deploy_foundation" ||
+        context.kind === "deploy_sync_suppression" ||
+        context.kind === "deploy_ai" ||
+        context.kind === "deploy_fault"
+          ? context
+          : undefined;
+      const candidateRunRef =
+        "candidateRunRef" in context ? context.candidateRunRef : "";
+      const rollbackRunRef =
+        context.kind === "close_rollback" ? context.rollbackRunRef : "";
+      const rollbackClosureRunRef =
+        "rollbackClosureRunRef" in context
+          ? context.rollbackClosureRunRef
+          : "";
+      const authenticatedReadsGate =
+        "authenticatedReadsGate" in context
+          ? context.authenticatedReadsGate
+          : "";
+      const faultScenario =
+        "faultScenario" in context ? context.faultScenario ?? "" : "";
+      const evidenceFamily =
+        context.kind === "observe" ? context.evidenceFamily : "";
+      await appendFile(
+        outputPath,
+        [
+          `reviewed_commit=${context.reviewedCommit}`,
+          `candidate_run_ref=${candidateRunRef}`,
+          `rollback_run_ref=${rollbackRunRef}`,
+          `rollback_closure_run_ref=${rollbackClosureRunRef}`,
+          `authenticated_reads_gate=${authenticatedReadsGate}`,
+          `fault_scenario=${faultScenario}`,
+          `evidence_family=${evidenceFamily}`,
+          `selector=${selection.selector ?? ""}`,
+          `observer_dispatch_started_at=${candidateContext?.observerDispatchStartedAt ?? ""}`,
+          `observer_dispatch_completed_at=${candidateContext?.observerDispatchCompletedAt ?? ""}`,
+          "",
+        ].join("\n"),
+        "utf8",
+      );
       process.stdout.write("Preview acceptance workflow selection is valid.\n");
       return;
     }
+    const parsed = readArguments(arguments_);
     if (
       parsed.get("--input") !== NORMAL_INPUT ||
       parsed.get("--output") !== ACCEPTANCE_OUTPUT ||
-      parsed.size !== 9 ||
+      parsed.size !== 3 ||
       selection.selector === undefined
     ) {
       throw new Error(INVALID_CONFIG);

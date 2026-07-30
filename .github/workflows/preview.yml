@@ -12,61 +12,15 @@ on:
           - none
           - observe
           - deploy_foundation
+          - deploy_sync_suppression
           - deploy_ai
           - deploy_fault
           - rollback
           - close_rollback
           - verify_cleanup
-      fault_scenario:
-        description: Closed fault selector used only with deploy_fault
+      acceptance_context:
+        description: Canonical versioned context for the selected operation
         required: true
-        default: none
-        type: choice
-        options:
-          - none
-          - queue_delayed
-          - job_failed
-          - channel_expired
-          - database_unavailable
-          - r2_upload_failed
-          - ai_stopped
-      authenticated_reads_gate:
-        description: Operator attestation for authenticated diagnostics and calendar reads
-        required: true
-        default: not_verified
-        type: choice
-        options:
-          - not_verified
-          - verified
-      observer_evidence:
-        description: Privacy-safe terminal type for the non-mutating observer
-        required: true
-        default: calendar_maintenance
-        type: choice
-        options:
-          - calendar_maintenance
-          - foundation_probe
-          - ai_usage
-          - preview_fault
-      observer_run_id:
-        description: Active observe-operation run required for candidate deployment
-        required: false
-        default: ""
-        type: string
-      candidate_run_ref:
-        description: Latest candidate run, or baseline only before the first candidate
-        required: false
-        default: ""
-        type: string
-      rollback_run_id:
-        description: Completed rollback run required only to close rollback
-        required: false
-        default: ""
-        type: string
-      rollback_closure_run_id:
-        description: Latest closure run, or baseline only before the first candidate
-        required: false
-        default: ""
         type: string
       configure_ai_budget:
         description: Apply and verify the approved preview AI Gateway budget without deployment
@@ -86,10 +40,25 @@ jobs:
   selection:
     name: Admit one preview operation
     runs-on: ubuntu-latest
+    outputs:
+      reviewed_commit: ${{ steps.acceptance-selection.outputs.reviewed_commit }}
+      candidate_run_ref: ${{ steps.acceptance-selection.outputs.candidate_run_ref }}
+      rollback_run_ref: ${{ steps.acceptance-selection.outputs.rollback_run_ref }}
+      rollback_closure_run_ref: ${{ steps.acceptance-selection.outputs.rollback_closure_run_ref }}
+      authenticated_reads_gate: ${{ steps.acceptance-selection.outputs.authenticated_reads_gate }}
+      fault_scenario: ${{ steps.acceptance-selection.outputs.fault_scenario }}
+      evidence_family: ${{ steps.acceptance-selection.outputs.evidence_family }}
+      selector: ${{ steps.acceptance-selection.outputs.selector }}
+      observer_dispatch_started_at: ${{ steps.acceptance-selection.outputs.observer_dispatch_started_at }}
+      observer_dispatch_completed_at: ${{ steps.acceptance-selection.outputs.observer_dispatch_completed_at }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ github.sha }}
+      - name: Resolve checked out commit
+        id: checked-out
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
@@ -98,18 +67,18 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
       - name: Verify exact acceptance operation
+        id: acceptance-selection
         shell: bash
+        env:
+          ACCEPTANCE_OPERATION: ${{ inputs.acceptance_operation }}
+          ACCEPTANCE_CONTEXT: ${{ inputs.acceptance_context }}
+          DISPATCH_SHA: ${{ github.sha }}
+          CHECKED_OUT_SHA: ${{ steps.checked-out.outputs.sha }}
         run: |
           if [[ "${{ inputs.configure_ai_budget }}" == "true" && "${{ inputs.acceptance_operation }}" != "none" ]]; then
             exit 1
           fi
-          pnpm exec tsx scripts/prepare-preview-acceptance-deploy-config.ts --verify-workflow-inputs \
-            --operation "${{ inputs.acceptance_operation }}" \
-            --fault-scenario "${{ inputs.fault_scenario }}" \
-            --authenticated-reads-gate "${{ inputs.authenticated_reads_gate }}" \
-            --candidate-run-ref "${{ inputs.candidate_run_ref }}" \
-            --rollback-run-id "${{ inputs.rollback_run_id }}" \
-            --rollback-closure-run-id "${{ inputs.rollback_closure_run_id }}"
+          pnpm exec tsx scripts/prepare-preview-acceptance-deploy-config.ts --verify-workflow-inputs
 
   verify:
     name: Verify preview candidate
@@ -189,7 +158,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
 
   tail:
-    name: Capture ${{ inputs.observer_evidence }} safe scheduled outcome
+    name: Capture ${{ needs.selection.outputs.evidence_family }} safe scheduled outcome
     if: ${{ inputs.acceptance_operation == 'observe' && inputs.configure_ai_budget == false }}
     needs: selection
     runs-on: ubuntu-latest
@@ -218,7 +187,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
-          OBSERVER_EVIDENCE: ${{ inputs.observer_evidence }}
+          OBSERVER_EVIDENCE: ${{ needs.selection.outputs.evidence_family }}
         run: |
           case "$OBSERVER_EVIDENCE" in
             calendar_maintenance) evidence_flag="--calendar-maintenance-only" ;;
@@ -233,8 +202,8 @@ jobs:
 
   deploy_acceptance_candidate:
     name: Deploy one generated acceptance candidate
-    if: ${{ inputs.acceptance_operation == 'deploy_foundation' || inputs.acceptance_operation == 'deploy_ai' || inputs.acceptance_operation == 'deploy_fault' }}
-    needs: verify
+    if: ${{ inputs.acceptance_operation == 'deploy_foundation' || inputs.acceptance_operation == 'deploy_sync_suppression' || inputs.acceptance_operation == 'deploy_ai' || inputs.acceptance_operation == 'deploy_fault' }}
+    needs: [selection, verify]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: preview
@@ -263,15 +232,15 @@ jobs:
       - name: Require authenticated diagnostics and calendar operator gate
         shell: bash
         env:
-          AUTHENTICATED_READS_GATE: ${{ inputs.authenticated_reads_gate }}
+          AUTHENTICATED_READS_GATE: ${{ needs.selection.outputs.authenticated_reads_gate }}
         run: |
           [[ "$AUTHENTICATED_READS_GATE" == "verified" ]]
       - name: Verify latest post-restore closure before candidate deployment
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          CANDIDATE_RUN_REF: ${{ inputs.candidate_run_ref }}
-          ROLLBACK_CLOSURE_RUN_ID: ${{ inputs.rollback_closure_run_id }}
+          CANDIDATE_RUN_REF: ${{ needs.selection.outputs.candidate_run_ref }}
+          ROLLBACK_CLOSURE_RUN_ID: ${{ needs.selection.outputs.rollback_closure_run_ref }}
           VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}
         run: |
           artifacts_file="$(mktemp)"
@@ -305,14 +274,27 @@ jobs:
             --operation "candidate"
       - name: Reject daily recovery overlap before candidate preparation
         run: pnpm exec tsx scripts/validate-preview-acceptance-window.ts
+        env:
+          ACCEPTANCE_OPERATION: ${{ inputs.acceptance_operation }}
+          ACCEPTANCE_CONTEXT: ${{ inputs.acceptance_context }}
       - name: Verify active privacy-safe observer
+        id: observer-state
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           ACCEPTANCE_OPERATION: ${{ inputs.acceptance_operation }}
-          OBSERVER_RUN_ID: ${{ inputs.observer_run_id }}
+          OBSERVER_DISPATCH_STARTED_AT: ${{ needs.selection.outputs.observer_dispatch_started_at }}
+          OBSERVER_DISPATCH_COMPLETED_AT: ${{ needs.selection.outputs.observer_dispatch_completed_at }}
           VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}
         run: |
+          observer_runs_file="$(mktemp)"
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/preview.yml/runs?event=workflow_dispatch&per_page=100" > "$observer_runs_file"
+          OBSERVER_RUN_ID="$(jq -er \
+            --arg started "$OBSERVER_DISPATCH_STARTED_AT" \
+            --arg completed "$OBSERVER_DISPATCH_COMPLETED_AT" \
+            '[.workflow_runs[] | select(.created_at >= $started and .created_at <= $completed)] |
+             if length == 1 then .[0].id | tostring else error("observer selection failed") end' \
+            "$observer_runs_file")"
           if ! [[ "$OBSERVER_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]; then
             exit 1
           fi
@@ -324,7 +306,7 @@ jobs:
           esac
           run_file="$(mktemp)"
           jobs_file="$(mktemp)"
-          trap 'rm -f "$run_file" "$jobs_file"' EXIT
+          trap 'rm -f "$observer_runs_file" "$run_file" "$jobs_file"' EXIT
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$OBSERVER_RUN_ID" > "$run_file"
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$OBSERVER_RUN_ID/jobs" > "$jobs_file"
           jq -e --arg sha "$VERIFIED_SHA" '
@@ -342,6 +324,7 @@ jobs:
             --jobs-file "$jobs_file" \
             --sha "$VERIFIED_SHA" \
             --evidence "$expected_observer_evidence"
+          echo "run_id=$OBSERVER_RUN_ID" >> "$GITHUB_OUTPUT"
       - name: Verify live preview is normal before candidate deployment
         shell: bash
         env:
@@ -369,11 +352,11 @@ jobs:
       - name: Verify immutable normal artifact
         run: pnpm deploy:check:preview
       - name: Attest exact server-only AI pricing policy
-        if: ${{ inputs.acceptance_operation == 'deploy_ai' || (inputs.acceptance_operation == 'deploy_fault' && inputs.fault_scenario == 'ai_stopped') }}
+        if: ${{ inputs.acceptance_operation == 'deploy_ai' || (inputs.acceptance_operation == 'deploy_fault' && needs.selection.outputs.fault_scenario == 'ai_stopped') }}
         run: pnpm ai:pricing:attest --config dist/vision/wrangler.json --environment preview
       - name: Verify the existing AI Gateway limit
         id: gateway-attestation
-        if: ${{ inputs.acceptance_operation == 'deploy_ai' || (inputs.acceptance_operation == 'deploy_fault' && inputs.fault_scenario == 'ai_stopped') }}
+        if: ${{ inputs.acceptance_operation == 'deploy_ai' || (inputs.acceptance_operation == 'deploy_fault' && needs.selection.outputs.fault_scenario == 'ai_stopped') }}
         run: |
           pnpm gateway:verify:preview
           echo "attested=true" >> "$GITHUB_OUTPUT"
@@ -383,15 +366,13 @@ jobs:
       - name: Build generated acceptance candidate
         shell: bash
         env:
+          ACCEPTANCE_OPERATION: ${{ inputs.acceptance_operation }}
+          ACCEPTANCE_CONTEXT: ${{ inputs.acceptance_context }}
+          DISPATCH_SHA: ${{ github.sha }}
+          CHECKED_OUT_SHA: ${{ needs.verify.outputs.verified_sha }}
           AI_GATEWAY_LIMIT_ATTESTED: ${{ inputs.acceptance_operation == 'deploy_ai' && steps.gateway-attestation.outputs.attested || '' }}
         run: |
           pnpm exec tsx scripts/prepare-preview-acceptance-deploy-config.ts \
-            --operation "${{ inputs.acceptance_operation }}" \
-            --fault-scenario "${{ inputs.fault_scenario }}" \
-            --authenticated-reads-gate "${{ inputs.authenticated_reads_gate }}" \
-            --candidate-run-ref "${{ inputs.candidate_run_ref }}" \
-            --rollback-run-id "${{ inputs.rollback_run_id }}" \
-            --rollback-closure-run-id "${{ inputs.rollback_closure_run_id }}" \
             --input dist/vision/wrangler.json \
             --output dist/vision/wrangler.acceptance.json \
             --ai-gateway-limit-attested "$AI_GATEWAY_LIMIT_ATTESTED"
@@ -412,7 +393,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ACCEPTANCE_OPERATION: ${{ inputs.acceptance_operation }}
-          OBSERVER_RUN_ID: ${{ inputs.observer_run_id }}
+          OBSERVER_RUN_ID: ${{ steps.observer-state.outputs.run_id }}
           VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}
         run: |
           if ! [[ "$OBSERVER_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]; then
@@ -456,7 +437,7 @@ jobs:
   rollback:
     name: Restore immutable normal preview
     if: ${{ inputs.acceptance_operation == 'rollback' && inputs.configure_ai_budget == false }}
-    needs: verify
+    needs: [selection, verify]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: preview
@@ -484,7 +465,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          CANDIDATE_RUN_REF: ${{ inputs.candidate_run_ref }}
+          CANDIDATE_RUN_REF: ${{ needs.selection.outputs.candidate_run_ref }}
           VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}
         run: |
           artifacts_file="$(mktemp)"
@@ -537,7 +518,7 @@ jobs:
       - name: Write privacy-safe restored-normal proof
         run: |
           pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --write-restore-proof \
-            --candidate-run-ref "${{ inputs.candidate_run_ref }}" \
+            --candidate-run-ref "${{ needs.selection.outputs.candidate_run_ref }}" \
             --commit "${{ needs.verify.outputs.verified_sha }}" \
             --restored-at "${{ steps.rollback-deploy.outputs.restored_at }}" \
             --provider-verified-at "${{ steps.rollback-provider.outputs.provider_verified_at }}" \
@@ -554,7 +535,7 @@ jobs:
   close_rollback:
     name: Close restored normal preview
     if: ${{ inputs.acceptance_operation == 'close_rollback' && inputs.configure_ai_budget == false }}
-    needs: verify
+    needs: [selection, verify]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: preview
@@ -582,7 +563,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          ROLLBACK_RUN_ID: ${{ inputs.rollback_run_id }}
+          ROLLBACK_RUN_ID: ${{ needs.selection.outputs.rollback_run_ref }}
           VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}
         run: |
           run_file="$(mktemp)"
@@ -630,11 +611,11 @@ jobs:
       - name: Close rollback after post-restore authenticated reads
         shell: bash
         env:
-          AUTHENTICATED_READS_GATE: ${{ inputs.authenticated_reads_gate }}
+          AUTHENTICATED_READS_GATE: ${{ needs.selection.outputs.authenticated_reads_gate }}
         run: |
           pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --close-rollback \
             --restore-proof preview-rollback-restored.json \
-            --candidate-run-ref "${{ inputs.candidate_run_ref }}" \
+            --candidate-run-ref "${{ needs.selection.outputs.candidate_run_ref }}" \
             --commit "${{ needs.verify.outputs.verified_sha }}" \
             --authenticated-reads-gate "$AUTHENTICATED_READS_GATE" \
             --closure-provider-verified-at "${{ steps.closure-provider.outputs.provider_verified_at }}" \
@@ -651,7 +632,7 @@ jobs:
   verify_cleanup:
     name: Verify cleanup admission
     if: ${{ inputs.acceptance_operation == 'verify_cleanup' && inputs.configure_ai_budget == false }}
-    needs: verify
+    needs: [selection, verify]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -669,8 +650,8 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          CANDIDATE_RUN_REF: ${{ inputs.candidate_run_ref }}
-          ROLLBACK_CLOSURE_RUN_ID: ${{ inputs.rollback_closure_run_id }}
+          CANDIDATE_RUN_REF: ${{ needs.selection.outputs.candidate_run_ref }}
+          ROLLBACK_CLOSURE_RUN_ID: ${{ needs.selection.outputs.rollback_closure_run_ref }}
           VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}
         run: |
           artifacts_file="$(mktemp)"
@@ -699,7 +680,7 @@ jobs:
 
   configure_gateway:
     name: Configure approved AI Gateway budget
-    if: ${{ inputs.configure_ai_budget == true && inputs.acceptance_operation == 'none' && inputs.fault_scenario == 'none' }}
+    if: ${{ inputs.configure_ai_budget == true && inputs.acceptance_operation == 'none' }}
     needs: selection
     runs-on: ubuntu-latest
     environment: preview

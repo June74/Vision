@@ -2,8 +2,11 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import {
+  PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
   preparePreviewAcceptanceDeployConfig,
-  validatePreviewAcceptanceWorkflowInputs,
+  parsePreviewAcceptanceContext,
+  serializePreviewAcceptanceContext,
+  type PreviewAcceptanceContext,
   type PreviewAcceptanceSelector,
 } from "../../../scripts/prepare-preview-acceptance-deploy-config";
 import {
@@ -30,7 +33,9 @@ const ACCEPTANCE_SELECTORS = [
   ...FAULT_SCENARIOS,
   "foundation_probe",
   "ai_usage",
+  "sync_suppression",
 ] as const;
+const REVIEWED_COMMIT = "a".repeat(40);
 const NORMAL_PREVIEW_PROVIDER_BINDINGS = [
   ...AI_PRICING_BINDING_CONTRACT.map(({ name, type, value }) => ({
     name,
@@ -294,6 +299,23 @@ describe("generated preview acceptance candidate", () => {
     ).not.toThrow();
   });
 
+  it("builds the exact ten-minute suppression artifact without a one-minute schedule", () => {
+    const candidate = preparePreviewAcceptanceDeployConfig({
+      normalConfig: previewArtifact(),
+      selector: "sync_suppression",
+      activatedAt: new Date("2026-07-29T04:00:00.000Z"),
+    });
+
+    expect(candidate.vars).toMatchObject({
+      PREVIEW_ACCEPTANCE_SCENARIO: "sync_suppression",
+      PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-29T04:10:00.000Z",
+    });
+    expect(candidate.triggers).toEqual({ crons: NORMAL_CRONS });
+    expect(() =>
+      validatePreviewAcceptanceDeployConfig(candidate, "sync_suppression"),
+    ).not.toThrow();
+  });
+
   it("rejects a missing, malformed, or unreviewed candidate deadline", () => {
     const candidate = preparePreviewAcceptanceDeployConfig({
       normalConfig: previewArtifact(),
@@ -449,128 +471,207 @@ describe("generated preview acceptance candidate", () => {
 });
 
 describe("preview acceptance workflow input admission", () => {
-  const validSelections: ReadonlyArray<
-    readonly [
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string | undefined,
-    ]
-  > = [
-    ["none", "none", "not_verified", "", "", "", undefined],
-    ["observe", "none", "not_verified", "", "", "", undefined],
-    [
-      "deploy_foundation",
-      "none",
-      "verified",
-      "baseline",
-      "",
-      "baseline",
-      "foundation_probe",
-    ],
-    [
-      "deploy_ai",
-      "none",
-      "verified",
-      "101",
-      "",
-      "202",
-      "ai_usage",
-    ],
-    ["rollback", "none", "not_verified", "101", "", "", undefined],
-    ["close_rollback", "none", "verified", "101", "202", "", undefined],
-    ["verify_cleanup", "none", "not_verified", "101", "", "303", undefined],
-    ...FAULT_SCENARIOS.map(
-      (
-        scenario,
-      ): readonly [string, string, string, string, string, string, string] => [
-        "deploy_fault",
-        scenario,
-        "verified",
-        "101",
-        "",
-        "202",
-        scenario,
-      ],
-    ),
-  ];
+  const candidateLifecycle = {
+    authenticatedReadsGate: "verified",
+    candidateRunRef: "baseline",
+    rollbackClosureRunRef: "baseline",
+    observerDispatchStartedAt: "2026-07-29T04:00:00.000Z",
+    observerDispatchCompletedAt: "2026-07-29T04:00:01.000Z",
+  } as const;
+  const context = <T extends PreviewAcceptanceContext>(value: T): T => value;
 
-  it.each(validSelections)(
-    "admits operation %s with fault choice %s",
-    (
-      operation,
-      faultScenario,
-      authenticatedReadsGate,
-      candidateRunRef,
-      rollbackRunId,
-      rollbackClosureRunId,
-      expectedSelector,
-    ) => {
-      const selection = validatePreviewAcceptanceWorkflowInputs(
-        operation,
-        faultScenario,
-        authenticatedReadsGate,
-        candidateRunRef,
-        rollbackRunId,
-        rollbackClosureRunId,
-      );
-      expect(selection.selector).toBe(expectedSelector);
-      expect(selection.candidateRunRef).toBe(candidateRunRef);
-      expect(selection.rollbackRunId).toBe(rollbackRunId);
-      expect(selection.rollbackClosureRunId).toBe(rollbackClosureRunId);
+  const validContexts = [
+    context({
+      version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
+      kind: "none",
+      reviewedCommit: REVIEWED_COMMIT,
+    }),
+    context({
+      version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
+      kind: "observe",
+      reviewedCommit: REVIEWED_COMMIT,
+      evidenceFamily: "foundation_probe",
+      expectedOutcome: "foundation_succeeded",
+    }),
+    context({
+      version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
+      kind: "observe",
+      reviewedCommit: REVIEWED_COMMIT,
+      evidenceFamily: "preview_fault",
+      expectedOutcome: "fault_expected",
+      faultScenario: "job_failed",
+    }),
+    context({
+      version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
+      kind: "deploy_foundation",
+      reviewedCommit: REVIEWED_COMMIT,
+      ...candidateLifecycle,
+    }),
+    context({
+      version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
+      kind: "deploy_sync_suppression",
+      reviewedCommit: REVIEWED_COMMIT,
+      ...candidateLifecycle,
+    }),
+    context({
+      version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
+      kind: "deploy_fault",
+      reviewedCommit: REVIEWED_COMMIT,
+      ...candidateLifecycle,
+      faultScenario: "job_failed",
+    }),
+    context({
+      version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
+      kind: "deploy_ai",
+      reviewedCommit: REVIEWED_COMMIT,
+      ...candidateLifecycle,
+    }),
+    context({
+      version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
+      kind: "rollback",
+      reviewedCommit: REVIEWED_COMMIT,
+      candidateRunRef: "101",
+    }),
+    context({
+      version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
+      kind: "close_rollback",
+      reviewedCommit: REVIEWED_COMMIT,
+      candidateRunRef: "101",
+      rollbackRunRef: "202",
+      authenticatedReadsGate: "verified",
+    }),
+    context({
+      version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
+      kind: "verify_cleanup",
+      reviewedCommit: REVIEWED_COMMIT,
+      candidateRunRef: "101",
+      rollbackClosureRunRef: "303",
+    }),
+  ] as const;
+
+  it.each(validContexts)(
+    "round-trips canonical context kind $kind as deeply frozen data",
+    (value) => {
+      const serialized = serializePreviewAcceptanceContext(value);
+      const selection = parsePreviewAcceptanceContext(value.kind, serialized);
+
+      expect(serialized).toBe(JSON.stringify(value));
+      expect(Buffer.byteLength(serialized, "ascii")).toBeLessThanOrEqual(2_048);
+      expect(selection.operation).toBe(value.kind);
+      expect(selection.context).toEqual(value);
+      expect(Object.isFrozen(selection)).toBe(true);
+      expect(Object.isFrozen(selection.context)).toBe(true);
     },
   );
 
+  it("admits sync suppression as its own selector", () => {
+    const value = validContexts.find(
+      (candidate) => candidate.kind === "deploy_sync_suppression",
+    )!;
+    const selection = parsePreviewAcceptanceContext(
+      value.kind,
+      serializePreviewAcceptanceContext(value),
+    );
+
+    expect(selection).toMatchObject({
+      operation: "deploy_sync_suppression",
+      selector: "sync_suppression",
+    });
+  });
+
   it.each([
-    ["unknown", "none", "not_verified", "", "", ""],
-    ["none", "job_failed", "not_verified", "", "", ""],
-    ["observe", "job_failed", "not_verified", "", "", ""],
-    ["deploy_foundation", "job_failed", "verified", "baseline", "", "baseline"],
-    ["deploy_ai", "ai_stopped", "verified", "baseline", "", "baseline"],
-    ["deploy_fault", "none", "verified", "baseline", "", "baseline"],
-    ["deploy_fault", "unknown", "verified", "baseline", "", "baseline"],
-    ["rollback", "queue_delayed", "not_verified", "101", "", ""],
-    ["deploy_foundation", "none", "not_verified", "baseline", "", "baseline"],
-    ["deploy_ai", "none", "unknown", "baseline", "", "baseline"],
-    ["deploy_fault", "job_failed", "not_verified", "baseline", "", "baseline"],
-    ["rollback", "none", "verified", "101", "", ""],
-    ["none", "none", "verified", "", "", ""],
-    ["observe", "none", "verified", "", "", ""],
-    ["none", "none", "not_verified", "101", "", ""],
-    ["deploy_ai", "none", "verified", "", "", ""],
-    ["deploy_ai", "none", "verified", "baseline", "", "202"],
-    ["deploy_ai", "none", "verified", "101", "", "baseline"],
-    ["deploy_ai", "none", "verified", "01", "", "202"],
-    ["rollback", "none", "not_verified", "baseline", "", ""],
-    ["rollback", "none", "not_verified", "101", "202", ""],
-    ["close_rollback", "none", "not_verified", "101", "202", ""],
-    ["close_rollback", "none", "verified", "101", "", ""],
-    ["verify_cleanup", "none", "not_verified", "101", "", ""],
-    ["verify_cleanup", "none", "not_verified", "101", "202", "303"],
-  ])("rejects operation %s with invalid lifecycle inputs", (
-    operation,
-    faultScenario,
-    authenticatedReadsGate,
-    candidateRunRef,
-    rollbackRunId,
-    rollbackClosureRunId,
-  ) => {
+    [
+      "operation mismatch",
+      "deploy_ai",
+      JSON.stringify(validContexts[0]),
+    ],
+    [
+      "noncanonical whitespace",
+      "none",
+      `${JSON.stringify(validContexts[0])} `,
+    ],
+    [
+      "non-ASCII",
+      "none",
+      `${JSON.stringify(validContexts[0])}\u00a0`,
+    ],
+    [
+      "oversize",
+      "none",
+      "a".repeat(2_049),
+    ],
+    [
+      "duplicate key",
+      "none",
+      `{"version":"${PREVIEW_ACCEPTANCE_CONTEXT_VERSION}","kind":"none","reviewedCommit":"${REVIEWED_COMMIT}","kind":"none"}`,
+    ],
+    [
+      "wrong key order",
+      "none",
+      `{"kind":"none","version":"${PREVIEW_ACCEPTANCE_CONTEXT_VERSION}","reviewedCommit":"${REVIEWED_COMMIT}"}`,
+    ],
+    [
+      "extra key",
+      "none",
+      `{"version":"${PREVIEW_ACCEPTANCE_CONTEXT_VERSION}","kind":"none","reviewedCommit":"${REVIEWED_COMMIT}","extra":true}`,
+    ],
+    [
+      "uppercase reviewed commit",
+      "none",
+      JSON.stringify({
+        ...validContexts[0],
+        reviewedCommit: "A".repeat(40),
+      }),
+    ],
+    [
+      "leading-zero lifecycle ref",
+      "rollback",
+      JSON.stringify({ ...validContexts[7], candidateRunRef: "01" }),
+    ],
+    [
+      "baseline action ref",
+      "rollback",
+      JSON.stringify({ ...validContexts[7], candidateRunRef: "baseline" }),
+    ],
+    [
+      "noncanonical timestamp",
+      "deploy_foundation",
+      JSON.stringify({
+        ...validContexts[3],
+        observerDispatchStartedAt: "2026-07-29T04:00:00Z",
+      }),
+    ],
+    [
+      "unsupported future AI field",
+      "deploy_ai",
+      JSON.stringify({ ...validContexts[6], aiScheduledAt: "pending" }),
+    ],
+    [
+      "mismatched evidence family",
+      "observe",
+      JSON.stringify({
+        ...validContexts[1],
+        expectedOutcome: "ai_succeeded",
+      }),
+    ],
+    [
+      "fault outcome without scenario",
+      "observe",
+      JSON.stringify({
+        version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
+        kind: "observe",
+        reviewedCommit: REVIEWED_COMMIT,
+        evidenceFamily: "preview_fault",
+        expectedOutcome: "fault_expected",
+      }),
+    ],
+  ] as const)("rejects %s", (_label, operation, serialized) => {
     expect(() =>
-      validatePreviewAcceptanceWorkflowInputs(
-        operation,
-        faultScenario,
-        authenticatedReadsGate,
-        candidateRunRef,
-        rollbackRunId,
-        rollbackClosureRunId,
-      ),
+      parsePreviewAcceptanceContext(operation as never, serialized),
     ).toThrow(/acceptance workflow selection/i);
   });
 
-  it("keeps the exact eight-value selector vocabulary frozen", () => {
+  it("keeps the exact nine-value selector vocabulary frozen", () => {
     const selected = ACCEPTANCE_SELECTORS.map((selector) =>
       preparePreviewAcceptanceDeployConfig({
         normalConfig: previewArtifact(),
@@ -582,7 +683,7 @@ describe("preview acceptance workflow input admission", () => {
       }),
     );
 
-    expect(selected).toHaveLength(8);
+    expect(selected).toHaveLength(9);
   });
 });
 

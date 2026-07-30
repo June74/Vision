@@ -1,5 +1,9 @@
 # `src/server/env.ts`
 
+`RuntimeEnvSchema` consumes the canonical domain selector tuple. The
+`sync_suppression` selector therefore inherits the same preview-only,
+paired-expiry, strict-variable boundary without becoming a fault scenario.
+
 ## Signatures
 
 ```ts

@@ -7,7 +7,11 @@ import {
   runTemporaryPreviewFault,
   type TemporaryPreviewFaultEntry,
 } from "../../../src/jobs/temporary-preview-fault";
-import { DAILY_BACKUP_CRON, scheduled } from "../../../src/jobs/scheduled";
+import {
+  CALENDAR_MAINTENANCE_CRON,
+  DAILY_BACKUP_CRON,
+  scheduled,
+} from "../../../src/jobs/scheduled";
 import type { Env } from "../../../src/server/env";
 
 const NOW = new Date("2026-07-28T12:00:00.000Z");
@@ -236,6 +240,43 @@ describe("temporary preview fault scheduled entry", () => {
     expect(dependencies.maintenance).not.toHaveBeenCalled();
     expect(dependencies.recovery).not.toHaveBeenCalled();
     expect(dependencies.temporaryRoleProbe).not.toHaveBeenCalled();
+  });
+
+  it("enforces the ten-minute suppression lifetime before a normal schedule", async () => {
+    const { dependencies } = scheduledDependencies();
+    const maintenanceController = {
+      ...CONTROLLER,
+      cron: CALENDAR_MAINTENANCE_CRON,
+    } as ScheduledController;
+    const exactEnvironment = {
+      VISION_ENV: "preview",
+      PREVIEW_ACCEPTANCE_SCENARIO: "sync_suppression",
+      PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-28T12:10:00.000Z",
+    } as Env;
+
+    await expect(
+      scheduledWithDependencies(
+        maintenanceController,
+        exactEnvironment,
+        {} as ExecutionContext,
+        dependencies,
+      ),
+    ).resolves.toBeUndefined();
+    expect(dependencies.maintenance).toHaveBeenCalledExactlyOnceWith(NOW);
+
+    vi.mocked(dependencies.maintenance).mockClear();
+    await expect(
+      scheduledWithDependencies(
+        maintenanceController,
+        {
+          ...exactEnvironment,
+          PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-28T12:10:00.001Z",
+        } as Env,
+        {} as ExecutionContext,
+        dependencies,
+      ),
+    ).rejects.toThrow("Preview acceptance timing is unavailable.");
+    expect(dependencies.maintenance).not.toHaveBeenCalled();
   });
 
   it.each([

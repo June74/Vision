@@ -10,10 +10,12 @@ and both maintenance and daily recovery crons. It rejects a serialized
 `BACKUP_ENCRYPTION_KEY`.
 
 `validatePreviewAcceptanceDeployConfig` separately admits one expected
-generated selector, the additional one-minute cron, and an attestation only
-for the AI evidence selector. The command entry point validates only the normal
-artifact and exits nonzero with one generic message when it is missing,
-malformed, or unsafe.
+generated selector and derives its exact schedule contract. Synchronization
+suppression retains the normal two schedules; the other temporary candidates
+add the one-minute cron. Only the AI evidence selector may carry its
+attestation. The command entry point validates only the normal artifact and
+exits nonzero with one generic message when it is missing, malformed, or
+unsafe.
 
 The separate `--verify-provider-state <health> <schedules> <settings>` mode
 validates sanitized live provider responses. It requires a healthy Worker,

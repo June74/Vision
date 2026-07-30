@@ -1,5 +1,9 @@
 # Client binding boundary
 
+The client scanner derives forbidden temporary values from the canonical
+domain selector tuple, including `sync_suppression`, while preserving the
+strict separation from the six fault scenarios.
+
 `src/server/client-binding-boundary.ts` is the authoritative binding-name classification consumed by the Phase B release scanner.
 
 `RUNTIME_CLIENT_FORBIDDEN_BINDING_NAMES` and `CLIENT_SAFE_RUNTIME_BINDING_NAMES` form an exact partition of `RuntimeEnvSchema.shape`, enforced by a contract test. `CLIENT_FORBIDDEN_BINDING_NAMES` extends the runtime denylist with operator restore and Cloudflare deployment credentials that are intentionally outside the Worker runtime schema.

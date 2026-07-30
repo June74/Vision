@@ -17,6 +17,7 @@ export const TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS = Object.freeze([
   ...TEMPORARY_PREVIEW_FAULT_SCENARIOS,
   "foundation_probe",
   "ai_usage",
+  "sync_suppression",
 ] as const);
 
 /** Closed scenario vocabulary shared by the scheduler, observer, and diagnostics overlay. */
@@ -49,22 +50,35 @@ type PreviewFaultBinding = {
   readonly PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED?: unknown;
 };
 
-/** Fails closed when the complete maximum lifetime touches recovery. */
-export function assertPreviewAcceptanceWindow(now: Date): void {
+/** Returns the exact maximum lifetime admitted for one acceptance selector. */
+export function previewAcceptanceMaxLifetimeMinutes(
+  selector: TemporaryPreviewAcceptanceSelector,
+): 10 | 30 {
+  return selector === "sync_suppression" ? 10 : 30;
+}
+
+/** Fails closed when the complete selector lifetime touches recovery. */
+export function assertPreviewAcceptanceWindow(
+  now: Date,
+  selector: TemporaryPreviewAcceptanceSelector,
+): void {
   const startsAt = validAcceptanceInstant(now);
   assertAvailableAcceptanceInterval(
     startsAt,
     startsAt +
-      PREVIEW_ACCEPTANCE_MAX_LIFETIME_MINUTES * MILLISECONDS_PER_MINUTE,
+      previewAcceptanceMaxLifetimeMinutes(selector) * MILLISECONDS_PER_MINUTE,
   );
 }
 
 /** Creates the only candidate deadline after checking its whole lifetime. */
-export function createPreviewAcceptanceDeadline(activatedAt: Date): string {
-  assertPreviewAcceptanceWindow(activatedAt);
+export function createPreviewAcceptanceDeadline(
+  activatedAt: Date,
+  selector: TemporaryPreviewAcceptanceSelector,
+): string {
+  assertPreviewAcceptanceWindow(activatedAt, selector);
   return new Date(
     validAcceptanceInstant(activatedAt) +
-      PREVIEW_ACCEPTANCE_MAX_LIFETIME_MINUTES * MILLISECONDS_PER_MINUTE,
+      previewAcceptanceMaxLifetimeMinutes(selector) * MILLISECONDS_PER_MINUTE,
   ).toISOString();
 }
 
@@ -72,6 +86,7 @@ export function createPreviewAcceptanceDeadline(activatedAt: Date): string {
 export function assertPreviewAcceptanceLifetime(
   now: Date,
   expiresAt: unknown,
+  selector: TemporaryPreviewAcceptanceSelector,
 ): void {
   const startsAt = validAcceptanceInstant(now);
   if (typeof expiresAt !== "string" || !CANONICAL_INSTANT.test(expiresAt)) {
@@ -83,7 +98,7 @@ export function assertPreviewAcceptanceLifetime(
     new Date(endsAt).toISOString() !== expiresAt ||
     endsAt <= startsAt ||
     endsAt - startsAt >
-      PREVIEW_ACCEPTANCE_MAX_LIFETIME_MINUTES * MILLISECONDS_PER_MINUTE
+      previewAcceptanceMaxLifetimeMinutes(selector) * MILLISECONDS_PER_MINUTE
   ) {
     throw new Error(INVALID_TIMING);
   }
@@ -98,9 +113,17 @@ export function assertTemporaryPreviewAcceptanceLifetime(
   if (environment === null || typeof environment !== "object") {
     throw new Error(INVALID_TIMING);
   }
+  let selector: TemporaryPreviewAcceptanceSelector | undefined;
+  try {
+    selector = parseTemporaryPreviewAcceptanceSelector(environment);
+  } catch {
+    throw new Error(INVALID_TIMING);
+  }
+  if (selector === undefined) throw new Error(INVALID_TIMING);
   assertPreviewAcceptanceLifetime(
     now,
     (environment as PreviewFaultBinding).PREVIEW_ACCEPTANCE_EXPIRES_AT,
+    selector,
   );
 }
 

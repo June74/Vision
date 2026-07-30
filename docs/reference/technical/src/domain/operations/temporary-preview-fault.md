@@ -1,5 +1,10 @@
 # `src/domain/operations/temporary-preview-fault.ts`
 
+## `previewAcceptanceMaxLifetimeMinutes`
+
+Maps the closed acceptance-selector union to the exact `10 | 30` lifetime used
+by both construction-time and execution-time protected-window checks.
+
 Owns the frozen six-value preview-only scenario vocabulary and pure
 `FoundationHealthFacts` overlays. A separate frozen eight-value selector
 vocabulary adds `foundation_probe` and `ai_usage` without widening the fault

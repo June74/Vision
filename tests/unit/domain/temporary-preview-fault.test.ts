@@ -7,6 +7,7 @@ import {
   parseTemporaryPreviewAcceptanceAiGatewayAttestation,
   parseTemporaryPreviewAcceptanceSelector,
   parseTemporaryPreviewFaultScenario,
+  previewAcceptanceMaxLifetimeMinutes,
 } from "../../../src/domain/operations/temporary-preview-fault";
 import type { FoundationHealthFacts } from "../../../src/domain/operations/health";
 
@@ -30,12 +31,19 @@ function facts(): FoundationHealthFacts {
 }
 
 describe("temporary preview fault scenario admission", () => {
-  it("keeps foundation and AI selectors separate from the strict fault tuple", () => {
+  it("keeps evidence and suppression selectors separate from the strict fault tuple", () => {
     expect(TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS).toEqual([
       ...TEMPORARY_PREVIEW_FAULT_SCENARIOS,
       "foundation_probe",
       "ai_usage",
+      "sync_suppression",
     ]);
+    expect(TEMPORARY_PREVIEW_FAULT_SCENARIOS).not.toContain(
+      "sync_suppression",
+    );
+    expect(TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS).toContain(
+      "sync_suppression",
+    );
     expect(Object.isFrozen(TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS)).toBe(true);
     expect(
       parseTemporaryPreviewAcceptanceSelector({
@@ -50,6 +58,12 @@ describe("temporary preview fault scenario admission", () => {
         PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true",
       }),
     ).toBe("ai_usage");
+    expect(
+      parseTemporaryPreviewAcceptanceSelector({
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: "sync_suppression",
+      }),
+    ).toBe("sync_suppression");
     expect(
       parseTemporaryPreviewAcceptanceSelector({ VISION_ENV: "preview" }),
     ).toBeUndefined();
@@ -74,6 +88,15 @@ describe("temporary preview fault scenario admission", () => {
       expect(() =>
         parseTemporaryPreviewAcceptanceSelector(invalid),
       ).toThrow("Temporary preview acceptance selector is invalid.");
+    }
+  });
+
+  it("assigns the exact selector-specific maximum lifetime", () => {
+    expect(previewAcceptanceMaxLifetimeMinutes("sync_suppression")).toBe(10);
+    expect(previewAcceptanceMaxLifetimeMinutes("ai_usage")).toBe(30);
+    expect(previewAcceptanceMaxLifetimeMinutes("foundation_probe")).toBe(30);
+    for (const scenario of TEMPORARY_PREVIEW_FAULT_SCENARIOS) {
+      expect(previewAcceptanceMaxLifetimeMinutes(scenario)).toBe(30);
     }
   });
 

@@ -1,5 +1,10 @@
 # `src/domain/operations/temporary-preview-fault.ts`
 
+## `previewAcceptanceMaxLifetimeMinutes`
+
+Returns ten minutes only for synchronization suppression and thirty minutes
+for every other admitted preview acceptance selector.
+
 Contains the preview-only candidate switches used to produce closed acceptance
 evidence or show safe operational failure states. It cannot read the browser
 request, database, Queue, provider, or AI output.

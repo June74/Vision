@@ -6,12 +6,15 @@ import {
   assertPreviewAcceptanceLifetime,
   assertPreviewAcceptanceWindow,
   createPreviewAcceptanceDeadline,
+  previewAcceptanceMaxLifetimeMinutes,
+  parseTemporaryPreviewAcceptanceSelector,
 } from "../src/domain/operations/temporary-preview-fault";
 
 export {
   assertPreviewAcceptanceLifetime,
   assertPreviewAcceptanceWindow,
   createPreviewAcceptanceDeadline,
+  previewAcceptanceMaxLifetimeMinutes,
   PREVIEW_ACCEPTANCE_BLOCKED_END_UTC_MINUTE,
   PREVIEW_ACCEPTANCE_BLOCKED_START_UTC_MINUTE,
   PREVIEW_ACCEPTANCE_MAX_LIFETIME_MINUTES,
@@ -47,7 +50,15 @@ async function main(): Promise<void> {
   try {
     const arguments_ = process.argv.slice(2);
     if (arguments_.length === 0) {
-      assertPreviewAcceptanceWindow(new Date());
+      const { parsePreviewAcceptanceContext } = await import(
+        "./prepare-preview-acceptance-deploy-config"
+      );
+      const selection = parsePreviewAcceptanceContext(
+        process.env.ACCEPTANCE_OPERATION as never,
+        process.env.ACCEPTANCE_CONTEXT ?? "",
+      );
+      if (selection.selector === undefined) throw new Error(INVALID);
+      assertPreviewAcceptanceWindow(new Date(), selection.selector);
     } else if (
       arguments_.length === 2 &&
       arguments_[0] === "--candidate" &&
@@ -57,9 +68,12 @@ async function main(): Promise<void> {
         JSON.parse(await readFile(resolve(CANDIDATE_PATH), "utf8")) as unknown,
       );
       const vars = plainObject(dataValue(config, "vars"));
+      const selector = parseTemporaryPreviewAcceptanceSelector(vars);
+      if (selector === undefined) throw new Error(INVALID);
       assertPreviewAcceptanceLifetime(
         new Date(),
         dataValue(vars, "PREVIEW_ACCEPTANCE_EXPIRES_AT"),
+        selector,
       );
     } else {
       throw new Error(INVALID);

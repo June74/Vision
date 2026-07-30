@@ -15,7 +15,8 @@ Uses a property descriptor to read only an enumerable own data value.
 
 ## `main`
 
-No-argument mode validates the complete maximum interval beginning now.
-`--candidate dist/vision/wrangler.acceptance.json` validates the canonical
-deadline embedded in the fixed artifact. Every other argument or input maps to
-one non-sensitive error and nonzero exit status.
+No-argument mode parses the canonical workflow context and validates the
+complete selector-specific interval beginning now. Fixed-candidate mode
+derives the selector and canonical deadline from the generated artifact.
+Every other argument or input maps to one non-sensitive error and nonzero exit
+status.

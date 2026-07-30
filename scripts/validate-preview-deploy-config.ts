@@ -6,6 +6,7 @@ import {
   AI_PRICING_BINDING_CONTRACT,
   AI_PRICING_POLICY_VALUES,
 } from "../src/server/ai-pricing-binding-contract";
+import { TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS } from "../src/domain/operations/temporary-preview-fault";
 import type { PreviewAcceptanceSelector } from "./prepare-preview-acceptance-deploy-config";
 
 const INVALID_NORMAL = "Preview deployment configuration is invalid.";
@@ -27,16 +28,7 @@ const NORMAL_VAR_ENTRIES = Object.freeze({
   R2_USAGE_WARNING_OBJECTS: "100",
   VISION_ENV: "preview",
 });
-const ACCEPTANCE_SELECTORS = new Set([
-  "queue_delayed",
-  "job_failed",
-  "channel_expired",
-  "database_unavailable",
-  "r2_upload_failed",
-  "ai_stopped",
-  "foundation_probe",
-  "ai_usage",
-]);
+const ACCEPTANCE_SELECTORS = new Set(TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS);
 interface ProviderBindingContract {
   readonly name: string;
   readonly type: string;
@@ -216,7 +208,7 @@ function validate(
     : {};
   const crons = Array.isArray(triggers.crons) ? triggers.crons : [];
   const expectedCrons =
-    expectedSelector === undefined
+    expectedSelector === undefined || expectedSelector === "sync_suppression"
       ? NORMAL_CRONS
       : [...NORMAL_CRONS, ACCEPTANCE_CRON];
   const acceptanceExpiresAt =

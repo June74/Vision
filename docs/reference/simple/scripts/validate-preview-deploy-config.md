@@ -23,8 +23,9 @@ private bucket, Queue behavior, and two normal schedules.
 
 ## `validatePreviewAcceptanceDeployConfig`
 
-Checks a generated candidate for exactly one expected selector, the one-minute
-schedule, and the AI-only attestation.
+Checks a generated candidate for exactly one expected selector, the exact
+selector-specific schedule set, and the AI-only attestation. Synchronization
+suppression retains only the two normal schedules.
 
 ## `validateNormalPreviewProviderState`
 

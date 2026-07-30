@@ -370,7 +370,7 @@ describe("preview live diagnostics policy", () => {
       "if: ${{ inputs.acceptance_operation == 'observe' && inputs.configure_ai_budget == false }}",
     );
     expect(preview).toContain(
-      "if: ${{ inputs.configure_ai_budget == true && inputs.acceptance_operation == 'none' && inputs.fault_scenario == 'none' }}",
+      "if: ${{ inputs.configure_ai_budget == true && inputs.acceptance_operation == 'none' }}",
     );
     expect(preview.match(/^  deploy:/gmu)).toHaveLength(1);
     expect(preview.match(/^  tail:/gmu)).toHaveLength(1);
@@ -452,52 +452,65 @@ describe("preview acceptance candidate workflow", () => {
     expect(tailStep).toContain("CLOUDFLARE_API_TOKEN");
   });
 
-  it("admits only the exact operation and fault choice vocabularies", async () => {
+  it("admits only three dispatch inputs and validates canonical context through one fixed command", async () => {
     const preview = await readWorkflow("preview.yml");
+    const selection = readWorkflowStep(
+      preview,
+      "Verify exact acceptance operation",
+    );
+    const dispatchInputs = preview.match(
+      /workflow_dispatch:\r?\n\s{4}inputs:\r?\n([\s\S]*?)\r?\n\r?\npermissions:/u,
+    )?.[1];
+    const inputNames = [
+      ...(dispatchInputs ?? "").matchAll(/^\s{6}([a-z_]+):\s*$/gmu),
+    ].map((match) => match[1]);
 
     expect(readWorkflowChoiceOptions(preview, "acceptance_operation")).toEqual([
       "none",
       "observe",
       "deploy_foundation",
+      "deploy_sync_suppression",
       "deploy_ai",
       "deploy_fault",
       "rollback",
       "close_rollback",
       "verify_cleanup",
     ]);
-    expect(readWorkflowChoiceOptions(preview, "fault_scenario")).toEqual([
-      "none",
-      "queue_delayed",
-      "job_failed",
-      "channel_expired",
-      "database_unavailable",
-      "r2_upload_failed",
-      "ai_stopped",
+    expect(inputNames).toEqual([
+      "acceptance_operation",
+      "acceptance_context",
+      "configure_ai_budget",
     ]);
-    expect(
-      readWorkflowChoiceOptions(preview, "authenticated_reads_gate"),
-    ).toEqual(["not_verified", "verified"]);
-    expect(preview).toContain(
+    expect(inputNames).toHaveLength(3);
+    expect(inputNames.length).toBeLessThanOrEqual(10);
+    expect(selection).toContain(
       "pnpm exec tsx scripts/prepare-preview-acceptance-deploy-config.ts --verify-workflow-inputs",
     );
-    expect(preview).toContain(
-      "--operation \"${{ inputs.acceptance_operation }}\"",
+    expect(selection).toContain(
+      "ACCEPTANCE_CONTEXT: ${{ inputs.acceptance_context }}",
     );
-    expect(preview).toContain(
-      "--fault-scenario \"${{ inputs.fault_scenario }}\"",
+    expect(selection).toContain(
+      "ACCEPTANCE_OPERATION: ${{ inputs.acceptance_operation }}",
     );
-    expect(preview).toContain(
-      "--authenticated-reads-gate \"${{ inputs.authenticated_reads_gate }}\"",
+    expect(selection).toContain("DISPATCH_SHA: ${{ github.sha }}");
+    expect(selection).toContain("CHECKED_OUT_SHA:");
+    expect(selection).not.toContain(
+      '--acceptance-context "${{ inputs.acceptance_context }}"',
     );
-    expect(preview).toContain(
-      "--candidate-run-ref \"${{ inputs.candidate_run_ref }}\"",
+    expect(selection).not.toContain(
+      'echo "${{ inputs.acceptance_context }}"',
     );
-    expect(preview).toContain(
-      "--rollback-run-id \"${{ inputs.rollback_run_id }}\"",
-    );
-    expect(preview).toContain(
-      "--rollback-closure-run-id \"${{ inputs.rollback_closure_run_id }}\"",
-    );
+    for (const removed of [
+      "fault_scenario",
+      "authenticated_reads_gate",
+      "observer_evidence",
+      "observer_run_id",
+      "candidate_run_ref",
+      "rollback_run_id",
+      "rollback_closure_run_id",
+    ]) {
+      expect(preview).not.toContain(`inputs.${removed}`);
+    }
   });
 
   it("keeps observer and mutation runs separate and bounded", async () => {
@@ -544,6 +557,11 @@ describe("preview acceptance candidate workflow", () => {
     expect(candidate).toContain(
       "ref: ${{ needs.verify.outputs.verified_sha }}",
     );
+    expect(
+      candidate.includes(
+        "inputs.acceptance_operation == 'deploy_sync_suppression'",
+      ),
+    ).toBe(true);
     expect(proofStep).toContain("OBSERVER_RUN_ID");
     expect(proofStep).toContain("actions/runs/$OBSERVER_RUN_ID");
     expect(proofStep).toContain("head_sha");
@@ -581,7 +599,7 @@ describe("preview acceptance candidate workflow", () => {
     );
     expect(proofStep).not.toContain("any(.jobs[]");
     expect(readWorkflowJob(preview, "tail")).toContain(
-      "name: Capture ${{ inputs.observer_evidence }} safe scheduled outcome",
+      "name: Capture ${{ needs.selection.outputs.evidence_family }} safe scheduled outcome",
     );
     expect(buildStep).toContain(
       "scripts/prepare-preview-acceptance-deploy-config.ts",
@@ -658,7 +676,7 @@ describe("preview acceptance candidate workflow", () => {
     );
 
     expect(verifier).toContain(
-      "inputs.acceptance_operation == 'deploy_ai' || (inputs.acceptance_operation == 'deploy_fault' && inputs.fault_scenario == 'ai_stopped')",
+      "inputs.acceptance_operation == 'deploy_ai' || (inputs.acceptance_operation == 'deploy_fault' && needs.selection.outputs.fault_scenario == 'ai_stopped')",
     );
     expect(verifier).toContain("pnpm gateway:verify:preview");
     expect(verifier).not.toContain("gateway:configure:preview");
@@ -669,7 +687,7 @@ describe("preview acceptance candidate workflow", () => {
       "--ai-gateway-limit-attested \"$AI_GATEWAY_LIMIT_ATTESTED\"",
     );
     expect(policyAttestation).toContain(
-      "inputs.acceptance_operation == 'deploy_ai' || (inputs.acceptance_operation == 'deploy_fault' && inputs.fault_scenario == 'ai_stopped')",
+      "inputs.acceptance_operation == 'deploy_ai' || (inputs.acceptance_operation == 'deploy_fault' && needs.selection.outputs.fault_scenario == 'ai_stopped')",
     );
     expect(policyAttestation).toContain(
       "pnpm ai:pricing:attest --config dist/vision/wrangler.json --environment preview",
@@ -805,7 +823,7 @@ describe("preview acceptance candidate workflow", () => {
       "scripts/validate-preview-rollback-lifecycle.ts --close-rollback",
     );
     expect(closeProof).toContain(
-      "AUTHENTICATED_READS_GATE: ${{ inputs.authenticated_reads_gate }}",
+      "AUTHENTICATED_READS_GATE: ${{ needs.selection.outputs.authenticated_reads_gate }}",
     );
     expect(
       closeNames.indexOf(
@@ -858,14 +876,14 @@ describe("preview acceptance candidate workflow", () => {
     const closureNames = readWorkflowStepNames(closeRollback);
 
     expect(candidateGate).toContain(
-      "AUTHENTICATED_READS_GATE: ${{ inputs.authenticated_reads_gate }}",
+      "AUTHENTICATED_READS_GATE: ${{ needs.selection.outputs.authenticated_reads_gate }}",
     );
     expect(candidateGate).toContain(
       '[[ "$AUTHENTICATED_READS_GATE" == "verified" ]]',
     );
     expect(rollback).not.toContain("AUTHENTICATED_READS_GATE");
     expect(closureGate).toContain(
-      "AUTHENTICATED_READS_GATE: ${{ inputs.authenticated_reads_gate }}",
+      "AUTHENTICATED_READS_GATE: ${{ needs.selection.outputs.authenticated_reads_gate }}",
     );
     expect(closureGate).toContain(
       '--authenticated-reads-gate "$AUTHENTICATED_READS_GATE"',

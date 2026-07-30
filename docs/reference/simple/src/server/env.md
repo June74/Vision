@@ -1,5 +1,9 @@
 # `src/server/env.ts`
 
+The preview-only acceptance selector schema is sourced from the domain tuple,
+so synchronization suppression is admitted only in preview and only together
+with its canonical expiry.
+
 ## `RuntimeEnvSchema`
 
 `RuntimeEnvSchema` checks the deployment environment, private database URL,

@@ -14,6 +14,7 @@ Reads one ordinary own property without invoking a getter.
 
 ## `main`
 
-With no arguments, checks whether a fresh maximum candidate lifetime is safe.
-With the fixed candidate flag, checks the generated expiry immediately before
-deployment. It prints only a fixed safe result.
+With no arguments, validates the selected operation and checks its full
+selector-specific lifetime. With the fixed candidate flag, it derives the
+selector from the generated artifact and checks that exact expiry immediately
+before deployment. It prints only a fixed safe result.
