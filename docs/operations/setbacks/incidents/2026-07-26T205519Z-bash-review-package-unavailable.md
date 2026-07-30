@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:55:19.3868194Z
-- **Last observed:** 2026-07-28T22:51:02.2002810Z
-- **Phase/task:** Phase B acceptance instrumentation Task 1 handoff
+- **Last observed:** 2026-07-29T23:59:25.5323636Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final re-review package
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** `0f08fc1`
 
@@ -83,3 +83,8 @@ The PowerShell fallback produced a 36,835-byte package for
   review package; `bash.exe` could not start because the Windows logon session
   was unavailable. No artifact or repository state changed. The documented
   typed-list PowerShell fallback is used.
+- 2026-07-29T23:59:25.5323636Z: Recurred when Git Bash ran the review-package
+  helper but lacked its final byte-count utilities. Both ignored package files
+  were written before the display-only failure, no source or provider state
+  changed, and they are replaced and verified with the deterministic
+  PowerShell fallback before review.

@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T04:02:13Z
-- **Last observed:** 2026-07-29T23:49:18.1537051Z
-- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
+- **Last observed:** 2026-07-30T00:00:24.4439832Z
+- **Phase/task:** Phase B acceptance instrumentation Task 7 final re-review package
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `4420f6d`
 
@@ -118,3 +118,7 @@ this incident was recorded.
   output. That made existing CRLF bytes appear as trailing whitespace and
   produced a false nonzero diff result. No file changed; the ordinary
   repository-configured check is used for the authoritative result.
+- 2026-07-30T00:00:24.4439832Z: Recurred while verifying the review-package
+  helper setback record. Documentation and whitespace checks exited zero; the
+  warning remained expected Windows normalization metadata. No provider state
+  or semantic content changed.
