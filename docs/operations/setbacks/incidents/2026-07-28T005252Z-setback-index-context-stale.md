@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T00:52:52.8805934Z
-- **Last observed:** 2026-07-28T19:31:19Z
+- **Last observed:** 2026-07-30T19:52:45.8152645Z
 - **Phase/task:** Calendar maintenance evidence Task 1 review fix reporting
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `7d2f9f6`
@@ -71,3 +71,8 @@ is indexed once.
   confirmed no partial report change; the append was retried against the exact
   final line. No source, provider, private-data, or controller-owned setback
   content was changed by the failed patch.
+- 2026-07-30T19:52:45.8152645Z: A recurrence update for the line-ending
+  incident assumed its header timestamp matched a newer recurrence already
+  present in the file and index. The patch was rejected atomically. Exact
+  header, tail, and index inspection confirmed no partial change; the retry
+  uses each file's independently observed context.

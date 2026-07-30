@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T04:24:16.3267175Z
-- **Last observed:** 2026-07-29T23:51:26.1763604Z
-- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
+- **Last observed:** 2026-07-30T19:20:38.9747919Z
+- **Phase/task:** Phase B live-acceptance closure Task 1
 - **Environment:** Local Phase B worktree
 - **Version/commit:** Uncommitted wave-2 fixes based on `41d3e74`
 
@@ -65,3 +65,10 @@ the final complete gate.
   UTF-8 dash through the default PowerShell decoding and therefore missed the
   exact final-line context. The patch was rejected atomically; the correction
   reads the boundary explicitly as UTF-8.
+- 2026-07-30T19:20:09.0786632Z: A combined Task 1 workflow replacement used
+  an inferred environment-variable name for one observer field. The patch was
+  rejected atomically before mutation; the correction uses smaller exact
+  replacements from bounded input-reference inspection.
+- 2026-07-30T19:20:38.9747919Z: A second combined replacement retained one
+  inferred lifecycle environment name and was also rejected atomically. The
+  correction now uses literal one-line substitutions only.

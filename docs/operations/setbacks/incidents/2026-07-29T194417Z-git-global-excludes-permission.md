@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T19:44:17Z
-- **Last observed:** 2026-07-30T17:35:24.7550264Z
-- **Phase/task:** Phase B acceptance instrumentation Task 7 final re-review
-- **Environment:** Local Phase B worktree
-- **Version/commit:** `41d3e74` base with tracked setback recurrences
+- **Last observed:** 2026-07-30T20:11:11.7052165Z
+- **Phase/task:** Phase B live-acceptance closure Task 1
+- **Environment:** Local Phase B linked worktree under the managed sandbox
+- **Version/commit:** `44d8e93802ce834fd0c8ca620d81472e23431b00`
 
 ## Symptom
 
@@ -64,3 +64,11 @@ The same command returned a clean worktree at the required base commit.
   the same warning. Git still returned the complete modified/untracked path
   list, branch name, and exact commit; exact-path staging remains the
   prevention, and no provider or persistent Git configuration changed.
+- 2026-07-30T19:05:56.5122279Z: The Task 1 branch/base/status check repeated
+  the same warning. Git still returned the required branch, exact base commit,
+  and complete tracked status; no persistent Git configuration or provider
+  state changed.
+- 2026-07-30T20:11:11.7052165Z: The Task 2 prerequisite branch/status check
+  repeated the same warning. Git still returned the exact expected head and
+  dirty-path boundary; no persistent configuration, repository content, or
+  provider state changed.

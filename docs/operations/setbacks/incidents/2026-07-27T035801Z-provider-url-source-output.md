@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T03:58:01Z
-- **Last observed:** 2026-07-30T04:53:23.7871797Z
-- **Phase/task:** Phase B live-acceptance implementation planning
+- **Last observed:** 2026-07-30T20:02:49.5514598Z
+- **Phase/task:** Phase B live-acceptance closure Task 1
 - **Environment:** Local Phase B worktree
-- **Version/commit:** `1d6ad12`; `d24e24d`; `c8879b2`
+- **Version/commit:** `1d6ad12`; `d24e24d`; `c8879b2`; `6bd0e45`; `7d5ca8a`
 
 ## Symptom
 
@@ -142,3 +142,48 @@ comparison that emitted only `remote_matches_reviewed_head=True` and
   runtime credential, token, account identifier, database value, protected row,
   or provider action. The subagent stopped broad reads; controller mapping uses
   redacted structure and bounded output.
+- 2026-07-30T19:07:00.8702538Z: A broad Task 1 source inspection printed
+  checked-in deployment metadata, including a configured location and provider
+  resource labels. It contained no credential, authorization material,
+  database value, event content, protected row, or secret value. Broad reads
+  stopped immediately; remaining inspection uses redacted structure, function
+  names, booleans, counts, and line numbers.
+- 2026-07-30T19:07:41.4123087Z: A subsequent broad unit-test read printed one
+  synthetic database-shaped fixture. It was test-only and contained no real
+  credential, account data, protected row, or provider state. Raw test-file
+  output stopped; remaining reads redact URL-shaped strings before returning
+  content.
+- 2026-07-30T19:13:01.8044726Z: The Task 1 workflow redaction removed URLs and
+  deployment fixture lines but missed source-controlled provider resource
+  labels elsewhere in the file. It exposed no credential, live provider value,
+  account data, or external state. Further workflow inspection is restricted
+  to input keys, operation literals, step names, booleans, and counts.
+- 2026-07-30T19:22:08.5552380Z: A focused workflow-test failure diff rendered
+  the full checked-in workflow because one stale assertion targeted the whole
+  document. It exposed source-controlled deployment metadata but no credential,
+  authorization material, live provider value, account data, or external
+  state. The stale whole-document assertion is updated before rerunning.
+- 2026-07-30T19:26:43.5529645Z: A redacted reference-page read did not mask
+  source-controlled resource names embedded in prose. It exposed no credential,
+  authorization material, live provider value, account data, or external
+  state. Documentation edits continue from known headings without further raw
+  reference output.
+- 2026-07-30T19:39:25.0693453Z: A broad Task 1 source read printed the
+  checked-in OAuth redirect location while checking implementation structure.
+  It exposed no secret, token, authorization code, email, database value,
+  protected row, or live provider response, and changed no state. Further
+  source inspection is restricted to targeted symbols and URL-redacted output.
+- 2026-07-30T19:42:17.7914405Z: A read-only Task 3 brief-preparation agent
+  performed a broad memory context search that returned a previously stored
+  preview location and historical metadata. The agent stopped before reading
+  task documents. No secret, token, provider identifier, environment value,
+  raw log, file mutation, network request, or provider action occurred.
+  Preparation resumes from exact repository files without rendering memory
+  context.
+- 2026-07-30T20:02:49.5514598Z: The final Task 1 reviewer requested numbered
+  workflow context outside the already sanitized review package and the local
+  read included unchanged source-controlled URL literals. The reviewer did not
+  use or repeat them and paused immediately. No credential, token, account
+  data, provider response, file mutation, or external action was involved.
+  Re-review resumes from the sanitized package plus redacted or symbol-only
+  checks.

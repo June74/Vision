@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T04:30:46.4130206Z
-- **Last observed:** 2026-07-30T01:34:09.3799447Z
+- **Last observed:** 2026-07-30T20:37:56.4287329Z
 - **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 4
 - **Environment:** Managed local sandbox and linked Git worktree
 - **Version/commit:** Uncommitted review fixes based on `1880cf9`
@@ -49,3 +49,13 @@ On 2026-07-30T01:34:09.3799447Z the wave-4 tracked-file stage hit the same
 linked-worktree index boundary. The lock could not be created, the staged diff
 remained empty, and the verified working changes remained intact. The exact
 tracked-file stage and commit require the same narrow metadata permission.
+
+On 2026-07-30T19:32:49.8884559Z Task 1 exact-path staging hit the same
+linked-worktree index boundary. The lock could not be created before any path
+was staged. The identical allowlisted stage and verification require the same
+narrow repository-metadata permission.
+
+On 2026-07-30T20:37:56.4287329Z the dedicated setback-ledger stage hit the
+same linked-worktree index boundary. Git exited before staging any path; the
+setback files remain intact. The exact setback-only stage requires the same
+narrow repository-metadata permission.

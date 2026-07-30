@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:16:44.091309Z
-- **Last observed:** 2026-07-29T18:47:59Z
-- **Phase/task:** Acceptance instrumentation Task 4 final re-review diagnosis
+- **Last observed:** 2026-07-30T20:11:11.7052165Z
+- **Phase/task:** Phase B live-acceptance closure Task 1
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** `7d2f9f6`; reviewed candidate `0f08fc1`
 
@@ -83,6 +83,15 @@ files with 59 passing tests.
   artifact was written, no application code ran, and no provider or external
   state changed. The local wrapper exists and will run the same script and
   arguments directly.
+- 2026-07-30T19:08:57.9326924Z: Recurred during the exact Task 1 focused RED
+  command. The test process did not start, the repository-local Vitest wrapper
+  was confirmed present, and no implementation or provider state changed. The
+  equivalent retry uses that local Windows wrapper directly.
+- 2026-07-30T20:11:11.7052165Z: Recurred during Task 2 prerequisite/test-runner
+  preparation before the new RED suites were written. The documented runner
+  did not start the local test process; no Task 2 source or provider state
+  changed. The already approved repository-local Windows wrapper remains the
+  equivalent runner.
 
 The repository-local wrapper reached the candidate script, confirming the
 package-runner resolution boundary. The workflow-equivalent local Node loader

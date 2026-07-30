@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:55:19.3868194Z
-- **Last observed:** 2026-07-29T23:59:25.5323636Z
+- **Last observed:** 2026-07-30T19:03:45.7444044Z
 - **Phase/task:** Phase B acceptance instrumentation Task 7 final re-review package
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** `0f08fc1`
@@ -88,3 +88,8 @@ The PowerShell fallback produced a 36,835-byte package for
   were written before the display-only failure, no source or provider state
   changed, and they are replaced and verified with the deterministic
   PowerShell fallback before review.
+- 2026-07-30T19:03:45.7444044Z: Recurred when the Task 1 brief helper resolved
+  to the WindowsApps Bash shim and failed with the unavailable-logon-session
+  category before execution. No brief, source change, or provider action was
+  created. The exact task section is generated with the already-verified
+  deterministic PowerShell fallback.

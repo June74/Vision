@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T02:58:08Z
-- **Last observed:** 2026-07-27T19:57:34Z
+- **Last observed:** 2026-07-30T19:37:29.2870837Z
 - **Phase/task:** Phase B restore Task 1 review
 - **Environment:** Local ignored scratch workspace
 - **Version/commit:** `3e2f60d`
@@ -47,7 +47,9 @@ The package was only 186 bytes and contained zero recognized section markers.
 - **Correction:** Build a typed list of strings and append each Git command's
   output lines explicitly.
 - **Prevention:** Require exactly three section markers, one commit, and a
-  nontrivial byte size before every review dispatch.
+  nontrivial byte size before every review dispatch. Cast `Get-Content` results
+  to plain strings before JSON serialization so PowerShell extended properties
+  cannot expand into noisy filesystem metadata.
 - **Owner:** Codex.
 - **Next diagnostic step:** None while closed.
 
@@ -63,3 +65,8 @@ sections and cover the exact Task 1 range.
   to two closed booleans. PowerShell `-match` returned matching line arrays;
   no log lines were printed. The retry joins the lines in memory before
   comparison.
+- 2026-07-30T19:37:29.2870837Z: Recurred during a safe structural inspection
+  of an ignored review package. A `Get-Content` result retained PowerShell
+  extended properties and JSON serialization expanded them into noisy
+  filesystem metadata. No private value was present; the retry casts every
+  selected line to a plain string before serialization.

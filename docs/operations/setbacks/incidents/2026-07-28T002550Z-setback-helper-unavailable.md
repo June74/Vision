@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T00:25:50Z
-- **Last observed:** 2026-07-30T01:58:36.5078652Z
-- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 5
+- **Last observed:** 2026-07-30T19:10:30.8275680Z
+- **Phase/task:** Phase B live-acceptance closure Task 1
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `ff6a767`
 
@@ -62,3 +62,7 @@ inspection uses bounded tracked-file queries.
   though it were repository-relative. The direct help probe failed before any
   write. Bounded discovery confirmed the helper belongs to the skill directory,
   while this repository still requires the documented manual fallback.
+- 2026-07-30T19:10:30.8275680Z: Task 1 again treated the generic helper name as
+  repository-relative. The direct help probe failed before any write, and a
+  bounded ledger-local search confirmed no worktree copy exists. The follow-up
+  uses the skill-directory helper or the documented manual fallback.

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T19:11:54.8575979Z
-- **Last observed:** 2026-07-29T19:38:09.4855675Z
+- **Last observed:** 2026-07-30T19:55:35.8993222Z
 - **Phase/task:** Phase B Task 7 final review and live-runbook preparation
 - **Environment:** Codex subagent coordination
 - **Version/commit:** `84a6fe7`
@@ -63,3 +63,8 @@ consolidated fix wave, so the coordination delay is closed.
 - 2026-07-29T19:11:54.8575979Z: First observed and contained.
 - 2026-07-29T19:38:09.4855675Z: Required reviews completed and a reusable
   thread became available; incident closed.
+- 2026-07-30T19:55:35.8993222Z: An optional Task 9 brief-preparation spawn was
+  rejected because Task 1's implementer had correctly used the remaining slot
+  for its required fix review. Task 1 review and Task 8 preparation continued;
+  no file, provider, private-data, or external state changed, and Task 9
+  preparation is deferred until a slot opens.

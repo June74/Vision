@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T20:00:11Z
-- **Last observed:** 2026-07-29T22:58:24.0691484Z
+- **Last observed:** 2026-07-30T19:54:17.6284485Z
 - **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
 - **Environment:** Local Windows worktree
 - **Version/commit:** `b9ec10c`
@@ -39,3 +39,7 @@ The next status check uses the canonical worktree path.
   mistyped one character in the established worktree path, so process creation
   failed before the test started. No file, repository, or external state
   changed; the retry copies the canonical path verbatim.
+- 2026-07-30T19:54:17.6284485Z: A bounded Task 7 brief read used a mistyped
+  worktree path, so process creation failed before execution. No file,
+  repository, private-data, provider, or external state changed. The agent
+  completed its brief only from already captured safe evidence.

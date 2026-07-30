@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T04:02:13Z
-- **Last observed:** 2026-07-30T18:08:07.1088786Z
+- **Last observed:** 2026-07-30T20:38:40.2393105Z
 - **Phase/task:** Phase B acceptance instrumentation formal final review
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `4420f6d`
@@ -142,3 +142,18 @@ this incident was recorded.
 - 2026-07-30T18:08:07.1088786Z: Recurred during the final post-review plan
   whitespace check after exact-path staging instructions were added. The check
   exited zero; the warnings remained Windows normalization metadata only.
+- 2026-07-30T19:31:15.9144398Z: Recurred during the Task 1 exact-path diff
+  audit. `git diff --check` exited zero, no file was staged or rewritten by
+  Git, and no provider or external state changed.
+- 2026-07-30T19:52:18.7464363Z: Recurred during a read-only name-only check of
+  the Task 1 review-fix paths. Git reported the same expected working-copy
+  normalization warning; it did not stage or rewrite files and no external
+  state changed.
+- 2026-07-30T20:36:52.1315852Z: Recurred while inventorying the setback-only
+  documentation delta before its dedicated commit. Direct process capture
+  classified fourteen stderr lines as this known warning and proved Git exited
+  zero; no file was staged or rewritten by the read.
+- 2026-07-30T20:38:40.2393105Z: The approved setback-only stage completed and
+  emitted the same normalization metadata for its exact documentation paths.
+  No semantic rewrite or external action occurred; the immediate bookkeeping
+  restage is part of this same closed recurrence.
