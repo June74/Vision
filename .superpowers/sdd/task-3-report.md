@@ -13,7 +13,7 @@ Commit sequence:
 - final lifecycle integration: `b4f6dce`
 - final package-review repair: `328b748`
 
-The full inventory below remains the exact 75-path Task 3 implementation and
+The full inventory below is the exact 77-path Task 3 implementation and
 report surface. The final lifecycle/package-review repairs change paths already
 in that inventory. All setback-ledger paths remain separately controller-owned
 and excluded from implementation scope.
@@ -127,7 +127,7 @@ and excluded from implementation scope.
 - `tests/unit/scripts/preview-observer-run-resolution.test.ts`
 - `tests/unit/scripts/preview-restore-readmission.test.ts`
 
-## Complete final package inventory (75)
+## Complete final package inventory (77)
 
 - `.github/workflows/preview.yml`
 - `.superpowers/sdd/task-3-report.md`
@@ -147,6 +147,7 @@ and excluded from implementation scope.
 - `docs/reference/simple/src/jobs/calendar-maintenance-evidence.md`
 - `docs/reference/simple/src/jobs/scheduled.md`
 - `docs/reference/simple/src/jobs/temporary-preview-restore-production.md`
+- `docs/reference/simple/src/jobs/temporary-preview-restore.md`
 - `docs/reference/technical/scripts/prepare-preview-acceptance-deploy-config.md`
 - `docs/reference/technical/scripts/print-safe-tail.md`
 - `docs/reference/technical/scripts/resolve-preview-observer-run.md`
@@ -162,6 +163,7 @@ and excluded from implementation scope.
 - `docs/reference/technical/src/jobs/calendar-maintenance-evidence.md`
 - `docs/reference/technical/src/jobs/scheduled.md`
 - `docs/reference/technical/src/jobs/temporary-preview-restore-production.md`
+- `docs/reference/technical/src/jobs/temporary-preview-restore.md`
 - `scripts/prepare-preview-acceptance-deploy-config.ts`
 - `scripts/print-safe-tail.ts`
 - `scripts/resolve-preview-observer-run.ts`
@@ -212,7 +214,7 @@ from this implementation commit.
 
 - Review base: `24e959f5`
 - Integrated implementation tip: `328b748`
-- Integrated implementation shape: 11 implementation commits and 75 changed
+- Integrated implementation shape: 11 implementation commits and 77 changed
   paths
 - Decisive repair commits:
   - `00cd3c7` restores the production restore facade and acceptance contract.
@@ -244,6 +246,6 @@ from this implementation commit.
   passed at the integrated implementation tip.
 - The backup key remains version 1 and was not rotated.
 
-This final integration section and 75-path inventory supersede the earlier
+This final integration section and 77-path inventory supersede the earlier
 five-commit wording. Final package re-review remains required before Task 3 is
 accepted. Setback evidence remains separately controller-owned.
