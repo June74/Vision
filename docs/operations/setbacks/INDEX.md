@@ -2,6 +2,7 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
+| [SB-20260731-183821-task3-review-package-privacy-scan](incidents/2026-07-31T183821Z-task3-review-package-privacy-scan.md) | closed | 2026-07-31T18:40:54.3304219Z | Phase B Task 3 fifth review-package preparation | Raw Task 3 review artifact failed strict content privacy checks |
 | [SB-20260731-182610-cleanup-cross-lane-residue-inventory](incidents/2026-07-31T182610Z-cleanup-cross-lane-residue-inventory.md) | closed | 2026-07-31T18:27:33.1690763Z | Phase B Task 3 full-check regression repair | Cleanup test missed a test file changed by the parallel restore lane |
 | [SB-20260731-182141-task3-complete-check-failure](incidents/2026-07-31T182141Z-task3-complete-check-failure.md) | closed | 2026-07-31T18:34:34.1475347Z | Phase B Task 3 complete repository verification | Task 3 combined changes failed the complete repository check |
 | [SB-20260731-181521-full-check-launch-timeout](incidents/2026-07-31T181521Z-full-check-launch-timeout.md) | closed | 2026-07-31T18:34:34.1475347Z | Phase B Task 3 complete repository verification | Full-check wrapper used an insufficient timeout |
