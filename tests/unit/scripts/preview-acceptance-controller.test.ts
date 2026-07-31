@@ -41,6 +41,13 @@ async function runControllerCli(arguments_: readonly string[]): Promise<{
   return { exitCode, stdout, stderr };
 }
 
+function testCallBoundary() {
+  return {
+    deadlineMonotonic: performance.now() + 60_000,
+    signal: new AbortController().signal,
+  };
+}
+
 function harness(
   overrides: Partial<PreviewAcceptanceControllerDependencies> = {},
 ) {
@@ -66,6 +73,7 @@ function harness(
       nextRunRef += 1;
       return { runRef: String(nextRunRef) };
     }),
+    reconcileCandidateDispatch: vi.fn(async () => null),
     resolveObserver: vi.fn(async () => "41" as never),
     readObserverState: vi
       .fn()
@@ -343,7 +351,15 @@ describe("preview acceptance controller", () => {
     expect(fixture.dependencies.assertRemoteTip).toHaveBeenCalledTimes(
       fixture.dispatches.length,
     );
-    expect(fixture.dependencies.assertRemoteTip).toHaveBeenCalledWith(SHA);
+    for (const [commit, boundary] of vi.mocked(
+      fixture.dependencies.assertRemoteTip,
+    ).mock.calls) {
+      expect(commit).toBe(SHA);
+      expect(boundary).toEqual(expect.objectContaining({
+        deadlineMonotonic: expect.any(Number),
+        signal: expect.anything(),
+      }));
+    }
   });
 
   it("fails closed on branch movement before candidate dispatch", async () => {
@@ -579,13 +595,15 @@ describe("preview acceptance controller", () => {
       },
     );
     let stateReads = 0;
+    let signalObservedAt: Date | null = null;
     vi.mocked(fixture.dependencies.readObserverState).mockImplementation(
       async () => {
         stateReads += 1;
+        signalObservedAt ??= fixture.currentWall();
         return {
           signal: "succeeded",
           uniqueness: stateReads < 3 ? "listening" : "succeeded",
-          signalObservedAt: fixture.currentWall(),
+          signalObservedAt,
         };
       },
     );
@@ -915,41 +933,63 @@ describe("preview acceptance controller", () => {
       writeStatus: (status) => statuses.push(status),
     });
 
-    await expect(dependencies.assertRemoteTip(SHA)).resolves.toBe(true);
     await expect(
-      dependencies.dispatch("deploy_foundation", '{"safe":true}'),
+      dependencies.assertRemoteTip(SHA, testCallBoundary()),
+    ).resolves.toBe(true);
+    await expect(
+      dependencies.dispatch(
+        "deploy_foundation",
+        '{"safe":true}',
+        testCallBoundary(),
+      ),
     ).resolves.toEqual({ runRef: "101" });
-    const handle = await dependencies.resolveObserver({ family: "foundation_probe" });
-    await expect(dependencies.readObserverState(handle)).resolves.toEqual({
+    const handle = await dependencies.resolveObserver(
+      { family: "foundation_probe" },
+      testCallBoundary(),
+    );
+    await expect(
+      dependencies.readObserverState(handle, testCallBoundary()),
+    ).resolves.toEqual({
       signal: "succeeded",
       uniqueness: "listening",
       signalObservedAt: new Date("2026-07-30T18:00:05.000Z"),
     });
-    await dependencies.verifyCandidateAttribution({
-      runRef: "101",
-      operation: "deploy_foundation",
-      reviewedCommit: SHA,
-    });
+    await dependencies.verifyCandidateAttribution(
+      {
+        runRef: "101",
+        operation: "deploy_foundation",
+        reviewedCommit: SHA,
+      },
+      testCallBoundary(),
+    );
     const action = {
       family: "foundation_probe" as const,
       operation: "deploy_foundation" as const,
       candidateRunRef: "101",
       reviewedCommit: SHA,
     };
-    await expect(dependencies.requestApproval({
-      ...action,
-      expiresAt: "2026-07-30T18:10:00.000Z",
-    })).resolves.toEqual(
+    await expect(dependencies.requestApproval(
+      {
+        ...action,
+        expiresAt: "2026-07-30T18:10:00.000Z",
+      },
+      testCallBoundary(),
+    )).resolves.toEqual(
       new Date("2026-07-30T18:00:06.000Z"),
     );
-    await expect(dependencies.performAction(action)).resolves.toEqual(
+    await expect(
+      dependencies.performAction(action, testCallBoundary()),
+    ).resolves.toEqual(
       new Date("2026-07-30T18:00:07.000Z"),
     );
-    await dependencies.verifyClosure({
-      ...action,
-      rollbackRunRef: "102",
-      closureRunRef: "103",
-    });
+    await dependencies.verifyClosure(
+      {
+        ...action,
+        rollbackRunRef: "102",
+        closureRunRef: "103",
+      },
+      testCallBoundary(),
+    );
 
     expect(calls[0]).toEqual({
       executable: "git-bin",
@@ -982,7 +1022,9 @@ describe("preview acceptance controller", () => {
         stderr: "",
       })),
     });
-    await expect(mismatch.assertRemoteTip(SHA)).resolves.toBe(false);
+    await expect(
+      mismatch.assertRemoteTip(SHA, testCallBoundary()),
+    ).resolves.toBe(false);
     for (const stdout of [
       "",
       `${SHA}\trefs/heads/other\n`,
@@ -994,7 +1036,9 @@ describe("preview acceptance controller", () => {
         observerPort,
         runCommand: vi.fn(async () => ({ stdout, stderr: "" })),
       });
-      await expect(malformed.assertRemoteTip(SHA)).rejects.toThrow(
+      await expect(
+        malformed.assertRemoteTip(SHA, testCallBoundary()),
+      ).rejects.toThrow(
         "Preview acceptance controller failed closed.",
       );
     }
@@ -1034,7 +1078,11 @@ describe("preview acceptance controller", () => {
     });
     try {
       await expect(
-        dependencies.dispatch("deploy_foundation", '{"safe":true}'),
+        dependencies.dispatch(
+          "deploy_foundation",
+          '{"safe":true}',
+          testCallBoundary(),
+        ),
       ).rejects.toThrow("Preview acceptance controller failed closed.");
       expect(parentStdout).toEqual([]);
       expect(parentStderr).toEqual([]);
@@ -1079,5 +1127,434 @@ describe("preview acceptance controller", () => {
     expect(stderr).toEqual([]);
     expect(JSON.stringify(stdout)).not.toContain(SHA);
     expect(JSON.stringify(stdout)).not.toContain("41");
+  });
+});
+
+describe("preview acceptance controller decisive hardening", () => {
+  it("reconciles an accepted candidate dispatch that throws before returning its receipt", async () => {
+    const fixture = harness();
+    let candidateDispatchCount = 0;
+    const reconcileCandidateDispatch = vi.fn(async () => ({
+      runRef: "202",
+    }));
+    vi.mocked(fixture.dependencies.dispatch).mockImplementation(
+      async (operation, context) => {
+        fixture.dispatches.push({ operation, context });
+        fixture.advanceWall(1000);
+        if (operation.startsWith("deploy_")) {
+          candidateDispatchCount += 1;
+          throw new Error("uncertain candidate dispatch");
+        }
+        return { runRef: String(200 + fixture.dispatches.length) };
+      },
+    );
+    Object.assign(fixture.dependencies, { reconcileCandidateDispatch });
+
+    let rejection: unknown = null;
+    try {
+      await runPreviewAcceptanceController(
+        {
+          family: "foundation_probe",
+          reviewedCommit: SHA,
+          expiresAt: new Date(START.getTime() + 10 * 60_000).toISOString(),
+          expectation: { kind: "foundation_succeeded" },
+        },
+        fixture.dependencies,
+      );
+    } catch (error) {
+      rejection = error;
+    }
+
+    expect(candidateDispatchCount).toBe(1);
+    expect(reconcileCandidateDispatch).toHaveBeenCalledOnce();
+    expect(
+      fixture.dependencies.verifyCandidateAttribution,
+    ).toHaveBeenCalledWith(
+      {
+        runRef: "202",
+        operation: "deploy_foundation",
+        reviewedCommit: SHA,
+      },
+      expect.objectContaining({
+        deadlineMonotonic: expect.any(Number),
+        signal: expect.anything(),
+      }),
+    );
+    const operations = fixture.dispatches.map(({ operation }) => operation);
+    expect(operations).toHaveLength(4);
+    expect(operations[0]).toBe("observe");
+    expect(operations[1]).toBe("deploy_foundation");
+    expect(operations.slice(2)).toEqual(["rollback", "close_rollback"]);
+    expect(rejection).toBeNull();
+  });
+
+  it("settles the no-signal path through rollback before accepting expected uniqueness failure", async () => {
+    const fixture = harness();
+    let postClosureTerminalReads = 0;
+    vi.mocked(fixture.dependencies.readObserverState).mockImplementation(
+      async () => {
+        const rollbackClosed = fixture.dispatches.some(
+          ({ operation }) => operation === "close_rollback",
+        );
+        if (rollbackClosed) {
+          postClosureTerminalReads += 1;
+          return {
+            signal: "listening" as const,
+            uniqueness: "failed" as const,
+            signalObservedAt: null,
+          };
+        }
+        return {
+          signal: "listening" as const,
+          uniqueness: "listening" as const,
+          signalObservedAt: null,
+        };
+      },
+    );
+
+    await expect(
+      runPreviewAcceptanceController(
+        {
+          family: "sync_suppression",
+          reviewedCommit: SHA,
+          expiresAt: new Date(START.getTime() + 10 * 60_000).toISOString(),
+          expectation: { kind: "sync_suppressed" },
+        },
+        fixture.dependencies,
+      ),
+    ).rejects.toThrow("Preview acceptance controller failed closed.");
+
+    expect(postClosureTerminalReads).toBe(1);
+    expect(
+      fixture.dispatches
+        .map(({ operation }) => operation)
+        .slice(-2),
+    ).toEqual(["rollback", "close_rollback"]);
+  });
+
+  it("fails closed when a post-signal uniqueness poll contradicts the signal result", async () => {
+    const fixture = harness();
+    let signalObservedAt: Date | null = null;
+    let reads = 0;
+    vi.mocked(fixture.dependencies.readObserverState).mockImplementation(
+      async () => {
+        reads += 1;
+        signalObservedAt ??= fixture.currentWall();
+        if (reads === 1) {
+          return {
+            signal: "succeeded" as const,
+            uniqueness: "listening" as const,
+            signalObservedAt,
+          };
+        }
+        return {
+          signal: "failed" as const,
+          uniqueness: "succeeded" as const,
+          signalObservedAt,
+        };
+      },
+    );
+
+    await expect(
+      runPreviewAcceptanceController(
+        {
+          family: "sync_suppression",
+          reviewedCommit: SHA,
+          expiresAt: new Date(START.getTime() + 10 * 60_000).toISOString(),
+          expectation: { kind: "sync_suppressed" },
+        },
+        fixture.dependencies,
+      ),
+    ).rejects.toThrow("Preview acceptance controller failed closed.");
+  });
+
+  it("fails closed when a post-signal uniqueness poll drifts the original signal timestamp", async () => {
+    const fixture = harness();
+    let signalObservedAt: Date | null = null;
+    let reads = 0;
+    vi.mocked(fixture.dependencies.readObserverState).mockImplementation(
+      async () => {
+        reads += 1;
+        signalObservedAt ??= fixture.currentWall();
+        return {
+          signal: "succeeded" as const,
+          uniqueness:
+            reads === 1 ? ("listening" as const) : ("succeeded" as const),
+          signalObservedAt:
+            reads === 1
+              ? signalObservedAt
+              : new Date(signalObservedAt.getTime() + 1),
+        };
+      },
+    );
+
+    await expect(
+      runPreviewAcceptanceController(
+        {
+          family: "sync_suppression",
+          reviewedCommit: SHA,
+          expiresAt: new Date(START.getTime() + 10 * 60_000).toISOString(),
+          expectation: { kind: "sync_suppressed" },
+        },
+        fixture.dependencies,
+      ),
+    ).rejects.toThrow("Preview acceptance controller failed closed.");
+  });
+
+  it("waits for the observer's true uniqueness close beyond the old signal estimate", async () => {
+    const fixture = harness();
+    let signalObservedAt: Date | null = null;
+    let uniquenessClosesAt: Date | null = null;
+    vi.mocked(fixture.dependencies.readObserverState).mockImplementation(
+      async () => {
+        signalObservedAt ??= fixture.currentWall();
+        uniquenessClosesAt ??= new Date(
+          signalObservedAt.getTime() + 130_001,
+        );
+        return {
+          signal: "succeeded" as const,
+          uniqueness:
+            fixture.currentWall().getTime() >= uniquenessClosesAt.getTime()
+              ? ("succeeded" as const)
+              : ("listening" as const),
+          signalObservedAt,
+          uniquenessClosesAt,
+        } as never;
+      },
+    );
+
+    await expect(
+      runPreviewAcceptanceController(
+        {
+          family: "sync_suppression",
+          reviewedCommit: SHA,
+          expiresAt: new Date(START.getTime() + 10 * 60_000).toISOString(),
+          expectation: { kind: "sync_suppressed" },
+        },
+        fixture.dependencies,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it("accepts unchanged signal success and timestamp through uniqueness settlement", async () => {
+    const fixture = harness();
+    let signalObservedAt: Date | null = null;
+    let reads = 0;
+    vi.mocked(fixture.dependencies.readObserverState).mockImplementation(
+      async () => {
+        reads += 1;
+        signalObservedAt ??= fixture.currentWall();
+        return {
+          signal: "succeeded" as const,
+          uniqueness:
+            reads === 1 ? ("listening" as const) : ("succeeded" as const),
+          signalObservedAt,
+        };
+      },
+    );
+
+    await expect(
+      runPreviewAcceptanceController(
+        {
+          family: "sync_suppression",
+          reviewedCommit: SHA,
+          expiresAt: new Date(START.getTime() + 10 * 60_000).toISOString(),
+          expectation: { kind: "sync_suppressed" },
+        },
+        fixture.dependencies,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it("interrupts a never-resolving pre-signal controller child at its absolute observer deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      const fixture = harness();
+      let aborted = false;
+      let deadlineMonotonic: number | null = null;
+      const assertRemoteTip = vi.fn(
+        async (
+          _commit: string,
+          boundary?: {
+            readonly deadlineMonotonic: number;
+            readonly signal: AbortSignal;
+          },
+        ): Promise<boolean> => {
+          if (boundary === undefined) {
+            throw new Error("missing controller deadline");
+          }
+          deadlineMonotonic = boundary.deadlineMonotonic;
+          return new Promise<boolean>((_resolvePromise, rejectPromise) => {
+            boundary.signal.addEventListener(
+              "abort",
+              () => {
+                aborted = true;
+                rejectPromise(new Error("private child timeout"));
+              },
+              { once: true },
+            );
+          });
+        },
+      );
+      Object.assign(fixture.dependencies, { assertRemoteTip });
+
+      const run = runPreviewAcceptanceController(
+        {
+          family: "foundation_probe",
+          reviewedCommit: SHA,
+          expiresAt: new Date(START.getTime() + 10 * 60_000).toISOString(),
+          expectation: { kind: "foundation_succeeded" },
+        },
+        fixture.dependencies,
+      );
+      const rejection = expect(run).rejects.toThrow(
+        "Preview acceptance controller failed closed.",
+      );
+      await vi.advanceTimersByTimeAsync(120_000);
+
+      await rejection;
+      expect(deadlineMonotonic).toBe(120_000);
+      expect(aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("interrupts a never-resolving rollback child at the post-signal local deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      const fixture = harness();
+      const originalDispatch = vi
+        .mocked(fixture.dependencies.dispatch)
+        .getMockImplementation();
+      if (originalDispatch === undefined) {
+        throw new Error("missing harness dispatch implementation");
+      }
+      let rollbackAborted = false;
+      let rollbackDeadline: number | null = null;
+      vi.mocked(fixture.dependencies.dispatch).mockImplementation(
+        async (
+          operation,
+          context,
+          boundary?: {
+            readonly deadlineMonotonic: number;
+            readonly signal: AbortSignal;
+          },
+        ) => {
+          if (boundary === undefined) {
+            throw new Error("missing rollback deadline");
+          }
+          if (operation !== "rollback") {
+            return originalDispatch(operation, context, boundary);
+          }
+          rollbackDeadline = boundary.deadlineMonotonic;
+          return new Promise<{ readonly runRef: string }>(
+            (_resolvePromise, rejectPromise) => {
+              boundary.signal.addEventListener(
+                "abort",
+                () => {
+                  rollbackAborted = true;
+                  rejectPromise(new Error("private rollback timeout"));
+                },
+                { once: true },
+              );
+            },
+          );
+        },
+      );
+      vi.mocked(fixture.dependencies.readObserverState).mockImplementation(
+        async () => ({
+          signal: "succeeded" as const,
+          uniqueness: "succeeded" as const,
+          signalObservedAt: fixture.currentWall(),
+        }),
+      );
+
+      const run = runPreviewAcceptanceController(
+        {
+          family: "foundation_probe",
+          reviewedCommit: SHA,
+          expiresAt: new Date(START.getTime() + 10 * 60_000).toISOString(),
+          expectation: { kind: "foundation_succeeded" },
+        },
+        fixture.dependencies,
+      );
+      const rejection = expect(run).rejects.toThrow(
+        "Preview acceptance controller failed closed.",
+      );
+      for (
+        let pendingTurns = 0;
+        rollbackDeadline === null && pendingTurns < 32;
+        pendingTurns += 1
+      ) {
+        await Promise.resolve();
+      }
+      expect(rollbackDeadline).not.toBeNull();
+      await vi.advanceTimersByTimeAsync(50_001);
+
+      await rejection;
+      expect(rollbackDeadline).toBe(
+        fixture.currentMonotonic() + 50_001,
+      );
+      expect(rollbackAborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("terminates and reaps a timed-out controller child without forwarding either stream", async () => {
+    const parentStdout: string[] = [];
+    const parentStderr: string[] = [];
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation(((chunk: string | Uint8Array) => {
+        parentStdout.push(String(chunk));
+        return true;
+      }) as typeof process.stdout.write);
+    const stderrWrite = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(((chunk: string | Uint8Array) => {
+        parentStderr.push(String(chunk));
+        return true;
+      }) as typeof process.stderr.write);
+    const opaqueObserver = Object.freeze(Object.create(null)) as object;
+    const dependencies = createPreviewControllerSubprocessDependencies({
+      driverExecutable: process.execPath,
+      driverPrefixArguments: [
+        "-e",
+        "setTimeout(() => process.stdout.write(JSON.stringify({ runRef: '41' })), 250)",
+      ],
+      observerPort: {
+        resolveObserver: async () => opaqueObserver,
+        readObserverState: async () => ({
+          signal: "listening",
+          uniqueness: "listening",
+          signalObservedAt: null,
+        }),
+      },
+    });
+    const dispatchWithBoundary = dependencies.dispatch as unknown as (
+      operation: "observe",
+      context: string,
+      boundary: {
+        readonly deadlineMonotonic: number;
+        readonly signal: AbortSignal;
+      },
+    ) => Promise<{ readonly runRef: string }>;
+    const startedAt = performance.now();
+    try {
+      await expect(
+        dispatchWithBoundary("observe", "{}", {
+          deadlineMonotonic: startedAt + 25,
+          signal: new AbortController().signal,
+        }),
+      ).rejects.toThrow("Preview acceptance controller failed closed.");
+      expect(performance.now() - startedAt).toBeLessThan(1_000);
+      expect(parentStdout).toEqual([]);
+      expect(parentStderr).toEqual([]);
+    } finally {
+      stdoutWrite.mockRestore();
+      stderrWrite.mockRestore();
+    }
   });
 });

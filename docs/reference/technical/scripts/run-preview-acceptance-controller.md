@@ -311,3 +311,56 @@ exit code 1 on any pre-run, child, protocol, or controller failure.
 ## `fail`
 
 Throws the sole value-free controller error.
+
+## `reconcileCandidateDispatch`
+
+Performs one bounded accepted-then-throw reconciliation using the canonical
+operation, serialized context, and reviewed commit. A missing or malformed
+receipt fails closed; the controller never redispatches the candidate.
+
+## `runControllerCall`
+
+Clamps a requested absolute monotonic deadline to the controller ceiling,
+supplies an `AbortSignal`, clears its timer on settlement, and converts every
+dependency failure into the constant public error.
+
+## `nextPreSignalDeadline`
+
+Derives an absolute monotonic deadline from the remaining observer window and
+the buffered candidate expiry, rejecting exhausted or invalid time.
+
+## `nextCleanupDeadline`
+
+Starts a fresh bounded monotonic cleanup window after candidate attribution so
+expiry rejection cannot prevent mandatory rollback and closure.
+
+## `waitForNoSignalUniqueness`
+
+Reads only through the bounded post-closure settlement interval and accepts
+exactly the expected listening-signal plus failed-uniqueness terminal.
+
+## `rollbackCallDeadline`
+
+Combines the signal-relative local deadline with the provider-observed wall
+deadline. The returned child boundary is exclusive by one millisecond so the
+documented inclusive rollback instant remains executable.
+
+## `monotonicDeadlineForWall`
+
+Validates a future wall-clock close and projects its remaining duration onto
+the controller's monotonic clock.
+
+## `cleanup`
+
+Clears the per-command timer and removes the abort listener exactly once after
+the child invocation settles.
+
+## `rejectClosed`
+
+Rejects the subprocess boundary with only the constant public controller
+failure, never with child output or provider-controlled text.
+
+## `terminate`
+
+Marks termination requested and signals the child, while leaving settlement to
+the close callback so the process is reaped before control returns.

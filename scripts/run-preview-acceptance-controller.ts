@@ -1,9 +1,8 @@
 /** Coordinates guarded preview acceptance with one process-local observer. */
-import { execFile } from "node:child_process";
+import { execFile, type ChildProcess } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { promisify } from "node:util";
 import {
   PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
   serializePreviewAcceptanceContext,
@@ -35,7 +34,6 @@ const MAX_CHILD_OUTPUT_BYTES = 65_536;
 const MAX_DRIVER_INPUT_BYTES = 8_192;
 const REVIEWED_BRANCH = "codex/phase-b-foundation";
 const REVIEWED_BRANCH_REF = `refs/heads/${REVIEWED_BRANCH}`;
-const execFileAsync = promisify(execFile);
 const CONTROLLER_STATUSES = Object.freeze([
   "observer_ready",
   "candidate_dispatched",
@@ -71,30 +69,57 @@ export interface PreviewAcceptanceControllerDependencies {
   wallNow(): Date;
   monotonicNow(): number;
   sleep(milliseconds: number): Promise<void>;
-  assertRemoteTip(commit: string): Promise<boolean>;
+  assertRemoteTip(
+    commit: string,
+    boundary: PreviewControllerCallBoundary,
+  ): Promise<boolean>;
   dispatch(
     operation: PreviewAcceptanceOperation,
     serializedContext: string,
+    boundary: PreviewControllerCallBoundary,
   ): Promise<{ readonly runRef: string }>;
-  resolveObserver(input: Readonly<Record<string, unknown>>): Promise<unknown>;
-  readObserverState(handle: unknown): Promise<{
+  reconcileCandidateDispatch(input: {
+    readonly operation: PreviewAcceptanceOperation;
+    readonly serializedContext: string;
+    readonly reviewedCommit: string;
+  }, boundary: PreviewControllerCallBoundary): Promise<{
+    readonly runRef: string;
+  } | null>;
+  resolveObserver(
+    input: Readonly<Record<string, unknown>>,
+    boundary: PreviewControllerCallBoundary,
+  ): Promise<unknown>;
+  readObserverState(
+    handle: unknown,
+    boundary: PreviewControllerCallBoundary,
+  ): Promise<{
     readonly signal: "listening" | "succeeded" | "failed";
     readonly uniqueness: "listening" | "succeeded" | "failed";
     readonly signalObservedAt: Date | null;
+    readonly uniquenessClosesAt?: Date;
   }>;
   verifyCandidateAttribution(input: {
     readonly runRef: string;
     readonly operation: PreviewAcceptanceOperation;
     readonly reviewedCommit: string;
-  }): Promise<void>;
+  }, boundary: PreviewControllerCallBoundary): Promise<void>;
   admitRestore(input: {
     readonly priorCandidateRunRef: string;
     readonly rollbackClosureRunRef: string;
     readonly reviewedCommit: string;
-  }): Promise<"verified">;
-  requestApproval(input: PreviewAcceptanceApprovalInput): Promise<Date>;
-  performAction(input: PreviewAcceptanceActionInput): Promise<Date>;
-  verifyClosure(input: PreviewAcceptanceClosureInput): Promise<void>;
+  }, boundary: PreviewControllerCallBoundary): Promise<"verified">;
+  requestApproval(
+    input: PreviewAcceptanceApprovalInput,
+    boundary: PreviewControllerCallBoundary,
+  ): Promise<Date>;
+  performAction(
+    input: PreviewAcceptanceActionInput,
+    boundary: PreviewControllerCallBoundary,
+  ): Promise<Date>;
+  verifyClosure(
+    input: PreviewAcceptanceClosureInput,
+    boundary: PreviewControllerCallBoundary,
+  ): Promise<void>;
   writeStatus(status: PreviewAcceptanceStatus): void;
 }
 
@@ -133,9 +158,16 @@ export interface PreviewControllerCommandResult {
   readonly stderr: string;
 }
 
+/** One absolute monotonic deadline and its interrupt signal. */
+export interface PreviewControllerCallBoundary {
+  readonly deadlineMonotonic: number;
+  readonly signal: AbortSignal;
+}
+
 export type PreviewControllerCommandRunner = (
   executable: string,
   arguments_: readonly string[],
+  boundary: PreviewControllerCallBoundary,
 ) => Promise<PreviewControllerCommandResult>;
 
 export type PreviewControllerObserverPort = Pick<
@@ -179,9 +211,10 @@ export function createPreviewControllerSubprocessDependencies(input: {
   const invoke = async (
     executable: string,
     arguments_: readonly string[],
+    boundary: PreviewControllerCallBoundary,
   ): Promise<PreviewControllerCommandResult> => {
     try {
-      const result = await runCommand(executable, [...arguments_]);
+      const result = await runCommand(executable, [...arguments_], boundary);
       if (
         typeof result?.stdout !== "string" ||
         typeof result.stderr !== "string" ||
@@ -202,22 +235,27 @@ export function createPreviewControllerSubprocessDependencies(input: {
   /** Invokes one closed driver operation with bounded arguments. */
   const invokeDriver = async (
     command: string,
-    arguments_: readonly string[] = [],
+    arguments_: readonly string[],
+    boundary: PreviewControllerCallBoundary,
   ): Promise<unknown> => {
     const result = await invoke(driverExecutable, [
       ...driverPrefixArguments,
       boundedCommandPart(command),
       ...arguments_.map(boundedDriverArgument),
-    ]);
+    ], boundary);
     return parseDriverJsonLine(result.stdout);
   };
 
   /** Requires the driver's exact success acknowledgement. */
   const expectOk = async (
     command: string,
-    arguments_: readonly string[] = [],
+    arguments_: readonly string[],
+    boundary: PreviewControllerCallBoundary,
   ): Promise<void> => {
-    const record = exactRecord(await invokeDriver(command, arguments_), ["ok"]);
+    const record = exactRecord(
+      await invokeDriver(command, arguments_, boundary),
+      ["ok"],
+    );
     if (ownData(record, "ok") !== true) fail();
   };
 
@@ -231,14 +269,14 @@ export function createPreviewControllerSubprocessDependencies(input: {
           setTimeout(resolvePromise, milliseconds)
         )),
     /** Verifies the reviewed branch tip immediately before dispatch. */
-    assertRemoteTip: async (commit) => {
+    assertRemoteTip: async (commit, boundary) => {
       const expectedCommit = validCommit(commit);
       const result = await invoke(gitExecutable, [
         "ls-remote",
         "--heads",
         "origin",
         REVIEWED_BRANCH_REF,
-      ]);
+      ], boundary);
       const match =
         /^([a-f0-9]{40})\trefs\/heads\/codex\/phase-b-foundation\r?\n?$/u.exec(
           result.stdout,
@@ -247,69 +285,94 @@ export function createPreviewControllerSubprocessDependencies(input: {
       return match[1] === expectedCommit;
     },
     /** Dispatches one canonical operation/context pair. */
-    dispatch: async (operation, serializedContext) => {
+    dispatch: async (operation, serializedContext, boundary) => {
       const record = exactRecord(
-        await invokeDriver("dispatch", [operation, serializedContext]),
+        await invokeDriver(
+          "dispatch",
+          [operation, serializedContext],
+          boundary,
+        ),
         ["runRef"],
       );
       const runRef = ownData(record, "runRef");
       if (!validRunRef(runRef)) fail();
       return Object.freeze({ runRef });
     },
+    /** Reconciles only the exact candidate dispatch tuple after uncertainty. */
+    reconcileCandidateDispatch: async (candidate, boundary) => {
+      const record = exactRecord(
+        await invokeDriver("reconcile-candidate-dispatch", [
+          candidate.operation,
+          candidate.serializedContext,
+          candidate.reviewedCommit,
+        ], boundary),
+        ["runRef"],
+      );
+      const runRef = ownData(record, "runRef");
+      if (runRef === null) return null;
+      if (!validRunRef(runRef)) fail();
+      return Object.freeze({ runRef });
+    },
     /** Resolves one observer while retaining only its opaque handle. */
-    resolveObserver: async (resolutionInput) => {
+    resolveObserver: async (resolutionInput, boundary) => {
       try {
-        return await observerPort.resolveObserver(resolutionInput);
+        return await observerPort.resolveObserver(resolutionInput, boundary);
       } catch {
         fail();
       }
     },
     /** Reads one closed observer-state response. */
-    readObserverState: async (handle) => {
+    readObserverState: async (handle, boundary) => {
       try {
-        const state = await observerPort.readObserverState(handle);
+        const state = await observerPort.readObserverState(handle, boundary);
         return snapshotControllerObserverState(state);
       } catch {
         fail();
       }
     },
     /** Verifies the candidate run and commit attribution. */
-    verifyCandidateAttribution: (attribution) =>
+    verifyCandidateAttribution: (attribution, boundary) =>
       expectOk("verify-candidate-attribution", [
         attribution.runRef,
         attribution.operation,
         attribution.reviewedCommit,
-      ]),
+      ], boundary),
     /** Privately re-admits the immediately preceding role-probe closure. */
-    admitRestore: async (admission) => {
+    admitRestore: async (admission, boundary) => {
       const record = exactRecord(
-        await invokeDriver("admit-restore", [
-          serializeDriverInput(admission),
-        ]),
+          await invokeDriver(
+            "admit-restore",
+            [serializeDriverInput(admission)],
+            boundary,
+          ),
         ["attestation"],
       );
       if (ownData(record, "attestation") !== "verified") fail();
       return "verified";
     },
     /** Requests approval and returns only its canonical instant. */
-    requestApproval: async (action) =>
+    requestApproval: async (action, boundary) =>
       readDriverDate(
         await invokeDriver("request-approval", [
           serializePreviewApprovalInput(action),
-        ]),
+        ], boundary),
       ),
     /** Performs one admitted action and returns its completion instant. */
-    performAction: async (action) =>
+    performAction: async (action, boundary) =>
       readDriverDate(
         await invokeDriver(isUserMediatedFamily(action.family)
           ? "perform-action"
           : "confirm-candidate-deployment", [
           serializePreviewActionInput(action),
-        ]),
+        ], boundary),
       ),
     /** Verifies the exact rollback-closure binding. */
-    verifyClosure: (closure) =>
-      expectOk("verify-closure", [serializePreviewClosureInput(closure)]),
+    verifyClosure: (closure, boundary) =>
+      expectOk(
+        "verify-closure",
+        [serializePreviewClosureInput(closure)],
+        boundary,
+      ),
     /** Writes only one admitted controller status. */
     writeStatus: (status) => {
       if (!isControllerStatus(status)) fail();
@@ -320,6 +383,40 @@ export function createPreviewControllerSubprocessDependencies(input: {
   return Object.freeze(dependencies);
 }
 
+/** Runs one controller dependency within an absolute, interruptible deadline. */
+async function runControllerCall<T>(
+  requestedDeadlineMonotonic: number,
+  dependencies: PreviewAcceptanceControllerDependencies,
+  operation: (boundary: PreviewControllerCallBoundary) => Promise<T>,
+): Promise<T> {
+  const now = safeMonotonic(dependencies.monotonicNow());
+  const deadlineMonotonic = Math.min(
+    safeMonotonic(requestedDeadlineMonotonic),
+    now + UNIQUENESS_MILLISECONDS,
+  );
+  const remaining = deadlineMonotonic - now;
+  if (remaining <= 0) fail();
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  timer = setTimeout(() => {
+    controller.abort();
+  }, remaining);
+  try {
+    const result = await operation(
+      Object.freeze({
+        deadlineMonotonic,
+        signal: controller.signal,
+      }),
+    );
+    if (controller.signal.aborted) fail();
+    return result;
+  } catch {
+    throw new Error(FAILURE);
+  } finally {
+    if (timer !== null) clearTimeout(timer);
+  }
+}
+
 /** Executes observer, candidate, rollback, and uniqueness fail-closed. */
 export async function runPreviewAcceptanceController(
   input: PreviewAcceptanceControllerInput,
@@ -328,6 +425,20 @@ export async function runPreviewAcceptanceController(
   input = snapshotControllerInput(input);
   const reviewedCommit = validCommit(input.reviewedCommit);
   const expiresAt = canonicalDate(input.expiresAt);
+  /** Bounds each pre-signal child by both observer and expiry windows. */
+  const nextPreSignalDeadline = (): number => {
+    const wall = safeNow(dependencies.wallNow());
+    const monotonic = safeMonotonic(dependencies.monotonicNow());
+    const expiryRemaining =
+      expiresAt.getTime() - EXPIRY_BUFFER_MILLISECONDS - wall.getTime();
+    if (expiryRemaining <= 0) fail();
+    return monotonic + Math.min(UNIQUENESS_MILLISECONDS, expiryRemaining);
+  };
+  /** Grants bounded cleanup time after an attributed candidate must fail. */
+  const nextCleanupDeadline = (): number => {
+    const monotonic = safeMonotonic(dependencies.monotonicNow());
+    return safeMonotonic(monotonic + UNIQUENESS_MILLISECONDS);
+  };
   let candidateRunRef: string | null = null;
   let rollbackRunRef: string | null = null;
   let rollbackStarted = false;
@@ -335,55 +446,107 @@ export async function runPreviewAcceptanceController(
   /** Serializes every dispatch through the canonical closed context. */
   const dispatch = async (
     context: PreviewAcceptanceContext,
+    deadlineMonotonic: number,
     beforeDispatch?: () => void,
   ): Promise<{ readonly runRef: string }> => {
-    if (!(await dependencies.assertRemoteTip(reviewedCommit))) fail();
+    if (
+      !(await runControllerCall(
+        deadlineMonotonic,
+        dependencies,
+        (boundary) => dependencies.assertRemoteTip(reviewedCommit, boundary),
+      ))
+    ) {
+      fail();
+    }
     beforeDispatch?.();
-    const result = await dependencies.dispatch(
-      context.kind,
-      serializePreviewAcceptanceContext(context),
-    );
+    const serializedContext = serializePreviewAcceptanceContext(context);
+    let result: { readonly runRef: string };
+    try {
+      result = await runControllerCall(
+        deadlineMonotonic,
+        dependencies,
+        (boundary) =>
+          dependencies.dispatch(context.kind, serializedContext, boundary),
+      );
+    } catch {
+      if (
+        context.kind === "observe" ||
+        context.kind === "rollback" ||
+        context.kind === "close_rollback"
+      ) {
+        fail();
+      }
+      const reconciled = await runControllerCall(
+        deadlineMonotonic,
+        dependencies,
+        (boundary) =>
+          dependencies.reconcileCandidateDispatch(
+            {
+              operation: context.kind,
+              serializedContext,
+              reviewedCommit,
+            },
+            boundary,
+          ),
+      );
+      if (reconciled === null) fail();
+      result = reconciled;
+    }
     if (!validRunRef(result?.runRef)) fail();
     return Object.freeze({ runRef: result.runRef });
   };
 
   /** Immediately restores and closes one attributed candidate. */
-  const rollbackAndClose = async (signal?: {
+  const rollbackAndClose = async (
+    deadlineMonotonic: number,
+    signal?: {
     readonly detectedAtMonotonic: number;
     readonly providerObservedAt: Date;
-  }): Promise<void> => {
+    },
+  ): Promise<void> => {
     if (candidateRunRef === null || rollbackStarted) return;
     rollbackStarted = true;
+    const rollbackCandidateRunRef = candidateRunRef;
     const rollbackOperation = candidateOperation(input.family);
     const rollback = await dispatch(
       {
         version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
         kind: "rollback",
         reviewedCommit,
-        candidateRunRef,
+        candidateRunRef: rollbackCandidateRunRef,
       },
+      deadlineMonotonic,
       signal === undefined
         ? undefined
         : () => assertRollbackDispatchDeadline(signal, dependencies),
     );
     rollbackRunRef = rollback.runRef;
+    const completedRollbackRunRef = rollback.runRef;
     dependencies.writeStatus("rollback_dispatched");
     const closure = await dispatch({
       version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
       kind: "close_rollback",
       reviewedCommit,
-      candidateRunRef,
-      rollbackRunRef,
+      candidateRunRef: rollbackCandidateRunRef,
+      rollbackRunRef: completedRollbackRunRef,
       authenticatedReadsGate: "verified",
-    });
-    await dependencies.verifyClosure({
-      family: input.family,
-      operation: rollbackOperation,
-      candidateRunRef,
-      rollbackRunRef,
-      closureRunRef: closure.runRef,
-      reviewedCommit,
-    });
+    }, deadlineMonotonic);
+    await runControllerCall(
+      deadlineMonotonic,
+      dependencies,
+      (boundary) =>
+        dependencies.verifyClosure(
+          {
+            family: input.family,
+            operation: rollbackOperation,
+            candidateRunRef: rollbackCandidateRunRef,
+            rollbackRunRef: completedRollbackRunRef,
+            closureRunRef: closure.runRef,
+            reviewedCommit,
+          },
+          boundary,
+        ),
+    );
     dependencies.writeStatus("closure_verified");
   };
 
@@ -397,15 +560,23 @@ export async function runPreviewAcceptanceController(
       input,
       reviewedCommit,
     );
-    await dispatch(observeContext);
+    await dispatch(observeContext, nextPreSignalDeadline());
     const observerCompletedAt = safeNow(dependencies.wallNow());
-    const observer = await dependencies.resolveObserver({
-      family: input.family,
-      expectedCommit: reviewedCommit,
-      dispatchStartedAt: observerStartedAt,
-      dispatchCompletedAt: observerCompletedAt,
-      expectation: input.expectation,
-    });
+    const observer = await runControllerCall(
+      nextPreSignalDeadline(),
+      dependencies,
+      (boundary) =>
+        dependencies.resolveObserver(
+          {
+            family: input.family,
+            expectedCommit: reviewedCommit,
+            dispatchStartedAt: observerStartedAt,
+            dispatchCompletedAt: observerCompletedAt,
+            expectation: input.expectation,
+          },
+          boundary,
+        ),
+    );
     dependencies.writeStatus("observer_ready");
 
     if (input.family === "calendar_maintenance") {
@@ -422,7 +593,12 @@ export async function runPreviewAcceptanceController(
     const operation = candidateOperation(input.family);
     const restoreAdmission =
       operation === "deploy_restore"
-        ? await admitRestore(input, reviewedCommit, dependencies)
+        ? await admitRestore(
+            input,
+            reviewedCommit,
+            nextPreSignalDeadline(),
+            dependencies,
+          )
         : undefined;
     const candidate = await dispatch(createCandidateContext(
       input,
@@ -431,20 +607,29 @@ export async function runPreviewAcceptanceController(
       observerStartedAt,
       observerCompletedAt,
       restoreAdmission,
-    ));
+    ), nextPreSignalDeadline());
     const candidateDispatchReturnedAt = safeNow(dependencies.wallNow());
-    candidateRunRef = candidate.runRef;
-    await dependencies.verifyCandidateAttribution({
-      runRef: candidateRunRef,
-      operation,
-      reviewedCommit,
-    });
+    const attributedCandidateRunRef = candidate.runRef;
+    candidateRunRef = attributedCandidateRunRef;
+    await runControllerCall(
+      nextPreSignalDeadline(),
+      dependencies,
+      (boundary) =>
+        dependencies.verifyCandidateAttribution(
+          {
+            runRef: attributedCandidateRunRef,
+            operation,
+            reviewedCommit,
+          },
+          boundary,
+        ),
+    );
     dependencies.writeStatus("candidate_dispatched");
 
     const actionInput = Object.freeze({
       family: input.family,
       operation,
-      candidateRunRef,
+      candidateRunRef: attributedCandidateRunRef,
       reviewedCommit,
     });
     let actionCompletedAt: Date;
@@ -461,10 +646,18 @@ export async function runPreviewAcceptanceController(
         );
       }
       const approvedAt = safeNow(
-        await dependencies.requestApproval({
-          ...actionInput,
-          expiresAt: input.expiresAt,
-        }),
+        await runControllerCall(
+          nextPreSignalDeadline(),
+          dependencies,
+          (boundary) =>
+            dependencies.requestApproval(
+              {
+                ...actionInput,
+                expiresAt: input.expiresAt,
+              },
+              boundary,
+            ),
+        ),
       );
       const beforeAction = safeNow(dependencies.wallNow());
       const approvalAge = beforeAction.getTime() - approvedAt.getTime();
@@ -478,12 +671,20 @@ export async function runPreviewAcceptanceController(
         );
       }
       actionCompletedAt = safeNow(
-        await dependencies.performAction(actionInput),
+        await runControllerCall(
+          nextPreSignalDeadline(),
+          dependencies,
+          (boundary) => dependencies.performAction(actionInput, boundary),
+        ),
       );
       if (actionCompletedAt.getTime() < beforeAction.getTime()) fail();
     } else {
       actionCompletedAt = safeNow(
-        await dependencies.performAction(actionInput),
+        await runControllerCall(
+          nextPreSignalDeadline(),
+          dependencies,
+          (boundary) => dependencies.performAction(actionInput, boundary),
+        ),
       );
       if (
         actionCompletedAt.getTime() <
@@ -513,18 +714,45 @@ export async function runPreviewAcceptanceController(
       absoluteNoSignalDeadline,
       dependencies,
     );
+    if (signal.kind === "no_signal") {
+      await rollbackAndClose(noSignalDeadline + POLL_MILLISECONDS);
+      if (!isTwoJobFamily(input.family)) fail();
+      await waitForNoSignalUniqueness(
+        observer,
+        absoluteNoSignalDeadline,
+        dependencies,
+      );
+      fail();
+    }
     dependencies.writeStatus("candidate_signal_seen");
-    await rollbackAndClose({
-      detectedAtMonotonic: signal.detectedAtMonotonic,
-      providerObservedAt: signal.providerObservedAt,
-    });
+    await rollbackAndClose(
+      rollbackCallDeadline(signal, dependencies),
+      {
+        detectedAtMonotonic: signal.detectedAtMonotonic,
+        providerObservedAt: signal.providerObservedAt,
+      },
+    );
 
     if (isTwoJobFamily(input.family)) {
       let state = signal.state;
-      const uniquenessClosesAt = new Date(
-        signal.providerObservedAt.getTime() + UNIQUENESS_MILLISECONDS,
+      const uniquenessClosesAt =
+        state.uniquenessClosesAt === undefined
+          ? absoluteNoSignalDeadline
+          : safeNow(state.uniquenessClosesAt);
+      const uniquenessDeadline = monotonicDeadlineForWall(
+        new Date(uniquenessClosesAt.getTime() + POLL_MILLISECONDS),
+        dependencies,
       );
-      while (state.uniqueness !== "succeeded") {
+      for (;;) {
+        if (
+          state.signal !== "succeeded" ||
+          state.signalObservedAt === null ||
+          safeNow(state.signalObservedAt).getTime() !==
+            signal.providerObservedAt.getTime()
+        ) {
+          fail();
+        }
+        if (state.uniqueness === "succeeded") break;
         if (
           state.uniqueness === "failed" ||
           safeNow(dependencies.wallNow()).getTime() >
@@ -533,13 +761,17 @@ export async function runPreviewAcceptanceController(
           fail();
         }
         await dependencies.sleep(POLL_MILLISECONDS);
-        state = await dependencies.readObserverState(observer);
+        state = await runControllerCall(
+          uniquenessDeadline,
+          dependencies,
+          (boundary) => dependencies.readObserverState(observer, boundary),
+        );
       }
     }
   } catch {
     if (candidateRunRef !== null && !rollbackStarted) {
       try {
-        await rollbackAndClose();
+        await rollbackAndClose(nextCleanupDeadline());
       } catch {
         // The sole public failure below intentionally hides child/provider data.
       }
@@ -557,15 +789,43 @@ async function waitForSignal(
   noSignalDeadline: number,
   absoluteNoSignalDeadline: Date,
   dependencies: PreviewAcceptanceControllerDependencies,
-): Promise<{
-  readonly state: Awaited<ReturnType<
-    PreviewAcceptanceControllerDependencies["readObserverState"]
-  >>;
-  readonly detectedAtMonotonic: number;
-  readonly providerObservedAt: Date;
-}> {
+): Promise<
+  | {
+      readonly kind: "signal";
+      readonly state: Awaited<
+        ReturnType<
+          PreviewAcceptanceControllerDependencies["readObserverState"]
+        >
+      >;
+      readonly detectedAtMonotonic: number;
+      readonly providerObservedAt: Date;
+    }
+  | {
+      readonly kind: "no_signal";
+    }
+> {
   for (;;) {
-    const state = await dependencies.readObserverState(observer);
+    const beforeReadWall = safeNow(dependencies.wallNow());
+    const beforeReadMonotonic = safeMonotonic(
+      dependencies.monotonicNow(),
+    );
+    if (
+      beforeReadWall.getTime() > absoluteNoSignalDeadline.getTime() ||
+      beforeReadMonotonic > noSignalDeadline
+    ) {
+      fail();
+    }
+    if (
+      beforeReadWall.getTime() === absoluteNoSignalDeadline.getTime() ||
+      beforeReadMonotonic === noSignalDeadline
+    ) {
+      return Object.freeze({ kind: "no_signal" as const });
+    }
+    const state = await runControllerCall(
+      noSignalDeadline,
+      dependencies,
+      (boundary) => dependencies.readObserverState(observer, boundary),
+    );
     const detectedAtWall = safeNow(dependencies.wallNow());
     const detectedAtMonotonic = safeMonotonic(
       dependencies.monotonicNow(),
@@ -590,18 +850,59 @@ async function waitForSignal(
         fail();
       }
       return Object.freeze({
+        kind: "signal" as const,
         state,
         detectedAtMonotonic,
         providerObservedAt: observedAt,
       });
     }
     if (safeMonotonic(dependencies.monotonicNow()) >= noSignalDeadline) {
-      fail();
+      return Object.freeze({ kind: "no_signal" as const });
     }
     const remaining =
       noSignalDeadline - safeMonotonic(dependencies.monotonicNow());
     if (remaining <= 0) fail();
     await dependencies.sleep(Math.min(POLL_MILLISECONDS, remaining));
+  }
+}
+
+/** Requires the no-signal two-job observer to fail only after rollback close. */
+async function waitForNoSignalUniqueness(
+  observer: unknown,
+  closesAt: Date,
+  dependencies: PreviewAcceptanceControllerDependencies,
+): Promise<void> {
+  const settlementAt = new Date(closesAt.getTime() + POLL_MILLISECONDS);
+  const settlementDeadline = monotonicDeadlineForWall(
+    settlementAt,
+    dependencies,
+  );
+  for (;;) {
+    const state = await runControllerCall(
+      settlementDeadline,
+      dependencies,
+      (boundary) => dependencies.readObserverState(observer, boundary),
+    );
+    const detectedAtWall = safeNow(dependencies.wallNow());
+    if (
+      detectedAtWall.getTime() > settlementAt.getTime() ||
+      state.signal !== "listening" ||
+      state.signalObservedAt !== null ||
+      state.uniqueness === "succeeded"
+    ) {
+      fail();
+    }
+    if (state.uniqueness === "failed") {
+      if (detectedAtWall.getTime() < closesAt.getTime()) fail();
+      return;
+    }
+    const remaining = Math.min(
+      POLL_MILLISECONDS,
+      settlementAt.getTime() - detectedAtWall.getTime(),
+      closesAt.getTime() - detectedAtWall.getTime(),
+    );
+    if (remaining <= 0) fail();
+    await dependencies.sleep(remaining);
   }
 }
 
@@ -636,6 +937,40 @@ function assertRollbackDispatchDeadline(
   }
 }
 
+/** Derives the tighter absolute post-signal child deadline. */
+function rollbackCallDeadline(
+  signal: {
+    readonly detectedAtMonotonic: number;
+    readonly providerObservedAt: Date;
+  },
+  dependencies: PreviewAcceptanceControllerDependencies,
+): number {
+  const nowMonotonic = safeMonotonic(dependencies.monotonicNow());
+  const nowWall = safeNow(dependencies.wallNow());
+  const localDeadline =
+    signal.detectedAtMonotonic + LOCAL_SIGNAL_MILLISECONDS;
+  const providerRemaining =
+    signal.providerObservedAt.getTime() +
+    PROVIDER_SIGNAL_MILLISECONDS -
+    nowWall.getTime();
+  const providerDeadline = nowMonotonic + providerRemaining;
+  const deadline = Math.min(localDeadline, providerDeadline);
+  if (providerRemaining <= 0 || deadline < nowMonotonic) fail();
+  return safeMonotonic(deadline + 1);
+}
+
+/** Maps one wall-clock close to an absolute monotonic deadline. */
+function monotonicDeadlineForWall(
+  wallDeadline: Date,
+  dependencies: PreviewAcceptanceControllerDependencies,
+): number {
+  const nowWall = safeNow(dependencies.wallNow());
+  const nowMonotonic = safeMonotonic(dependencies.monotonicNow());
+  const remaining = safeNow(wallDeadline).getTime() - nowWall.getTime();
+  if (remaining <= 0) fail();
+  return nowMonotonic + remaining;
+}
+
 /** Waits through the reserved post-close settlement margin. */
 async function waitForMaintenanceUniqueness(
   observer: unknown,
@@ -653,7 +988,11 @@ async function waitForMaintenanceUniqueness(
   const settlementMonotonic =
     anchorMonotonic + settlementRemaining;
   for (;;) {
-    const state = await dependencies.readObserverState(observer);
+    const state = await runControllerCall(
+      settlementMonotonic,
+      dependencies,
+      (boundary) => dependencies.readObserverState(observer, boundary),
+    );
     const detectedAtWall = safeNow(dependencies.wallNow());
     const detectedAtMonotonic = safeMonotonic(
       dependencies.monotonicNow(),
@@ -779,6 +1118,7 @@ function createCandidateContext(
 async function admitRestore(
   input: PreviewAcceptanceControllerInput,
   reviewedCommit: string,
+  deadlineMonotonic: number,
   dependencies: PreviewAcceptanceControllerDependencies,
 ): Promise<"verified"> {
   if (
@@ -787,11 +1127,21 @@ async function admitRestore(
   ) {
     fail();
   }
-  const attestation = await dependencies.admitRestore({
-    priorCandidateRunRef: input.priorCandidateRunRef,
-    rollbackClosureRunRef: input.rollbackClosureRunRef,
-    reviewedCommit,
-  });
+  const priorCandidateRunRef = input.priorCandidateRunRef;
+  const rollbackClosureRunRef = input.rollbackClosureRunRef;
+  const attestation = await runControllerCall(
+    deadlineMonotonic,
+    dependencies,
+    (boundary) =>
+      dependencies.admitRestore(
+        {
+          priorCandidateRunRef,
+          rollbackClosureRunRef,
+          reviewedCommit,
+        },
+        boundary,
+      ),
+  );
   if (attestation !== "verified") fail();
   return "verified";
 }
@@ -1038,20 +1388,23 @@ function snapshotControllerObserverState(value: unknown): {
   readonly signal: "listening" | "succeeded" | "failed";
   readonly uniqueness: "listening" | "succeeded" | "failed";
   readonly signalObservedAt: Date | null;
+  readonly uniquenessClosesAt?: Date;
 } {
-  const record = exactRecord(value, [
-    "signal",
-    "signalObservedAt",
-    "uniqueness",
-  ]);
+  const record = exactRecordWithOptional(
+    value,
+    ["signal", "signalObservedAt", "uniqueness"],
+    ["uniquenessClosesAt"],
+  );
   const signal = ownData(record, "signal");
   const uniqueness = ownData(record, "uniqueness");
   const observed = ownData(record, "signalObservedAt");
+  const closesAt = optionalOwnData(record, "uniquenessClosesAt");
   if (
     !isObserverState(signal) ||
     !isObserverState(uniqueness) ||
     (signal === "succeeded" && !(observed instanceof Date)) ||
-    (signal !== "succeeded" && observed !== null)
+    (signal !== "succeeded" && observed !== null) ||
+    (closesAt !== undefined && !(closesAt instanceof Date))
   ) {
     fail();
   }
@@ -1059,6 +1412,9 @@ function snapshotControllerObserverState(value: unknown): {
     signal,
     uniqueness,
     signalObservedAt: observed === null ? null : safeNow(observed as Date),
+    ...(closesAt === undefined
+      ? {}
+      : { uniquenessClosesAt: safeNow(closesAt as Date) }),
   });
 }
 
@@ -1251,23 +1607,75 @@ function validateActionInput(input: PreviewAcceptanceActionInput): void {
 async function runCapturedCommand(
   executable: string,
   arguments_: readonly string[],
+  boundary: PreviewControllerCallBoundary,
 ): Promise<PreviewControllerCommandResult> {
+  const remaining =
+    safeMonotonic(boundary.deadlineMonotonic) -
+    safeMonotonic(performance.now());
+  if (remaining <= 0 || boundary.signal.aborted) fail();
   try {
-    const result = await execFileAsync(executable, [...arguments_], {
-      encoding: "utf8",
-      maxBuffer: MAX_CHILD_OUTPUT_BYTES,
-      windowsHide: true,
-    });
-    if (
-      typeof result.stdout !== "string" ||
-      typeof result.stderr !== "string"
-    ) {
-      fail();
-    }
-    return Object.freeze({
-      stdout: result.stdout,
-      stderr: result.stderr,
-    });
+    return await new Promise<PreviewControllerCommandResult>(
+      (resolvePromise, rejectPromise) => {
+        let child: ChildProcess | null = null;
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        let terminationRequested = false;
+
+        /** Releases the timer and abort listener for the child invocation. */
+        const cleanup = (): void => {
+          if (timer !== null) clearTimeout(timer);
+          boundary.signal.removeEventListener("abort", terminate);
+        };
+        /** Rejects the child invocation with the sole public controller error. */
+        const rejectClosed = (): void => {
+          rejectPromise(new Error(FAILURE));
+        };
+        /** Requests child termination while deferring settlement until close. */
+        const terminate = (): void => {
+          terminationRequested = true;
+          if (child !== null && !child.killed) {
+            try {
+              child.kill();
+            } catch {
+              // The callback remains the sole settlement point so the child is
+              // always observed as closed before control returns.
+            }
+          }
+        };
+
+        try {
+          child = execFile(
+            executable,
+            [...arguments_],
+            {
+              encoding: "utf8",
+              maxBuffer: MAX_CHILD_OUTPUT_BYTES,
+              windowsHide: true,
+            },
+            (error, stdout, stderr) => {
+              cleanup();
+              if (
+                error !== null ||
+                terminationRequested ||
+                typeof stdout !== "string" ||
+                typeof stderr !== "string"
+              ) {
+                rejectClosed();
+                return;
+              }
+              resolvePromise(Object.freeze({ stdout, stderr }));
+            },
+          );
+        } catch {
+          cleanup();
+          rejectClosed();
+          return;
+        }
+
+        boundary.signal.addEventListener("abort", terminate, { once: true });
+        timer = setTimeout(terminate, remaining);
+        if (boundary.signal.aborted) terminate();
+      },
+    );
   } catch {
     fail();
   }

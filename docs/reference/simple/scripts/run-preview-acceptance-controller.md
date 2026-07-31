@@ -270,3 +270,44 @@ and emits one `failed_closed` status on any failure.
 ## `fail`
 
 Throws the sole value-free controller error.
+
+## `reconcileCandidateDispatch`
+
+Checks whether a candidate dispatch actually succeeded when its caller did not
+receive a trustworthy receipt, without dispatching it again.
+
+## `runControllerCall`
+
+Runs one dependency call inside a bounded deadline that can be aborted.
+
+## `nextPreSignalDeadline`
+
+Chooses the tighter observer or candidate deadline before a signal is proven.
+
+## `nextCleanupDeadline`
+
+Grants one bounded cleanup window after an attributed candidate must fail.
+
+## `waitForNoSignalUniqueness`
+
+After rollback closure, waits for the expected no-signal uniqueness failure.
+
+## `rollbackCallDeadline`
+
+Chooses the tighter local or provider rollback deadline after a signal.
+
+## `monotonicDeadlineForWall`
+
+Converts one validated wall-clock close into a local monotonic deadline.
+
+## `cleanup`
+
+Releases the child timer and abort listener after a command settles.
+
+## `rejectClosed`
+
+Rejects a child command with the controller's single public failure.
+
+## `terminate`
+
+Requests child termination while waiting for the child to close and be reaped.
