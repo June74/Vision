@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T00:29:56.640284Z
-- **Last observed:** 2026-07-31T00:29:56.640284Z
-- **Phase/task:** Phase B live-acceptance closure Task 3 setback logging
+- **Last observed:** 2026-07-31T20:07:23.9884666Z
+- **Phase/task:** Phase B live-acceptance closure Tasks 3 and 4 setback logging
 - **Environment:** Local setback-ledger update
 - **Version/commit:** Task 3 final bounded repair working tree
 
@@ -54,3 +54,7 @@ The stable-context retry applied successfully.
 ## Recurrence history
 
 - 2026-07-31T00:29:56.640284Z: First observed.
+- 2026-07-31T20:07:23.9884666Z: Recurred when the Task 4 diagnostics lane
+  matched rendered encoding instead of stable metadata while updating the
+  Wrangler log-path incident. The patch applied nothing; this stable-context
+  update closed the bookkeeping recurrence.

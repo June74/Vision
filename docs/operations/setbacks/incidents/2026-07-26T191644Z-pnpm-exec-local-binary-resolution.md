@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:16:44.091309Z
-- **Last observed:** 2026-07-31T16:17:56.4875463Z
-- **Phase/task:** Phase B live-acceptance closure Task 1
+- **Last observed:** 2026-07-31T21:48:44.0535215Z
+- **Phase/task:** Phase B live-acceptance closure Tasks 1 and 4
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** `7d2f9f6`; reviewed candidate `0f08fc1`
 
@@ -120,6 +120,18 @@ files with 59 passing tests.
   the same repository-local Windows wrapper.
 - 2026-07-31T16:17:56.4875463Z: Closed after the explicit local wrapper ran
   the final observer/controller scope with all 154 tests passing.
+- 2026-07-31T20:09:32.0943834Z: Recurred during the Task 4 window/workflow RED
+  run because the frozen command used `pnpm exec`. No test process, provider,
+  network, or external mutation occurred; retry uses the explicit local
+  Vitest Windows wrapper.
+- 2026-07-31T20:19:26.9311954Z: Closed after the explicit local wrapper
+  collected the same four-file scope and passed all 201 tests.
+- 2026-07-31T21:47:11.1253084Z: Recurred during the Task 4 v1 AI
+  compatibility RED attempt when `pnpm exec vitest` did not resolve Vitest.
+  No test ran; the result was discarded and the next attempt uses the explicit
+  repository-local Windows wrapper.
+- 2026-07-31T21:48:44.0535215Z: Closed after the explicit local Windows
+  wrapper ran the repaired focused suite with all 28 tests passing.
 
 The repository-local wrapper reached the candidate script, confirming the
 package-runner resolution boundary. The workflow-equivalent local Node loader

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T19:48:22.4653742Z
-- **Last observed:** 2026-07-31T19:48:22.4653742Z
+- **Last observed:** 2026-07-31T20:25:06.8283361Z
 - **Phase/task:** Phase B Task 3 review-incident closure
 - **Environment:** Local setback-ledger edit
 - **Version/commit:** 6549b66 plus accepted Task 3 implementation/report commits
@@ -38,3 +38,7 @@ evidence is unaffected; only ledger closure was delayed.
 
 - 2026-07-31T19:48:22.4653742Z: Observed, corrected, and closed before any
   partial write.
+- 2026-07-31T20:25:06.8283361Z: Recurred when two nonadjacent setback-index
+  rows were ordered differently from their multi-file patch hunks. The patch
+  failed atomically. Closed by returning to independent incident and index
+  updates.

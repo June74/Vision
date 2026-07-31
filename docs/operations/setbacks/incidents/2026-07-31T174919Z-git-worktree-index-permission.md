@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T17:49:19.1079389Z
-- **Last observed:** 2026-07-31T17:49:19.1079389Z
-- **Phase/task:** Phase B Task 3 setback-ledger commit
+- **Last observed:** 2026-07-31T21:54:05.3420661Z
+- **Phase/task:** Phase B Tasks 3 and 4 setback-ledger commit
 - **Environment:** Local Git worktree
 - **Version/commit:** ee8f260 plus two setback-ledger paths
 
@@ -38,3 +38,10 @@ environment values, and secrets were unaffected.
 ## Recurrence history
 
 - 2026-07-31T17:49:19.1079389Z: Observed and contained before staging.
+- 2026-07-31T21:53:19.8105626Z: Recurred when Task 4 ledger staging tried to
+  create the linked-worktree index lock inside shared repository metadata.
+  Nothing was staged; retry requires the established bounded metadata-write
+  approval.
+- 2026-07-31T21:54:05.3420661Z: Closed after the approved bounded retry staged
+  only the setback index and incident directory and the cached diff audit
+  completed without an error.

@@ -1,8 +1,8 @@
 # SB-20260729-205537-wrangler-debug-log-residue
 
 - **Status:** closed
-- **Last observed:** 2026-07-30T00:49:49.2867141Z
-- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 3
+- **Last observed:** 2026-07-31T20:59:26.0712949Z
+- **Phase/task:** Phase B Task 4 root integration preflight
 - **Title:** Wrangler left an untracked debug log outside the temporary-file pattern
 - **Impact:** One small generated log remained at the exact workspace root after the successful dry-run. It was not opened, staged, or included in any report.
 - **Cause:** Wrangler used a generic debug-log filename not matched by the `.tmp-*` cleanup pattern.
@@ -21,3 +21,9 @@
   Bounded metadata and sensitive-pattern checks found zero sensitive-pattern
   matches. Exact path verification, removal, and the absence recheck passed
   before staging.
+- **Task 4 recurrence:** The root integration preflight found the same small
+  generated filename after focused Worker/security verification. Exact path
+  checks proved it and the task-local temporary directory are inside the
+  intended worktree. Content was not printed; bounded sensitive-pattern checks
+  found zero matches, both exact temporary targets were removed, and absence
+  was reverified before final staging.

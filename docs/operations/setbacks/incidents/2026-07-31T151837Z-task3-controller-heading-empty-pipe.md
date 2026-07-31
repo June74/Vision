@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T15:18:37.2748875Z
-- **Last observed:** 2026-07-31T15:30:50.5669463Z
+- **Last observed:** 2026-07-31T19:55:17.8592731Z
 - **Phase/task:** Phase B Task 3 final controller review repair
 - **Environment:** Shared worktree; read-only reference-heading summary
 - **Version/commit:** 73191b7 plus unstaged GREEN repairs and setback records
@@ -63,3 +63,10 @@ documentation plus full repository verification pass.
   GREEN with zero command-side mutation.
 - 2026-07-31T15:30:50.5669463Z: Closed after the split query/reference update
   and all canonical gates passed.
+- 2026-07-31T19:54:53.2384260Z: Recurred during a read-only Task 4 file-size
+  inventory when a parenthesized result was omitted before a final formatting
+  pipeline. The command failed during parsing, changed no project/provider
+  state, and emitted no sensitive values. Contained by switching to separate
+  commands before resuming the review.
+- 2026-07-31T19:55:17.8592731Z: Closed after the corrected bounded inventory
+  completed successfully and confirmed all three requested files were present.

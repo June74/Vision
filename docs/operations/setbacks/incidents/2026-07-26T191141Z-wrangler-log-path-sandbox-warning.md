@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-07-31T03:37:02.9850425Z
-- **Phase/task:** Phase B live-acceptance closure Task 3 integration verification
+- **Last observed:** 2026-07-31T20:14:00.4865884Z
+- **Phase/task:** Phase B Task 4 diagnostics RED verification
 - **Environment:** Local managed sandbox
 - **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`; `6ebabd1`
 - **Latest recurrence:** 2026-07-30T03:32:34.1083650Z — the segmented Gate 0
@@ -201,3 +201,12 @@ security validation passed.
 - 2026-07-31T03:37:02.9850425Z: Closed after the identical build and
   production crypto-boundary validation passed with the approved
   worktree-local Wrangler log path and no sandbox warning.
+- 2026-07-31T20:07:23.9884666Z: Recurred during Task 4 diagnostics RED because
+  the task-local Wrangler diagnostic setting was omitted. The focused Worker
+  run still collected one file and 33 tests, with eight expected feature RED
+  failures and 25 passes; no provider, credential, repository, or private-data
+  state changed.
+- 2026-07-31T20:14:00.4865884Z: Closed after the Task 4 diagnostics Worker
+  rerun used the approved worktree-local diagnostic path and passed all 33
+  tests without the optional debug-log permission warning. The separate known
+  static export-analysis sandbox warning remained warning-only.

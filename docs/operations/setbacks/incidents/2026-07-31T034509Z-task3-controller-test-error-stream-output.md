@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T03:45:09.0596591Z
-- **Last observed:** 2026-07-31T03:46:42.2666190Z
+- **Last observed:** 2026-07-31T20:08:18.4872536Z
 - **Phase/task:** Phase B Task 3 isolated controller deadline verification
 - **Environment:** Local controller-hardening Vitest run
 - **Version/commit:** 2bfbc23 plus uncommitted controller hardening
@@ -66,3 +66,12 @@ reported zero unhandled markers.
 - 2026-07-31T03:45:09.0596591Z: First observed and contained.
 - 2026-07-31T03:46:42.2666190Z: Closed after a clean structured
   category-only rerun.
+- 2026-07-31T20:06:06.6240319Z: Recurred when the initial Task 4 data RED run
+  used the normal reporter and one unexpected fixture failure caused a local
+  parameterized query diagnostic to enter the tool stream. The values were
+  deterministic test-only fixtures, not credentials, provider data, external
+  data, or production rows. Contained by switching all subsequent non-green
+  runs to captured output with safe count/category extraction.
+- 2026-07-31T20:08:18.4872536Z: Closed after the corrected RED was captured;
+  safe classification showed no query or parameter diagnostic markers and
+  only the two intended missing-method categories.
