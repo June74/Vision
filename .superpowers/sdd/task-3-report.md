@@ -1,6 +1,6 @@
 # Task 3 report
 
-Status: third package-review repair locally verified; fourth package re-review
+Status: fourth package-review repair locally verified; fifth package re-review
 pending.
 
 Commit sequence:
@@ -13,8 +13,12 @@ Commit sequence:
 - decisive boundary repair: `2bfbc23f13c`
 - final lifecycle integration: `b4f6dce`
 - final package-review repair: `328b748`
+- second package-review repair: `d6a6432`
+- third package-review repair: `f37fb4c`
+- fourth timing-envelope repair: `e9e8934`
+- fourth lifecycle/schema repair: `25830ea`
 
-The full inventory below is the exact 77-path Task 3 implementation and
+The full inventory below is the exact 78-path Task 3 implementation and
 report surface. The final lifecycle/package-review repairs change paths already
 in that inventory. All setback-ledger paths remain separately controller-owned
 and excluded from implementation scope.
@@ -109,6 +113,15 @@ and excluded from implementation scope.
 - `pnpm.cmd security:scan`: passed with fresh release evidence.
 - Full `pnpm.cmd check`: passed with `WRANGLER_LOG_PATH` directed to the
   system temporary directory.
+- Fourth-review lifecycle/workflow suite: 5 files and 157 tests passed.
+- Fourth-review combined focused suite: 6 files and 216 tests passed.
+- Fourth-review cross-lane regression suite: 3 files and 33 tests passed.
+- Current complete repository gate: 96 unit files passed and 1 skipped with
+  1,486 tests passed and 1 skipped; 14 contract files and 179 tests passed; 7
+  Worker files and 106 tests passed; production build, fresh release evidence,
+  and release security scan passed. The authoritative Windows run used
+  `cmd.exe` so optional sandboxed Wrangler-log warnings did not replace the
+  actual child exit code, which was 0.
 - No live provider, deployment, database, R2, Queue, browser, remote query,
   push, or other remote mutation was performed.
 
@@ -215,8 +228,8 @@ from this implementation commit.
 ## Final canonical integration
 
 - Review base: `24e959f5`
-- Integrated implementation tip: `f37fb4c`
-- Integrated implementation shape: 13 implementation commits and 78 changed
+- Latest implementation commit: `25830ea`
+- Integrated implementation shape: 15 implementation commits and 78 changed
   paths
 - Decisive repair commits:
   - `00cd3c7` restores the production restore facade and acceptance contract.
@@ -241,14 +254,25 @@ from this implementation commit.
     bypass an open candidate; raw backward uniqueness and contradictory queued
     topology fail closed; restore has a 44-minute listener inside a 46-minute
     job; and maintenance evidence is bounded to the same listener envelope.
+  - `e9e8934` accounts for the full 2,710-second restore path and raises the
+    controller listener/maintenance envelope to 46 minutes.
+  - `25830ea` closes the fourth package-review findings: v2 candidate intents
+    bind exact operation-specific provider configuration while v1 evidence has
+    an explicit fail-closed transition; provider and local timestamp grammars
+    remain distinct; rollback admits exact normal or exact candidate state
+    after a may-have-started boundary but always restores and verifies normal;
+    prior candidate closure is separated from the independently verified new
+    deployment commit; and all seven acceptance jobs use a 46-minute listener
+    inside a 48-minute outer job.
 - The first fresh package-review wave reported 2 Critical and 6 Important
   findings. Each finding has a dedicated RED case and an implemented repair;
   the second wave reported a deduplicated 2 Critical and 3 Important findings.
   Every second-wave finding also has a dedicated RED case and an implemented
   repair. The third wave reported five Important findings, and its bounded
   timeout analysis added one Important maintenance-envelope finding. All six
-  have dedicated RED coverage and an implemented repair. A fourth package
-  review remains required.
+  have dedicated RED coverage and an implemented repair. The fourth wave
+  reported six Important findings; each now has focused regression coverage
+  and an implemented repair. A fifth package re-review remains required.
 - Resolver verification: 71 passed tests, zero failures.
 - Controller verification: 53 passed tests, zero failures.
 - Restore reader/selection verification: 38 passed tests, zero failures.
@@ -265,6 +289,11 @@ from this implementation commit.
   cross-boundary tests, zero failures.
 - Integrated third-wave focused verification: 9 files and 301 passed tests,
   zero failures.
+- Integrated fourth-wave focused verification: 6 files and 216 passed tests,
+  zero failures.
+- Complete fourth-wave repository verification: 1,486 unit, 179 contract, and
+  106 Worker tests passed; build, documentation coverage, release evidence, and
+  security scan passed.
 - The combined controller, resolver, and workflow focused group passed from
   the main worktree with zero failures.
 - Focused schema and restore verification: 8 passed tests, zero failures.
@@ -279,5 +308,5 @@ from this implementation commit.
 - The backup key remains version 1 and was not rotated.
 
 This final integration section and 78-path inventory supersede the earlier
-five-commit wording. Fourth package re-review remains required before Task 3
-is accepted. Setback evidence remains separately controller-owned.
+five-commit wording. Fifth package re-review remains required before Task 3 is
+accepted. Setback evidence remains separately controller-owned.
