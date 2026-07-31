@@ -1,6 +1,6 @@
 # Task 3 report
 
-Status: decisive follow-up repaired and locally verified.
+Status: final contract-gap repair locally verified; package re-review pending.
 
 Commit sequence:
 
@@ -9,12 +9,13 @@ Commit sequence:
 - first acceptance-gap repair: `b1935577c211`
 - final re-review repair: `841bc01b600e`
 - final follow-up repair: `870de3980789`
-- decisive boundary repair: this commit
+- decisive boundary repair: `2bfbc23f13c`
+- final lifecycle integration: `b4f6dce`
 
-The full package inventory below covers the complete
-`24e959f..decisive-follow-up` range. The decisive-follow-up allowlist is listed
-separately so its 13 paths can be compared exactly with the 74-path,
-five-commit package.
+The full inventory below remains the exact 75-path Task 3 implementation and
+report surface. The final lifecycle integration changes eight already
+inventoried paths. All setback-ledger paths remain separately controller-owned
+and excluded from implementation scope.
 
 ## RED, GREEN, and refactor evidence
 
@@ -209,23 +210,31 @@ from this implementation commit.
 ## Final canonical integration
 
 - Review base: `24e959f5`
-- Integrated tip: `0e283a3`
-- Integrated implementation shape: 9 commits and 75 changed paths
+- Integrated implementation tip: `b4f6dce`
+- Integrated implementation shape: 10 implementation commits and 75 changed
+  paths
 - Decisive repair commits:
   - `00cd3c7` restores the production restore facade and acceptance contract.
   - `5f11f52` hardens controller lifecycle deadlines and reconciliation.
   - `0e283a3` gives the one three-process safe-tail test a bounded
     suite-load allowance.
-- Focused controller, resolver, and workflow verification: 119 passed tests,
-  zero failures.
+  - `b4f6dce` forwards the controller boundary through the concrete resolver
+    and all state readers, preserves the stable provider close, settles
+    rollback before closure, and gives reconciliation/cleanup fresh bounded
+    deadlines.
+- Resolver verification: 66 passed tests, zero failures.
+- Controller verification: 51 passed tests, zero failures.
+- The combined controller, resolver, and workflow focused group passed from
+  the main worktree with zero failures.
 - Focused schema and restore verification: 8 passed tests, zero failures.
 - Focused temporary-surface security verification: 8 passed tests, zero
   failures.
 - Focused safe-tail verification: 28 passed tests, zero failures.
 - TypeScript, documentation coverage, production build, repository security
-  scan, and the complete repository `check` pipeline all passed at the
-  integrated tip.
+  scan, security evidence, and the complete repository `check` pipeline all
+  passed at the integrated implementation tip.
 - The backup key remains version 1 and was not rotated.
 
 This final integration section and 75-path inventory supersede the earlier
-five-commit wording. Setback evidence remains separately controller-owned.
+five-commit wording. Final package re-review remains required before Task 3 is
+accepted. Setback evidence remains separately controller-owned.
