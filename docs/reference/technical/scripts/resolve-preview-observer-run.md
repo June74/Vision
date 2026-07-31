@@ -35,7 +35,9 @@ exact canonical whole-second UTC provider form.
 ## `readPreviewTwoJobObserverState`
 
 Reads one provider job snapshot and keeps suppression or restore signal and
-uniqueness states independent.
+uniqueness states independent. It samples wall time after that metadata read,
+rejects a successful uniqueness timestamp later than the paired sample, and
+returns no close when neither successful job supplies a provider anchor.
 
 ## `readPreviewMaintenanceObserverState`
 
@@ -89,8 +91,9 @@ callback boundary settles.
 
 ## `raceCommandAgainstDeadline`
 
-Races injected command runners against cancellation and remaining time while
-discarding both captured streams on failure.
+Runs each injected command with a fresh linked abort signal. Remaining-time
+expiry or caller cancellation aborts that signal, and the boundary awaits the
+command's settlement before discarding both captured streams and failing.
 
 ## `interruptibleSleep`
 
@@ -260,14 +263,15 @@ non-skipped duplicates remain ambiguous and fail closed.
 
 ## `uniquenessClosesAt`
 
-`readPreviewTwoJobObserverState` always returns
-`uniquenessClosesAt: Date`. Before a provider timestamp exists, a dependency-
-scoped observer cache records the first validated wall-clock observation plus
-120 seconds plus 999 milliseconds. Repeated listening reads reuse that instant.
-A successful signal contributes its provider-second timestamp plus 120 seconds
-plus 999 milliseconds. A successful uniqueness listener contributes the end of
-its reported provider second. The latest validated candidate is cached, so
-later evidence can extend the close but never shorten it.
+`readPreviewTwoJobObserverState` returns
+`uniquenessClosesAt: Date | null`. With no successful provider timestamp, it
+returns `null`; local wall time is validation evidence, never a substitute
+anchor. A successful signal contributes its provider-second timestamp plus 120
+seconds plus 999 milliseconds. A successful uniqueness listener contributes
+the end of its reported provider second only when that timestamp is not later
+than the wall sample taken immediately after the job-list read. The latest
+validated candidate is cached, so later provider evidence can extend the close
+but never shorten it.
 
 ## `boundedObserverDeadline`
 
@@ -284,7 +288,7 @@ the operation's `finally` path.
 
 ## `conservativeUniquenessClose`
 
-Stores close instants in a dependency-scoped observer map. With no provider
-anchor it records wall-clock observation plus 120,999 milliseconds. Signal and
-uniqueness completion anchors use the end of provider-second precision, and the
-cached maximum prevents a later read from shortening the close.
+Stores provider-anchored close instants in a dependency-scoped observer map.
+Without an anchor it returns `null`. Signal and uniqueness completion anchors
+use the end of provider-second precision, and the cached maximum prevents a
+later read from shortening the close.

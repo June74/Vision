@@ -38,6 +38,8 @@ import {
 } from "../../../src/domain/backup/manifest";
 import {
   BACKUP_OBJECT_PREFIX,
+  type BackupObjectCatalogReader,
+  type BackupObjectHead,
   type BackupObjectMetadata,
 } from "../../../src/jobs/create-daily-backup";
 import {
@@ -53,6 +55,8 @@ const DATABASE_URL =
   `postgresql://vision_app:${PRIVATE_SENTINEL}@preview.example.test/vision`;
 const TARGET_ID = "synthetic_disposable_target";
 const KEY_VERSION = 7;
+const MAX_RESTORE_CATALOG_PAGES = 16;
+const MAX_RESTORE_CANDIDATES = 64;
 
 interface MutableTargetState {
   snapshot: BackupSnapshotV1;
@@ -177,6 +181,52 @@ async function seedEncryptedObject(
     body,
     await sha256Base64Url(body),
   );
+}
+
+async function candidateHeads(
+  fixture: RestoreFixture,
+  count: number,
+): Promise<readonly BackupObjectHead[]> {
+  const newest = await fixture.store.head(fixture.objectKey);
+  if (newest === null) throw new Error("Synthetic newest candidate missing.");
+  const metadata = await objectMetadata(fixture.encrypted);
+  const heads: BackupObjectHead[] = [newest];
+  for (let daysBefore = 1; daysBefore < count; daysBefore += 1) {
+    const createdDate = new Date(
+      Date.parse(`${CREATED_DATE}T00:00:00.000Z`) - daysBefore * 86_400_000,
+    ).toISOString().slice(0, 10);
+    heads.push({
+      key: await dailyObjectKey(createdDate),
+      etag: `etag-${daysBefore}`,
+      customMetadata: { ...metadata, createdDate },
+      bodySha256: "B".repeat(43),
+    });
+  }
+  return heads;
+}
+
+function paginatedCatalog(
+  fixture: RestoreFixture,
+  pages: readonly (readonly BackupObjectHead[])[],
+): {
+  readonly store: BackupObjectCatalogReader;
+  readonly list: ReturnType<typeof vi.fn>;
+} {
+  const list = vi.fn(async (_prefix: string, cursor?: string) => {
+    const pageIndex = cursor === undefined ? 0 : Number(cursor);
+    const objects = pages[pageIndex] ?? [];
+    return pageIndex + 1 < pages.length
+      ? { objects, cursor: String(pageIndex + 1) }
+      : { objects };
+  });
+  return {
+    store: {
+      head: fixture.store.head.bind(fixture.store),
+      get: fixture.store.get.bind(fixture.store),
+      list,
+    },
+    list,
+  };
 }
 
 function memoryManagedTarget(
@@ -439,6 +489,70 @@ describe("temporary preview restore", () => {
     expectPrivateValuesAbsent(JSON.stringify(result), [
       fixture.privateSentinel,
     ]);
+    expect(fixture.claimOnce).not.toHaveBeenCalled();
+    expect(fixture.clearTarget).not.toHaveBeenCalled();
+    expect(fixture.createTarget).not.toHaveBeenCalled();
+  });
+
+  it("accepts exactly the fixed maximum number of unique catalog pages", async () => {
+    const fixture = await restoreFixture();
+    const candidates = await candidateHeads(fixture, MAX_RESTORE_CATALOG_PAGES);
+    const catalog = paginatedCatalog(
+      fixture,
+      candidates.map((candidate) => [candidate]),
+    );
+
+    await expect(runTemporaryPreviewRestore(fixture.environment, {
+      ...fixture.dependencies,
+      store: catalog.store,
+    })).resolves.toMatchObject({ outcome: "succeeded" });
+    expect(catalog.list).toHaveBeenCalledTimes(MAX_RESTORE_CATALOG_PAGES);
+  });
+
+  it("rejects a unique max-plus-one pagination chain without requesting the extra page", async () => {
+    const fixture = await restoreFixture();
+    const candidates = await candidateHeads(
+      fixture,
+      MAX_RESTORE_CATALOG_PAGES + 1,
+    );
+    const catalog = paginatedCatalog(
+      fixture,
+      candidates.map((candidate) => [candidate]),
+    );
+
+    await expect(runTemporaryPreviewRestore(fixture.environment, {
+      ...fixture.dependencies,
+      store: catalog.store,
+    })).resolves.toBeNull();
+    expect(catalog.list).toHaveBeenCalledTimes(MAX_RESTORE_CATALOG_PAGES);
+    expect(fixture.claimOnce).not.toHaveBeenCalled();
+  });
+
+  it("accepts exactly the fixed maximum number of catalog candidates", async () => {
+    const fixture = await restoreFixture();
+    const candidates = await candidateHeads(fixture, MAX_RESTORE_CANDIDATES);
+    const catalog = paginatedCatalog(fixture, [candidates]);
+
+    await expect(runTemporaryPreviewRestore(fixture.environment, {
+      ...fixture.dependencies,
+      store: catalog.store,
+    })).resolves.toMatchObject({ outcome: "succeeded" });
+    expect(catalog.list).toHaveBeenCalledOnce();
+  });
+
+  it("rejects max plus one catalog candidates before claiming or touching the database", async () => {
+    const fixture = await restoreFixture();
+    const candidates = await candidateHeads(
+      fixture,
+      MAX_RESTORE_CANDIDATES + 1,
+    );
+    const catalog = paginatedCatalog(fixture, [candidates]);
+
+    await expect(runTemporaryPreviewRestore(fixture.environment, {
+      ...fixture.dependencies,
+      store: catalog.store,
+    })).resolves.toBeNull();
+    expect(catalog.list).toHaveBeenCalledOnce();
     expect(fixture.claimOnce).not.toHaveBeenCalled();
     expect(fixture.clearTarget).not.toHaveBeenCalled();
     expect(fixture.createTarget).not.toHaveBeenCalled();

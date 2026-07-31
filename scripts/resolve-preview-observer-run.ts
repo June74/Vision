@@ -273,7 +273,7 @@ export async function readPreviewTwoJobObserverState(
   readonly signal: "listening" | "succeeded" | "failed";
   readonly uniqueness: "listening" | "succeeded" | "failed";
   readonly signalObservedAt: Date | null;
-  readonly uniquenessClosesAt: Date;
+  readonly uniquenessClosesAt: Date | null;
 }> {
   const jobs = await jobsFor(
     handle,
@@ -281,6 +281,8 @@ export async function readPreviewTwoJobObserverState(
     stateReadDeadline(deps, outerContext),
     outerContext,
   );
+  const providerReadAt = new Date(Date.now());
+  if (!validDate(providerReadAt)) fail();
   const signal = observerJobState(exactJob(jobs, `Capture ${family} signal`));
   const uniqueness = observerJobState(
     exactJob(jobs, `Capture ${family} uniqueness`),
@@ -303,6 +305,7 @@ export async function readPreviewTwoJobObserverState(
       deps,
       signalObservedAt,
       uniquenessCompletedAt,
+      providerReadAt,
     ),
   });
 }
@@ -372,7 +375,8 @@ export function createGitHubObserverResolutionDependencies(input: {
   ): Promise<unknown> => {
     try {
       const result = await raceCommandAgainstDeadline(
-        runCommand(executable, [...arguments_], context),
+        (commandContext) =>
+          runCommand(executable, [...arguments_], commandContext),
         context,
         monotonicNow,
       );
@@ -615,14 +619,16 @@ function linkOuterAbort(
   return () => outerContext.signal.removeEventListener("abort", abort);
 }
 
-/** Conservatively closes no earlier than either provider-second anchor. */
+/** Conservatively closes no earlier than provider timestamp evidence. */
 function conservativeUniquenessClose(
   handle: PreviewObserverRunHandle,
   family: "sync_suppression" | "restore",
   deps: PreviewObserverResolutionDependencies,
   signalObservedAt: Date | null,
   uniquenessCompletedAt: Date | null,
-): Date {
+  providerReadAt: Date,
+): Date | null {
+  if (!validDate(providerReadAt)) fail();
   let closesByObserver = uniquenessClosesByDependencies.get(deps);
   if (closesByObserver === undefined) {
     closesByObserver = new Map<string, number>();
@@ -642,7 +648,12 @@ function conservativeUniquenessClose(
         : Math.max(closesAt, signalWindowClosesAt);
   }
   if (uniquenessCompletedAt !== null) {
-    if (!validDate(uniquenessCompletedAt)) fail();
+    if (
+      !validDate(uniquenessCompletedAt) ||
+      uniquenessCompletedAt.getTime() > providerReadAt.getTime()
+    ) {
+      fail();
+    }
     const completedSecondEndsAt =
       uniquenessCompletedAt.getTime() +
       PROVIDER_TIMESTAMP_UNCERTAINTY_MILLISECONDS;
@@ -651,12 +662,7 @@ function conservativeUniquenessClose(
         ? completedSecondEndsAt
         : Math.max(closesAt, completedSecondEndsAt);
   }
-  if (closesAt === null) {
-    closesAt =
-      Date.now() +
-      RESOLUTION_MILLISECONDS +
-      PROVIDER_TIMESTAMP_UNCERTAINTY_MILLISECONDS;
-  }
+  if (closesAt === null) return null;
   const conservativeClose = new Date(closesAt);
   if (!validDate(conservativeClose)) fail();
   closesByObserver.set(observerKey, closesAt);
@@ -690,7 +696,9 @@ async function runCapturedProviderCommand(
 
 /** Settles an injected command no later than its absolute deadline. */
 async function raceCommandAgainstDeadline(
-  command: Promise<PreviewObserverCommandResult>,
+  runCommand: (
+    context: PreviewObserverCallContext,
+  ) => Promise<PreviewObserverCommandResult>,
   context: PreviewObserverCallContext,
   monotonicNow: () => number,
 ): Promise<PreviewObserverCommandResult> {
@@ -698,25 +706,30 @@ async function raceCommandAgainstDeadline(
     validMonotonic(context.deadlineMonotonic) -
     validMonotonic(monotonicNow());
   if (remaining < 0 || context.signal.aborted) fail();
+  const controller = new AbortController();
+  const removeOuterAbort = linkOuterAbort(controller, context);
+  const commandContext = Object.freeze({
+    deadlineMonotonic: context.deadlineMonotonic,
+    signal: controller.signal,
+  });
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let rejectAbort: (() => void) | undefined;
-  const aborted = new Promise<never>((_resolvePromise, rejectPromise) => {
-    rejectAbort = () => rejectPromise(new Error(FAILURE));
-    context.signal.addEventListener("abort", rejectAbort, { once: true });
-  });
-  const timeout = new Promise<never>((_resolvePromise, rejectPromise) => {
-    timer = setTimeout(
-      () => rejectPromise(new Error(FAILURE)),
-      Math.max(1, remaining),
-    );
-  });
+  let timedOut = false;
   try {
-    return await Promise.race([command, aborted, timeout]);
+    const commandResult = runCommand(commandContext).then(
+      (value) => ({ ok: true as const, value }),
+      () => ({ ok: false as const }),
+    );
+    timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, Math.max(1, remaining));
+    const settled = await commandResult;
+    if (!settled.ok || timedOut || context.signal.aborted) fail();
+    return settled.value;
   } finally {
     if (timer !== undefined) clearTimeout(timer);
-    if (rejectAbort !== undefined) {
-      context.signal.removeEventListener("abort", rejectAbort);
-    }
+    removeOuterAbort();
+    if (!controller.signal.aborted) controller.abort();
   }
 }
 

@@ -36,10 +36,11 @@ reference and requires its sole returned SHA to equal the reviewed commit.
 
 Rechecks the remote tip in the immediate pre-dispatch hook, serializes one
 canonical acceptance context, and admits only an exact positive-decimal
-`runRef` driver response. Candidate uncertainty is reconciled under a new
-bounded deadline with a frozen exact operation/context/commit tuple. An
-accepted candidate whose dispatch call timed out is marked for mandatory
-rollback and cannot be redispatched or acted on.
+`runRef` driver response. Candidate and rollback uncertainty are reconciled
+under a new bounded deadline with a frozen exact operation/context/commit
+tuple. A timed-out candidate is marked for mandatory rollback. An uncertain
+rollback is never redispatched; an exactly reconciled run is attributed before
+settlement and closure, after which the attempt remains failed closed.
 
 ## `resolveObserver`
 
@@ -101,11 +102,11 @@ candidate fails closed through one constant error surface.
 ## `rollbackAndClose`
 
 Sets the rollback-attempt latch before the first dispatch, performs the final
-local/provider deadline check, and applies that deadline only through successful
-rollback dispatch. It then starts one fresh bounded cleanup deadline, awaits
-rollback settlement, dispatches closure, and verifies the closure artifact in
-that order. Once the latch is set, the controller will not retry an ambiguous
-mutation.
+local/provider deadline check, and applies that strict deadline only through
+rollback dispatch. Rollback settlement receives a fresh rollback-workflow
+deadline, closure dispatch receives a fresh strict dispatch deadline, and
+closure verification receives a fresh closure-workflow deadline. Once the
+latch is set, the controller never retries an ambiguous mutation.
 
 ## `waitForSignal`
 
@@ -199,7 +200,9 @@ optional maintenance tick passed to the resolver.
 ## `snapshotControllerObserverState`
 
 Reconstructs only the closed state fields returned by a custom observer port
-and canonicalizes the optional provider timestamp.
+and canonicalizes the optional provider timestamp. Absent and null uniqueness
+close values remain distinct from provider-attributed dates and are never
+replaced with controller wall time.
 
 ## `snapshotControllerInput`
 
@@ -334,14 +337,29 @@ receipt fails closed; the controller never redispatches the candidate.
 
 ## `runControllerCall`
 
-Clamps a requested absolute monotonic deadline to the controller ceiling,
-supplies an `AbortSignal`, clears its timer on settlement, and converts every
-dependency failure into the constant public error.
+Clamps a requested absolute monotonic deadline to the caller-selected stage
+ceiling, supplies an `AbortSignal`, clears its timer on settlement, and converts
+every dependency failure into the constant public error.
 
 ## `nextPreSignalDeadline`
 
-Derives an absolute monotonic deadline from the remaining observer window and
-the buffered candidate expiry, rejecting exhausted or invalid time.
+Derives an ordinary pre-signal absolute monotonic deadline from the uniqueness
+ceiling and buffered candidate expiry, rejecting exhausted or invalid time.
+
+## `nextObserverResolutionDeadline`
+
+Derives an expiry-bounded 125-second outer deadline so the resolver can use its
+120-second discovery window and five-second terminal metadata settlement poll.
+
+## `nextCandidateWorkflowDeadline`
+
+Derives a candidate-confirmation deadline from the 30-minute workflow duration
+plus settlement margin, capped by the buffered candidate expiry.
+
+## `nextWorkflowDeadline`
+
+Allocates a fresh absolute monotonic deadline for a supplied bounded provider
+workflow duration after the preceding lifecycle stage settles.
 
 ## `nextCleanupDeadline`
 
@@ -357,10 +375,10 @@ poll margin, independent of the earlier signal cutoff and rollback deadline.
 ## `waitForNoSignalUniqueness`
 
 Reads under a newly allocated post-closure monotonic deadline and accepts
-exactly the expected listening-signal plus failed-uniqueness terminal at or
-after the resolver's stable semantic close. Every read must return that same
-close; absence or drift fails closed, and the controller never synthesizes a
-replacement from the exhausted signal cutoff.
+exactly the expected listening-signal plus failed-uniqueness terminal. If the
+provider returns a semantic close, every later read must preserve it and the
+terminal cannot precede it. If the provider returns null or omits the close,
+the local deadline bounds polling but is never promoted to provider evidence.
 
 ## `serializePreviewRollbackSettlementInput`
 

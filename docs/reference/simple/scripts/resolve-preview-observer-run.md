@@ -28,7 +28,9 @@ with whole-second UTC precision.
 
 ## `readPreviewTwoJobObserverState`
 
-Checks signal and uniqueness separately.
+Checks signal and uniqueness separately. It returns no uniqueness close until
+a successful provider timestamp supplies an anchor, and rejects uniqueness
+completion reported later than the wall time sampled after that provider read.
 
 ## `readPreviewMaintenanceObserverState`
 
@@ -70,8 +72,9 @@ for the child boundary to settle.
 
 ## `raceCommandAgainstDeadline`
 
-Fails an injected command on timeout or cancellation without retaining either
-captured stream.
+Gives an injected command a fresh abort signal, aborts it on timeout or caller
+cancellation, and waits for that command to settle before failing without
+retaining either captured stream.
 
 ## `interruptibleSleep`
 
@@ -223,10 +226,11 @@ job, so multiple active or otherwise non-skipped copies fail closed.
 
 ## Conservative uniqueness close
 
-The two-job state reader always returns `uniquenessClosesAt`. While both jobs
-listen, the first read remembers a conservative two-minute close. Repeated
-reads keep it stable. Provider timestamps can move it later, never earlier, and
-include the provider's one-second timestamp uncertainty.
+The two-job state reader returns `uniquenessClosesAt: null` while neither job
+has supplied a successful provider timestamp. A successful signal anchors its
+two-minute window, while successful uniqueness anchors the end of its provider
+second. Valid provider evidence can move a remembered close later, never
+earlier, and includes the provider's one-second timestamp uncertainty.
 
 ## `boundedObserverDeadline`
 
@@ -240,5 +244,6 @@ sleep operation and removes the link after that operation settles.
 
 ## `conservativeUniquenessClose`
 
-Creates, validates, remembers, and only moves forward the two-job observer's
-safe uniqueness close.
+Validates provider anchors, remembers them, and only moves the two-job
+observer's safe uniqueness close forward. It never substitutes local wall time
+for missing provider evidence.

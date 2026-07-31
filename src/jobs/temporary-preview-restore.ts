@@ -31,6 +31,10 @@ import { validatedBackupObjectDate } from "./purge-expired-backups";
 
 /** Temporary every-minute schedule used only by the preview restore Worker. */
 export const TEMPORARY_PREVIEW_RESTORE_CRON = "* * * * *" as const;
+/** Maximum unique provider pages admitted during one restore selection. */
+export const MAX_RESTORE_CATALOG_PAGES = 16;
+/** Maximum total provider objects retained during one restore selection. */
+export const MAX_RESTORE_CANDIDATES = 64;
 
 /** Closed failure categories safe to retain without provider or protected values. */
 export type TemporaryRestoreFailureCategory =
@@ -250,7 +254,13 @@ async function selectBackupCandidate(
   }> = [];
 
   do {
+    if (seenCursors.size >= MAX_RESTORE_CATALOG_PAGES) {
+      throw new Error("Restore backup candidate listing exceeds its page limit.");
+    }
     const page = await store.list(BACKUP_OBJECT_PREFIX, cursor);
+    if (page.objects.length > MAX_RESTORE_CANDIDATES - candidates.length) {
+      throw new Error("Restore backup candidate listing exceeds its object limit.");
+    }
     for (const object of page.objects) {
       const date = validatedBackupObjectDate(object);
       if (date === undefined) {
@@ -264,6 +274,9 @@ async function selectBackupCandidate(
         throw new Error("Restore backup candidate listing is invalid.");
       }
       seenCursors.add(cursor);
+      if (seenCursors.size >= MAX_RESTORE_CATALOG_PAGES) {
+        throw new Error("Restore backup candidate listing exceeds its page limit.");
+      }
     }
   } while (cursor !== undefined);
 

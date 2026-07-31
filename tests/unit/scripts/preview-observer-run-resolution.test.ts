@@ -259,7 +259,7 @@ describe("full provider job-list resolution", () => {
 import { resolve } from "node:path";
 
 describe("conservative uniqueness close timestamps", () => {
-  it("uses the end of the conservative signal window while uniqueness listens", async () => {
+  it("returns no uniqueness close until provider evidence anchors one", async () => {
     const candidate = run();
     vi.useFakeTimers();
     try {
@@ -286,10 +286,8 @@ describe("conservative uniqueness close timestamps", () => {
         listeningDeps,
       );
 
-      expect(firstListening.uniquenessClosesAt).toBeInstanceOf(Date);
-      expect(secondListening.uniquenessClosesAt).toEqual(
-        firstListening.uniquenessClosesAt,
-      );
+      expect(firstListening.uniquenessClosesAt).toBeNull();
+      expect(secondListening.uniquenessClosesAt).toBeNull();
     } finally {
       vi.useRealTimers();
     }
@@ -318,6 +316,75 @@ describe("conservative uniqueness close timestamps", () => {
     expect(state.uniquenessClosesAt).toEqual(
       new Date(Date.parse(signalObservedAt) + 120_999),
     );
+  });
+
+  it.each([
+    ["uniqueness-only", false],
+    ["simultaneous signal and uniqueness", true],
+  ] as const)(
+    "rejects a future uniqueness completion from %s provider state",
+    async (_label, signalSucceeded) => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date("2026-07-30T18:00:11.500Z"));
+        const signal = job(
+          "Capture restore signal",
+          signalSucceeded ? "completed" : "in_progress",
+          signalSucceeded ? "success" : null,
+        );
+        const uniqueness = job(
+          "Capture restore uniqueness",
+          "completed",
+          "success",
+        );
+        uniqueness.steps[0]!.completed_at = "2026-07-30T18:00:12Z";
+        const deps = dependencies([], [signal, uniqueness]);
+
+        await expect(
+          readPreviewTwoJobObserverState(
+            "41" as never,
+            "restore",
+            deps,
+          ),
+        ).rejects.toThrow("Preview observer metadata is invalid.");
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it("samples provider-read wall time after an advancing metadata call", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-07-30T18:00:11.500Z"));
+      const signal = job("Capture restore signal");
+      const uniqueness = job(
+        "Capture restore uniqueness",
+        "completed",
+        "success",
+      );
+      uniqueness.steps[0]!.completed_at = "2026-07-30T18:00:12Z";
+      const deps = dependencies([], [signal, uniqueness]);
+      deps.listJobs = vi.fn(async () => {
+        await vi.advanceTimersByTimeAsync(1_000);
+        return { jobs: [signal, uniqueness] };
+      });
+
+      await expect(
+        readPreviewTwoJobObserverState(
+          "41" as never,
+          "restore",
+          deps,
+        ),
+      ).resolves.toStrictEqual({
+        signal: "listening",
+        uniqueness: "succeeded",
+        signalObservedAt: null,
+        uniquenessClosesAt: new Date("2026-07-30T18:00:12.999Z"),
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps the signal-derived close when uniqueness succeeds on schedule", async () => {
@@ -682,7 +749,7 @@ describe("preview observer run resolution", () => {
     expect(listRuns).toHaveBeenCalledWith(2, expect.anything());
   });
 
-  it("uses exact provider projections and passes one absolute interruptible deadline to every command", async () => {
+  it("uses exact provider projections and gives each command a bounded abort signal", async () => {
     const calls: Array<{
       readonly arguments_: readonly string[];
       readonly context: PreviewObserverCallContext;
@@ -760,10 +827,104 @@ describe("preview observer run resolution", () => {
       ],
     ]);
     for (const call of calls) {
-      expect(call.context).toBe(context);
-      expect(call.context.signal).toBe(controller.signal);
+      expect(call.context).not.toBe(context);
+      expect(call.context.signal).not.toBe(controller.signal);
+      expect(call.context.signal.aborted).toBe(true);
       expect(call.context.deadlineMonotonic).toBe(10_000);
     }
+    expect(controller.signal.aborted).toBe(false);
+  });
+
+  it("aborts an injected provider command at its deadline and waits for settlement", async () => {
+    vi.useFakeTimers();
+    try {
+      let commandContext: PreviewObserverCallContext | undefined;
+      let releaseCommand: (() => void) | undefined;
+      let readSettled = false;
+      const runCommand: PreviewObserverCommandRunner = vi.fn(
+        async (_executable, _arguments, context) => {
+          commandContext = context;
+          await new Promise<void>((_resolvePromise, rejectPromise) => {
+            releaseCommand = () => rejectPromise(
+              new Error("discarded-provider-canary"),
+            );
+          });
+          throw new Error("unreachable-provider-canary");
+        },
+      );
+      const dependencies = createGitHubObserverResolutionDependencies({
+        repository: "owner/repository",
+        executable: "provider-cli",
+        monotonicNow: () => 0,
+        runCommand,
+      });
+      const read = dependencies.listRuns(1, Object.freeze({
+        deadlineMonotonic: 10,
+        signal: new AbortController().signal,
+      }));
+      const tracked = read.then(
+        () => { readSettled = true; },
+        () => { readSettled = true; },
+      );
+
+      await vi.advanceTimersByTimeAsync(10);
+      expect(commandContext?.signal.aborted).toBe(true);
+      expect(readSettled).toBe(false);
+
+      releaseCommand?.();
+      await expect(read).rejects.toThrow(
+        "Preview observer metadata is invalid.",
+      );
+      await tracked;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("propagates outer cancellation to an injected command and waits for settlement", async () => {
+    let commandContext: PreviewObserverCallContext | undefined;
+    let releaseCommand: (() => void) | undefined;
+    let readSettled = false;
+    const runCommand: PreviewObserverCommandRunner = vi.fn(
+      async (_executable, _arguments, context) => {
+        commandContext = context;
+        await new Promise<void>((_resolvePromise, rejectPromise) => {
+          releaseCommand = () => rejectPromise(
+            new Error("discarded-provider-canary"),
+          );
+        });
+        throw new Error("unreachable-provider-canary");
+      },
+    );
+    const dependencies = createGitHubObserverResolutionDependencies({
+      repository: "owner/repository",
+      executable: "provider-cli",
+      monotonicNow: () => 0,
+      runCommand,
+    });
+    const controller = new AbortController();
+    const read = dependencies.listRuns(1, Object.freeze({
+      deadlineMonotonic: 10_000,
+      signal: controller.signal,
+    }));
+    const tracked = read.then(
+      () => { readSettled = true; },
+      () => { readSettled = true; },
+    );
+
+    await vi.waitFor(() => expect(commandContext).toBeDefined());
+    controller.abort();
+    await new Promise<void>((resolvePromise) => {
+      setImmediate(resolvePromise);
+    });
+    expect(commandContext?.signal.aborted).toBe(true);
+    expect(readSettled).toBe(false);
+
+    releaseCommand?.();
+    await expect(read).rejects.toThrow(
+      "Preview observer metadata is invalid.",
+    );
+    await tracked;
   });
 
   it.each([

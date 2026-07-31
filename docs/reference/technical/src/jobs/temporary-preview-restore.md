@@ -19,9 +19,11 @@ evidence. Only the owner can return a post-claim failure.
 
 ## `selectBackupCandidate`
 
-Traverses every page under the fixed private backup prefix, rejects malformed entries and invalid or repeated
-cursors, requires an unambiguous greatest UTC date, and compares the admitted metadata key version with the injected
-unchanged backup key version.
+Traverses no more than 16 pages under the fixed private backup prefix and retains no more than 64 objects. A cursor
+that would require another page, or a page that would exceed the total-object limit, is rejected before the next
+request or candidate accumulation. It also rejects malformed entries and invalid or repeated cursors, requires an
+unambiguous greatest UTC date, and compares the admitted metadata key version with the injected unchanged backup key
+version.
 
 ## `classifyImportFailure`
 

@@ -7,9 +7,15 @@ Returns exactly `head`, `get`, and `list`.
 ## `head`
 Copies bounded head metadata.
 ## `get`
-Copies the body into `Uint8Array`.
+Requires a positive safe-integer provider size no greater than 8,389,144 bytes before allocating the destination,
+streams into that fixed allocation, and rejects early EOF or any chunk that would exceed the declared size. It does
+not use the provider's unbounded whole-body allocation helper.
 ## `list`
-Maps provider pagination without mutation capabilities.
+Requests no more than 64 entries, rejects a provider response above that limit before mapping it, and exposes only
+bounded copied metadata without mutation capabilities.
+## `readBoundedBody`
+Validates the provider size before the sole fixed allocation, consumes `ReadableStream<Uint8Array>` chunks without
+an unbounded whole-body helper, cancels on a stream failure, and requires exact declared-versus-observed byte parity.
 ## `adapt`
 Bounds keys, etags, and custom metadata.
 ## `exactMetadata`

@@ -25,6 +25,15 @@ import { TEMPORARY_PREVIEW_FAULT_SCENARIOS } from "../src/domain/operations/temp
 const FAILURE = "Preview acceptance controller failed closed.";
 const POLL_MILLISECONDS = 5_000;
 const UNIQUENESS_MILLISECONDS = 120_000;
+const OBSERVER_RESOLUTION_MILLISECONDS =
+  UNIQUENESS_MILLISECONDS + POLL_MILLISECONDS;
+const WORKFLOW_SETTLEMENT_MARGIN_MILLISECONDS = 60_000;
+const CANDIDATE_WORKFLOW_MILLISECONDS =
+  30 * 60_000 + WORKFLOW_SETTLEMENT_MARGIN_MILLISECONDS;
+const ROLLBACK_WORKFLOW_MILLISECONDS =
+  15 * 60_000 + WORKFLOW_SETTLEMENT_MARGIN_MILLISECONDS;
+const CLOSURE_WORKFLOW_MILLISECONDS =
+  15 * 60_000 + WORKFLOW_SETTLEMENT_MARGIN_MILLISECONDS;
 const LOCAL_SIGNAL_MILLISECONDS = 50_000;
 const PROVIDER_SIGNAL_MILLISECONDS = 59_000;
 const APPROVAL_MILLISECONDS = 60_000;
@@ -96,7 +105,7 @@ export interface PreviewAcceptanceControllerDependencies {
     readonly signal: "listening" | "succeeded" | "failed";
     readonly uniqueness: "listening" | "succeeded" | "failed";
     readonly signalObservedAt: Date | null;
-    readonly uniquenessClosesAt?: Date;
+    readonly uniquenessClosesAt?: Date | null;
   }>;
   verifyCandidateAttribution(input: {
     readonly runRef: string;
@@ -402,11 +411,14 @@ async function runControllerCall<T>(
   requestedDeadlineMonotonic: number,
   dependencies: PreviewAcceptanceControllerDependencies,
   operation: (boundary: PreviewControllerCallBoundary) => Promise<T>,
+  maximumDurationMilliseconds = UNIQUENESS_MILLISECONDS,
 ): Promise<T> {
   const now = safeMonotonic(dependencies.monotonicNow());
+  const maximumDuration = safeMonotonic(maximumDurationMilliseconds);
+  if (maximumDuration <= 0) fail();
   const deadlineMonotonic = Math.min(
     safeMonotonic(requestedDeadlineMonotonic),
-    now + UNIQUENESS_MILLISECONDS,
+    now + maximumDuration,
   );
   const remaining = deadlineMonotonic - now;
   if (remaining <= 0) fail();
@@ -453,6 +465,37 @@ export async function runPreviewAcceptanceController(
     const monotonic = safeMonotonic(dependencies.monotonicNow());
     return safeMonotonic(monotonic + UNIQUENESS_MILLISECONDS);
   };
+  /** Preserves the resolver's terminal poll without crossing candidate expiry. */
+  const nextObserverResolutionDeadline = (): number => {
+    const wall = safeNow(dependencies.wallNow());
+    const monotonic = safeMonotonic(dependencies.monotonicNow());
+    const expiryRemaining =
+      expiresAt.getTime() - EXPIRY_BUFFER_MILLISECONDS - wall.getTime();
+    if (expiryRemaining <= 0) fail();
+    return monotonic + Math.min(
+      OBSERVER_RESOLUTION_MILLISECONDS,
+      expiryRemaining,
+    );
+  };
+  /** Bounds a long-running candidate confirmation by its actual expiry. */
+  const nextCandidateWorkflowDeadline = (): number => {
+    const wall = safeNow(dependencies.wallNow());
+    const monotonic = safeMonotonic(dependencies.monotonicNow());
+    const expiryRemaining =
+      expiresAt.getTime() - EXPIRY_BUFFER_MILLISECONDS - wall.getTime();
+    if (expiryRemaining <= 0) fail();
+    return monotonic + Math.min(
+      CANDIDATE_WORKFLOW_MILLISECONDS,
+      expiryRemaining,
+    );
+  };
+  /** Grants one fresh provider-workflow settlement window. */
+  const nextWorkflowDeadline = (durationMilliseconds: number): number => {
+    const monotonic = safeMonotonic(dependencies.monotonicNow());
+    return safeMonotonic(
+      monotonic + safeMonotonic(durationMilliseconds),
+    );
+  };
   /** Grants a fresh post-closure window including one terminal poll margin. */
   const nextVerificationDeadline = (): number => {
     const monotonic = safeMonotonic(dependencies.monotonicNow());
@@ -471,6 +514,7 @@ export async function runPreviewAcceptanceController(
     beforeDispatch?: () => void,
   ): Promise<{
     readonly runRef: string;
+    readonly reconciledAfterFailure: boolean;
     readonly reconciledAfterTimeout: boolean;
   }> => {
     if (
@@ -486,6 +530,7 @@ export async function runPreviewAcceptanceController(
     const serializedContext = serializePreviewAcceptanceContext(context);
     let result: { readonly runRef: string };
     let dispatchSignal: AbortSignal | undefined;
+    let reconciledAfterFailure = false;
     let reconciledAfterTimeout = false;
     try {
       result = await runControllerCall(
@@ -503,7 +548,6 @@ export async function runPreviewAcceptanceController(
     } catch {
       if (
         context.kind === "observe" ||
-        context.kind === "rollback" ||
         context.kind === "close_rollback"
       ) {
         fail();
@@ -513,6 +557,7 @@ export async function runPreviewAcceptanceController(
         serializedContext,
         reviewedCommit,
       });
+      reconciledAfterFailure = true;
       reconciledAfterTimeout = dispatchSignal?.aborted === true;
       const reconciled = await runControllerCall(
         nextCleanupDeadline(),
@@ -529,6 +574,7 @@ export async function runPreviewAcceptanceController(
     if (!validRunRef(result?.runRef)) fail();
     return Object.freeze({
       runRef: result.runRef,
+      reconciledAfterFailure,
       reconciledAfterTimeout,
     });
   };
@@ -559,10 +605,27 @@ export async function runPreviewAcceptanceController(
     );
     rollbackRunRef = rollback.runRef;
     const completedRollbackRunRef = rollback.runRef;
+    if (rollback.reconciledAfterFailure) {
+      await runControllerCall(
+        nextCleanupDeadline(),
+        dependencies,
+        (boundary) =>
+          dependencies.verifyCandidateAttribution(
+            Object.freeze({
+              runRef: completedRollbackRunRef,
+              operation: "rollback",
+              reviewedCommit,
+            }),
+            boundary,
+          ),
+      );
+    }
     dependencies.writeStatus("rollback_dispatched");
-    const cleanupDeadline = nextCleanupDeadline();
+    const settlementDeadline = nextWorkflowDeadline(
+      ROLLBACK_WORKFLOW_MILLISECONDS,
+    );
     await runControllerCall(
-      cleanupDeadline,
+      settlementDeadline,
       dependencies,
       (boundary) =>
         dependencies.awaitRollbackSettlement(
@@ -575,7 +638,9 @@ export async function runPreviewAcceptanceController(
           }),
           boundary,
         ),
+      ROLLBACK_WORKFLOW_MILLISECONDS,
     );
+    const closureDispatchDeadline = nextCleanupDeadline();
     const closure = await dispatch({
       version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
       kind: "close_rollback",
@@ -583,9 +648,12 @@ export async function runPreviewAcceptanceController(
       candidateRunRef: rollbackCandidateRunRef,
       rollbackRunRef: completedRollbackRunRef,
       authenticatedReadsGate: "verified",
-    }, cleanupDeadline);
+    }, closureDispatchDeadline);
+    const closureVerificationDeadline = nextWorkflowDeadline(
+      CLOSURE_WORKFLOW_MILLISECONDS,
+    );
     await runControllerCall(
-      cleanupDeadline,
+      closureVerificationDeadline,
       dependencies,
       (boundary) =>
         dependencies.verifyClosure(
@@ -599,8 +667,10 @@ export async function runPreviewAcceptanceController(
           },
           boundary,
         ),
+      CLOSURE_WORKFLOW_MILLISECONDS,
     );
     dependencies.writeStatus("closure_verified");
+    if (rollback.reconciledAfterFailure) fail();
   };
 
   try {
@@ -616,7 +686,7 @@ export async function runPreviewAcceptanceController(
     await dispatch(observeContext, nextPreSignalDeadline());
     const observerCompletedAt = safeNow(dependencies.wallNow());
     const observer = await runControllerCall(
-      nextPreSignalDeadline(),
+      nextObserverResolutionDeadline(),
       dependencies,
       (boundary) =>
         dependencies.resolveObserver(
@@ -629,6 +699,7 @@ export async function runPreviewAcceptanceController(
           },
           boundary,
         ),
+      OBSERVER_RESOLUTION_MILLISECONDS,
     );
     dependencies.writeStatus("observer_ready");
 
@@ -739,9 +810,10 @@ export async function runPreviewAcceptanceController(
     } else {
       actionCompletedAt = safeNow(
         await runControllerCall(
-          nextPreSignalDeadline(),
+          nextCandidateWorkflowDeadline(),
           dependencies,
           (boundary) => dependencies.performAction(actionInput, boundary),
+          CANDIDATE_WORKFLOW_MILLISECONDS,
         ),
       );
       if (
@@ -793,7 +865,10 @@ export async function runPreviewAcceptanceController(
 
     if (isTwoJobFamily(input.family)) {
       let state = signal.state;
-      if (state.uniquenessClosesAt === undefined) fail();
+      if (
+        state.uniquenessClosesAt === undefined ||
+        state.uniquenessClosesAt === null
+      ) fail();
       const uniquenessClosesAt = safeNow(state.uniquenessClosesAt);
       const verificationStartedAtWall = safeNow(dependencies.wallNow());
       const verificationStartedAtMonotonic = safeMonotonic(
@@ -816,6 +891,7 @@ export async function runPreviewAcceptanceController(
           safeNow(state.signalObservedAt).getTime() !==
             signal.providerObservedAt.getTime() ||
           currentUniquenessClosesAt === undefined ||
+          currentUniquenessClosesAt === null ||
           safeNow(currentUniquenessClosesAt).getTime() !==
             uniquenessClosesAt.getTime()
         ) {
@@ -964,13 +1040,17 @@ async function waitForNoSignalUniqueness(
     const detectedAtMonotonic = safeMonotonic(
       dependencies.monotonicNow(),
     );
-    if (state.uniquenessClosesAt === undefined) fail();
-    const currentClosesAt = safeNow(state.uniquenessClosesAt);
-    if (
-      stableClosesAt !== null &&
-      stableClosesAt.getTime() !== currentClosesAt.getTime()
-    ) fail();
-    stableClosesAt ??= currentClosesAt;
+    const providerClosesAt = state.uniquenessClosesAt;
+    if (providerClosesAt === undefined || providerClosesAt === null) {
+      if (stableClosesAt !== null) fail();
+    } else {
+      const currentClosesAt = safeNow(providerClosesAt);
+      if (
+        stableClosesAt !== null &&
+        stableClosesAt.getTime() !== currentClosesAt.getTime()
+      ) fail();
+      stableClosesAt ??= currentClosesAt;
+    }
     if (
       detectedAtMonotonic > verificationDeadline ||
       state.signal !== "listening" ||
@@ -980,13 +1060,17 @@ async function waitForNoSignalUniqueness(
       fail();
     }
     if (state.uniqueness === "failed") {
-      if (detectedAtWall.getTime() < stableClosesAt.getTime()) fail();
+      if (
+        stableClosesAt !== null &&
+        detectedAtWall.getTime() < stableClosesAt.getTime()
+      ) fail();
       return;
     }
     const remaining = Math.min(
       POLL_MILLISECONDS,
       verificationDeadline - detectedAtMonotonic,
-      detectedAtWall.getTime() < stableClosesAt.getTime()
+      stableClosesAt !== null &&
+          detectedAtWall.getTime() < stableClosesAt.getTime()
         ? stableClosesAt.getTime() - detectedAtWall.getTime()
         : POLL_MILLISECONDS,
     );
@@ -1481,7 +1565,7 @@ function snapshotControllerObserverState(value: unknown): {
   readonly signal: "listening" | "succeeded" | "failed";
   readonly uniqueness: "listening" | "succeeded" | "failed";
   readonly signalObservedAt: Date | null;
-  readonly uniquenessClosesAt?: Date;
+  readonly uniquenessClosesAt?: Date | null;
 } {
   const record = exactRecordWithOptional(
     value,
@@ -1497,7 +1581,9 @@ function snapshotControllerObserverState(value: unknown): {
     !isObserverState(uniqueness) ||
     (signal === "succeeded" && !(observed instanceof Date)) ||
     (signal !== "succeeded" && observed !== null) ||
-    (closesAt !== undefined && !(closesAt instanceof Date))
+    (closesAt !== undefined &&
+      closesAt !== null &&
+      !(closesAt instanceof Date))
   ) {
     fail();
   }
@@ -1507,7 +1593,10 @@ function snapshotControllerObserverState(value: unknown): {
     signalObservedAt: observed === null ? null : safeNow(observed as Date),
     ...(closesAt === undefined
       ? {}
-      : { uniquenessClosesAt: safeNow(closesAt as Date) }),
+      : {
+          uniquenessClosesAt:
+            closesAt === null ? null : safeNow(closesAt as Date),
+        }),
   });
 }
 

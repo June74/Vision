@@ -14,8 +14,9 @@ counts, checksum, references, and a readable event list.
 
 ## `selectBackupCandidate`
 
-Reads every storage page, rejects any malformed entry, and selects exactly one backup from the newest UTC date with
-the expected unchanged key version.
+Reads at most 16 storage pages and 64 total objects, rejects an additional page or object before accumulating it,
+rejects any malformed entry, and selects exactly one backup from the newest UTC date with the expected unchanged
+key version.
 
 ## `classifyImportFailure`
 

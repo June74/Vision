@@ -31,10 +31,11 @@ before every dispatch.
 ## `dispatch`
 
 Serializes dispatch through the canonical closed context and accepts only one
-positive run reference. If a candidate receipt is uncertain, reconciliation
-uses a fresh bounded window and the exact frozen operation/context/commit
-tuple. A candidate reconciled after timeout is never dispatched or acted on
-again; it is attributed and sent directly through rollback.
+positive run reference. If a candidate or rollback receipt is uncertain,
+reconciliation uses a fresh bounded window and the exact frozen
+operation/context/commit tuple. A timed-out candidate is sent directly through
+rollback. An uncertain rollback is never retried; an exactly reconciled one is
+attributed, settled, closed, and then reported failed closed.
 
 ## `resolveObserver`
 
@@ -86,9 +87,9 @@ back without action. An uncertain rollback is never retried.
 ## `rollbackAndClose`
 
 Latches the rollback attempt before dispatch, rechecks both signal deadlines,
-dispatches rollback within that deadline, then starts a fresh bounded cleanup
-window. Rollback must settle inside that window before closure dispatch and
-verification.
+and dispatches rollback within that strict deadline. Rollback settlement,
+closure dispatch, and closure verification then each receive a fresh bounded
+deadline appropriate to that stage.
 
 ## `waitForSignal`
 
@@ -175,7 +176,9 @@ observer handle.
 
 ## `snapshotControllerObserverState`
 
-Copies one custom observer result into the controller's closed state.
+Copies one custom observer result into the controller's closed state. A missing
+or null uniqueness close remains missing provider evidence; the controller does
+not replace it with a local timestamp.
 
 ## `snapshotControllerInput`
 
@@ -290,11 +293,26 @@ receive a trustworthy receipt, without dispatching it again.
 
 ## `runControllerCall`
 
-Runs one dependency call inside a bounded deadline that can be aborted.
+Runs one dependency call inside a bounded deadline that can be aborted. The
+caller selects the maximum duration for the workflow stage.
 
 ## `nextPreSignalDeadline`
 
-Chooses the tighter observer or candidate deadline before a signal is proven.
+Chooses the tighter ordinary pre-signal call deadline before a signal is proven.
+
+## `nextObserverResolutionDeadline`
+
+Allows the resolver's full two-minute discovery window plus its final polling
+margin, without crossing the buffered candidate expiry.
+
+## `nextCandidateWorkflowDeadline`
+
+Allows candidate deployment confirmation to use its workflow-aware duration,
+bounded by the candidate's buffered expiry.
+
+## `nextWorkflowDeadline`
+
+Starts a fresh bounded deadline for a known provider workflow stage.
 
 ## `nextCleanupDeadline`
 
@@ -307,9 +325,10 @@ Starts a fresh post-closure verification window with one final polling margin.
 
 ## `waitForNoSignalUniqueness`
 
-After rollback closure, uses a fresh bounded verification window to wait for
-the expected no-signal uniqueness failure at the observer's stable true close.
-It never substitutes the exhausted signal cutoff for a missing close.
+After rollback closure, uses a fresh bounded local verification window to wait
+for the expected no-signal uniqueness failure. When the provider supplies a
+true close it must remain stable and be reached; a missing or null provider
+close is never replaced with local time.
 
 ## `serializePreviewRollbackSettlementInput`
 
