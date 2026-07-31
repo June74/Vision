@@ -2,6 +2,7 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
+| [SB-20260731-175017-timing-doc-path-mismatch](incidents/2026-07-31T175017Z-timing-doc-path-mismatch.md) | closed | 2026-07-31T17:50:48.9808129Z | Phase B Task 3 fourth-wave timing repair | Timing assignment named absent controller references |
 | [SB-20260731-174919-git-worktree-index-permission](incidents/2026-07-31T174919Z-git-worktree-index-permission.md) | closed | 2026-07-31T17:49:19.1079389Z | Phase B Task 3 setback-ledger commit | Sandbox blocked the worktree Git index |
 | [SB-20260731-174826-timing-lane-read-path-mismatch](incidents/2026-07-31T174826Z-timing-lane-read-path-mismatch.md) | closed | 2026-07-31T17:48:26.8998201Z | Phase B Task 3 fourth-wave timing repair | Timing lane searched a nonexistent root README |
 | [SB-20260731-173033-fourth-wave-inventory-mismatch](incidents/2026-07-31T173033Z-fourth-wave-inventory-mismatch.md) | closed | 2026-07-31T17:31:21.3811353Z | Phase B Task 3 fourth-wave repair integration | Fourth-wave repair includes one path outside the Task 3 report inventory |
