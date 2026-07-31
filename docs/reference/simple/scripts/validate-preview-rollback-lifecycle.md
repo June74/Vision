@@ -32,6 +32,15 @@ still redeploys and freshly verifies immutable normal. A v1 intent paired with
 a v2 boundary, duplicates, expired artifacts, and foreign artifacts fail
 closed.
 
+## `readPreviewCandidateIntentVersion`
+
+Returns only `v1` or `v2` after parsing the exact candidate intent. Hybrid or
+malformed markers fail closed. The rollback workflow combines this label with
+the mutation state in a closed matrix: only legacy `v1:may_have_started` skips
+the v2-only boundary download, while `v2:may_have_started` must download and
+verify that exact boundary. Both paths still pass provider admission, redeploy
+immutable normal, freshly verify normal, create restore proof, and close.
+
 ## `assertPreviewCandidateIntent`
 
 Checks that the downloaded marker belongs to the reviewed commit.
@@ -198,5 +207,5 @@ Creates one lifecycle artifact without overwriting an existing file.
 ## `main`
 
 Dispatches the closed lifecycle validation and transition modes without
-printing identifiers. Mutation-boundary classification prints only one of the
-two fixed state labels.
+printing identifiers. Mutation-boundary classification and intent-version
+reading print only their fixed safe labels.

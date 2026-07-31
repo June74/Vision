@@ -1373,8 +1373,9 @@ describe("post-acceptance temporary surface cleanup", () => {
     expect(usage).toContain("calculateUsageWarnings");
     expect(previewWorkflow).toContain("vision-preview-observer");
     expect(previewWorkflow).toContain("vision-preview-mutation");
-    expect(previewWorkflow.match(/timeout-minutes: 48/gu)).toHaveLength(7);
+    expect(previewWorkflow.match(/timeout-minutes: 60/gu)).toHaveLength(7);
     expect(previewWorkflow.match(/timeout 46m/gu)).toHaveLength(7);
+    expect(previewWorkflow).not.toContain("timeout-minutes: 48");
     expect(previewWorkflow).not.toContain("timeout-minutes: 46");
     expect(previewWorkflow).not.toContain("timeout 44m");
     expect(releaseScanner).toContain("scanRelease");

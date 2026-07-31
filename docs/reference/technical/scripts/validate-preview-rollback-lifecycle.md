@@ -34,6 +34,17 @@ the unconditional immutable-normal redeploy and fresh exact-normal
 verification. A v1 intent with a boundary, hybrid intents, duplicates, and
 stale or foreign artifacts fail closed.
 
+## `readPreviewCandidateIntentVersion`
+
+Reuses the exact candidate-intent parser and emits only the schema-generation
+label `v1` or `v2`; hybrids and malformed records fail closed. The workflow
+uses a closed version/state matrix: legacy `v1:may_have_started` alone bypasses
+the v2-only mutation-boundary artifact lookup, `v2:not_started` needs no
+boundary, and `v2:may_have_started` requires the exact boundary download and
+verification. Every admitted branch continues through exact provider-state
+admission, immutable-normal deployment, fresh exact-normal verification,
+restore proof, and closure.
+
 ## `assertPreviewCandidateIntent`
 
 Parses the exact intent and requires equality with the workflow's verified
@@ -220,5 +231,5 @@ Writes canonical formatted JSON with exclusive creation.
 
 Routes only the approved intent, restore, closure, latest-candidate, and
 completed-run modes plus mutation-boundary write, classify, and verify modes;
-all errors become one value-free failure. Classification emits only a fixed
-state label.
+all errors become one value-free failure. Classification and intent-version
+reading emit only fixed safe labels.

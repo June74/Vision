@@ -382,9 +382,10 @@ describe("preview live diagnostics policy", () => {
         "  cancel-in-progress: false",
     );
     expect(preview).not.toContain("group: vision-preview\n");
-    expect(tailJob).toContain("timeout-minutes: 48");
+    expect(tailJob).toContain("timeout-minutes: 60");
     expect(tailJob).toContain(
       `uses: ${CHECKOUT_ACTION}\n` +
+        "        timeout-minutes: 2\n" +
         "        with:\n" +
         "          ref: ${{ github.sha }}",
     );
@@ -529,7 +530,7 @@ describe("preview acceptance candidate workflow", () => {
       "group: ${{ inputs.acceptance_operation == 'observe' && inputs.configure_ai_budget == false && 'vision-preview-observer' || 'vision-preview-mutation' }}",
     );
     expect(preview).toContain("cancel-in-progress: false");
-    expect(observer).toContain("timeout-minutes: 48");
+    expect(observer).toContain("timeout-minutes: 60");
     expect(candidate).toContain("timeout-minutes: 30");
     expect(rollback).toContain("timeout-minutes: 15");
     expect(observer).toContain("ref: ${{ github.sha }}");
@@ -554,7 +555,7 @@ describe("preview acceptance candidate workflow", () => {
     ];
     for (const jobName of observerJobs) {
       const observer = readWorkflowJob(preview, jobName);
-      expect(observer).toContain("timeout-minutes: 48");
+      expect(observer).toContain("timeout-minutes: 60");
       expect(observer).toContain(
         "timeout 46m pnpm exec tsx scripts/run-preview-tail-supervisor.ts",
       );
@@ -585,7 +586,12 @@ describe("preview acceptance candidate workflow", () => {
     const parsed = parse(preview) as {
       jobs?: Record<string, {
         "timeout-minutes"?: number;
-        steps?: Array<{ name?: string; run?: string }>;
+        steps?: Array<{
+          name?: string;
+          uses?: string;
+          run?: string;
+          "timeout-minutes"?: number;
+        }>;
       }>;
     };
     const observerJobs = [
@@ -597,6 +603,7 @@ describe("preview acceptance candidate workflow", () => {
       "restore_uniqueness",
       "maintenance_uniqueness",
     ] as const;
+    const observerDispatchSeconds = 120;
     const resolverStartupSeconds = 125;
     const candidateWorkflowSeconds = 31 * 60;
     const approvalSeconds = 120;
@@ -628,6 +635,7 @@ describe("preview acceptance candidate workflow", () => {
       sync_suppression: 850,
       ai_usage: 725,
       restore:
+        observerDispatchSeconds +
         resolverStartupSeconds +
         restoreAdmissionSeconds +
         candidateDispatchSeconds +
@@ -640,24 +648,48 @@ describe("preview acceptance candidate workflow", () => {
       ...Object.values(familyRequiredSeconds),
     );
 
-    expect(familyRequiredSeconds.restore).toBe(2_590);
-    expect(requiredInnerSeconds).toBe(2_590);
+    expect(familyRequiredSeconds.restore).toBe(2_710);
+    expect(requiredInnerSeconds).toBe(2_710);
 
     for (const jobName of observerJobs) {
       const job = parsed.jobs?.[jobName];
-      const listener = job?.steps?.find(
+      const listenerIndex = job?.steps?.findIndex(
         (step) => step.name === "Print only allowlisted acceptance evidence",
       );
+      expect(listenerIndex, jobName).toBe(5);
+      const setup = job?.steps?.slice(0, listenerIndex);
+      expect(setup?.[0]?.uses, jobName).toMatch(/^actions\/checkout@/u);
+      expect(setup?.[1]?.name, jobName).toBe(
+        "Verify observer checkout matches dispatch commit",
+      );
+      expect(setup?.[2]?.uses, jobName).toMatch(/^pnpm\/action-setup@/u);
+      expect(setup?.[3]?.uses, jobName).toMatch(/^actions\/setup-node@/u);
+      expect(setup?.[4]?.run, jobName).toBe("pnpm install --frozen-lockfile");
+      expect(
+        setup?.map((step) => step["timeout-minutes"]),
+        jobName,
+      ).toEqual([2, 1, 2, 2, 5]);
+      const setupSeconds =
+        (setup ?? []).reduce(
+          (total, step) => total + (step["timeout-minutes"] ?? 0),
+          0,
+        ) * 60;
+      expect(setupSeconds, jobName).toBe(12 * 60);
+      const listener = job?.steps?.[listenerIndex ?? -1];
       const timeoutMatch = listener?.run?.match(/\btimeout (\d+)m\b/u);
-      expect(job?.["timeout-minutes"], jobName).toBe(48);
+      expect(job?.["timeout-minutes"], jobName).toBe(60);
       expect(timeoutMatch, jobName).not.toBeNull();
       const innerSeconds = Number(timeoutMatch?.[1]) * 60;
       expect(innerSeconds, jobName).toBe(46 * 60);
       expect(innerSeconds, jobName).toBeGreaterThanOrEqual(
         requiredInnerSeconds,
       );
-      expect(job!["timeout-minutes"]! * 60 - innerSeconds, jobName).toBe(
-        120,
+      expect(innerSeconds - requiredInnerSeconds, jobName).toBe(50);
+      expect(
+        job!["timeout-minutes"]! * 60 - setupSeconds - innerSeconds,
+        jobName,
+      ).toBe(
+        2 * 60,
       );
     }
   });
@@ -1043,6 +1075,29 @@ describe("preview acceptance candidate workflow", () => {
     expect(rollbackMutation).toContain("--verify-mutation-boundary");
     expect(rollbackMutation).toContain("may_have_started");
     expect(rollbackMutation).toContain("not_started");
+    expect(rollbackMutation).toContain("--read-candidate-intent-version");
+    expect(rollbackMutation).toContain(
+      'case "$candidate_intent_version:$mutation_state" in',
+    );
+    const legacyUncertain = rollbackMutation.indexOf("v1:may_have_started)");
+    const v2NotStarted = rollbackMutation.indexOf("v2:not_started)");
+    const v2Uncertain = rollbackMutation.indexOf("v2:may_have_started)");
+    const invalidVersionState = rollbackMutation.indexOf("*)");
+    expect(legacyUncertain).toBeGreaterThan(-1);
+    expect(v2NotStarted).toBeGreaterThan(legacyUncertain);
+    expect(v2Uncertain).toBeGreaterThan(v2NotStarted);
+    expect(invalidVersionState).toBeGreaterThan(v2Uncertain);
+    expect(
+      rollbackMutation.slice(legacyUncertain, v2Uncertain),
+    ).not.toContain("gh run download");
+    expect(
+      rollbackMutation.slice(v2Uncertain, invalidVersionState),
+    ).toContain(
+      'gh run download "$CANDIDATE_RUN_REF" --name vision-preview-candidate-mutation-boundary',
+    );
+    expect(
+      rollbackMutation.slice(v2Uncertain, invalidVersionState),
+    ).toContain("--verify-mutation-boundary");
     expect(rollbackProfile).toContain("--verify-rollback-provider-state");
     expect(rollbackProfile).toContain(
       '"${{ steps.rollback-mutation.outputs.mutation_state }}"',
@@ -1057,6 +1112,11 @@ describe("preview acceptance candidate workflow", () => {
       "scripts/validate-preview-rollback-lifecycle.ts --write-restore-proof",
     );
     expect(restoreProof).toContain('--provider-state "verified"');
+    expect(
+      rollbackNames.indexOf("Resolve candidate mutation state before rollback"),
+    ).toBeLessThan(
+      rollbackNames.indexOf("Verify rollback admission provider state"),
+    );
     expect(
       rollbackNames.indexOf("Verify rollback admission provider state"),
     ).toBeLessThan(

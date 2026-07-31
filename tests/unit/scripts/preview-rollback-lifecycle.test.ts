@@ -10,6 +10,7 @@ import {
   derivePreviewBindingProfile,
   readLatestPreviewCandidateRunRef,
   readPreviewCandidateBindingProfile,
+  readPreviewCandidateIntentVersion,
   readPreviewCandidateMutationState,
   validateCompletedPreviewLifecycleRun,
 } from "../../../scripts/validate-preview-rollback-lifecycle";
@@ -218,6 +219,8 @@ describe("preview rollback lifecycle", () => {
         candidateRunRef: CANDIDATE_RUN_REF,
       }),
     ).toBe("may_have_started");
+    expect(readPreviewCandidateIntentVersion(legacyIntent)).toBe("v1");
+    expect(readPreviewCandidateIntentVersion(candidateIntent())).toBe("v2");
 
     const v2BoundaryArtifact = {
       name: "vision-preview-candidate-mutation-boundary",
@@ -239,6 +242,12 @@ describe("preview rollback lifecycle", () => {
         }),
       ).toThrow("Preview rollback lifecycle proof is invalid.");
     }
+    expect(() =>
+      readPreviewCandidateIntentVersion({
+        ...legacyIntent,
+        candidateOperation: "deploy_foundation",
+      }),
+    ).toThrow("Preview rollback lifecycle proof is invalid.");
   });
 
   it("admits normal deployment only at baseline or after the exact latest closure", () => {

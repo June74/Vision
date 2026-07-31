@@ -255,6 +255,17 @@ export function readPreviewCandidateMutationState(input: {
   return "may_have_started";
 }
 
+/** Returns only the exact parsed candidate-intent schema generation. */
+export function readPreviewCandidateIntentVersion(
+  candidateIntent: unknown,
+): "v1" | "v2" {
+  const intent = parseCandidateIntent(candidateIntent);
+  if (intent === undefined) throw new Error(INVALID);
+  return intent.evidenceType === "vision.preview-candidate-intent/v1"
+    ? "v1"
+    : "v2";
+}
+
 /** Binds a downloaded candidate marker to the reviewed workflow commit. */
 export function assertPreviewCandidateIntent(input: {
   readonly candidateIntent: unknown;
@@ -1124,6 +1135,13 @@ async function main(): Promise<void> {
             }
           : {}),
       });
+    } else if (
+      mode === "--read-candidate-intent-version" &&
+      parsed.size === 1
+    ) {
+      successOutput = `${readPreviewCandidateIntentVersion(
+        await readJson(parsed.get("--candidate-intent")),
+      )}\n`;
     } else if (mode === "--write-restore-proof" && parsed.size === 7) {
       await writeJson(
         parsed.get("--output"),
