@@ -1,8 +1,8 @@
 # SB-20260731-185558-windows-cmd-wrapper-teardown-hang: Windows command wrapper did not settle its child during teardown
 
-- **Status:** open
+- **Status:** closed
 - **First observed:** 2026-07-31T18:55:58.7433742Z
-- **Last observed:** 2026-07-31T19:06:09.8782456Z
+- **Last observed:** 2026-07-31T19:13:08.1209651Z
 - **Phase/task:** Phase B Task 3 fifth-review Windows supervisor repair
 - **Environment:** Local focused Vitest process
 - **Version/commit:** 7dc954b plus in-progress isolated repairs
@@ -62,3 +62,8 @@ secret, staging, or commit was changed by the stopped lane.
   tree-first termination used an absolute trusted taskkill path, fixed
   arguments, a five-second bound, and awaited wrapper close; the suite still
   hung, so the hypothesis is not accepted as a complete fix.
+- 2026-07-31T19:13:08.1209651Z: Closed by removing the command-script wrapper
+  entirely. The default plan now launches the installed Wrangler and tsx
+  JavaScript entrypoints through `process.execPath`, absolute paths, fixed
+  argument arrays, and `shell: false`. The owned suite passed 11 of 11 and the
+  combined fifth-review suite passed 175 of 175 with TypeScript and docs green.
