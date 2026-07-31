@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T02:06:04.595659Z
-- **Last observed:** 2026-07-31T15:30:50.5669463Z
+- **Last observed:** 2026-07-31T15:40:49.4392607Z
 - **Phase/task:** Phase B Task 3 isolated integration diagnosis
 - **Environment:** Isolated restore/controller worktrees; bounded diagnostic output
 - **Version/commit:** 2bfbc23f13c44e60b01bbffcecc9748d322765b5 plus restore repair
@@ -124,3 +124,10 @@ completed without another output overflow.
 - 2026-07-31T15:30:50.5669463Z: Closed after the ordinary output-suppressed
   diff check, combined focused group, and complete repository pipeline all
   exited successfully without another output overflow.
+- 2026-07-31T15:40:00.0022312Z: Reopened as contained after a small ledger
+  `apply_patch` response exceeded the remaining model-output bound and was
+  truncated. No source, credential, provider data, protected identifier,
+  external state, or raw runtime stream was exposed. Bounded exact-field reads
+  then confirmed the intended incident and index updates had applied.
+- 2026-07-31T15:40:49.4392607Z: Closed after bounded reads confirmed both the
+  77-path inventory incident and index were updated exactly as intended.
