@@ -2,6 +2,8 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
+| [SB-20260731-192554-sixth-review-log-delay](incidents/2026-07-31T192554Z-sixth-review-log-delay.md) | closed | 2026-07-31T19:25:54.6019364Z | Phase B Task 3 sixth sanitized package review | Known sixth-review blocker was not logged before waiting for deduplication |
+| [SB-20260731-192554-task3-sixth-review-blocker](incidents/2026-07-31T192554Z-task3-sixth-review-blocker.md) | open | 2026-07-31T19:29:02.3220014Z | Phase B Task 3 sixth sanitized package review | Sixth Task 3 review found a v1 workflow recovery and job-margin gap |
 | [SB-20260731-190706-wrangler-entrypoint-not-exported](incidents/2026-07-31T190706Z-wrangler-entrypoint-not-exported.md) | closed | 2026-07-31T19:07:06.7862317Z | Phase B Task 3 Windows supervisor alternative diagnosis | Wrangler's guessed JavaScript bin subpath is not exported |
 | [SB-20260731-190331-windows-incident-duplicate-cause](incidents/2026-07-31T190331Z-windows-incident-duplicate-cause.md) | closed | 2026-07-31T19:03:31.7402839Z | Phase B Task 3 setback-ledger maintenance | Windows incident update duplicated its cause label |
 | [SB-20260731-185558-windows-cmd-wrapper-teardown-hang](incidents/2026-07-31T185558Z-windows-cmd-wrapper-teardown-hang.md) | closed | 2026-07-31T19:13:08.1209651Z | Phase B Task 3 fifth-review Windows supervisor repair | Windows command wrapper did not settle its child during teardown |
