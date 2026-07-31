@@ -1,6 +1,6 @@
 # Task 3 report
 
-Status: fourth package-review repair locally verified; fifth package re-review
+Status: fifth package-review repair locally verified; sixth package re-review
 pending.
 
 Commit sequence:
@@ -17,6 +17,7 @@ Commit sequence:
 - third package-review repair: `f37fb4c`
 - fourth timing-envelope repair: `e9e8934`
 - fourth lifecycle/schema repair: `25830ea`
+- fifth package-review repair: `8ea5540`
 
 The full inventory below is the exact 78-path Task 3 implementation and
 report surface. The final lifecycle/package-review repairs change paths already
@@ -57,9 +58,9 @@ and excluded from implementation scope.
 
 ## Delivered
 
-- All seven observer jobs have an 18-minute job timeout and a 16-minute inner
-  timeout. A parsed-YAML test enumerates the exact job set and proves the
-  two-minute outer margin.
+- All seven acceptance jobs have a 48-minute job timeout and a 46-minute inner
+  listener/supervisor timeout. Parsed-workflow tests enumerate the exact job
+  set and prove the configured two-minute outer margin.
 - The tail supervisor validates both command arrays before any spawn, starts
   and confirms the consumer before starting the producer, and awaits every
   started child during success and failure teardown. Real CLI entrypoint tests
@@ -98,30 +99,17 @@ and excluded from implementation scope.
 
 ## Verification
 
-- Focused final repair suite: 8 files, 137 tests passed.
-- Final supervisor/cleanup correction: 2 files, 18 tests passed.
-- Decisive boundary suite: 3 files, 70 tests passed.
-- Explicit Task 3 package: 22 files, 492 tests passed.
-- Workflow suite, including the parsed-YAML invariant: 1 file, 22 tests passed.
+- Fifth-review combined focused suite: 7 files and 175 tests passed.
 - `pnpm.cmd typecheck`: passed.
-- Full unit stage: 95 files passed and 1 skipped; 1,352 tests passed and
-  1 skipped.
-- Full contract stage: 14 files and 179 tests passed.
-- Full worker stage: 7 files and 106 tests passed.
 - `pnpm.cmd docs:check`: passed.
-- Production build: passed.
-- `pnpm.cmd security:scan`: passed with fresh release evidence.
-- Full `pnpm.cmd check`: passed with `WRANGLER_LOG_PATH` directed to the
-  system temporary directory.
-- Fourth-review lifecycle/workflow suite: 5 files and 157 tests passed.
-- Fourth-review combined focused suite: 6 files and 216 tests passed.
-- Fourth-review cross-lane regression suite: 3 files and 33 tests passed.
-- Current complete repository gate: 96 unit files passed and 1 skipped with
-  1,486 tests passed and 1 skipped; 14 contract files and 179 tests passed; 7
-  Worker files and 106 tests passed; production build, fresh release evidence,
-  and release security scan passed. The authoritative Windows run used
-  `cmd.exe` so optional sandboxed Wrangler-log warnings did not replace the
-  actual child exit code, which was 0.
+- Complete repository gate: 96 unit files passed and 1 skipped with 1,490
+  tests passed and 1 skipped; 14 contract files and 179 tests passed; 7 Worker
+  files and 106 tests passed.
+- Production worker/client build, fresh release evidence, and release security
+  scan passed. The authoritative Windows check used `cmd.exe` only as the local
+  test-runner wrapper so optional Wrangler debug-log warnings could not replace
+  the actual `pnpm` child exit code, which was 0. Vision's supervisor itself
+  uses no command shell.
 - No live provider, deployment, database, R2, Queue, browser, remote query,
   push, or other remote mutation was performed.
 
@@ -225,88 +213,35 @@ and excluded from implementation scope.
 All `docs/operations/setbacks/**` paths remain controller-owned and excluded
 from this implementation commit.
 
-## Final canonical integration
+## Current canonical integration
 
-- Review base: `24e959f5`
-- Latest implementation commit: `25830ea`
-- Integrated implementation shape: 15 implementation commits and 78 changed
-  paths
-- Decisive repair commits:
-  - `00cd3c7` restores the production restore facade and acceptance contract.
-  - `5f11f52` hardens controller lifecycle deadlines and reconciliation.
-  - `0e283a3` gives the one three-process safe-tail test a bounded
-    suite-load allowance.
-  - `b4f6dce` forwards the controller boundary through the concrete resolver
-    and all state readers, preserves the stable provider close, settles
-    rollback before closure, and gives reconciliation/cleanup fresh bounded
-    deadlines.
-  - `328b748` closes the fresh package-review findings: provider commands
-    abort and settle; provider closes require bounded provider evidence;
-    rollback dispatch is reconciled; workflow stages receive separate bounded
-    deadlines; and restore bodies/pages/candidates are fixed-size bounded.
-  - `d6a6432` closes the second package-review findings: observer startup is
-    polled without identity drift; observer lifetime covers the complete
-    candidate window; uniqueness close may move only within bounded later
-    provider evidence; candidate rollback verifies the exact schedule profile;
-    and malformed R2 pagination envelopes fail closed.
-  - `f37fb4c` closes the third package-review findings: never-deployed intents
-    recover only after exact normal-state proof; normal deployment cannot
-    bypass an open candidate; raw backward uniqueness and contradictory queued
-    topology fail closed; restore has a 44-minute listener inside a 46-minute
-    job; and maintenance evidence is bounded to the same listener envelope.
-  - `e9e8934` accounts for the full 2,710-second restore path and raises the
-    controller listener/maintenance envelope to 46 minutes.
-  - `25830ea` closes the fourth package-review findings: v2 candidate intents
-    bind exact operation-specific provider configuration while v1 evidence has
-    an explicit fail-closed transition; provider and local timestamp grammars
-    remain distinct; rollback admits exact normal or exact candidate state
-    after a may-have-started boundary but always restores and verifies normal;
-    prior candidate closure is separated from the independently verified new
-    deployment commit; and all seven acceptance jobs use a 46-minute listener
-    inside a 48-minute outer job.
-- The first fresh package-review wave reported 2 Critical and 6 Important
-  findings. Each finding has a dedicated RED case and an implemented repair;
-  the second wave reported a deduplicated 2 Critical and 3 Important findings.
-  Every second-wave finding also has a dedicated RED case and an implemented
-  repair. The third wave reported five Important findings, and its bounded
-  timeout analysis added one Important maintenance-envelope finding. All six
-  have dedicated RED coverage and an implemented repair. The fourth wave
-  reported six Important findings; each now has focused regression coverage
-  and an implemented repair. A fifth package re-review remains required.
-- Resolver verification: 71 passed tests, zero failures.
-- Controller verification: 53 passed tests, zero failures.
-- Restore reader/selection verification: 38 passed tests, zero failures.
-- Second-wave R2 reader verification: 25 passed tests, zero failures.
-- Second-wave candidate provider-state verification: 84 passed tests, zero
-  failures.
-- Second-wave observer/controller/workflow verification: 154 passed tests,
-  zero failures.
-- Integrated second-wave focused verification: 6 files and 263 passed tests,
-  zero failures.
-- Third-wave resolver verification: 76 passed tests, zero failures.
-- Third-wave controller-envelope verification: 59 passed tests, zero failures.
-- Third-wave candidate lifecycle verification: 154 owned tests and 63
-  cross-boundary tests, zero failures.
-- Integrated third-wave focused verification: 9 files and 301 passed tests,
-  zero failures.
-- Integrated fourth-wave focused verification: 6 files and 216 passed tests,
-  zero failures.
-- Complete fourth-wave repository verification: 1,486 unit, 179 contract, and
-  106 Worker tests passed; build, documentation coverage, release evidence, and
-  security scan passed.
-- The combined controller, resolver, and workflow focused group passed from
-  the main worktree with zero failures.
-- Focused schema and restore verification: 8 passed tests, zero failures.
-- Focused temporary-surface security verification: 8 passed tests, zero
-  failures.
-- Focused safe-tail verification: 28 passed tests, zero failures.
-- TypeScript, documentation coverage, production build, repository security
-  scan, security evidence, and the complete repository `check` pipeline all
-  passed at the integrated implementation tip. Contract and Worker projects
-  also passed independently while the one full-unit integration mismatch was
-  diagnosed and corrected; the complete repository gate then passed.
+- Review base: `24e959f5`.
+- Latest implementation commit: `8ea5540`.
+- Integrated shape: 16 implementation commits and exactly 78 changed paths.
+- All seven acceptance jobs use a 46-minute listener/supervisor inside a
+  48-minute job. The complete restore evidence path is 2,710 seconds, leaving
+  50 seconds inside the listener bound.
+- New v2 candidate intents bind exact operation-specific provider
+  configuration. Valid v1 evidence has an explicit conservative recovery path:
+  a v1 run without the v2-only mutation artifact is `may_have_started`, while
+  v2 zero-artifact state remains `not_started`. Mixed-version evidence fails
+  closed.
+- `may_have_started` admits only exact normal or the exact known candidate
+  provider state, then unconditionally redeploys immutable normal, freshly
+  verifies exact normal, and only then writes proof and closure.
+- Legacy candidate expiry requires a finite parse and byte-for-byte canonical
+  UTC millisecond round-trip; provider metadata and local-proof timestamp
+  grammars remain distinct.
+- The default supervisor launches installed Wrangler and tsx JavaScript
+  entrypoints through `process.execPath`, absolute entrypoint paths, fixed
+  argument arrays, and `shell: false`; it no longer relies on Windows command
+  scripts or wrapper-process teardown.
+- The current focused and complete verification results are recorded once in
+  the Verification section above.
+- Five independent review waves have completed. The fifth reported four
+  Important blockers, all with RED evidence and implemented repairs. A sixth
+  sanitized-package re-review is required before Task 3 is accepted.
 - The backup key remains version 1 and was not rotated.
 
-This final integration section and 78-path inventory supersede the earlier
-five-commit wording. Fifth package re-review remains required before Task 3 is
-accepted. Setback evidence remains separately controller-owned.
+This canonical section and the 78-path inventory supersede earlier integration
+wording. Setback evidence remains separately controller-owned.
