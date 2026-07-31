@@ -4,15 +4,29 @@ Checks the restore-pair names.
 
 ## `validatePreviewProviderStateForCandidateIntent`
 Derives both binding and schedule checks from the commit-bound candidate
-intent. Synchronization suppression requires only the two permanent schedules;
-each other candidate requires those schedules plus the temporary one-minute
-schedule.
+intent. It requires the intent's exact scenario, expiry, AI-only attestation,
+and restore-only secret names. Synchronization suppression keeps the permanent
+schedules; each other candidate also requires the one-minute schedule.
 
 ## `validatePreviewProviderStateForRollback`
 
 Requires exact normal provider state when the durable mutation boundary is
-absent. Once that boundary exists, it requires the exact operation-derived
-candidate schedule and binding profile; unknown states fail closed.
+absent. Once that boundary exists, it accepts either exact normal or the exact
+operation-derived candidate because cancellation may have happened on either
+side of deployment; unknown states fail closed.
+
+## `matchesCandidateProviderBindings`
+
+Checks the permanent inventory plus every intent-derived temporary binding.
+
+## `matchesProviderBinding`
+
+Checks one exact provider name, type, and optional non-secret text value.
+
+## `matchesAnyLegacyCandidateProviderState`
+
+Allows an exact known candidate inventory while safely recovering an old v1
+intent that did not record its operation.
 
 ## `matchesNormalProviderHealthAndSchedules`
 Checks healthy runtime and exactly the two permanent schedules.
@@ -25,9 +39,6 @@ Checks the complete immutable normal binding inventory.
 
 ## `matchesTemporaryRestorePairBindings`
 Checks the normal inventory plus exactly the two restore-pair secrets.
-
-## `readCandidateOperation`
-Reads the operation already admitted by the exact lifecycle intent parser.
 
 ## `matchesTemporaryRestoreBinding`
 Checks one name-and-type-only temporary restore secret.

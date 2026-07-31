@@ -14,6 +14,8 @@ const RUN_REF_PATTERN = /^(?:baseline|[1-9]\d{0,19})$/u;
 const DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
 const ISO_INSTANT_PATTERN =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
+const PROVIDER_INSTANT_PATTERN =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/u;
 const CANDIDATE_OPERATIONS = [
   "deploy_foundation",
   "deploy_sync_suppression",
@@ -28,12 +30,37 @@ export type PreviewCandidateMutationState =
   | "not_started"
   | "may_have_started";
 
-export interface PreviewCandidateIntent {
+export interface PreviewCandidateAcceptanceBindings {
+  readonly scenario: string;
+  readonly expiresAt: string;
+  readonly aiGatewayLimitAttested: "true" | null;
+}
+
+export interface LegacyPreviewCandidateIntent {
   readonly evidenceType: "vision.preview-candidate-intent/v1";
+  readonly candidateCommit: string;
+}
+
+export interface PreviewCandidateIntentV2 {
+  readonly evidenceType: "vision.preview-candidate-intent/v2";
   readonly candidateCommit: string;
   readonly candidateOperation: PreviewCandidateOperation;
   readonly bindingProfile: PreviewBindingProfile;
+  readonly candidateConfigHash: string;
+  readonly acceptanceBindings: PreviewCandidateAcceptanceBindings;
 }
+export type PreviewCandidateIntent =
+  | LegacyPreviewCandidateIntent
+  | PreviewCandidateIntentV2;
+
+export type PreviewCandidateIntentDetails =
+  | Readonly<{ readonly legacy: true }>
+  | Readonly<{
+      readonly legacy: false;
+      readonly operation: PreviewCandidateOperation;
+      readonly bindingProfile: PreviewBindingProfile;
+      readonly acceptanceBindings: PreviewCandidateAcceptanceBindings;
+    }>;
 
 export interface PreviewCandidateMutationBoundary {
   readonly evidenceType: "vision.preview-candidate-mutation-boundary/v1";
@@ -59,8 +86,17 @@ export function derivePreviewBindingProfile(
   throw new Error(INVALID);
 }
 
-export interface PreviewRollbackRestoreProof {
+export interface LegacyPreviewRollbackRestoreProof {
   readonly evidenceType: "vision.preview-rollback-restored/v1";
+  readonly candidateRunRefHash: string;
+  readonly restoredCommit: string;
+  readonly normalProviderState: "verified";
+  readonly restoredAt: string;
+  readonly providerVerifiedAt: string;
+}
+
+export interface PreviewRollbackRestoreProofV2 {
+  readonly evidenceType: "vision.preview-rollback-restored/v2";
   readonly candidateRunRefHash: string;
   readonly candidateOperation: PreviewCandidateOperation;
   readonly bindingProfile: PreviewBindingProfile;
@@ -69,9 +105,24 @@ export interface PreviewRollbackRestoreProof {
   readonly restoredAt: string;
   readonly providerVerifiedAt: string;
 }
+export type PreviewRollbackRestoreProof =
+  | LegacyPreviewRollbackRestoreProof
+  | PreviewRollbackRestoreProofV2;
 
-export interface PreviewRollbackClosureProof {
+export interface LegacyPreviewRollbackClosureProof {
   readonly evidenceType: "vision.preview-rollback-closed/v1";
+  readonly candidateRunRefHash: string;
+  readonly restoredCommit: string;
+  readonly normalProviderState: "verified";
+  readonly authenticatedReads: "verified";
+  readonly restoreProofHash: string;
+  readonly rollbackProviderVerifiedAt: string;
+  readonly closureProviderVerifiedAt: string;
+  readonly closedAt: string;
+}
+
+export interface PreviewRollbackClosureProofV2 {
+  readonly evidenceType: "vision.preview-rollback-closed/v2";
   readonly candidateRunRefHash: string;
   readonly candidateOperation: PreviewCandidateOperation;
   readonly bindingProfile: PreviewBindingProfile;
@@ -83,22 +134,32 @@ export interface PreviewRollbackClosureProof {
   readonly closureProviderVerifiedAt: string;
   readonly closedAt: string;
 }
+export type PreviewRollbackClosureProof =
+  | LegacyPreviewRollbackClosureProof
+  | PreviewRollbackClosureProofV2;
 
 /** Creates the value-free marker uploaded before any candidate mutation. */
 export function createPreviewCandidateIntent(
   candidateCommit: unknown,
-): PreviewCandidateIntent {
+): PreviewCandidateIntentV2 {
   const candidateRecord = plainObject(candidateCommit);
   const commit = ownDataValue(candidateRecord, "candidateCommit");
   const operation = ownDataValue(candidateRecord, "operation");
+  const candidateConfig = ownDataValue(candidateRecord, "candidateConfig");
   if (!validCommit(commit) || !validCandidateOperation(operation)) {
     throw new Error(INVALID);
   }
+  const acceptanceBindings = readCandidateAcceptanceBindings(
+    candidateConfig,
+    operation,
+  );
   return Object.freeze({
-    evidenceType: "vision.preview-candidate-intent/v1",
+    evidenceType: "vision.preview-candidate-intent/v2",
     candidateCommit: commit,
     candidateOperation: operation,
     bindingProfile: derivePreviewBindingProfile(operation),
+    candidateConfigHash: digestCanonicalValue(candidateConfig),
+    acceptanceBindings,
   });
 }
 
@@ -106,9 +167,15 @@ export function createPreviewCandidateIntent(
 export function createPreviewCandidateMutationBoundary(input: {
   readonly candidateIntent: unknown;
   readonly candidateRunRef: unknown;
+  readonly candidateConfig?: unknown;
 }): PreviewCandidateMutationBoundary {
   const intent = parseCandidateIntent(input.candidateIntent);
-  if (intent === undefined || !validNumericRunRef(input.candidateRunRef)) {
+  if (
+    intent === undefined ||
+    intent.evidenceType !== "vision.preview-candidate-intent/v2" ||
+    !validNumericRunRef(input.candidateRunRef) ||
+    intent.candidateConfigHash !== digestCanonicalValue(input.candidateConfig)
+  ) {
     throw new Error(INVALID);
   }
   return Object.freeze({
@@ -124,6 +191,7 @@ export function assertPreviewCandidateMutationBoundary(input: {
   readonly mutationBoundary: unknown;
   readonly candidateRunRef: unknown;
   readonly expectedCommit: unknown;
+  readonly candidateConfig?: unknown;
 }): void {
   const intent = parseCandidateIntent(input.candidateIntent);
   const boundary = parseCandidateMutationBoundary(input.mutationBoundary);
@@ -133,6 +201,9 @@ export function assertPreviewCandidateMutationBoundary(input: {
     !validNumericRunRef(input.candidateRunRef) ||
     !validCommit(input.expectedCommit) ||
     intent.candidateCommit !== input.expectedCommit ||
+    intent.evidenceType !== "vision.preview-candidate-intent/v2" ||
+    (input.candidateConfig !== undefined &&
+      intent.candidateConfigHash !== digestCanonicalValue(input.candidateConfig)) ||
     boundary.candidateIntentHash !== digestCandidateIntent(intent) ||
     boundary.candidateRunRefHash !==
       hashCandidateRunRef(input.candidateRunRef)
@@ -186,10 +257,7 @@ export function assertPreviewCandidateIntent(input: {
     !validCommit(input.expectedCommit) ||
     intent.candidateCommit !== input.expectedCommit ||
     (input.nextOperation !== undefined &&
-      !allowedCandidateTransition(
-        intent.candidateOperation,
-        input.nextOperation,
-      ))
+      !allowedIntentTransition(intent, input.nextOperation))
   ) {
     throw new Error(INVALID);
   }
@@ -203,12 +271,36 @@ export function readPreviewCandidateBindingProfile(input: {
   const intent = parseCandidateIntent(input.candidateIntent);
   if (
     intent === undefined ||
+    intent.evidenceType !== "vision.preview-candidate-intent/v2" ||
     !validCommit(input.expectedCommit) ||
     intent.candidateCommit !== input.expectedCommit
   ) {
     throw new Error(INVALID);
   }
   return derivePreviewBindingProfile(intent.candidateOperation);
+}
+
+/** Returns only validated provider-relevant intent data, never identifiers. */
+export function readPreviewCandidateIntentDetails(input: {
+  readonly candidateIntent: unknown;
+  readonly expectedCommit: unknown;
+}): PreviewCandidateIntentDetails {
+  const intent = parseCandidateIntent(input.candidateIntent);
+  if (
+    intent === undefined ||
+    !validCommit(input.expectedCommit) ||
+    intent.candidateCommit !== input.expectedCommit
+  ) {
+    throw new Error(INVALID);
+  }
+  return intent.evidenceType === "vision.preview-candidate-intent/v1"
+    ? Object.freeze({ legacy: true as const })
+    : Object.freeze({
+        legacy: false as const,
+        operation: intent.candidateOperation,
+        bindingProfile: intent.bindingProfile,
+        acceptanceBindings: intent.acceptanceBindings,
+      });
 }
 
 /** Creates the normal-state proof only after the immutable rollback and provider check. */
@@ -233,16 +325,24 @@ export function createPreviewRollbackRestoreProof(input: {
   ) {
     throw new Error(INVALID);
   }
-  return Object.freeze({
-    evidenceType: "vision.preview-rollback-restored/v1",
+  const common = {
     candidateRunRefHash: hashCandidateRunRef(input.candidateRunRef),
-    candidateOperation: intent.candidateOperation,
-    bindingProfile: derivePreviewBindingProfile(intent.candidateOperation),
     restoredCommit: input.restoredCommit,
     normalProviderState: "verified",
     restoredAt: input.restoredAt,
     providerVerifiedAt: input.providerVerifiedAt,
-  });
+  } as const;
+  return intent.evidenceType === "vision.preview-candidate-intent/v1"
+    ? Object.freeze({
+        evidenceType: "vision.preview-rollback-restored/v1" as const,
+        ...common,
+      })
+    : Object.freeze({
+        evidenceType: "vision.preview-rollback-restored/v2" as const,
+        candidateOperation: intent.candidateOperation,
+        bindingProfile: intent.bindingProfile,
+        ...common,
+      });
 }
 
 /**
@@ -275,11 +375,8 @@ export function closePreviewRollback(input: {
   ) {
     throw new Error(INVALID);
   }
-  return Object.freeze({
-    evidenceType: "vision.preview-rollback-closed/v1",
+  const common = {
     candidateRunRefHash: restored.candidateRunRefHash,
-    candidateOperation: restored.candidateOperation,
-    bindingProfile: derivePreviewBindingProfile(restored.candidateOperation),
     restoredCommit: restored.restoredCommit,
     normalProviderState: "verified",
     authenticatedReads: "verified",
@@ -287,7 +384,18 @@ export function closePreviewRollback(input: {
     rollbackProviderVerifiedAt: restored.providerVerifiedAt,
     closureProviderVerifiedAt: input.closureProviderVerifiedAt,
     closedAt: input.closedAt,
-  });
+  } as const;
+  return restored.evidenceType === "vision.preview-rollback-restored/v1"
+    ? Object.freeze({
+        evidenceType: "vision.preview-rollback-closed/v1" as const,
+        ...common,
+      })
+    : Object.freeze({
+        evidenceType: "vision.preview-rollback-closed/v2" as const,
+        candidateOperation: restored.candidateOperation,
+        bindingProfile: restored.bindingProfile,
+        ...common,
+      });
 }
 
 /** Blocks a later candidate or cleanup gate until the latest candidate is closed. */
@@ -296,6 +404,7 @@ export function assertPreviewRollbackClosure(input: {
   readonly latestCandidateRunRef: unknown;
   readonly expectedCommit: unknown;
   readonly operation: unknown;
+  readonly candidateIntent?: unknown;
 }): void {
   if (
     input.closureProof === null &&
@@ -307,15 +416,19 @@ export function assertPreviewRollbackClosure(input: {
     return;
   }
   const closure = parseClosureProof(input.closureProof);
+  const intent = input.candidateIntent === undefined
+    ? undefined
+    : parseCandidateIntent(input.candidateIntent);
+  const candidateCommit = intent?.candidateCommit ?? input.expectedCommit;
   if (
     closure === undefined ||
+    (input.candidateIntent !== undefined && intent === undefined) ||
     !validRunRef(input.latestCandidateRunRef) ||
     !validCommit(input.expectedCommit) ||
-    !(input.operation === "none" ||
-      allowedCandidateTransition(closure.candidateOperation, input.operation)) ||
+    !allowedClosureTransition(closure, intent, input.operation) ||
     closure.candidateRunRefHash !==
       hashCandidateRunRef(input.latestCandidateRunRef) ||
-    closure.restoredCommit !== input.expectedCommit ||
+    closure.restoredCommit !== candidateCommit ||
     Date.parse(closure.closureProviderVerifiedAt) <=
       Date.parse(closure.rollbackProviderVerifiedAt) ||
     Date.parse(closure.closedAt) <=
@@ -351,7 +464,7 @@ export function readLatestPreviewCandidateRunRef(input: unknown): string {
     if (
       name !== CANDIDATE_ARTIFACT_NAME ||
       expired !== false ||
-      !validInstant(createdAt) ||
+      !validProviderInstant(createdAt) ||
       !Number.isSafeInteger(runId) ||
       (runId as number) < 1
     ) {
@@ -395,8 +508,8 @@ export function validateCompletedPreviewLifecycleRun(input: {
         typeof path === "string" &&
         path.startsWith(`${PREVIEW_WORKFLOW_PATH}@refs/`)
       )) ||
-    !validInstant(ownDataValue(run, "run_started_at")) ||
-    !validInstant(ownDataValue(run, "updated_at")) ||
+    !validProviderInstant(ownDataValue(run, "run_started_at")) ||
+    !validProviderInstant(ownDataValue(run, "updated_at")) ||
     Date.parse(ownDataValue(run, "updated_at") as string) <
       Date.parse(ownDataValue(run, "run_started_at") as string) ||
     !Array.isArray(jobs)
@@ -421,7 +534,22 @@ function parseRestoreProof(
   input: unknown,
 ): PreviewRollbackRestoreProof | undefined {
   const record = plainObject(input);
-  const expectedKeys = [
+  const legacyKeys = [
+    "candidateRunRefHash",
+    "evidenceType",
+    "normalProviderState",
+    "providerVerifiedAt",
+    "restoredAt",
+    "restoredCommit",
+  ];
+  const version = ownDataValue(record, "evidenceType");
+  if (version === "vision.preview-rollback-restored/v1") {
+    return exactKeys(record, legacyKeys) &&
+        validRestoreProofCommon(record)
+      ? record as unknown as LegacyPreviewRollbackRestoreProof
+      : undefined;
+  }
+  const v2Keys = [
     "bindingProfile",
     "candidateOperation",
     "candidateRunRefHash",
@@ -432,23 +560,29 @@ function parseRestoreProof(
     "restoredCommit",
   ];
   if (
-    !exactKeys(record, expectedKeys) ||
-    ownDataValue(record, "evidenceType") !==
-      "vision.preview-rollback-restored/v1" ||
+    version !== "vision.preview-rollback-restored/v2" ||
+    !exactKeys(record, v2Keys) ||
     !validCandidateOperation(ownDataValue(record, "candidateOperation")) ||
     derivePreviewBindingProfile(ownDataValue(record, "candidateOperation")) !==
       ownDataValue(record, "bindingProfile") ||
-    !validDigest(ownDataValue(record, "candidateRunRefHash")) ||
-    !validCommit(ownDataValue(record, "restoredCommit")) ||
-    ownDataValue(record, "normalProviderState") !== "verified" ||
-    !validInstant(ownDataValue(record, "restoredAt")) ||
-    !validInstant(ownDataValue(record, "providerVerifiedAt")) ||
-    Date.parse(ownDataValue(record, "providerVerifiedAt") as string) <=
-      Date.parse(ownDataValue(record, "restoredAt") as string)
+    !validRestoreProofCommon(record)
   ) {
     return undefined;
   }
-  return record as unknown as PreviewRollbackRestoreProof;
+  return record as unknown as PreviewRollbackRestoreProofV2;
+}
+
+/** Validates the fields shared by both restore-proof schema generations. */
+function validRestoreProofCommon(
+  record: Record<string, unknown> | undefined,
+): boolean {
+  return validDigest(ownDataValue(record, "candidateRunRefHash")) &&
+    validCommit(ownDataValue(record, "restoredCommit")) &&
+    ownDataValue(record, "normalProviderState") === "verified" &&
+    validInstant(ownDataValue(record, "restoredAt")) &&
+    validInstant(ownDataValue(record, "providerVerifiedAt")) &&
+    Date.parse(ownDataValue(record, "providerVerifiedAt") as string) >
+      Date.parse(ownDataValue(record, "restoredAt") as string);
 }
 
 /** Parses an exact pre-mutation candidate intent. */
@@ -456,16 +590,25 @@ function parseCandidateIntent(
   input: unknown,
 ): PreviewCandidateIntent | undefined {
   const record = plainObject(input);
+  const version = ownDataValue(record, "evidenceType");
+  if (version === "vision.preview-candidate-intent/v1") {
+    return exactKeys(record, ["candidateCommit", "evidenceType"]) &&
+        validCommit(ownDataValue(record, "candidateCommit"))
+      ? record as unknown as LegacyPreviewCandidateIntent
+      : undefined;
+  }
   if (
     !exactKeys(record, [
+      "acceptanceBindings",
       "bindingProfile",
       "candidateCommit",
+      "candidateConfigHash",
       "candidateOperation",
       "evidenceType",
     ]) ||
-    ownDataValue(record, "evidenceType") !==
-      "vision.preview-candidate-intent/v1" ||
+    version !== "vision.preview-candidate-intent/v2" ||
     !validCommit(ownDataValue(record, "candidateCommit")) ||
+    !validDigest(ownDataValue(record, "candidateConfigHash")) ||
     !validCandidateOperation(ownDataValue(record, "candidateOperation"))
   ) {
     return undefined;
@@ -474,14 +617,18 @@ function parseCandidateIntent(
     if (
       derivePreviewBindingProfile(
         ownDataValue(record, "candidateOperation"),
-      ) !== ownDataValue(record, "bindingProfile")
+      ) !== ownDataValue(record, "bindingProfile") ||
+      !validAcceptanceBindings(
+        ownDataValue(record, "acceptanceBindings"),
+        ownDataValue(record, "candidateOperation") as PreviewCandidateOperation,
+      )
     ) {
       return undefined;
     }
   } catch {
     return undefined;
   }
-  return record as unknown as PreviewCandidateIntent;
+  return record as unknown as PreviewCandidateIntentV2;
 }
 
 /** Parses one exact immutable marker for the may-mutate boundary. */
@@ -526,6 +673,39 @@ function allowedCandidateTransition(
   );
 }
 
+/** Applies the explicit legacy recovery policy without inventing provenance. */
+function allowedIntentTransition(
+  intent: PreviewCandidateIntent,
+  nextOperation: unknown,
+): boolean {
+  return intent.evidenceType === "vision.preview-candidate-intent/v1"
+    ? nextOperation === "verify_cleanup" ||
+      isNonRestoreCandidateOperation(nextOperation)
+    : allowedCandidateTransition(intent.candidateOperation, nextOperation);
+}
+
+/** Separates closure provenance from the commit being newly deployed. */
+function allowedClosureTransition(
+  closure: PreviewRollbackClosureProof,
+  intent: PreviewCandidateIntent | undefined,
+  operation: unknown,
+): boolean {
+  if (operation === "none") return true;
+  if (closure.evidenceType === "vision.preview-rollback-closed/v1") {
+    return operation === "verify_cleanup" ||
+      isNonRestoreCandidateOperation(operation);
+  }
+  if (
+    intent !== undefined &&
+    (intent.evidenceType !== "vision.preview-candidate-intent/v2" ||
+      intent.candidateOperation !== closure.candidateOperation ||
+      intent.bindingProfile !== closure.bindingProfile)
+  ) {
+    return false;
+  }
+  return allowedCandidateTransition(closure.candidateOperation, operation);
+}
+
 /** Allows normal candidates and the role probe, but never direct restore. */
 function isNonRestoreCandidateOperation(
   value: unknown,
@@ -552,7 +732,24 @@ function parseClosureProof(
   input: unknown,
 ): PreviewRollbackClosureProof | undefined {
   const record = plainObject(input);
-  const expectedKeys = [
+  const legacyKeys = [
+    "authenticatedReads",
+    "candidateRunRefHash",
+    "closedAt",
+    "closureProviderVerifiedAt",
+    "evidenceType",
+    "normalProviderState",
+    "restoreProofHash",
+    "restoredCommit",
+    "rollbackProviderVerifiedAt",
+  ];
+  const version = ownDataValue(record, "evidenceType");
+  if (version === "vision.preview-rollback-closed/v1") {
+    return exactKeys(record, legacyKeys) && validClosureProofCommon(record)
+      ? record as unknown as LegacyPreviewRollbackClosureProof
+      : undefined;
+  }
+  const v2Keys = [
     "authenticatedReads",
     "bindingProfile",
     "candidateOperation",
@@ -566,24 +763,30 @@ function parseClosureProof(
     "rollbackProviderVerifiedAt",
   ];
   if (
-    !exactKeys(record, expectedKeys) ||
-    ownDataValue(record, "evidenceType") !==
-      "vision.preview-rollback-closed/v1" ||
+    version !== "vision.preview-rollback-closed/v2" ||
+    !exactKeys(record, v2Keys) ||
     !validCandidateOperation(ownDataValue(record, "candidateOperation")) ||
     derivePreviewBindingProfile(ownDataValue(record, "candidateOperation")) !==
       ownDataValue(record, "bindingProfile") ||
-    !validDigest(ownDataValue(record, "candidateRunRefHash")) ||
-    !validCommit(ownDataValue(record, "restoredCommit")) ||
-    ownDataValue(record, "normalProviderState") !== "verified" ||
-    ownDataValue(record, "authenticatedReads") !== "verified" ||
-    !validDigest(ownDataValue(record, "restoreProofHash")) ||
-    !validInstant(ownDataValue(record, "rollbackProviderVerifiedAt")) ||
-    !validInstant(ownDataValue(record, "closureProviderVerifiedAt")) ||
-    !validInstant(ownDataValue(record, "closedAt"))
+    !validClosureProofCommon(record)
   ) {
     return undefined;
   }
-  return record as unknown as PreviewRollbackClosureProof;
+  return record as unknown as PreviewRollbackClosureProofV2;
+}
+
+/** Validates the fields shared by both closure-proof schema generations. */
+function validClosureProofCommon(
+  record: Record<string, unknown> | undefined,
+): boolean {
+  return validDigest(ownDataValue(record, "candidateRunRefHash")) &&
+    validCommit(ownDataValue(record, "restoredCommit")) &&
+    ownDataValue(record, "normalProviderState") === "verified" &&
+    ownDataValue(record, "authenticatedReads") === "verified" &&
+    validDigest(ownDataValue(record, "restoreProofHash")) &&
+    validInstant(ownDataValue(record, "rollbackProviderVerifiedAt")) &&
+    validInstant(ownDataValue(record, "closureProviderVerifiedAt")) &&
+    validInstant(ownDataValue(record, "closedAt"));
 }
 
 /** Requires one exact own enumerable string-key inventory. */
@@ -661,6 +864,134 @@ function validInstant(value: unknown): value is string {
   );
 }
 
+/** Accepts GitHub's canonical whole-second UTC metadata timestamps. */
+function validProviderInstant(value: unknown): value is string {
+  if (typeof value !== "string" || !PROVIDER_INSTANT_PATTERN.test(value)) {
+    return false;
+  }
+  const milliseconds = Date.parse(value);
+  return Number.isFinite(milliseconds) &&
+    new Date(milliseconds).toISOString().replace(".000Z", "Z") === value;
+}
+
+/** Reads the exact temporary acceptance values generated for one operation. */
+function readCandidateAcceptanceBindings(
+  candidateConfig: unknown,
+  operation: PreviewCandidateOperation,
+): PreviewCandidateAcceptanceBindings {
+  const config = plainObject(candidateConfig);
+  const vars = plainObject(ownDataValue(config, "vars"));
+  const scenario = ownDataValue(vars, "PREVIEW_ACCEPTANCE_SCENARIO");
+  const expiresAt = ownDataValue(vars, "PREVIEW_ACCEPTANCE_EXPIRES_AT");
+  const aiAttestation = ownDataValue(
+    vars,
+    "PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED",
+  );
+  const expectedScenario = operation === "deploy_foundation"
+    ? "foundation_probe"
+    : operation === "deploy_sync_suppression"
+      ? "sync_suppression"
+      : operation === "deploy_ai"
+        ? "ai_usage"
+        : operation === "deploy_role_probe"
+          ? "role_probe"
+          : operation === "deploy_restore"
+            ? "restore"
+            : undefined;
+  const validFaultScenario = operation === "deploy_fault" &&
+    (scenario === "queue_delayed" ||
+      scenario === "job_failed" ||
+      scenario === "channel_expired" ||
+      scenario === "database_unavailable" ||
+      scenario === "r2_upload_failed" ||
+      scenario === "ai_stopped");
+  if (
+    vars === undefined ||
+    (!validFaultScenario && scenario !== expectedScenario) ||
+    !validInstant(expiresAt) ||
+    (operation === "deploy_ai"
+      ? aiAttestation !== "true"
+      : Object.prototype.hasOwnProperty.call(
+          vars,
+          "PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED",
+        ))
+  ) {
+    throw new Error(INVALID);
+  }
+  return Object.freeze({
+    scenario: scenario as string,
+    expiresAt,
+    aiGatewayLimitAttested: operation === "deploy_ai" ? "true" : null,
+  });
+}
+
+/** Revalidates the immutable acceptance values embedded in a v2 intent. */
+function validAcceptanceBindings(
+  value: unknown,
+  operation: PreviewCandidateOperation,
+): boolean {
+  const record = plainObject(value);
+  if (
+    !exactKeys(record, ["aiGatewayLimitAttested", "expiresAt", "scenario"])
+  ) {
+    return false;
+  }
+  try {
+    const vars = {
+      PREVIEW_ACCEPTANCE_SCENARIO: ownDataValue(record, "scenario"),
+      PREVIEW_ACCEPTANCE_EXPIRES_AT: ownDataValue(record, "expiresAt"),
+      ...(ownDataValue(record, "aiGatewayLimitAttested") === "true"
+        ? { PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true" }
+        : {}),
+    };
+    const parsed = readCandidateAcceptanceBindings({ vars }, operation);
+    return ownDataValue(record, "aiGatewayLimitAttested") ===
+      parsed.aiGatewayLimitAttested;
+  } catch {
+    return false;
+  }
+}
+
+/** Hashes one accessor-free JSON value after recursively sorting object keys. */
+function digestCanonicalValue(value: unknown): string {
+  const canonical = canonicalizeJson(value, 0);
+  return createHash("sha256")
+    .update(JSON.stringify(canonical), "utf8")
+    .digest("hex");
+}
+
+/** Builds a deterministic JSON value without invoking caller-owned accessors. */
+function canonicalizeJson(value: unknown, depth: number): unknown {
+  if (depth > 32) throw new Error(INVALID);
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw new Error(INVALID);
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => canonicalizeJson(entry, depth + 1));
+  }
+  const record = plainObject(value);
+  if (record === undefined) throw new Error(INVALID);
+  const keys = Reflect.ownKeys(record);
+  if (keys.some((key) => typeof key !== "string")) throw new Error(INVALID);
+  const canonical: Record<string, unknown> = {};
+  for (const key of (keys as string[]).sort()) {
+    const descriptor = Object.getOwnPropertyDescriptor(record, key);
+    if (descriptor?.enumerable !== true || !("value" in descriptor)) {
+      throw new Error(INVALID);
+    }
+    canonical[key] = canonicalizeJson(descriptor.value, depth + 1);
+  }
+  return canonical;
+}
+
 /** Hashes a run reference before binding it into a lifecycle artifact. */
 function hashCandidateRunRef(candidateRunRef: string): string {
   return createHash("sha256")
@@ -671,15 +1002,7 @@ function hashCandidateRunRef(candidateRunRef: string): string {
 
 /** Hashes the canonical immutable candidate intent. */
 function digestCandidateIntent(intent: PreviewCandidateIntent): string {
-  const canonical = {
-    evidenceType: "vision.preview-candidate-intent/v1" as const,
-    candidateCommit: intent.candidateCommit,
-    candidateOperation: intent.candidateOperation,
-    bindingProfile: derivePreviewBindingProfile(intent.candidateOperation),
-  };
-  return createHash("sha256")
-    .update(JSON.stringify(canonical), "utf8")
-    .digest("hex");
+  return digestCanonicalValue(intent);
 }
 
 /** Produces the deterministic digest used by the closure transition. */
@@ -733,12 +1056,13 @@ async function main(): Promise<void> {
     const [mode, ...rest] = process.argv.slice(2);
     const parsed = readPairs(rest);
     let successOutput = "Preview rollback lifecycle proof is valid.\n";
-    if (mode === "--write-candidate-intent" && parsed.size === 3) {
+    if (mode === "--write-candidate-intent" && parsed.size === 4) {
       await writeJson(
         parsed.get("--output"),
         createPreviewCandidateIntent({
           candidateCommit: parsed.get("--commit"),
           operation: parsed.get("--operation"),
+          candidateConfig: await readJson(parsed.get("--candidate-config")),
         }),
       );
     } else if (
@@ -754,13 +1078,14 @@ async function main(): Promise<void> {
       });
     } else if (
       mode === "--write-mutation-boundary" &&
-      parsed.size === 3
+      parsed.size === 4
     ) {
       await writeJson(
         parsed.get("--output"),
         createPreviewCandidateMutationBoundary({
           candidateIntent: await readJson(parsed.get("--candidate-intent")),
           candidateRunRef: parsed.get("--candidate-run-ref"),
+          candidateConfig: await readJson(parsed.get("--candidate-config")),
         }),
       );
     } else if (
@@ -773,13 +1098,20 @@ async function main(): Promise<void> {
       })}\n`;
     } else if (
       mode === "--verify-mutation-boundary" &&
-      parsed.size === 4
+      (parsed.size === 4 || parsed.size === 5)
     ) {
       assertPreviewCandidateMutationBoundary({
         candidateIntent: await readJson(parsed.get("--candidate-intent")),
         mutationBoundary: await readJson(parsed.get("--mutation-boundary")),
         candidateRunRef: parsed.get("--candidate-run-ref"),
         expectedCommit: parsed.get("--commit"),
+        ...(parsed.has("--candidate-config")
+          ? {
+              candidateConfig: await readJson(
+                parsed.get("--candidate-config"),
+              ),
+            }
+          : {}),
       });
     } else if (mode === "--write-restore-proof" && parsed.size === 7) {
       await writeJson(
@@ -807,13 +1139,29 @@ async function main(): Promise<void> {
           closedAt: parsed.get("--closed-at"),
         }),
       );
-    } else if (mode === "--verify-closure" && parsed.size === 4) {
+    } else if (
+      mode === "--verify-closure" &&
+      (parsed.size === 4 || parsed.size === 5)
+    ) {
       assertPreviewRollbackClosure({
         closureProof: await readJson(parsed.get("--closure-proof")),
         latestCandidateRunRef: parsed.get("--candidate-run-ref"),
         expectedCommit: parsed.get("--commit"),
         operation: parsed.get("--operation"),
+        ...(parsed.has("--candidate-intent")
+          ? {
+              candidateIntent: await readJson(
+                parsed.get("--candidate-intent"),
+              ),
+            }
+          : {}),
       });
+    } else if (mode === "--read-candidate-commit" && parsed.size === 1) {
+      const intent = parseCandidateIntent(
+        await readJson(parsed.get("--candidate-intent")),
+      );
+      if (intent === undefined) throw new Error(INVALID);
+      successOutput = `${intent.candidateCommit}\n`;
     } else if (mode === "--verify-latest-candidate" && parsed.size === 2) {
       const latest = readLatestPreviewCandidateRunRef(
         await readJson(parsed.get("--artifacts-file")),

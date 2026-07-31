@@ -752,8 +752,9 @@ const EXPECTED_SHARED_RESIDUE_PATHS = [
       "tests/security/secret-bundle.test.ts",
       "tests/unit/ci/workflows.test.ts",
       "tests/unit/jobs/temporary-preview-restore-production.test.ts",
-      "tests/unit/scripts/preview-acceptance-context.test.ts",
+  "tests/unit/scripts/preview-acceptance-context.test.ts",
   "tests/unit/scripts/preview-acceptance-controller.test.ts",
+  "tests/unit/scripts/preview-restore-readmission.test.ts",
   "tests/unit/scripts/preview-tail-supervisor.test.ts",
   "tests/unit/scripts/print-safe-tail.test.ts",
   "tests/unit/scripts/production-deploy-config.test.ts",
@@ -1264,8 +1265,8 @@ describe("post-acceptance temporary surface cleanup", () => {
     );
     expect(TEMPORARY_PATHS).toHaveLength(60);
     expect(new Set(TEMPORARY_PATHS)).toHaveLength(60);
-    expect(EXPECTED_SHARED_RESIDUE_PATHS).toHaveLength(49);
-    expect(new Set(EXPECTED_SHARED_RESIDUE_PATHS)).toHaveLength(49);
+    expect(EXPECTED_SHARED_RESIDUE_PATHS).toHaveLength(50);
+    expect(new Set(EXPECTED_SHARED_RESIDUE_PATHS)).toHaveLength(50);
     expect(new Set(PERMANENT_PATHS)).toHaveLength(PERMANENT_PATHS.length);
     expect(referenceInventory(TEMPORARY_PATHS, "simple")).toEqual(
       referenceInventory(TEMPORARY_PATHS, "technical"),
@@ -1372,8 +1373,10 @@ describe("post-acceptance temporary surface cleanup", () => {
     expect(usage).toContain("calculateUsageWarnings");
     expect(previewWorkflow).toContain("vision-preview-observer");
     expect(previewWorkflow).toContain("vision-preview-mutation");
-    expect(previewWorkflow).toContain("timeout-minutes: 46");
-    expect(previewWorkflow).toContain("timeout 44m");
+    expect(previewWorkflow.match(/timeout-minutes: 48/gu)).toHaveLength(7);
+    expect(previewWorkflow.match(/timeout 46m/gu)).toHaveLength(7);
+    expect(previewWorkflow).not.toContain("timeout-minutes: 46");
+    expect(previewWorkflow).not.toContain("timeout 44m");
     expect(releaseScanner).toContain("scanRelease");
     expect(secretBundleTest).toContain("client secret-bundle boundary");
     expect(protectedSentinelTest).toContain("protected sentinel");

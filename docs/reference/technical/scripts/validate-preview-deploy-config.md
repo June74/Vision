@@ -3,19 +3,36 @@
 Requires exactly two additional secret names.
 
 ## `validatePreviewProviderStateForCandidateIntent`
-Reads the binding profile only from the commit-bound lifecycle intent and
-derives the exact live provider contract from its admitted operation.
+Reads provider details only from the commit-bound lifecycle intent and derives
+the exact live provider contract from its admitted operation and temporary
+values.
 `deploy_sync_suppression` requires the normal two schedules; the other five
 candidate operations require those schedules plus the temporary one-minute
-schedule. Binding validation remains normal or restore-pair as encoded by the
-same intent.
+schedule. Binding validation includes exact scenario and expiry values, AI
+attestation only for AI usage, and restore secrets only for a restore pair.
 
 ## `validatePreviewProviderStateForRollback`
 
 Revalidates the exact commit-bound intent, then dispatches only
 `not_started` to the strict normal provider validator and
-`may_have_started` to the strict candidate-profile validator. Any alias,
-stale intent, or provider mismatch maps to the generic provider-state failure.
+`may_have_started` to exact normal-or-candidate validation because the durable
+boundary precedes the deploy call. Any alias, stale intent, or provider
+mismatch maps to the generic provider-state failure.
+
+## `matchesCandidateProviderBindings`
+
+Filters the exact temporary name set, verifies the remaining permanent
+contract, and matches each temporary name/type/text tuple to the v2 intent.
+
+## `matchesProviderBinding`
+
+Requires an exact own-key inventory and compares name, type, and optional text
+without coercion.
+
+## `matchesAnyLegacyCandidateProviderState`
+
+Recognizes only one exact generated selector inventory, matching schedules,
+AI rule, and restore-pair rule while recovering an old v1 intent.
 
 ## `matchesNormalProviderHealthAndSchedules`
 Requires `status=ok`, a successful schedules envelope, and exactly the two
@@ -32,10 +49,6 @@ contract exactly once.
 ## `matchesTemporaryRestorePairBindings`
 Requires the immutable normal inventory plus exactly one secret binding for
 each approved restore-pair name, with no extra binding.
-
-## `readCandidateOperation`
-Reads one own data operation from the candidate intent after the lifecycle
-parser has already authenticated its exact shape and reviewed commit.
 
 ## `matchesTemporaryRestoreBinding`
 Requires an ordinary exact `{ name, type }` record whose type is

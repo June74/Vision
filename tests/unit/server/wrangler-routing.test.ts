@@ -17,6 +17,7 @@ import {
   validatePreviewAcceptanceDeployConfig,
   validatePreviewDeployConfig,
 } from "../../../scripts/validate-preview-deploy-config";
+import { createPreviewCandidateIntent } from "../../../scripts/validate-preview-rollback-lifecycle";
 import {
   AI_PRICING_BINDING_CONTRACT,
   AI_PRICING_POLICY_VALUES,
@@ -50,6 +51,7 @@ const CANDIDATE_OPERATIONS = [
 ] as const;
 type CandidateOperation = (typeof CANDIDATE_OPERATIONS)[number];
 const REVIEWED_COMMIT = "a".repeat(40);
+const ACCEPTANCE_STARTED_AT = new Date("2026-07-30T18:00:00.000Z");
 const NORMAL_PREVIEW_PROVIDER_BINDINGS = [
   ...AI_PRICING_BINDING_CONTRACT.map(({ name, type, value }) => ({
     name,
@@ -168,6 +170,13 @@ function normalProviderState(): {
 function candidateProviderState(operation: CandidateOperation): ReturnType<
   typeof normalProviderState
 > {
+  const selector = candidateSelector(operation);
+  const candidateConfig = preparePreviewAcceptanceDeployConfig({
+    normalConfig: previewArtifact(),
+    selector,
+    ...(selector === "ai_usage" ? { aiGatewayLimitAttested: true } : {}),
+    activatedAt: ACCEPTANCE_STARTED_AT,
+  });
   const providerState = normalProviderState();
   if (operation !== "deploy_sync_suppression") {
     providerState.schedulesResponse = {
@@ -183,20 +192,48 @@ function candidateProviderState(operation: CandidateOperation): ReturnType<
       { name: "PREVIEW_RESTORE_TARGET_ID", type: "secret_text" },
     );
   }
+  const candidateVars = candidateConfig.vars as Record<string, string>;
+  const bindings = (
+    providerState.settingsResponse as { result: { bindings: unknown[] } }
+  ).result.bindings;
+  for (const name of [
+    "PREVIEW_ACCEPTANCE_EXPIRES_AT",
+    "PREVIEW_ACCEPTANCE_SCENARIO",
+    "PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED",
+  ]) {
+    if (candidateVars[name] !== undefined) {
+      bindings.push({ name, type: "plain_text", text: candidateVars[name] });
+    }
+  }
   return providerState;
 }
 
 /** Builds the exact commit-bound candidate marker for one operation. */
 function candidateIntent(operation: CandidateOperation) {
-  return {
-    evidenceType: "vision.preview-candidate-intent/v1",
+  const selector = candidateSelector(operation);
+  const candidateConfig = preparePreviewAcceptanceDeployConfig({
+    normalConfig: previewArtifact(),
+    selector,
+    ...(selector === "ai_usage" ? { aiGatewayLimitAttested: true } : {}),
+    activatedAt: ACCEPTANCE_STARTED_AT,
+  });
+  return createPreviewCandidateIntent({
     candidateCommit: REVIEWED_COMMIT,
-    candidateOperation: operation,
-    bindingProfile:
-      operation === "deploy_role_probe" || operation === "deploy_restore"
-        ? "restore_pair"
-        : "normal",
-  } as const;
+    operation,
+    candidateConfig,
+  });
+}
+
+/** Maps one workflow operation to its generated candidate selector. */
+function candidateSelector(operation: CandidateOperation): PreviewAcceptanceSelector {
+  switch (operation) {
+    case "deploy_foundation": return "foundation_probe";
+    case "deploy_sync_suppression": return "sync_suppression";
+    case "deploy_ai": return "ai_usage";
+    case "deploy_fault": return "job_failed";
+    case "deploy_role_probe": return "role_probe";
+    case "deploy_restore": return "restore";
+  }
 }
 
 describe("Cloudflare asset and normal schedule routing", () => {
@@ -943,11 +980,19 @@ describe("normal preview live provider-state validation", () => {
           ...normalProviderState(),
         }),
       ).not.toThrow();
+      expect(() =>
+        validatePreviewProviderStateForRollback({
+          candidateIntent: candidateIntent(operation),
+          expectedCommit: REVIEWED_COMMIT,
+          mutationState: "not_started",
+          ...candidateProviderState(operation),
+        }),
+      ).toThrow("Normal preview provider state is invalid.");
     },
   );
 
   it.each(CANDIDATE_OPERATIONS)(
-    "requires the exact candidate profile once %s may have started",
+    "admits exact candidate or exact normal state once %s may have started",
     (operation) => {
       expect(() =>
         validatePreviewProviderStateForRollback({
@@ -958,18 +1003,44 @@ describe("normal preview live provider-state validation", () => {
         }),
       ).not.toThrow();
 
-      if (operation !== "deploy_sync_suppression") {
-        expect(() =>
-          validatePreviewProviderStateForRollback({
-            candidateIntent: candidateIntent(operation),
-            expectedCommit: REVIEWED_COMMIT,
-            mutationState: "may_have_started",
-            ...normalProviderState(),
-          }),
-        ).toThrow("Normal preview provider state is invalid.");
-      }
+      expect(() =>
+        validatePreviewProviderStateForRollback({
+          candidateIntent: candidateIntent(operation),
+          expectedCommit: REVIEWED_COMMIT,
+          mutationState: "may_have_started",
+          ...normalProviderState(),
+        }),
+      ).not.toThrow();
     },
   );
+
+  it("recovers an exact legacy v1 intent without weakening mutation state", () => {
+    const legacyIntent = {
+      evidenceType: "vision.preview-candidate-intent/v1",
+      candidateCommit: REVIEWED_COMMIT,
+    };
+    for (const providerState of [
+      normalProviderState(),
+      candidateProviderState("deploy_foundation"),
+    ]) {
+      expect(() =>
+        validatePreviewProviderStateForRollback({
+          candidateIntent: legacyIntent,
+          expectedCommit: REVIEWED_COMMIT,
+          mutationState: "may_have_started",
+          ...providerState,
+        }),
+      ).not.toThrow();
+    }
+    expect(() =>
+      validatePreviewProviderStateForRollback({
+        candidateIntent: legacyIntent,
+        expectedCommit: REVIEWED_COMMIT,
+        mutationState: "not_started",
+        ...candidateProviderState("deploy_foundation"),
+      }),
+    ).toThrow("Normal preview provider state is invalid.");
+  });
 
   it("fails closed for unknown recovery state and stale intent", () => {
     for (const override of [
@@ -989,7 +1060,7 @@ describe("normal preview live provider-state validation", () => {
   });
 
   it.each(CANDIDATE_OPERATIONS)(
-    "derives the exact candidate schedule profile for %s",
+    "derives the exact generated candidate provider profile for %s",
     (operation) => {
       const expected = candidateProviderState(operation);
       expect(() =>
@@ -1021,6 +1092,21 @@ describe("normal preview live provider-state validation", () => {
           }),
         ).toThrow("Normal preview provider state is invalid.");
       }
+      const settings = structuredClone(expected.settingsResponse) as {
+        result: { bindings: Array<Record<string, unknown>> };
+      };
+      const scenario = settings.result.bindings.find(
+        (binding) => binding.name === "PREVIEW_ACCEPTANCE_SCENARIO",
+      )!;
+      scenario.text = "forged";
+      expect(() =>
+        validatePreviewProviderStateForCandidateIntent({
+          candidateIntent: candidateIntent(operation),
+          expectedCommit: REVIEWED_COMMIT,
+          ...expected,
+          settingsResponse: settings,
+        }),
+      ).toThrow("Normal preview provider state is invalid.");
     },
   );
 
@@ -1028,12 +1114,7 @@ describe("normal preview live provider-state validation", () => {
     const normal = candidateProviderState("deploy_foundation");
     expect(() =>
       validatePreviewProviderStateForCandidateIntent({
-        candidateIntent: {
-          evidenceType: "vision.preview-candidate-intent/v1",
-          candidateCommit: REVIEWED_COMMIT,
-          candidateOperation: "deploy_foundation",
-          bindingProfile: "normal",
-        },
+        candidateIntent: candidateIntent("deploy_foundation"),
         expectedCommit: REVIEWED_COMMIT,
         ...normal,
       }),
@@ -1042,34 +1123,25 @@ describe("normal preview live provider-state validation", () => {
     const restorePair = candidateProviderState("deploy_restore");
     expect(() =>
       validatePreviewProviderStateForCandidateIntent({
-        candidateIntent: {
-          evidenceType: "vision.preview-candidate-intent/v1",
-          candidateCommit: REVIEWED_COMMIT,
-          candidateOperation: "deploy_restore",
-          bindingProfile: "restore_pair",
-        },
+        candidateIntent: candidateIntent("deploy_restore"),
         expectedCommit: REVIEWED_COMMIT,
         ...restorePair,
       }),
     ).not.toThrow();
 
-    for (const candidateIntent of [
+    for (const forgedIntent of [
       {
-        evidenceType: "vision.preview-candidate-intent/v1",
-        candidateCommit: REVIEWED_COMMIT,
-        candidateOperation: "deploy_restore",
+        ...candidateIntent("deploy_restore"),
         bindingProfile: "normal",
       },
       {
-        evidenceType: "vision.preview-candidate-intent/v1",
+        ...candidateIntent("deploy_restore"),
         candidateCommit: "b".repeat(40),
-        candidateOperation: "deploy_restore",
-        bindingProfile: "restore_pair",
       },
     ]) {
       expect(() =>
         validatePreviewProviderStateForCandidateIntent({
-          candidateIntent,
+          candidateIntent: forgedIntent,
           expectedCommit: REVIEWED_COMMIT,
           ...restorePair,
         }),

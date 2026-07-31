@@ -382,7 +382,7 @@ describe("preview live diagnostics policy", () => {
         "  cancel-in-progress: false",
     );
     expect(preview).not.toContain("group: vision-preview\n");
-    expect(tailJob).toContain("timeout-minutes: 46");
+    expect(tailJob).toContain("timeout-minutes: 48");
     expect(tailJob).toContain(
       `uses: ${CHECKOUT_ACTION}\n` +
         "        with:\n" +
@@ -392,7 +392,7 @@ describe("preview live diagnostics policy", () => {
     expect(tailJob).not.toContain("gateway:configure:preview");
     expect(tailJob).not.toContain("actions/upload-artifact");
     expect(tailStep).toContain(
-      "timeout 44m pnpm exec tsx scripts/run-preview-tail-supervisor.ts",
+      "timeout 46m pnpm exec tsx scripts/run-preview-tail-supervisor.ts",
     );
     expect(tailStep).not.toContain("--restore-only");
     expect(tailStep).not.toContain("--role-probe-only");
@@ -529,13 +529,13 @@ describe("preview acceptance candidate workflow", () => {
       "group: ${{ inputs.acceptance_operation == 'observe' && inputs.configure_ai_budget == false && 'vision-preview-observer' || 'vision-preview-mutation' }}",
     );
     expect(preview).toContain("cancel-in-progress: false");
-    expect(observer).toContain("timeout-minutes: 46");
+    expect(observer).toContain("timeout-minutes: 48");
     expect(candidate).toContain("timeout-minutes: 30");
     expect(rollback).toContain("timeout-minutes: 15");
     expect(observer).toContain("ref: ${{ github.sha }}");
     expect(observer).not.toContain("wrangler deploy");
     expect(observer).not.toContain("gateway:configure:preview");
-    expect(tailStep).toContain("timeout 44m");
+    expect(tailStep).toContain("timeout 46m");
     expect(tailStep).toContain("scripts/run-preview-tail-supervisor.ts");
     expect(tailStep).not.toContain("wrangler tail");
     expect(tailStep).not.toContain("actions/upload-artifact");
@@ -554,6 +554,10 @@ describe("preview acceptance candidate workflow", () => {
     ];
     for (const jobName of observerJobs) {
       const observer = readWorkflowJob(preview, jobName);
+      expect(observer).toContain("timeout-minutes: 48");
+      expect(observer).toContain(
+        "timeout 46m pnpm exec tsx scripts/run-preview-tail-supervisor.ts",
+      );
       expect(observer).toContain(
         "REVIEWED_SHA: ${{ needs.selection.outputs.reviewed_commit }}",
       );
@@ -645,10 +649,10 @@ describe("preview acceptance candidate workflow", () => {
         (step) => step.name === "Print only allowlisted acceptance evidence",
       );
       const timeoutMatch = listener?.run?.match(/\btimeout (\d+)m\b/u);
-      expect(job?.["timeout-minutes"], jobName).toBe(46);
+      expect(job?.["timeout-minutes"], jobName).toBe(48);
       expect(timeoutMatch, jobName).not.toBeNull();
       const innerSeconds = Number(timeoutMatch?.[1]) * 60;
-      expect(innerSeconds, jobName).toBe(44 * 60);
+      expect(innerSeconds, jobName).toBe(46 * 60);
       expect(innerSeconds, jobName).toBeGreaterThanOrEqual(
         requiredInnerSeconds,
       );
@@ -807,6 +811,24 @@ describe("preview acceptance candidate workflow", () => {
     expect(deployIndex).toBe(uploadIndex + 1);
   });
 
+  it("binds candidate intent and mutation boundary to the generated config", async () => {
+    const preview = await readWorkflow("preview.yml");
+    const intent = readWorkflowStep(
+      preview,
+      "Write candidate intent before preview mutation",
+    );
+    const boundary = readWorkflowStep(
+      preview,
+      "Write candidate mutation boundary",
+    );
+    expect(intent).toContain(
+      "--candidate-config dist/vision/wrangler.acceptance.json",
+    );
+    expect(boundary).toContain(
+      "--candidate-config dist/vision/wrangler.acceptance.json",
+    );
+  });
+
   it("gates normal deployment on the exact latest rollback closure", async () => {
     const preview = await readWorkflow("preview.yml");
     const deploy = readWorkflowJob(preview, "deploy");
@@ -824,6 +846,10 @@ describe("preview acceptance candidate workflow", () => {
       "scripts/validate-preview-rollback-lifecycle.ts --verify-closure",
     );
     expect(admission).toContain('--operation "none"');
+    expect(admission).toContain("--read-candidate-commit");
+    expect(admission).toContain('--commit "$candidate_commit"');
+    expect(admission).toContain('--commit "$VERIFIED_SHA"');
+    expect(admission).toContain('--candidate-intent "$candidate_intent"');
     expect(admission).toContain(
       "CANDIDATE_RUN_REF: ${{ needs.selection.outputs.candidate_run_ref }}",
     );
@@ -973,6 +999,12 @@ describe("preview acceptance candidate workflow", () => {
     expect(candidateClosure).toContain(
       '--operation "${{ inputs.acceptance_operation }}"',
     );
+    expect(candidateClosure).toContain("--read-candidate-commit");
+    expect(candidateClosure).toContain('--commit "$candidate_commit"');
+    expect(candidateClosure).toContain('--commit "$VERIFIED_SHA"');
+    expect(candidateClosure).toContain(
+      '--candidate-intent "$candidate_intent"',
+    );
     expect(candidateClosure).toContain(
       'gh run download "$ROLLBACK_CLOSURE_RUN_ID" --name vision-preview-rollback-closed',
     );
@@ -1076,6 +1108,10 @@ describe("preview acceptance candidate workflow", () => {
       "scripts/validate-preview-rollback-lifecycle.ts --verify-closure",
     );
     expect(cleanupClosure).toContain('--operation "verify_cleanup"');
+    expect(cleanupClosure).toContain("--read-candidate-commit");
+    expect(cleanupClosure).toContain('--commit "$candidate_commit"');
+    expect(cleanupClosure).toContain('--commit "$VERIFIED_SHA"');
+    expect(cleanupClosure).toContain('--candidate-intent "$candidate_intent"');
     expect(cleanupProvider).toContain("--verify-provider-state");
     expect(cleanupProvider).toContain("schedules");
     expect(cleanupProvider).toContain("settings");

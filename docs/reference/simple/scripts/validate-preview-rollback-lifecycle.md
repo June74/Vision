@@ -8,7 +8,8 @@ status labels, and commit/run bindings.
 
 ## `createPreviewCandidateIntent`
 
-Creates the marker that must be uploaded before preview mutation.
+Creates a v2 marker that binds the commit, operation, exact temporary values,
+and a digest of the generated candidate configuration.
 
 ## `createPreviewCandidateMutationBoundary`
 
@@ -35,6 +36,11 @@ Checks that the downloaded marker belongs to the reviewed commit.
 Returns the operation-derived binding profile from an exact commit-bound
 candidate marker.
 
+## `readPreviewCandidateIntentDetails`
+
+Returns only the validated provider-state details from a v2 marker, or a safe
+legacy label for an exact old v1 marker.
+
 ## `createPreviewRollbackRestoreProof`
 
 Creates proof only after the normal commit and provider state are restored.
@@ -59,7 +65,11 @@ Checks one exact successful rollback or closure job at the reviewed commit.
 
 ## `parseRestoreProof`
 
-Accepts only the exact restored-normal proof shape.
+Accepts only an exact v1 or v2 restored-normal proof shape.
+
+## `validRestoreProofCommon`
+
+Checks the fields and ordered local timestamps shared by both proof versions.
 
 ## `parseCandidateIntent`
 
@@ -72,6 +82,15 @@ Accepts only the exact value-free mutation-boundary proof shape.
 ## `allowedCandidateTransition`
 
 Checks the one allowed same-commit follow-on operation.
+
+## `allowedIntentTransition`
+
+Keeps old v1 markers recoverable while forbidding direct restore without v2
+operation provenance.
+
+## `allowedClosureTransition`
+
+Checks closure provenance separately from the commit being newly deployed.
 
 ## `isNonRestoreCandidateOperation`
 
@@ -88,7 +107,11 @@ Narrows an unknown value to the same closed operation vocabulary.
 
 ## `parseClosureProof`
 
-Accepts only the exact closure shape.
+Accepts only an exact v1 or v2 closure shape.
+
+## `validClosureProofCommon`
+
+Checks the proof fields shared by both closure versions.
 
 ## `exactKeys`
 
@@ -120,7 +143,28 @@ Checks a complete lifecycle hash.
 
 ## `validInstant`
 
-Checks a canonical UTC timestamp.
+Checks a canonical millisecond UTC timestamp for locally created proofs.
+
+## `validProviderInstant`
+
+Checks the canonical whole-second UTC timestamps returned by GitHub.
+
+## `readCandidateAcceptanceBindings`
+
+Reads the exact scenario, expiry, and AI-only attestation from a generated
+candidate configuration.
+
+## `validAcceptanceBindings`
+
+Rechecks the temporary values embedded in a downloaded v2 intent.
+
+## `digestCanonicalValue`
+
+Hashes one deterministic, accessor-free JSON representation.
+
+## `canonicalizeJson`
+
+Recursively sorts safe JSON object keys before hashing.
 
 ## `hashCandidateRunRef`
 

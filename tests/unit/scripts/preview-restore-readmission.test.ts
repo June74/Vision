@@ -21,6 +21,12 @@ function closureProof() {
   const intent = createPreviewCandidateIntent({
     candidateCommit: COMMIT,
     operation: "deploy_role_probe",
+    candidateConfig: {
+      vars: {
+        PREVIEW_ACCEPTANCE_SCENARIO: "role_probe",
+        PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-30T18:30:00.000Z",
+      },
+    },
   });
   const restore = createPreviewRollbackRestoreProof({
     candidateIntent: intent,
@@ -49,8 +55,8 @@ function dependencies(): PreviewRestoreReadmissionDependencies {
         conclusion: "success",
         head_sha: COMMIT,
         path: ".github/workflows/preview.yml",
-        run_started_at: "2026-07-29T07:00:00.000Z",
-        updated_at: "2026-07-29T07:03:00.000Z",
+        run_started_at: "2026-07-29T07:00:00Z",
+        updated_at: "2026-07-29T07:03:00Z",
       }),
       stderr: CANARY,
     },

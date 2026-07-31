@@ -8,7 +8,10 @@ import {
 } from "../src/server/ai-pricing-binding-contract";
 import { TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS } from "../src/domain/operations/temporary-preview-fault";
 import type { PreviewAcceptanceSelector } from "./prepare-preview-acceptance-deploy-config";
-import { readPreviewCandidateBindingProfile } from "./validate-preview-rollback-lifecycle";
+import {
+  readPreviewCandidateIntentDetails,
+  type PreviewCandidateAcceptanceBindings,
+} from "./validate-preview-rollback-lifecycle";
 
 const INVALID_NORMAL = "Preview deployment configuration is invalid.";
 const INVALID_ACCEPTANCE =
@@ -16,15 +19,6 @@ const INVALID_ACCEPTANCE =
 const INVALID_PROVIDER_STATE = "Normal preview provider state is invalid.";
 const NORMAL_CRONS = ["*/15 * * * *", "5 6 * * *"] as const;
 const ACCEPTANCE_CRON = "* * * * *";
-const CANDIDATE_OPERATIONS = Object.freeze([
-  "deploy_foundation",
-  "deploy_sync_suppression",
-  "deploy_ai",
-  "deploy_fault",
-  "deploy_role_probe",
-  "deploy_restore",
-] as const);
-type CandidateOperation = (typeof CANDIDATE_OPERATIONS)[number];
 const CANONICAL_INSTANT =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const NORMAL_VAR_ENTRIES = Object.freeze({
@@ -143,7 +137,7 @@ export function validatePreviewProviderStateForCandidateIntent(input: {
   readonly schedulesResponse: unknown;
   readonly settingsResponse: unknown;
 }): void {
-  const profile = readPreviewCandidateBindingProfile({
+  const details = readPreviewCandidateIntentDetails({
     candidateIntent: input.candidateIntent,
     expectedCommit: input.expectedCommit,
   });
@@ -152,16 +146,22 @@ export function validatePreviewProviderStateForCandidateIntent(input: {
     schedulesResponse: input.schedulesResponse,
     settingsResponse: input.settingsResponse,
   };
-  const operation = readCandidateOperation(input.candidateIntent);
-  const expectedCrons = operation === "deploy_sync_suppression"
+  if (details.legacy) {
+    if (!matchesAnyLegacyCandidateProviderState(providerState)) {
+      throw new Error(INVALID_PROVIDER_STATE);
+    }
+    return;
+  }
+  const expectedCrons = details.operation === "deploy_sync_suppression"
     ? NORMAL_CRONS
     : [...NORMAL_CRONS, ACCEPTANCE_CRON];
-  const bindingsMatch = profile === "restore_pair"
-    ? matchesTemporaryRestorePairBindings(providerState.settingsResponse)
-    : matchesNormalProviderBindings(providerState.settingsResponse);
   if (
     !matchesProviderHealthAndSchedules(providerState, expectedCrons) ||
-    !bindingsMatch
+    !matchesCandidateProviderBindings(
+      providerState.settingsResponse,
+      details.acceptanceBindings,
+      details.bindingProfile === "restore_pair",
+    )
   ) {
     throw new Error(INVALID_PROVIDER_STATE);
   }
@@ -177,7 +177,7 @@ export function validatePreviewProviderStateForRollback(input: {
   readonly settingsResponse: unknown;
 }): void {
   try {
-    readPreviewCandidateBindingProfile({
+    readPreviewCandidateIntentDetails({
       candidateIntent: input.candidateIntent,
       expectedCommit: input.expectedCommit,
     });
@@ -186,13 +186,136 @@ export function validatePreviewProviderStateForRollback(input: {
       return;
     }
     if (input.mutationState === "may_have_started") {
-      validatePreviewProviderStateForCandidateIntent(input);
-      return;
+      try {
+        validateNormalPreviewProviderState(input);
+        return;
+      } catch {
+        validatePreviewProviderStateForCandidateIntent(input);
+        return;
+      }
     }
   } catch {
     throw new Error(INVALID_PROVIDER_STATE);
   }
   throw new Error(INVALID_PROVIDER_STATE);
+}
+
+/** Requires normal bindings plus exact intent-derived temporary bindings. */
+function matchesCandidateProviderBindings(
+  settingsResponse: unknown,
+  acceptance: PreviewCandidateAcceptanceBindings,
+  restorePair: boolean,
+): boolean {
+  const bindings = readProviderBindings(settingsResponse);
+  const expectedTemporary: readonly ProviderBindingContract[] = [
+    {
+      name: "PREVIEW_ACCEPTANCE_EXPIRES_AT",
+      type: "plain_text",
+      text: acceptance.expiresAt,
+    },
+    {
+      name: "PREVIEW_ACCEPTANCE_SCENARIO",
+      type: "plain_text",
+      text: acceptance.scenario,
+    },
+    ...(acceptance.aiGatewayLimitAttested === "true"
+      ? [{
+          name: "PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED",
+          type: "plain_text",
+          text: "true",
+        }]
+      : []),
+    ...(restorePair
+      ? [
+          { name: "PREVIEW_RESTORE_DATABASE_URL", type: "secret_text" },
+          { name: "PREVIEW_RESTORE_TARGET_ID", type: "secret_text" },
+        ]
+      : []),
+  ];
+  const temporaryNames = new Set(expectedTemporary.map(({ name }) => name));
+  if (
+    bindings === undefined ||
+    bindings.length !==
+      NORMAL_PROVIDER_BINDING_CONTRACT.length + expectedTemporary.length ||
+    !matchesNormalProviderBindingContract(
+      bindings.filter((binding) =>
+        !isPlainDataObject(binding) ||
+        !temporaryNames.has(String(ownDataValue(binding, "name")))
+      ),
+    )
+  ) return false;
+  const temporary = bindings.filter((binding) =>
+    isPlainDataObject(binding) &&
+    temporaryNames.has(String(ownDataValue(binding, "name")))
+  );
+  return expectedTemporary.every((expected) =>
+    temporary.some((binding) =>
+      matchesProviderBinding(binding, expected)
+    )
+  );
+}
+
+/** Matches one provider binding without accepting aliases or hidden fields. */
+function matchesProviderBinding(
+  value: unknown,
+  expected: ProviderBindingContract,
+): boolean {
+  if (!isPlainDataObject(value)) return false;
+  const expectedKeys = expected.text === undefined
+    ? ["name", "type"]
+    : ["name", "text", "type"];
+  const keys = Reflect.ownKeys(value);
+  return keys.length === expectedKeys.length &&
+    keys.every((key) =>
+      typeof key === "string" && expectedKeys.includes(key)
+    ) &&
+    ownDataValue(value, "name") === expected.name &&
+    ownDataValue(value, "type") === expected.type &&
+    (expected.text === undefined ||
+      ownDataValue(value, "text") === expected.text);
+}
+
+/** Accepts one exact known v1 candidate inventory during legacy recovery. */
+function matchesAnyLegacyCandidateProviderState(
+  input: NormalPreviewProviderState,
+): boolean {
+  const bindings = readProviderBindings(input.settingsResponse);
+  if (bindings === undefined) return false;
+  const scenarioBinding = bindings.find((binding) =>
+    isPlainDataObject(binding) &&
+    ownDataValue(binding, "name") === "PREVIEW_ACCEPTANCE_SCENARIO"
+  );
+  const expiresBinding = bindings.find((binding) =>
+    isPlainDataObject(binding) &&
+    ownDataValue(binding, "name") === "PREVIEW_ACCEPTANCE_EXPIRES_AT"
+  );
+  if (
+    !isPlainDataObject(scenarioBinding) ||
+    !isPlainDataObject(expiresBinding)
+  ) return false;
+  const scenario = ownDataValue(scenarioBinding, "text");
+  const expiresAt = ownDataValue(expiresBinding, "text");
+  if (
+    typeof scenario !== "string" ||
+    typeof expiresAt !== "string" ||
+    !ACCEPTANCE_SELECTORS.has(scenario as PreviewAcceptanceSelector) ||
+    !CANONICAL_INSTANT.test(expiresAt)
+  ) return false;
+  const acceptanceBindings: PreviewCandidateAcceptanceBindings = {
+    scenario,
+    expiresAt,
+    aiGatewayLimitAttested: scenario === "ai_usage" ? "true" : null,
+  };
+  const restorePair = scenario === "role_probe" || scenario === "restore";
+  const expectedCrons = scenario === "sync_suppression"
+    ? NORMAL_CRONS
+    : [...NORMAL_CRONS, ACCEPTANCE_CRON];
+  return matchesProviderHealthAndSchedules(input, expectedCrons) &&
+    matchesCandidateProviderBindings(
+      input.settingsResponse,
+      acceptanceBindings,
+      restorePair,
+    );
 }
 
 /** Reuses the normal runtime health and exact permanent schedule contract. */
@@ -266,18 +389,6 @@ function matchesTemporaryRestorePairBindings(
           matchesTemporaryRestoreBinding(binding, name)
         ),
     );
-}
-
-/** Reads the candidate operation already admitted by the lifecycle parser. */
-function readCandidateOperation(candidateIntent: unknown): CandidateOperation {
-  if (!isPlainDataObject(candidateIntent)) {
-    throw new Error(INVALID_PROVIDER_STATE);
-  }
-  const operation = ownDataValue(candidateIntent, "candidateOperation");
-  if (!CANDIDATE_OPERATIONS.some((candidate) => candidate === operation)) {
-    throw new Error(INVALID_PROVIDER_STATE);
-  }
-  return operation as CandidateOperation;
 }
 
 /** Requires one name/type-only temporary secret binding without accessors. */

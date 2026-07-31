@@ -18,10 +18,34 @@ const COMMIT = "a".repeat(40);
 const OTHER_COMMIT = "b".repeat(40);
 const CANDIDATE_RUN_REF = "1201";
 
+function candidateConfig(operation = "deploy_foundation") {
+  const selector = operation === "deploy_foundation"
+    ? "foundation_probe"
+    : operation === "deploy_sync_suppression"
+      ? "sync_suppression"
+      : operation === "deploy_ai"
+        ? "ai_usage"
+        : operation === "deploy_fault"
+          ? "job_failed"
+          : operation === "deploy_role_probe"
+            ? "role_probe"
+            : "restore";
+  return {
+    vars: {
+      PREVIEW_ACCEPTANCE_SCENARIO: selector,
+      PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-30T18:30:00.000Z",
+      ...(operation === "deploy_ai"
+        ? { PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true" }
+        : {}),
+    },
+  };
+}
+
 function candidateIntent(operation = "deploy_foundation") {
   return createPreviewCandidateIntent({
     candidateCommit: COMMIT,
     operation,
+    candidateConfig: candidateConfig(operation),
   });
 }
 
@@ -30,6 +54,7 @@ function restoreProof(operation = "deploy_foundation") {
     candidateIntent: createPreviewCandidateIntent({
       candidateCommit: COMMIT,
       operation,
+      candidateConfig: candidateConfig(operation),
     }),
     candidateRunRef: CANDIDATE_RUN_REF,
     restoredCommit: COMMIT,
@@ -56,6 +81,7 @@ describe("preview rollback lifecycle", () => {
     const boundary = createPreviewCandidateMutationBoundary({
       candidateIntent: intent,
       candidateRunRef: CANDIDATE_RUN_REF,
+      candidateConfig: candidateConfig(),
     });
 
     expect(boundary).toEqual({
@@ -69,6 +95,7 @@ describe("preview rollback lifecycle", () => {
         mutationBoundary: boundary,
         candidateRunRef: CANDIDATE_RUN_REF,
         expectedCommit: COMMIT,
+        candidateConfig: candidateConfig(),
       }),
     ).not.toThrow();
 
@@ -76,6 +103,7 @@ describe("preview rollback lifecycle", () => {
       { candidateIntent: candidateIntent("deploy_ai") },
       { candidateRunRef: "1202" },
       { expectedCommit: OTHER_COMMIT },
+      { candidateConfig: candidateConfig("deploy_ai") },
       { mutationBoundary: { ...boundary, extra: true } },
     ]) {
       expect(() =>
@@ -84,10 +112,56 @@ describe("preview rollback lifecycle", () => {
           mutationBoundary: boundary,
           candidateRunRef: CANDIDATE_RUN_REF,
           expectedCommit: COMMIT,
+          candidateConfig: candidateConfig(),
           ...invalid,
         }),
       ).toThrow("Preview rollback lifecycle proof is invalid.");
     }
+  });
+
+  it("preserves the exact legacy v1 lifecycle without admitting direct restore", () => {
+    const legacyIntent = {
+      evidenceType: "vision.preview-candidate-intent/v1",
+      candidateCommit: COMMIT,
+    };
+    const legacyRestore = {
+      evidenceType: "vision.preview-rollback-restored/v1",
+      candidateRunRefHash: restoreProof().candidateRunRefHash,
+      restoredCommit: COMMIT,
+      normalProviderState: "verified",
+      restoredAt: "2026-07-29T07:00:00.000Z",
+      providerVerifiedAt: "2026-07-29T07:01:00.000Z",
+    };
+    const legacyClosure = {
+      evidenceType: "vision.preview-rollback-closed/v1",
+      candidateRunRefHash: legacyRestore.candidateRunRefHash,
+      restoredCommit: COMMIT,
+      normalProviderState: "verified",
+      authenticatedReads: "verified",
+      restoreProofHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      rollbackProviderVerifiedAt: "2026-07-29T07:01:00.000Z",
+      closureProviderVerifiedAt: "2026-07-29T07:01:30.000Z",
+      closedAt: "2026-07-29T07:02:00.000Z",
+    };
+    expect(() => assertPreviewCandidateIntent({
+      candidateIntent: legacyIntent,
+      expectedCommit: COMMIT,
+      nextOperation: "deploy_foundation",
+    })).not.toThrow();
+    expect(() => assertPreviewCandidateIntent({
+      candidateIntent: legacyIntent,
+      expectedCommit: COMMIT,
+      nextOperation: "deploy_restore",
+    })).toThrow("Preview rollback lifecycle proof is invalid.");
+    const closed = closePreviewRollback({
+      restoreProof: legacyRestore,
+      candidateRunRef: CANDIDATE_RUN_REF,
+      restoredCommit: COMMIT,
+      authenticatedReadsGate: "verified",
+      closureProviderVerifiedAt: "2026-07-29T07:01:30.000Z",
+      closedAt: "2026-07-29T07:02:00.000Z",
+    });
+    expect(closed).toEqual(legacyClosure);
   });
 
   it("classifies only zero or one exact mutation-boundary artifact for the candidate run", () => {
@@ -142,8 +216,9 @@ describe("preview rollback lifecycle", () => {
       assertPreviewRollbackClosure({
         closureProof: closureProof(),
         latestCandidateRunRef: CANDIDATE_RUN_REF,
-        expectedCommit: COMMIT,
+        expectedCommit: OTHER_COMMIT,
         operation: "none",
+        candidateIntent: candidateIntent(),
       }),
     ).not.toThrow();
     expect(() =>
@@ -179,10 +254,12 @@ describe("preview rollback lifecycle", () => {
     const roleIntent = createPreviewCandidateIntent({
       candidateCommit: COMMIT,
       operation: "deploy_role_probe",
+      candidateConfig: candidateConfig("deploy_role_probe"),
     });
     const restoreIntent = createPreviewCandidateIntent({
       candidateCommit: COMMIT,
       operation: "deploy_restore",
+      candidateConfig: candidateConfig("deploy_restore"),
     });
     expect(roleIntent).toMatchObject({
       candidateCommit: COMMIT,
@@ -265,15 +342,22 @@ describe("preview rollback lifecycle", () => {
     const intent = createPreviewCandidateIntent({
       candidateCommit: COMMIT,
       operation: "deploy_foundation",
+      candidateConfig: candidateConfig(),
     });
     const restored = restoreProof();
     const closed = closureProof();
 
     expect(intent).toEqual({
-      evidenceType: "vision.preview-candidate-intent/v1",
+      evidenceType: "vision.preview-candidate-intent/v2",
       candidateCommit: COMMIT,
       candidateOperation: "deploy_foundation",
       bindingProfile: "normal",
+      candidateConfigHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      acceptanceBindings: {
+        scenario: "foundation_probe",
+        expiresAt: "2026-07-30T18:30:00.000Z",
+        aiGatewayLimitAttested: null,
+      },
     });
     expect(() =>
       assertPreviewCandidateIntent({
@@ -288,7 +372,7 @@ describe("preview rollback lifecycle", () => {
       }),
     ).toThrow("Preview rollback lifecycle proof is invalid.");
     expect(restored).toEqual({
-      evidenceType: "vision.preview-rollback-restored/v1",
+      evidenceType: "vision.preview-rollback-restored/v2",
       candidateRunRefHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
       candidateOperation: "deploy_foundation",
       bindingProfile: "normal",
@@ -298,7 +382,7 @@ describe("preview rollback lifecycle", () => {
       providerVerifiedAt: "2026-07-29T07:01:00.000Z",
     });
     expect(closed).toEqual({
-      evidenceType: "vision.preview-rollback-closed/v1",
+      evidenceType: "vision.preview-rollback-closed/v2",
       candidateRunRefHash: restored.candidateRunRefHash,
       candidateOperation: "deploy_foundation",
       bindingProfile: "normal",
@@ -337,6 +421,7 @@ describe("preview rollback lifecycle", () => {
         candidateIntent: createPreviewCandidateIntent({
           candidateCommit: COMMIT,
           operation: "deploy_restore",
+          candidateConfig: candidateConfig("deploy_restore"),
         }),
         expectedCommit: COMMIT,
       }),
@@ -480,13 +565,13 @@ describe("preview rollback lifecycle", () => {
           {
             name: "vision-preview-candidate-intent",
             expired: false,
-            created_at: "2026-07-29T07:02:00.000Z",
+            created_at: "2026-07-29T07:02:00Z",
             workflow_run: { id: 1202 },
           },
           {
             name: "vision-preview-candidate-intent",
             expired: false,
-            created_at: "2026-07-29T07:01:00.000Z",
+            created_at: "2026-07-29T07:01:00Z",
             workflow_run: { id: 1201 },
           },
         ],
@@ -532,8 +617,8 @@ describe("preview rollback lifecycle", () => {
       conclusion: "success",
       head_sha: COMMIT,
       path: ".github/workflows/preview.yml",
-      run_started_at: "2026-07-29T07:00:00.000Z",
-      updated_at: "2026-07-29T07:01:30.000Z",
+      run_started_at: "2026-07-29T07:00:00Z",
+      updated_at: "2026-07-29T07:01:30Z",
     };
     const jobs = {
       jobs: [

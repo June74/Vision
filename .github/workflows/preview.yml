@@ -163,7 +163,9 @@ jobs:
           closure_run_file="$(mktemp)"
           closure_jobs_file="$(mktemp)"
           closure_dir="$(mktemp -d)"
-          trap 'rm -f "$artifacts_file" "$closure_file" "$closure_run_file" "$closure_jobs_file"; rm -rf "$closure_dir"' EXIT
+          candidate_dir="$(mktemp -d)"
+          trap 'rm -f "$artifacts_file" "$closure_file" "$closure_run_file" "$closure_jobs_file"; rm -rf "$closure_dir" "$candidate_dir"' EXIT
+          candidate_intent_args=()
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=vision-preview-candidate-intent&per_page=100" > "$artifacts_file"
           pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-latest-candidate \
             --artifacts-file "$artifacts_file" \
@@ -172,12 +174,17 @@ jobs:
             [[ "$ROLLBACK_CLOSURE_RUN_ID" == "baseline" ]]
             printf 'null\n' > "$closure_file"
           else
+            gh run download "$CANDIDATE_RUN_REF" --name vision-preview-candidate-intent --dir "$candidate_dir" > /dev/null
+            candidate_intent="$candidate_dir/preview-candidate-intent.json"
+            candidate_intent_args=(--candidate-intent "$candidate_intent")
+            candidate_commit="$(pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --read-candidate-commit \
+              --candidate-intent "$candidate_intent")"
             gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ROLLBACK_CLOSURE_RUN_ID" > "$closure_run_file"
             gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ROLLBACK_CLOSURE_RUN_ID/jobs" > "$closure_jobs_file"
             pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-run \
               --run-file "$closure_run_file" \
               --jobs-file "$closure_jobs_file" \
-              --commit "$VERIFIED_SHA" \
+              --commit "$candidate_commit" \
               --job-name "Close restored normal preview"
             gh run download "$ROLLBACK_CLOSURE_RUN_ID" --name vision-preview-rollback-closed --dir "$closure_dir" > /dev/null
             closure_file="$closure_dir/preview-rollback-closure.json"
@@ -186,7 +193,8 @@ jobs:
             --closure-proof "$closure_file" \
             --candidate-run-ref "$CANDIDATE_RUN_REF" \
             --commit "$VERIFIED_SHA" \
-            --operation "none"
+            --operation "none" \
+            "${candidate_intent_args[@]}"
       - name: Build deployable preview artifact
         run: pnpm build
         env:
@@ -206,7 +214,7 @@ jobs:
     needs: selection
     runs-on: ubuntu-latest
     environment: preview
-    timeout-minutes: 46
+    timeout-minutes: 48
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -247,7 +255,7 @@ jobs:
           if [[ "$OBSERVER_EVIDENCE" == "preview_fault" ]]; then
             scenario_args=(--scenario "$FAULT_SCENARIO")
           fi
-          timeout 44m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+          timeout 46m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
             "$evidence_flag" \
             --expectation "$EXPECTED_OUTCOME" \
             "${scenario_args[@]}"
@@ -258,7 +266,7 @@ jobs:
     needs: selection
     runs-on: ubuntu-latest
     environment: preview
-    timeout-minutes: 46
+    timeout-minutes: 48
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with: { ref: "${{ github.sha }}" }
@@ -277,7 +285,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Print only allowlisted acceptance evidence
         run: |
-          timeout 44m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+          timeout 46m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
             --sync-suppression-signal-only \
             --expectation "$EXPECTED_OUTCOME"
         env:
@@ -291,7 +299,7 @@ jobs:
     needs: selection
     runs-on: ubuntu-latest
     environment: preview
-    timeout-minutes: 46
+    timeout-minutes: 48
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with: { ref: "${{ github.sha }}" }
@@ -310,7 +318,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Print only allowlisted acceptance evidence
         run: |
-          timeout 44m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+          timeout 46m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
             --restore-signal-only \
             --expectation "$EXPECTED_OUTCOME"
         env:
@@ -324,7 +332,7 @@ jobs:
     needs: selection
     runs-on: ubuntu-latest
     environment: preview
-    timeout-minutes: 46
+    timeout-minutes: 48
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with: { ref: "${{ github.sha }}" }
@@ -343,7 +351,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Print only allowlisted acceptance evidence
         run: |
-          timeout 44m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+          timeout 46m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
             --role-probe-only \
             --expectation "$EXPECTED_OUTCOME"
         env:
@@ -357,7 +365,7 @@ jobs:
     needs: selection
     runs-on: ubuntu-latest
     environment: preview
-    timeout-minutes: 46
+    timeout-minutes: 48
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -377,7 +385,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Print only allowlisted acceptance evidence
         run: |
-          timeout 44m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+          timeout 46m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
             --sync-suppression-only \
             --expectation "$EXPECTED_OUTCOME"
         env:
@@ -391,7 +399,7 @@ jobs:
     needs: selection
     runs-on: ubuntu-latest
     environment: preview
-    timeout-minutes: 46
+    timeout-minutes: 48
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with: { ref: "${{ github.sha }}" }
@@ -410,7 +418,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Print only allowlisted acceptance evidence
         run: |
-          timeout 44m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+          timeout 46m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
             --restore-only \
             --expectation "$EXPECTED_OUTCOME"
         env:
@@ -424,7 +432,7 @@ jobs:
     needs: selection
     runs-on: ubuntu-latest
     environment: preview
-    timeout-minutes: 46
+    timeout-minutes: 48
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with: { ref: "${{ github.sha }}" }
@@ -443,7 +451,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Print only allowlisted acceptance evidence
         run: |
-          timeout 44m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+          timeout 46m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
             --calendar-maintenance-only \
             --expectation "$EXPECTED_OUTCOME" \
             --maintenance-scheduled-at "$MAINTENANCE_SCHEDULED_AT"
@@ -501,7 +509,9 @@ jobs:
           closure_run_file="$(mktemp)"
           closure_jobs_file="$(mktemp)"
           closure_dir="$(mktemp -d)"
-          trap 'rm -f "$artifacts_file" "$closure_file" "$closure_run_file" "$closure_jobs_file"; rm -rf "$closure_dir"' EXIT
+          candidate_dir="$(mktemp -d)"
+          trap 'rm -f "$artifacts_file" "$closure_file" "$closure_run_file" "$closure_jobs_file"; rm -rf "$closure_dir" "$candidate_dir"' EXIT
+          candidate_intent_args=()
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=vision-preview-candidate-intent&per_page=100" > "$artifacts_file"
           pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-latest-candidate \
             --artifacts-file "$artifacts_file" \
@@ -510,12 +520,17 @@ jobs:
             [[ "$ROLLBACK_CLOSURE_RUN_ID" == "baseline" ]]
             printf 'null\n' > "$closure_file"
           else
+            gh run download "$CANDIDATE_RUN_REF" --name vision-preview-candidate-intent --dir "$candidate_dir" > /dev/null
+            candidate_intent="$candidate_dir/preview-candidate-intent.json"
+            candidate_intent_args=(--candidate-intent "$candidate_intent")
+            candidate_commit="$(pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --read-candidate-commit \
+              --candidate-intent "$candidate_intent")"
             gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ROLLBACK_CLOSURE_RUN_ID" > "$closure_run_file"
             gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ROLLBACK_CLOSURE_RUN_ID/jobs" > "$closure_jobs_file"
             pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-run \
               --run-file "$closure_run_file" \
               --jobs-file "$closure_jobs_file" \
-              --commit "$VERIFIED_SHA" \
+              --commit "$candidate_commit" \
               --job-name "Close restored normal preview"
             gh run download "$ROLLBACK_CLOSURE_RUN_ID" --name vision-preview-rollback-closed --dir "$closure_dir" > /dev/null
             closure_file="$closure_dir/preview-rollback-closure.json"
@@ -524,7 +539,8 @@ jobs:
             --closure-proof "$closure_file" \
             --candidate-run-ref "$CANDIDATE_RUN_REF" \
             --commit "$VERIFIED_SHA" \
-            --operation "${{ inputs.acceptance_operation }}"
+            --operation "${{ inputs.acceptance_operation }}" \
+            "${candidate_intent_args[@]}"
       - name: Reject daily recovery overlap before candidate preparation
         run: pnpm exec tsx scripts/validate-preview-acceptance-window.ts
         env:
@@ -608,6 +624,7 @@ jobs:
           pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --write-candidate-intent \
             --commit "${{ needs.verify.outputs.verified_sha }}" \
             --operation "${{ inputs.acceptance_operation }}" \
+            --candidate-config dist/vision/wrangler.acceptance.json \
             --output preview-candidate-intent.json
       - name: Upload candidate intent before preview mutation
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -656,6 +673,7 @@ jobs:
           pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --write-mutation-boundary \
             --candidate-intent preview-candidate-intent.json \
             --candidate-run-ref "${{ github.run_id }}" \
+            --candidate-config dist/vision/wrangler.acceptance.json \
             --output preview-candidate-mutation-boundary.json
       - name: Upload candidate mutation boundary
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -951,24 +969,30 @@ jobs:
           run_file="$(mktemp)"
           jobs_file="$(mktemp)"
           closure_dir="$(mktemp -d)"
-          trap 'rm -f "$artifacts_file" "$run_file" "$jobs_file"; rm -rf "$closure_dir"' EXIT
+          candidate_dir="$(mktemp -d)"
+          trap 'rm -f "$artifacts_file" "$run_file" "$jobs_file"; rm -rf "$closure_dir" "$candidate_dir"' EXIT
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=vision-preview-candidate-intent&per_page=100" > "$artifacts_file"
           pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-latest-candidate \
             --artifacts-file "$artifacts_file" \
             --candidate-run-ref "$CANDIDATE_RUN_REF"
+          gh run download "$CANDIDATE_RUN_REF" --name vision-preview-candidate-intent --dir "$candidate_dir" > /dev/null
+          candidate_intent="$candidate_dir/preview-candidate-intent.json"
+          candidate_commit="$(pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --read-candidate-commit \
+            --candidate-intent "$candidate_intent")"
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ROLLBACK_CLOSURE_RUN_ID" > "$run_file"
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ROLLBACK_CLOSURE_RUN_ID/jobs" > "$jobs_file"
           pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-run \
             --run-file "$run_file" \
             --jobs-file "$jobs_file" \
-            --commit "$VERIFIED_SHA" \
+            --commit "$candidate_commit" \
             --job-name "Close restored normal preview"
           gh run download "$ROLLBACK_CLOSURE_RUN_ID" --name vision-preview-rollback-closed --dir "$closure_dir" > /dev/null
           pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-closure \
             --closure-proof "$closure_dir/preview-rollback-closure.json" \
             --candidate-run-ref "$CANDIDATE_RUN_REF" \
             --commit "$VERIFIED_SHA" \
-            --operation "verify_cleanup"
+            --operation "verify_cleanup" \
+            --candidate-intent "$candidate_intent"
           echo "Provider cleanup remains forbidden until the post-restore closure gate succeeds." >> "$GITHUB_STEP_SUMMARY"
       - name: Verify temporary names absent and strict normal provider state
         shell: bash

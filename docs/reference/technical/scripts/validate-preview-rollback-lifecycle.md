@@ -9,7 +9,8 @@ transition is bound to the reviewed commit and latest candidate run.
 
 ## `createPreviewCandidateIntent`
 
-Returns the frozen v1 intent after validating the complete commit digest.
+Returns a frozen v2 intent after validating the commit and operation, deriving
+the exact acceptance bindings, and hashing the complete generated config.
 
 ## `createPreviewCandidateMutationBoundary`
 
@@ -37,6 +38,11 @@ commit.
 
 Parses the exact commit-bound intent and returns only the binding profile
 derived from its operation.
+
+## `readPreviewCandidateIntentDetails`
+
+Parses and commit-binds the intent, then exposes only provider-relevant v2
+fields or an explicit legacy-v1 recovery marker.
 
 ## `createPreviewRollbackRestoreProof`
 
@@ -69,12 +75,17 @@ one successful job with the expected name.
 
 ## `parseRestoreProof`
 
-Validates the exact v1 restore-proof keys, literals, hashes, commit, and ordered
-instants.
+Validates the distinct exact v1 and v2 restore-proof schemas.
+
+## `validRestoreProofCommon`
+
+Validates the digest, commit, verified-state literal, millisecond instants, and
+their strict ordering shared by both schema generations.
 
 ## `parseCandidateIntent`
 
-Validates the exact v1 intent keys and complete commit.
+Validates either the legacy two-key v1 marker or the full v2 config-bound
+marker; hybrid and in-place-mutated shapes are rejected.
 
 ## `parseCandidateMutationBoundary`
 
@@ -85,6 +96,16 @@ SHA-256 digests.
 
 Enforces the closed role-to-restore-or-cleanup, restore-to-cleanup, and
 normal-profile transition graph.
+
+## `allowedIntentTransition`
+
+Applies the v2 transition graph and the explicit v1 migration rule. Legacy v1
+may recover into cleanup or a non-restore candidate, but never direct restore.
+
+## `allowedClosureTransition`
+
+Binds v2 closure operation/profile provenance to its candidate intent while
+allowing a newer independently verified deployment commit.
 
 ## `isNonRestoreCandidateOperation`
 
@@ -101,8 +122,12 @@ Narrows unknown workflow input without string coercion.
 
 ## `parseClosureProof`
 
-Validates the exact v1 closure keys, verified state literals, hashes, commit,
-and canonical instants.
+Validates the distinct exact v1 and v2 closure schemas.
+
+## `validClosureProofCommon`
+
+Validates the hashes, commit, state literals, and local millisecond timestamps
+shared by both closure generations.
 
 ## `exactKeys`
 
@@ -136,6 +161,28 @@ Requires a complete lowercase SHA-256 digest.
 ## `validInstant`
 
 Requires a parseable canonical millisecond UTC instant.
+
+## `validProviderInstant`
+
+Requires GitHub metadata to use its canonical whole-second UTC grammar.
+
+## `readCandidateAcceptanceBindings`
+
+Derives the operation-specific scenario, canonical expiry, and AI-only
+attestation from the exact generated config variables.
+
+## `validAcceptanceBindings`
+
+Reconstructs and revalidates the temporary binding subset stored in v2 intent.
+
+## `digestCanonicalValue`
+
+SHA-256 hashes the recursively canonicalized JSON value.
+
+## `canonicalizeJson`
+
+Rejects accessors, symbols, unsupported values, non-plain objects, non-finite
+numbers, and excessive nesting while sorting every object-key level.
 
 ## `hashCandidateRunRef`
 
