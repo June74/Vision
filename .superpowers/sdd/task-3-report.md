@@ -1,7 +1,6 @@
 # Task 3 report
 
-Status: sixth package-review repairs locally verified; final sanitized-package
-re-review pending.
+Status: accepted after final sanitized-package re-review.
 
 Commit sequence:
 
@@ -113,6 +112,9 @@ and excluded from implementation scope.
   test-runner wrapper so optional Wrangler debug-log warnings could not replace
   the actual `pnpm` child exit code, which was 0. Vision's supervisor itself
   uses no command shell.
+- Final sanitized-package acceptance review: three independent reviewers
+  returned `NO_BLOCKERS` for security/lifecycle, timing/workflow, and holistic
+  package correctness.
 - No live provider, deployment, database, R2, Queue, browser, remote query,
   push, or other remote mutation was performed.
 
@@ -245,11 +247,11 @@ from this implementation commit.
   scripts or wrapper-process teardown.
 - The current focused and complete verification results are recorded once in
   the Verification section above.
-- Six independent review waves have completed. The sixth reported two
-  Important blockers: the v1 workflow's attempted v2-only artifact download
-  and the unproven observer job-timeout envelope. Both have RED evidence and
-  implemented repairs. A final sanitized-package re-review is required before
-  Task 3 is accepted.
+- Six review/repair waves and the final acceptance re-review have completed.
+  The sixth reported two Important blockers: the v1 workflow's attempted
+  v2-only artifact download and the unproven observer job-timeout envelope.
+  Both have RED evidence and implemented repairs; the final three independent
+  reviewers returned `NO_BLOCKERS`, so Task 3 is accepted.
 - The backup key remains version 1 and was not rotated.
 
 This canonical section and the 78-path inventory supersede earlier integration
