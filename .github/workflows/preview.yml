@@ -169,7 +169,7 @@ jobs:
     needs: selection
     runs-on: ubuntu-latest
     environment: preview
-    timeout-minutes: 18
+    timeout-minutes: 44
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -210,7 +210,7 @@ jobs:
           if [[ "$OBSERVER_EVIDENCE" == "preview_fault" ]]; then
             scenario_args=(--scenario "$FAULT_SCENARIO")
           fi
-          timeout 16m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+          timeout 42m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
             "$evidence_flag" \
             --expectation "$EXPECTED_OUTCOME" \
             "${scenario_args[@]}"
@@ -221,7 +221,7 @@ jobs:
     needs: selection
     runs-on: ubuntu-latest
     environment: preview
-    timeout-minutes: 18
+    timeout-minutes: 44
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with: { ref: "${{ github.sha }}" }
@@ -240,7 +240,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Print only allowlisted acceptance evidence
         run: |
-          timeout 16m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+          timeout 42m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
             --sync-suppression-signal-only \
             --expectation "$EXPECTED_OUTCOME"
         env:
@@ -254,7 +254,7 @@ jobs:
     needs: selection
     runs-on: ubuntu-latest
     environment: preview
-    timeout-minutes: 18
+    timeout-minutes: 44
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with: { ref: "${{ github.sha }}" }
@@ -273,7 +273,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Print only allowlisted acceptance evidence
         run: |
-          timeout 16m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+          timeout 42m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
             --restore-signal-only \
             --expectation "$EXPECTED_OUTCOME"
         env:
@@ -287,7 +287,7 @@ jobs:
     needs: selection
     runs-on: ubuntu-latest
     environment: preview
-    timeout-minutes: 18
+    timeout-minutes: 44
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with: { ref: "${{ github.sha }}" }
@@ -306,7 +306,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Print only allowlisted acceptance evidence
         run: |
-          timeout 16m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+          timeout 42m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
             --role-probe-only \
             --expectation "$EXPECTED_OUTCOME"
         env:
@@ -320,7 +320,7 @@ jobs:
     needs: selection
     runs-on: ubuntu-latest
     environment: preview
-    timeout-minutes: 18
+    timeout-minutes: 44
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -340,7 +340,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Print only allowlisted acceptance evidence
         run: |
-          timeout 16m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+          timeout 42m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
             --sync-suppression-only \
             --expectation "$EXPECTED_OUTCOME"
         env:
@@ -354,7 +354,7 @@ jobs:
     needs: selection
     runs-on: ubuntu-latest
     environment: preview
-    timeout-minutes: 18
+    timeout-minutes: 44
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with: { ref: "${{ github.sha }}" }
@@ -373,7 +373,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Print only allowlisted acceptance evidence
         run: |
-          timeout 16m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+          timeout 42m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
             --restore-only \
             --expectation "$EXPECTED_OUTCOME"
         env:
@@ -387,7 +387,7 @@ jobs:
     needs: selection
     runs-on: ubuntu-latest
     environment: preview
-    timeout-minutes: 18
+    timeout-minutes: 44
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with: { ref: "${{ github.sha }}" }
@@ -406,7 +406,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Print only allowlisted acceptance evidence
         run: |
-          timeout 16m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+          timeout 42m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
             --calendar-maintenance-only \
             --expectation "$EXPECTED_OUTCOME" \
             --maintenance-scheduled-at "$MAINTENANCE_SCHEDULED_AT"

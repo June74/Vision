@@ -48,13 +48,40 @@ export function createR2BackupObjectCatalogReader(bucket: ReadOnlyBucket): Backu
         ) {
           throw new Error(FAILURE);
         }
+        const nextCursor = exactPaginationCursor(page);
         return Object.freeze({
           objects: Object.freeze(page.objects.map(adapt)),
-          ...(page.truncated && page.cursor ? { cursor: bounded(page.cursor) } : {}),
+          ...(nextCursor === undefined ? {} : { cursor: nextCursor }),
         });
       } catch { throw new Error(FAILURE); }
     },
   });
+}
+
+/** Requires one internally consistent provider pagination envelope. */
+function exactPaginationCursor(value: unknown): string | undefined {
+  if (value === null || typeof value !== "object") throw new Error(FAILURE);
+  const truncated = Object.getOwnPropertyDescriptor(value, "truncated");
+  const cursor = Object.getOwnPropertyDescriptor(value, "cursor");
+  if (
+    truncated?.enumerable !== true ||
+    !("value" in truncated) ||
+    typeof truncated.value !== "boolean"
+  ) {
+    throw new Error(FAILURE);
+  }
+  if (truncated.value) {
+    if (
+      cursor?.enumerable !== true ||
+      !("value" in cursor) ||
+      typeof cursor.value !== "string"
+    ) {
+      throw new Error(FAILURE);
+    }
+    return bounded(cursor.value);
+  }
+  if (cursor !== undefined || "cursor" in value) throw new Error(FAILURE);
+  return undefined;
 }
 
 /** Copies one stream only after its declared size passes the fixed allocation bound. */

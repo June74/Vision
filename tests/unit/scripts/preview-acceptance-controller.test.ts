@@ -1458,7 +1458,7 @@ describe("preview acceptance controller decisive hardening", () => {
     );
   });
 
-  it("uses the candidate workflow window instead of the uniqueness cap", async () => {
+  it("uses the full candidate workflow window under real advancing clocks", async () => {
     const fixture = harness();
     let candidateConfirmationDeadline: number | null = null;
     const performAction = vi.fn(async (
@@ -1472,7 +1472,7 @@ describe("preview acceptance controller decisive hardening", () => {
       ) {
         throw new Error("candidate confirmation was uniqueness-capped");
       }
-      fixture.advanceTime(180_000);
+      fixture.advanceTime(30 * 60_000);
       return fixture.currentWall();
     });
     Object.assign(fixture.dependencies, { performAction });
@@ -1489,7 +1489,7 @@ describe("preview acceptance controller decisive hardening", () => {
         {
           family: "foundation_probe",
           reviewedCommit: SHA,
-          expiresAt: new Date(START.getTime() + 10 * 60_000).toISOString(),
+          expiresAt: new Date(START.getTime() + 60 * 60_000).toISOString(),
           expectation: { kind: "foundation_succeeded" },
         },
         fixture.dependencies,
@@ -2163,6 +2163,133 @@ describe("preview acceptance controller decisive hardening", () => {
         fixture.dependencies,
       ),
     ).resolves.toBeUndefined();
+  });
+
+  it("accepts only monotonic provider close advancement and extends the bounded deadline", async () => {
+    const fixture = harness();
+    let signalObservedAt: Date | null = null;
+    let stableClose: Date | null = null;
+    let lateClose: Date | null = null;
+    const readDeadlines: number[] = [];
+    let uniquenessReads = 0;
+    vi.mocked(fixture.dependencies.readObserverState).mockImplementation(
+      async (_observer, boundary) => {
+        readDeadlines.push(boundary.deadlineMonotonic);
+        signalObservedAt ??= fixture.currentWall();
+        stableClose ??= new Date(signalObservedAt.getTime() + 120_999);
+        uniquenessReads += 1;
+        if (
+          fixture.currentWall().getTime() <
+          signalObservedAt.getTime() + 120_001
+        ) {
+          return {
+            signal: "succeeded" as const,
+            uniqueness: "listening" as const,
+            signalObservedAt,
+            uniquenessClosesAt: stableClose,
+          };
+        }
+        lateClose ??= new Date(fixture.currentWall().getTime() + 999);
+        return {
+          signal: "succeeded" as const,
+          uniqueness: "succeeded" as const,
+          signalObservedAt,
+          uniquenessClosesAt: lateClose,
+        };
+      },
+    );
+    const ordinarySleep = fixture.dependencies.sleep;
+    Object.assign(fixture.dependencies, {
+      sleep: vi.fn(async (milliseconds: number) => {
+        await ordinarySleep(milliseconds);
+        if (
+          signalObservedAt !== null &&
+          fixture.currentWall().getTime() ===
+            signalObservedAt.getTime() + 120_000
+        ) {
+          fixture.advanceTime(1);
+        }
+      }),
+    });
+
+    await expect(
+      runPreviewAcceptanceController(
+        {
+          family: "sync_suppression",
+          reviewedCommit: SHA,
+          expiresAt: new Date(START.getTime() + 10 * 60_000).toISOString(),
+          expectation: { kind: "sync_suppressed" },
+        },
+        fixture.dependencies,
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(uniquenessReads).toBeGreaterThan(2);
+    expect(Math.max(...readDeadlines)).toBeGreaterThan(readDeadlines[0]!);
+  });
+
+  it("rejects backward uniqueness-close drift", async () => {
+    const fixture = harness();
+    let signalObservedAt: Date | null = null;
+    let reads = 0;
+    vi.mocked(fixture.dependencies.readObserverState).mockImplementation(
+      async () => {
+        signalObservedAt ??= fixture.currentWall();
+        reads += 1;
+        return {
+          signal: "succeeded" as const,
+          uniqueness: reads === 1 ? ("listening" as const) : ("succeeded" as const),
+          signalObservedAt,
+          uniquenessClosesAt: new Date(
+            signalObservedAt.getTime() + (reads === 1 ? 120_999 : 120_998),
+          ),
+        };
+      },
+    );
+
+    await expect(
+      runPreviewAcceptanceController(
+        {
+          family: "sync_suppression",
+          reviewedCommit: SHA,
+          expiresAt: new Date(START.getTime() + 10 * 60_000).toISOString(),
+          expectation: { kind: "sync_suppressed" },
+        },
+        fixture.dependencies,
+      ),
+    ).rejects.toThrow("Preview acceptance controller failed closed.");
+  });
+
+  it("rejects a forward uniqueness close beyond provider timestamp uncertainty", async () => {
+    const fixture = harness();
+    let signalObservedAt: Date | null = null;
+    let reads = 0;
+    vi.mocked(fixture.dependencies.readObserverState).mockImplementation(
+      async () => {
+        signalObservedAt ??= fixture.currentWall();
+        reads += 1;
+        return {
+          signal: "succeeded" as const,
+          uniqueness: reads === 1 ? ("listening" as const) : ("succeeded" as const),
+          signalObservedAt,
+          uniquenessClosesAt: new Date(
+            signalObservedAt.getTime() + (reads === 1 ? 120_999 : 130_000),
+          ),
+        };
+      },
+    );
+
+    await expect(
+      runPreviewAcceptanceController(
+        {
+          family: "sync_suppression",
+          reviewedCommit: SHA,
+          expiresAt: new Date(START.getTime() + 10 * 60_000).toISOString(),
+          expectation: { kind: "sync_suppressed" },
+        },
+        fixture.dependencies,
+      ),
+    ).rejects.toThrow("Preview acceptance controller failed closed.");
   });
 
   it("accepts unchanged signal success and timestamp through uniqueness settlement", async () => {

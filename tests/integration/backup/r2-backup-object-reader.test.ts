@@ -181,6 +181,125 @@ describe("read-only R2 backup object catalog", () => {
     );
   });
 
+  it.each([
+    ["missing", {}],
+    ["string", { truncated: "false" }],
+    ["number", { truncated: 0 }],
+    ["null", { truncated: null }],
+  ])("rejects a %s truncated marker", async (_label, pagination) => {
+    const reader = createR2BackupObjectCatalogReader({
+      head: vi.fn(),
+      get: vi.fn(),
+      list: vi.fn(async () => ({
+        objects: [],
+        ...pagination,
+      })),
+    } as never);
+
+    await expect(reader.list("prefix/")).rejects.toThrow(
+      "Backup object catalog read failed.",
+    );
+  });
+
+  it.each([
+    ["missing", { truncated: true }],
+    ["empty", { truncated: true, cursor: "" }],
+    ["undefined", { truncated: true, cursor: undefined }],
+    ["wrong-type", { truncated: true, cursor: 7 }],
+    ["overlong", { truncated: true, cursor: "x".repeat(2_049) }],
+  ])(
+    "rejects a truncated page with a %s cursor",
+    async (_label, pagination) => {
+      const reader = createR2BackupObjectCatalogReader({
+        head: vi.fn(),
+        get: vi.fn(),
+        list: vi.fn(async () => ({
+          objects: [],
+          ...pagination,
+        })),
+      } as never);
+
+      await expect(reader.list("prefix/")).rejects.toThrow(
+        "Backup object catalog read failed.",
+      );
+    },
+  );
+
+  it.each([
+    ["nonempty", "next"],
+    ["empty", ""],
+    ["undefined", undefined],
+    ["wrong-type", 7],
+    ["overlong", "x".repeat(2_049)],
+  ])(
+    "rejects a terminal page with a contradictory %s cursor",
+    async (_label, cursor) => {
+      const reader = createR2BackupObjectCatalogReader({
+        head: vi.fn(),
+        get: vi.fn(),
+        list: vi.fn(async () => ({
+          objects: [],
+          truncated: false,
+          cursor,
+        })),
+      } as never);
+
+      await expect(reader.list("prefix/")).rejects.toThrow(
+        "Backup object catalog read failed.",
+      );
+    },
+  );
+
+  it("rejects pagination accessors without invoking them", async () => {
+    let getterCalls = 0;
+    const page = Object.defineProperties(
+      { objects: [] },
+      {
+        truncated: {
+          enumerable: true,
+          get() {
+            getterCalls += 1;
+            return true;
+          },
+        },
+        cursor: {
+          enumerable: true,
+          get() {
+            getterCalls += 1;
+            return "next";
+          },
+        },
+      },
+    );
+    const reader = createR2BackupObjectCatalogReader({
+      head: vi.fn(),
+      get: vi.fn(),
+      list: vi.fn(async () => page),
+    } as never);
+
+    await expect(reader.list("prefix/")).rejects.toThrow(
+      "Backup object catalog read failed.",
+    );
+    expect(getterCalls).toBe(0);
+  });
+
+  it("returns exactly one bounded cursor only for a truncated page", async () => {
+    const reader = createR2BackupObjectCatalogReader({
+      head: vi.fn(),
+      get: vi.fn(),
+      list: vi.fn(async () => ({
+        objects: [],
+        truncated: true,
+        cursor: "next",
+      })),
+    } as never);
+
+    await expect(reader.list("prefix/")).resolves.toEqual({
+      objects: [],
+      cursor: "next",
+    });
+  });
+
   it("bounds metadata and fails closed without returning provider objects", async () => {
     const bucket = {
       head: vi.fn(async () => ({

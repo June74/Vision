@@ -39,6 +39,15 @@ const ACCEPTANCE_SELECTORS = [
   "role_probe",
   "restore",
 ] as const;
+const CANDIDATE_OPERATIONS = [
+  "deploy_foundation",
+  "deploy_sync_suppression",
+  "deploy_ai",
+  "deploy_fault",
+  "deploy_role_probe",
+  "deploy_restore",
+] as const;
+type CandidateOperation = (typeof CANDIDATE_OPERATIONS)[number];
 const REVIEWED_COMMIT = "a".repeat(40);
 const NORMAL_PREVIEW_PROVIDER_BINDINGS = [
   ...AI_PRICING_BINDING_CONTRACT.map(({ name, type, value }) => ({
@@ -152,6 +161,41 @@ function normalProviderState(): {
       },
     },
   };
+}
+
+/** Builds the exact live provider profile expected for one candidate. */
+function candidateProviderState(operation: CandidateOperation): ReturnType<
+  typeof normalProviderState
+> {
+  const providerState = normalProviderState();
+  if (operation !== "deploy_sync_suppression") {
+    providerState.schedulesResponse = {
+      success: true,
+      result: [...NORMAL_CRONS, ACCEPTANCE_CRON].map((cron) => ({ cron })),
+    };
+  }
+  if (operation === "deploy_role_probe" || operation === "deploy_restore") {
+    (
+      providerState.settingsResponse as { result: { bindings: unknown[] } }
+    ).result.bindings.push(
+      { name: "PREVIEW_RESTORE_DATABASE_URL", type: "secret_text" },
+      { name: "PREVIEW_RESTORE_TARGET_ID", type: "secret_text" },
+    );
+  }
+  return providerState;
+}
+
+/** Builds the exact commit-bound candidate marker for one operation. */
+function candidateIntent(operation: CandidateOperation) {
+  return {
+    evidenceType: "vision.preview-candidate-intent/v1",
+    candidateCommit: REVIEWED_COMMIT,
+    candidateOperation: operation,
+    bindingProfile:
+      operation === "deploy_role_probe" || operation === "deploy_restore"
+        ? "restore_pair"
+        : "normal",
+  } as const;
 }
 
 describe("Cloudflare asset and normal schedule routing", () => {
@@ -885,8 +929,44 @@ describe("normal preview artifact validation", () => {
 });
 
 describe("normal preview live provider-state validation", () => {
+  it.each(CANDIDATE_OPERATIONS)(
+    "derives the exact candidate schedule profile for %s",
+    (operation) => {
+      const expected = candidateProviderState(operation);
+      expect(() =>
+        validatePreviewProviderStateForCandidateIntent({
+          candidateIntent: candidateIntent(operation),
+          expectedCommit: REVIEWED_COMMIT,
+          ...expected,
+        }),
+      ).not.toThrow();
+
+      const expectedCrons = operation === "deploy_sync_suppression"
+        ? [...NORMAL_CRONS]
+        : [...NORMAL_CRONS, ACCEPTANCE_CRON];
+      const invalidScheduleSets = [
+        expectedCrons.slice(0, -1),
+        [...expectedCrons, "7 7 * * *"],
+        [...expectedCrons.slice(0, -1), "7 7 * * *"],
+      ];
+      for (const crons of invalidScheduleSets) {
+        expect(() =>
+          validatePreviewProviderStateForCandidateIntent({
+            candidateIntent: candidateIntent(operation),
+            expectedCommit: REVIEWED_COMMIT,
+            ...expected,
+            schedulesResponse: {
+              success: true,
+              result: crons.map((cron) => ({ cron })),
+            },
+          }),
+        ).toThrow("Normal preview provider state is invalid.");
+      }
+    },
+  );
+
   it("selects normal or restore-pair validation only from the exact candidate intent", () => {
-    const normal = normalProviderState();
+    const normal = candidateProviderState("deploy_foundation");
     expect(() =>
       validatePreviewProviderStateForCandidateIntent({
         candidateIntent: {
@@ -900,13 +980,7 @@ describe("normal preview live provider-state validation", () => {
       }),
     ).not.toThrow();
 
-    const restorePair = normalProviderState();
-    (
-      restorePair.settingsResponse as { result: { bindings: unknown[] } }
-    ).result.bindings.push(
-      { name: "PREVIEW_RESTORE_DATABASE_URL", type: "secret_text" },
-      { name: "PREVIEW_RESTORE_TARGET_ID", type: "secret_text" },
-    );
+    const restorePair = candidateProviderState("deploy_restore");
     expect(() =>
       validatePreviewProviderStateForCandidateIntent({
         candidateIntent: {

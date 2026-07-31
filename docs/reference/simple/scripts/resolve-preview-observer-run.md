@@ -6,13 +6,14 @@ workflow, resolver, and state validator on the same exact names.
 
 ## `resolvePreviewObserverRun`
 
-Polls every five seconds across the complete two-minute horizon. A run first
-found on the inclusive terminal poll has a deliberate single-observation
-exception; otherwise the same active run must remain stable. Every poll walks
-all relevant pages, so a duplicate discovered on the last poll still fails.
-Every metadata read shares one absolute, interruptible monotonic deadline. The
-inclusive terminal poll gets one fixed five-second settlement cap without
-moving the two-minute observation close.
+Polls every five seconds across the complete two-minute horizon. Once the
+unique run identity appears, it remains selected while expected jobs are still
+queued or their listener steps are starting. It returns only after every exact
+listener is active on the inclusive terminal poll. Duplicate run identities,
+terminal runs, and contradictory job topology fail immediately. Every poll
+walks all relevant pages, and every metadata read shares one absolute,
+interruptible monotonic deadline. The terminal poll gets one fixed five-second
+settlement cap without moving the two-minute observation close.
 
 ## `listRelevantRuns`
 
@@ -96,10 +97,12 @@ Accepts only finite nonnegative monotonic instants.
 
 Requires exactly one job with the requested name.
 
-## `assertExpectedActiveJobs`
+## `expectedJobTopology`
 
-Requires every job for the family to be independently active and rejects an
-unexpected active capture job.
+Returns `pending` while exact expected jobs or listeners are starting, and
+`active` only when every family listener is independently active. Duplicates,
+terminal expected jobs without an active counterpart, and unexpected active
+capture jobs fail immediately.
 
 ## `observerJobState`
 
@@ -122,10 +125,11 @@ decimal handle before copying allowlisted fields.
 
 Requires exact job and step keys before copying bounded metadata.
 
-## `matchesRun`
+## `matchesRunIdentity`
 
-Checks workflow attribution and overlap between the provider's whole-second
-creation bucket and the closed millisecond dispatch interval.
+Checks immutable workflow attribution and overlap between the provider's
+whole-second creation bucket and the closed millisecond dispatch interval.
+Run state is checked separately so an attributed terminal run fails promptly.
 
 ## `validateResolutionInput`
 

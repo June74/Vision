@@ -36,6 +36,7 @@ const CLOSURE_WORKFLOW_MILLISECONDS =
   15 * 60_000 + WORKFLOW_SETTLEMENT_MARGIN_MILLISECONDS;
 const LOCAL_SIGNAL_MILLISECONDS = 50_000;
 const PROVIDER_SIGNAL_MILLISECONDS = 59_000;
+const PROVIDER_TIMESTAMP_UNCERTAINTY_MILLISECONDS = 999;
 const APPROVAL_MILLISECONDS = 60_000;
 const EXPIRY_BUFFER_MILLISECONDS = 60_000;
 const PRE_IDLE_MILLISECONDS = 180_000;
@@ -869,20 +870,24 @@ export async function runPreviewAcceptanceController(
         state.uniquenessClosesAt === undefined ||
         state.uniquenessClosesAt === null
       ) fail();
-      const uniquenessClosesAt = safeNow(state.uniquenessClosesAt);
+      let uniquenessClosesAt = safeNow(state.uniquenessClosesAt);
       const verificationStartedAtWall = safeNow(dependencies.wallNow());
       const verificationStartedAtMonotonic = safeMonotonic(
         dependencies.monotonicNow(),
       );
+      const verificationCeiling = safeMonotonic(
+        verificationStartedAtMonotonic + CANDIDATE_WORKFLOW_MILLISECONDS,
+      );
       const semanticCloseRemaining =
         uniquenessClosesAt.getTime() + POLL_MILLISECONDS -
         verificationStartedAtWall.getTime();
-      const uniquenessDeadline = safeMonotonic(
+      let uniquenessDeadline = safeMonotonic(
         verificationStartedAtMonotonic + Math.max(
           UNIQUENESS_MILLISECONDS + POLL_MILLISECONDS,
           semanticCloseRemaining,
         ),
       );
+      if (uniquenessDeadline > verificationCeiling) fail();
       for (;;) {
         const currentUniquenessClosesAt = state.uniquenessClosesAt;
         if (
@@ -891,9 +896,7 @@ export async function runPreviewAcceptanceController(
           safeNow(state.signalObservedAt).getTime() !==
             signal.providerObservedAt.getTime() ||
           currentUniquenessClosesAt === undefined ||
-          currentUniquenessClosesAt === null ||
-          safeNow(currentUniquenessClosesAt).getTime() !==
-            uniquenessClosesAt.getTime()
+          currentUniquenessClosesAt === null
         ) {
           fail();
         }
@@ -905,6 +908,31 @@ export async function runPreviewAcceptanceController(
           state.uniqueness === "failed" ||
           detectedAtMonotonic > uniquenessDeadline
         ) fail();
+        const currentClose = safeNow(currentUniquenessClosesAt);
+        if (currentClose.getTime() < uniquenessClosesAt.getTime()) fail();
+        if (currentClose.getTime() > uniquenessClosesAt.getTime()) {
+          if (
+            state.uniqueness !== "succeeded" ||
+            currentClose.getTime() >
+              detectedAtWall.getTime() +
+                PROVIDER_TIMESTAMP_UNCERTAINTY_MILLISECONDS
+          ) {
+            fail();
+          }
+          const extendedDeadline = safeMonotonic(
+            detectedAtMonotonic + Math.max(
+              0,
+              currentClose.getTime() + POLL_MILLISECONDS -
+                detectedAtWall.getTime(),
+            ),
+          );
+          if (extendedDeadline > verificationCeiling) fail();
+          uniquenessClosesAt = currentClose;
+          uniquenessDeadline = Math.max(
+            uniquenessDeadline,
+            extendedDeadline,
+          );
+        }
         if (
           state.uniqueness === "succeeded" &&
           detectedAtWall.getTime() >= uniquenessClosesAt.getTime()

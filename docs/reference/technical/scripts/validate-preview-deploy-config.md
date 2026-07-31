@@ -4,11 +4,31 @@ Requires exactly two additional secret names.
 
 ## `validatePreviewProviderStateForCandidateIntent`
 Reads the binding profile only from the commit-bound lifecycle intent and
-selects the corresponding exact provider-state validator.
+derives the exact live provider contract from its admitted operation.
+`deploy_sync_suppression` requires the normal two schedules; the other five
+candidate operations require those schedules plus the temporary one-minute
+schedule. Binding validation remains normal or restore-pair as encoded by the
+same intent.
 
 ## `matchesNormalProviderHealthAndSchedules`
 Requires `status=ok`, a successful schedules envelope, and exactly the two
 permanent cron expressions.
+
+## `matchesProviderHealthAndSchedules`
+Requires `status=ok`, a successful schedules envelope, and exact equality with
+the caller-selected cron set after order normalization.
+
+## `matchesNormalProviderBindings`
+Requires the explicit settings inventory to match the immutable normal binding
+contract exactly once.
+
+## `matchesTemporaryRestorePairBindings`
+Requires the immutable normal inventory plus exactly one secret binding for
+each approved restore-pair name, with no extra binding.
+
+## `readCandidateOperation`
+Reads one own data operation from the candidate intent after the lifecycle
+parser has already authenticated its exact shape and reviewed commit.
 
 ## `matchesTemporaryRestoreBinding`
 Requires an ordinary exact `{ name, type }` record whose type is
@@ -119,4 +139,5 @@ authoritative count, and compares every required binding to its expected type.
 Parses the generated artifact after the environment-selected Vite build in
 normal mode. Provider-state mode parses three sanitized response files. Every
 read, JSON, or contract failure maps to one non-sensitive error and a nonzero
-exit status.
+exit status. Candidate-provider mode also parses the candidate intent and
+reviewed commit, preserving the workflow's existing six-argument call shape.

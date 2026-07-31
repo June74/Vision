@@ -156,7 +156,7 @@ export async function resolvePreviewObserverRun(
         deps,
         outerContext,
       )
-    ).filter((run) => matchesRun(run, input));
+    ).filter((run) => matchesRunIdentity(run, input));
     if (runs.length > 1) fail();
     if (runs.length === 1) {
       const handle = runs[0]!.id as PreviewObserverRunHandle;
@@ -169,10 +169,18 @@ export async function resolvePreviewObserverRun(
           outerContext,
         ),
       );
-      if (detailed.id !== handle || !matchesRun(detailed, input)) fail();
-      const jobs = await jobsFor(handle, deps, pollDeadline, outerContext);
-      assertExpectedActiveJobs(jobs, input.family);
       if (
+        detailed.id !== handle ||
+        !matchesRunIdentity(detailed, input) ||
+        !["queued", "in_progress"].includes(detailed.status) ||
+        detailed.conclusion !== null
+      ) {
+        fail();
+      }
+      const jobs = await jobsFor(handle, deps, pollDeadline, outerContext);
+      const topology = expectedJobTopology(jobs, input.family);
+      if (
+        topology === "active" &&
         validMonotonic(deps.monotonicNow()) - started >=
           RESOLUTION_MILLISECONDS
       ) {
@@ -788,11 +796,11 @@ function exactJob(
   return matching[0]!;
 }
 
-/** Requires every family listener to be independently active. */
-function assertExpectedActiveJobs(
+/** Distinguishes a valid starting topology from exact active listeners. */
+function expectedJobTopology(
   jobs: readonly JobSnapshot[],
   family: PreviewObserverFamily,
-): void {
+): "pending" | "active" {
   const expected = PREVIEW_OBSERVER_JOB_CONTRACT[family];
   for (const job of jobs) {
     if (
@@ -806,18 +814,48 @@ function assertExpectedActiveJobs(
       fail();
     }
   }
+  let pending = false;
   for (const name of expected) {
-    const job = exactJob(jobs, name);
-    const listener = exactListener(job);
+    const named = jobs.filter((job) => job.name === name);
+    const matching = named.filter(
+      (job) =>
+        !(job.status === "completed" && job.conclusion === "skipped"),
+    );
+    if (matching.length > 1) fail();
+    if (matching.length === 0) {
+      if (named.length > 0) fail();
+      pending = true;
+      continue;
+    }
+    const job = matching[0]!;
+    const listeners = job.steps.filter((step) => step.name === LISTENER_STEP);
+    if (listeners.length > 1 || job.conclusion !== null) fail();
+    if (job.status === "queued") {
+      if (
+        listeners.length === 1 &&
+        (listeners[0]!.conclusion !== null ||
+          !["queued", "pending"].includes(listeners[0]!.status))
+      ) {
+        fail();
+      }
+      pending = true;
+      continue;
+    }
+    if (job.status !== "in_progress") fail();
+    if (listeners.length === 0) {
+      pending = true;
+      continue;
+    }
+    const listener = listeners[0]!;
     if (
-      job.status !== "in_progress" ||
-      job.conclusion !== null ||
-      listener.status !== "in_progress" ||
-      listener.conclusion !== null
+      listener.conclusion !== null ||
+      !["queued", "pending", "in_progress"].includes(listener.status)
     ) {
       fail();
     }
+    if (listener.status !== "in_progress") pending = true;
   }
+  return pending ? "pending" : "active";
 }
 
 /** Reduces a provider job/listener pair to a closed controller state. */
@@ -950,8 +988,8 @@ function snapshotJobs(payload: unknown): readonly JobSnapshot[] {
   }
 }
 
-/** Matches immutable workflow attribution and dispatch time. */
-function matchesRun(
+/** Matches immutable workflow identity and dispatch time, independent of state. */
+function matchesRunIdentity(
   run: RunSnapshot,
   input: {
     readonly expectedWorkflow: string;
@@ -966,8 +1004,6 @@ function matchesRun(
     run.event === "workflow_dispatch" &&
     run.headSha === input.expectedCommit &&
     run.path === input.expectedWorkflow &&
-    run.status === "in_progress" &&
-    run.conclusion === null &&
     createdBucketEndsAt >= input.dispatchStartedAt.getTime() &&
     created <= input.dispatchCompletedAt.getTime()
   );

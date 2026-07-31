@@ -3,11 +3,25 @@
 Checks the restore-pair names.
 
 ## `validatePreviewProviderStateForCandidateIntent`
-Derives the normal or restore-pair check from the commit-bound candidate
-intent.
+Derives both binding and schedule checks from the commit-bound candidate
+intent. Synchronization suppression requires only the two permanent schedules;
+each other candidate requires those schedules plus the temporary one-minute
+schedule.
 
 ## `matchesNormalProviderHealthAndSchedules`
 Checks healthy runtime and exactly the two permanent schedules.
+
+## `matchesProviderHealthAndSchedules`
+Checks healthy runtime and one exact caller-selected schedule list.
+
+## `matchesNormalProviderBindings`
+Checks the complete immutable normal binding inventory.
+
+## `matchesTemporaryRestorePairBindings`
+Checks the normal inventory plus exactly the two restore-pair secrets.
+
+## `readCandidateOperation`
+Reads the operation already admitted by the exact lifecycle intent parser.
 
 ## `matchesTemporaryRestoreBinding`
 Checks one name-and-type-only temporary restore secret.
@@ -98,4 +112,7 @@ missing, duplicated, unknown, or wrongly typed binding.
 
 Reads `dist/vision/wrangler.json` in normal mode. In
 `--verify-provider-state` mode it reads the three sanitized provider response
-files. Either mode exits with one safe error when input is missing or unsafe.
+files. `--verify-candidate-provider-state` additionally reads the candidate
+intent and reviewed commit so the live schedule and binding profile match that
+exact operation. Every mode exits with one safe error when input is missing or
+unsafe.

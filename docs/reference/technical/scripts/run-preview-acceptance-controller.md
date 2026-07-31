@@ -97,7 +97,12 @@ rollback, closure verification, and only then delayed uniqueness. A
 non-positive no-signal window, reversed timestamp, provider/local deadline
 miss, action completion later than the paired wall sample, unexpected observer
 state, retry after an uncertain rollback, or action after a timeout-reconciled
-candidate fails closed through one constant error surface.
+candidate fails closed through one constant error surface. For two-job
+families, a successful provider completion may advance the cached uniqueness
+close monotonically. The controller rejects backward movement or advancement
+beyond provider timestamp uncertainty, recomputes the semantic deadline, and
+caps all such extensions at one candidate-workflow verification ceiling. It
+still cannot accept uniqueness before the current close.
 
 ## `rollbackAndClose`
 
@@ -354,7 +359,12 @@ Derives an expiry-bounded 125-second outer deadline so the resolver can use its
 ## `nextCandidateWorkflowDeadline`
 
 Derives a candidate-confirmation deadline from the 30-minute workflow duration
-plus settlement margin, capped by the buffered candidate expiry.
+plus settlement margin, capped by the buffered candidate expiry. The workflow
+observer lifetime is derived separately as 125 seconds of resolver startup,
+31 minutes of candidate workflow time, 120 seconds each for approval, action,
+and signal, and 125 seconds for uniqueness. Rounding the 2,470-second total up
+produces a 42-minute inner ceiling inside a 44-minute job while every existing
+per-stage controller upper bound remains unchanged.
 
 ## `nextWorkflowDeadline`
 

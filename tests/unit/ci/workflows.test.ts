@@ -382,7 +382,7 @@ describe("preview live diagnostics policy", () => {
         "  cancel-in-progress: false",
     );
     expect(preview).not.toContain("group: vision-preview\n");
-    expect(tailJob).toContain("timeout-minutes: 18");
+    expect(tailJob).toContain("timeout-minutes: 44");
     expect(tailJob).toContain(
       `uses: ${CHECKOUT_ACTION}\n` +
         "        with:\n" +
@@ -392,7 +392,7 @@ describe("preview live diagnostics policy", () => {
     expect(tailJob).not.toContain("gateway:configure:preview");
     expect(tailJob).not.toContain("actions/upload-artifact");
     expect(tailStep).toContain(
-      "timeout 16m pnpm exec tsx scripts/run-preview-tail-supervisor.ts",
+      "timeout 42m pnpm exec tsx scripts/run-preview-tail-supervisor.ts",
     );
     expect(tailStep).not.toContain("--restore-only");
     expect(tailStep).not.toContain("--role-probe-only");
@@ -529,13 +529,13 @@ describe("preview acceptance candidate workflow", () => {
       "group: ${{ inputs.acceptance_operation == 'observe' && inputs.configure_ai_budget == false && 'vision-preview-observer' || 'vision-preview-mutation' }}",
     );
     expect(preview).toContain("cancel-in-progress: false");
-    expect(observer).toContain("timeout-minutes: 18");
+    expect(observer).toContain("timeout-minutes: 44");
     expect(candidate).toContain("timeout-minutes: 30");
     expect(rollback).toContain("timeout-minutes: 15");
     expect(observer).toContain("ref: ${{ github.sha }}");
     expect(observer).not.toContain("wrangler deploy");
     expect(observer).not.toContain("gateway:configure:preview");
-    expect(tailStep).toContain("timeout 16m");
+    expect(tailStep).toContain("timeout 42m");
     expect(tailStep).toContain("scripts/run-preview-tail-supervisor.ts");
     expect(tailStep).not.toContain("wrangler tail");
     expect(tailStep).not.toContain("actions/upload-artifact");
@@ -576,7 +576,7 @@ describe("preview acceptance candidate workflow", () => {
     );
   });
 
-  it("gives every observer a parsed 16-minute inner budget inside an 18-minute job budget", async () => {
+  it("gives every observer one derived safe lifetime with a two-minute job margin", async () => {
     const preview = await readWorkflow("preview.yml");
     const parsed = parse(preview) as {
       jobs?: Record<string, {
@@ -593,13 +593,19 @@ describe("preview acceptance candidate workflow", () => {
       "restore_uniqueness",
       "maintenance_uniqueness",
     ] as const;
-    const resolverPollingSeconds = 2 * 120;
-    const operationalAllowanceSeconds = 10 * 60;
-    const semanticWindowSeconds = 120;
+    const resolverStartupSeconds = 125;
+    const candidateWorkflowSeconds = 31 * 60;
+    const approvalSeconds = 120;
+    const actionSeconds = 120;
+    const signalSeconds = 120;
+    const uniquenessSeconds = 125;
     const requiredInnerSeconds =
-      resolverPollingSeconds +
-      operationalAllowanceSeconds +
-      semanticWindowSeconds;
+      resolverStartupSeconds +
+      candidateWorkflowSeconds +
+      approvalSeconds +
+      actionSeconds +
+      signalSeconds +
+      uniquenessSeconds;
 
     for (const jobName of observerJobs) {
       const job = parsed.jobs?.[jobName];
@@ -607,10 +613,10 @@ describe("preview acceptance candidate workflow", () => {
         (step) => step.name === "Print only allowlisted acceptance evidence",
       );
       const timeoutMatch = listener?.run?.match(/\btimeout (\d+)m\b/u);
-      expect(job?.["timeout-minutes"], jobName).toBe(18);
+      expect(job?.["timeout-minutes"], jobName).toBe(44);
       expect(timeoutMatch, jobName).not.toBeNull();
       const innerSeconds = Number(timeoutMatch?.[1]) * 60;
-      expect(innerSeconds, jobName).toBe(16 * 60);
+      expect(innerSeconds, jobName).toBe(42 * 60);
       expect(innerSeconds, jobName).toBeGreaterThanOrEqual(
         requiredInnerSeconds,
       );

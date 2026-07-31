@@ -1237,6 +1237,74 @@ describe("preview observer run resolution", () => {
     expect(deps.listJobs).toHaveBeenCalledOnce();
   });
 
+  it("retains one matching run while its exact listener topology starts", async () => {
+    let monotonic = 0;
+    let jobReads = 0;
+    const activeSignal = job("Capture sync_suppression signal");
+    const activeUniqueness = job("Capture sync_suppression uniqueness");
+    const queuedSignal = job(
+      "Capture sync_suppression signal",
+      "queued",
+      null,
+    );
+    const deps: PreviewObserverResolutionDependencies = {
+      monotonicNow: () => monotonic,
+      sleep: vi.fn(async (milliseconds) => {
+        monotonic += milliseconds;
+      }),
+      listRuns: vi.fn(async () => ({ workflow_runs: [run()] })),
+      readRun: vi.fn(async () => run()),
+      listJobs: vi.fn(async () => {
+        jobReads += 1;
+        if (jobReads === 1) return { jobs: [] };
+        if (jobReads === 2) return { jobs: [queuedSignal] };
+        return { jobs: [activeSignal, activeUniqueness] };
+      }),
+    };
+
+    await expect(resolvePreviewObserverRun({
+      expectedWorkflow: ".github/workflows/preview.yml",
+      expectedCommit: SHA,
+      dispatchStartedAt: START,
+      dispatchCompletedAt: END,
+      family: "sync_suppression",
+    }, deps)).resolves.toBe("41");
+
+    expect(jobReads).toBe(25);
+    expect(deps.sleep).toHaveBeenCalledTimes(24);
+    expect(deps.readRun).toHaveBeenCalledTimes(25);
+  });
+
+  it("fails immediately when the uniquely attributed observer run is terminal", async () => {
+    let monotonic = 0;
+    const terminalRun = {
+      ...run(),
+      status: "completed",
+      conclusion: "failure",
+    };
+    const deps: PreviewObserverResolutionDependencies = {
+      monotonicNow: () => monotonic,
+      sleep: vi.fn(async (milliseconds) => {
+        monotonic += milliseconds;
+      }),
+      listRuns: vi.fn(async () => ({ workflow_runs: [terminalRun] })),
+      readRun: vi.fn(async () => terminalRun),
+      listJobs: vi.fn(async () => ({ jobs: [] })),
+    };
+
+    await expect(resolvePreviewObserverRun({
+      expectedWorkflow: ".github/workflows/preview.yml",
+      expectedCommit: SHA,
+      dispatchStartedAt: START,
+      dispatchCompletedAt: END,
+      family: "foundation_probe",
+    }, deps)).rejects.toThrow("Preview observer metadata is invalid.");
+
+    expect(deps.sleep).not.toHaveBeenCalled();
+    expect(deps.readRun).toHaveBeenCalledOnce();
+    expect(deps.listJobs).not.toHaveBeenCalled();
+  });
+
   it("retains one stable identity through the deadline and rejects a last-poll duplicate", async () => {
     let monotonic = 0;
     let calls = 0;
@@ -1450,6 +1518,22 @@ describe("preview observer run resolution", () => {
       dispatchCompletedAt: END,
       family: "foundation_probe",
     }, deps)).resolves.toBe("41");
+  });
+
+  it("rejects an expected skipped capture job as contradictory without polling", async () => {
+    const deps = dependencies([run()], [
+      job("Capture foundation_probe signal", "completed", "skipped"),
+    ]);
+
+    await expect(resolvePreviewObserverRun({
+      expectedWorkflow: ".github/workflows/preview.yml",
+      expectedCommit: SHA,
+      dispatchStartedAt: START,
+      dispatchCompletedAt: END,
+      family: "foundation_probe",
+    }, deps)).rejects.toThrow("Preview observer metadata is invalid.");
+
+    expect(deps.sleep).not.toHaveBeenCalled();
   });
 
   it.each([

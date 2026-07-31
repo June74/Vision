@@ -7,16 +7,16 @@ shared with the captured-state validator.
 
 ## `resolvePreviewObserverRun`
 
-Polls at five-second intervals for at most 120 seconds. It requires zero or one
-matching run per read, re-reads the selected run, validates every expected
-listener job, and normally retains the same candidate across observations.
-Only a run first discovered on the inclusive terminal poll may use one complete
-observation. All 24 sleeps and the terminal page walk still occur, and a
-duplicate found on any page of that last poll fails closed. Run-list, run
-detail, and job reads all receive the same absolute monotonic deadline and
-abort signal. A poll that begins at the exact 120-second close receives one
-fixed five-second settlement cap; this does not renew or move the observation
-close.
+Polls at five-second intervals for at most 120 seconds. It resolves immutable
+run identity independently from run state, retains the unique candidate while
+expected jobs are queued or listeners are starting, and returns only when the
+exact listener topology is active on the inclusive terminal poll. Duplicate
+identity, terminal or invalid run state, and contradictory topology fail
+immediately. All 24 sleeps and the terminal page walk still occur for a valid
+starting topology. Run-list, run-detail, and job reads receive the same
+absolute monotonic deadline and abort signal. A poll that begins at the exact
+120-second close receives one fixed five-second settlement cap; this does not
+renew or move the observation close.
 
 ## `listRelevantRuns`
 
@@ -118,10 +118,12 @@ Rejects negative, infinite, or nonnumeric monotonic values.
 
 Rejects absent or duplicated exact job names.
 
-## `assertExpectedActiveJobs`
+## `expectedJobTopology`
 
-Requires all jobs in the shared family contract to have one active listener
-and rejects any other in-progress `Capture ...` job.
+Classifies absent, queued, or not-yet-active expected listeners as `pending`.
+It returns `active` only for exact active job/listener pairs, while duplicated
+expected jobs, terminal expected jobs without an active counterpart, malformed
+starting states, and any other non-skipped `Capture ...` job fail immediately.
 
 ## `observerJobState`
 
@@ -149,11 +151,13 @@ Requires exact envelope, job, and step key sets before copying bounded
 name/status/conclusion fields and the bounded setup/listener step list without
 invoking accessors.
 
-## `matchesRun`
+## `matchesRunIdentity`
 
-Requires `workflow_dispatch`, the reviewed SHA, exact workflow path, active
-status, null conclusion, and overlap between the whole provider-created second
-and the inclusive millisecond dispatch interval.
+Requires `workflow_dispatch`, the reviewed SHA, exact workflow path, and
+overlap between the whole provider-created second and the inclusive millisecond
+dispatch interval. The caller separately admits only queued or in-progress
+state with null conclusion, allowing attributed terminal failure to be detected
+without waiting for the discovery horizon.
 
 ## `validateResolutionInput`
 

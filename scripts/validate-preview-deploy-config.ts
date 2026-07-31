@@ -16,6 +16,15 @@ const INVALID_ACCEPTANCE =
 const INVALID_PROVIDER_STATE = "Normal preview provider state is invalid.";
 const NORMAL_CRONS = ["*/15 * * * *", "5 6 * * *"] as const;
 const ACCEPTANCE_CRON = "* * * * *";
+const CANDIDATE_OPERATIONS = Object.freeze([
+  "deploy_foundation",
+  "deploy_sync_suppression",
+  "deploy_ai",
+  "deploy_fault",
+  "deploy_role_probe",
+  "deploy_restore",
+] as const);
+type CandidateOperation = (typeof CANDIDATE_OPERATIONS)[number];
 const CANONICAL_INSTANT =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const NORMAL_VAR_ENTRIES = Object.freeze({
@@ -102,12 +111,9 @@ export function validatePreviewDeployConfig(candidate: unknown): void {
 export function validateNormalPreviewProviderState(
   input: NormalPreviewProviderState,
 ): void {
-  const bindings = readProviderBindings(input.settingsResponse);
-
   if (
     !matchesNormalProviderHealthAndSchedules(input) ||
-    bindings === undefined ||
-    !matchesNormalProviderBindingContract(bindings)
+    !matchesNormalProviderBindings(input.settingsResponse)
   ) {
     throw new Error(INVALID_PROVIDER_STATE);
   }
@@ -118,35 +124,12 @@ export function validateTemporaryRestorePairProviderState(
   input: NormalPreviewProviderState,
 ): void {
   try {
-    if (!matchesNormalProviderHealthAndSchedules(input)) {
+    if (
+      !matchesNormalProviderHealthAndSchedules(input) ||
+      !matchesTemporaryRestorePairBindings(input.settingsResponse)
+    ) {
       throw new Error(INVALID_RESTORE_PROVIDER_STATE);
     }
-    const bindings = readProviderBindings(input.settingsResponse);
-    if (
-      bindings === undefined ||
-      bindings.length !== NORMAL_PROVIDER_BINDING_CONTRACT.length + 2 ||
-      !matchesNormalProviderBindingContract(
-        bindings.filter((binding) => {
-          if (!isPlainDataObject(binding)) return true;
-          const name = ownDataValue(binding, "name");
-          return name !== "PREVIEW_RESTORE_DATABASE_URL" &&
-            name !== "PREVIEW_RESTORE_TARGET_ID";
-        }),
-      )
-    ) throw new Error(INVALID_RESTORE_PROVIDER_STATE);
-    const temporary = bindings.filter((binding) =>
-      isPlainDataObject(binding) &&
-      (ownDataValue(binding, "name") === "PREVIEW_RESTORE_DATABASE_URL" ||
-        ownDataValue(binding, "name") === "PREVIEW_RESTORE_TARGET_ID"));
-    if (
-      temporary.length !== 2 ||
-      !["PREVIEW_RESTORE_DATABASE_URL", "PREVIEW_RESTORE_TARGET_ID"].every(
-        (name) =>
-          temporary.some((binding) =>
-            matchesTemporaryRestoreBinding(binding, name)
-          ),
-      )
-    ) throw new Error(INVALID_RESTORE_PROVIDER_STATE);
   } catch {
     throw new Error(INVALID_RESTORE_PROVIDER_STATE);
   }
@@ -169,16 +152,32 @@ export function validatePreviewProviderStateForCandidateIntent(input: {
     schedulesResponse: input.schedulesResponse,
     settingsResponse: input.settingsResponse,
   };
-  if (profile === "restore_pair") {
-    validateTemporaryRestorePairProviderState(providerState);
-    return;
+  const operation = readCandidateOperation(input.candidateIntent);
+  const expectedCrons = operation === "deploy_sync_suppression"
+    ? NORMAL_CRONS
+    : [...NORMAL_CRONS, ACCEPTANCE_CRON];
+  const bindingsMatch = profile === "restore_pair"
+    ? matchesTemporaryRestorePairBindings(providerState.settingsResponse)
+    : matchesNormalProviderBindings(providerState.settingsResponse);
+  if (
+    !matchesProviderHealthAndSchedules(providerState, expectedCrons) ||
+    !bindingsMatch
+  ) {
+    throw new Error(INVALID_PROVIDER_STATE);
   }
-  validateNormalPreviewProviderState(providerState);
 }
 
 /** Reuses the normal runtime health and exact permanent schedule contract. */
 function matchesNormalProviderHealthAndSchedules(
   input: NormalPreviewProviderState,
+): boolean {
+  return matchesProviderHealthAndSchedules(input, NORMAL_CRONS);
+}
+
+/** Requires healthy runtime and one exact caller-selected schedule profile. */
+function matchesProviderHealthAndSchedules(
+  input: NormalPreviewProviderState,
+  expectedCrons: readonly string[],
 ): boolean {
   const health = isPlainDataObject(input.healthResponse)
     ? input.healthResponse
@@ -201,8 +200,56 @@ function matchesNormalProviderHealthAndSchedules(
   return (
     ownDataValue(health, "status") === "ok" &&
     ownDataValue(schedules, "success") === true &&
-    exactStringArray(scheduleCrons, [...NORMAL_CRONS].sort())
+    exactStringArray(scheduleCrons, [...expectedCrons].sort())
   );
+}
+
+/** Requires exactly the immutable normal provider binding inventory. */
+function matchesNormalProviderBindings(settingsResponse: unknown): boolean {
+  const bindings = readProviderBindings(settingsResponse);
+  return bindings !== undefined && matchesNormalProviderBindingContract(bindings);
+}
+
+/** Requires normal bindings plus the exact two temporary restore secrets. */
+function matchesTemporaryRestorePairBindings(
+  settingsResponse: unknown,
+): boolean {
+  const bindings = readProviderBindings(settingsResponse);
+  if (
+    bindings === undefined ||
+    bindings.length !== NORMAL_PROVIDER_BINDING_CONTRACT.length + 2 ||
+    !matchesNormalProviderBindingContract(
+      bindings.filter((binding) => {
+        if (!isPlainDataObject(binding)) return true;
+        const name = ownDataValue(binding, "name");
+        return name !== "PREVIEW_RESTORE_DATABASE_URL" &&
+          name !== "PREVIEW_RESTORE_TARGET_ID";
+      }),
+    )
+  ) return false;
+  const temporary = bindings.filter((binding) =>
+    isPlainDataObject(binding) &&
+    (ownDataValue(binding, "name") === "PREVIEW_RESTORE_DATABASE_URL" ||
+      ownDataValue(binding, "name") === "PREVIEW_RESTORE_TARGET_ID"));
+  return temporary.length === 2 &&
+    ["PREVIEW_RESTORE_DATABASE_URL", "PREVIEW_RESTORE_TARGET_ID"].every(
+      (name) =>
+        temporary.some((binding) =>
+          matchesTemporaryRestoreBinding(binding, name)
+        ),
+    );
+}
+
+/** Reads the candidate operation already admitted by the lifecycle parser. */
+function readCandidateOperation(candidateIntent: unknown): CandidateOperation {
+  if (!isPlainDataObject(candidateIntent)) {
+    throw new Error(INVALID_PROVIDER_STATE);
+  }
+  const operation = ownDataValue(candidateIntent, "candidateOperation");
+  if (!CANDIDATE_OPERATIONS.some((candidate) => candidate === operation)) {
+    throw new Error(INVALID_PROVIDER_STATE);
+  }
+  return operation as CandidateOperation;
 }
 
 /** Requires one name/type-only temporary secret binding without accessors. */

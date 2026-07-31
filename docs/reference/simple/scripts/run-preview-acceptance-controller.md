@@ -82,7 +82,11 @@ Writes only a member of the fixed status vocabulary.
 Keeps the observer handle private, starts observation before mutation, verifies
 attribution and timing, rolls back and closes once, then waits for any required
 uniqueness proof. A timed-out accepted candidate is reconciled once and rolled
-back without action. An uncertain rollback is never retried.
+back without action. An uncertain rollback is never retried. A later successful
+provider completion may move a two-job uniqueness close forward, never
+backward. The controller rejects implausibly future advancement, extends its
+deadline only to the new semantic close, and keeps one fixed workflow-aware
+verification ceiling.
 
 ## `rollbackAndClose`
 
@@ -308,7 +312,11 @@ margin, without crossing the buffered candidate expiry.
 ## `nextCandidateWorkflowDeadline`
 
 Allows candidate deployment confirmation to use its workflow-aware duration,
-bounded by the candidate's buffered expiry.
+bounded by the candidate's buffered expiry. The surrounding observer uses one
+42-minute inner ceiling inside a 44-minute job: 125 seconds of resolver startup,
+31 minutes of candidate workflow time, two minutes each for approval, action,
+and signal, plus 125 seconds for uniqueness, rounded up without changing any
+individual controller deadline.
 
 ## `nextWorkflowDeadline`
 
