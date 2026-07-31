@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:30:35.2961897Z
-- **Last observed:** 2026-07-31T16:54:31.0457568Z
+- **Last observed:** 2026-07-31T21:55:11.3910509Z
 - **Phase/task:** Phase B live-acceptance specification finalization
 - **Environment:** Local Phase B worktree under the managed sandbox
 - **Version/commit:** Written-spec candidate based on `38c35eb`
@@ -172,3 +172,8 @@ commit `4420f6d`.
   the optional user-level ignore read. No configuration change, file edit,
   provider action, secret access, or external mutation occurred; the lane may
   continue without consulting or modifying global Git configuration.
+- 2026-07-31T21:55:11.3910509Z: Recurred during the Task 4 staged-scope audit.
+  The expected 42 staged paths and zero unstaged paths were reported, but the
+  untracked-file query inherited the optional unreadable global ignore and the
+  compound command exited nonzero. The scope claim is rechecked with bounded
+  repository-metadata read authority before commit.
