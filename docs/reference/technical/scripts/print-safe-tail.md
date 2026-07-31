@@ -24,9 +24,9 @@ terminal.
 ## `parseObserverConfiguration`
 
 Parses one closed mode plus unique flag/value pairs. It requires canonical
-`--closes-at`, exact mode/expectation agreement, a fault scenario only for
-`fault_expected`, and `--maintenance-scheduled-at` only for the two
-maintenance outcomes.
+mode/expectation agreement, a fault scenario only for `fault_expected`, and
+`--maintenance-scheduled-at` only for the two maintenance outcomes. It rejects
+the removed `--closes-at` flag and derives maintenance close internally.
 
 ## `isCanonicalInstant`
 
@@ -62,5 +62,5 @@ argument vectors exit nonzero with empty stdout and stderr.
 Observer modes cover the exact safe-tail evidence families. Maintenance is
 bound to `vision.calendar-maintenance/v2` and its requested scheduled tick;
 fault evidence is bound to the requested scenario. Signal jobs return
-immediately, while uniqueness jobs remain open through the caller-supplied
+immediately, while uniqueness jobs remain open through the internally derived
 close instant.

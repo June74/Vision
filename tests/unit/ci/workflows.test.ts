@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { parse } from "yaml";
 
 const CHECKOUT_ACTION =
   "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0";
@@ -564,12 +565,8 @@ describe("preview acceptance candidate workflow", () => {
       expect(observer).not.toContain("set -o pipefail");
       expect(observer).not.toContain("wrangler tail vision-preview --format json 2>/dev/null |");
       expect(observer).toContain('--expectation "$EXPECTED_OUTCOME"');
-      if (jobName === "maintenance_uniqueness") {
-        expect(observer).toContain('--closes-at "$OBSERVER_CLOSES_AT"');
-      } else {
-        expect(observer).not.toContain("--closes-at");
-        expect(observer).not.toContain("OBSERVER_CLOSES_AT:");
-      }
+      expect(observer).not.toContain("--closes-at");
+      expect(observer).not.toContain("OBSERVER_CLOSES_AT:");
     }
     expect(readWorkflowJob(preview, "maintenance_uniqueness")).toContain(
       '--maintenance-scheduled-at "$MAINTENANCE_SCHEDULED_AT"',
@@ -577,6 +574,50 @@ describe("preview acceptance candidate workflow", () => {
     expect(readWorkflowJob(preview, "tail")).toContain(
       '--scenario "$FAULT_SCENARIO"',
     );
+  });
+
+  it("gives every observer a parsed 16-minute inner budget inside an 18-minute job budget", async () => {
+    const preview = await readWorkflow("preview.yml");
+    const parsed = parse(preview) as {
+      jobs?: Record<string, {
+        "timeout-minutes"?: number;
+        steps?: Array<{ name?: string; run?: string }>;
+      }>;
+    };
+    const observerJobs = [
+      "tail",
+      "suppression_signal",
+      "restore_signal",
+      "role_signal",
+      "suppression_uniqueness",
+      "restore_uniqueness",
+      "maintenance_uniqueness",
+    ] as const;
+    const resolverPollingSeconds = 2 * 120;
+    const operationalAllowanceSeconds = 10 * 60;
+    const semanticWindowSeconds = 120;
+    const requiredInnerSeconds =
+      resolverPollingSeconds +
+      operationalAllowanceSeconds +
+      semanticWindowSeconds;
+
+    for (const jobName of observerJobs) {
+      const job = parsed.jobs?.[jobName];
+      const listener = job?.steps?.find(
+        (step) => step.name === "Print only allowlisted acceptance evidence",
+      );
+      const timeoutMatch = listener?.run?.match(/\btimeout (\d+)m\b/u);
+      expect(job?.["timeout-minutes"], jobName).toBe(18);
+      expect(timeoutMatch, jobName).not.toBeNull();
+      const innerSeconds = Number(timeoutMatch?.[1]) * 60;
+      expect(innerSeconds, jobName).toBe(16 * 60);
+      expect(innerSeconds, jobName).toBeGreaterThanOrEqual(
+        requiredInnerSeconds,
+      );
+      expect(job!["timeout-minutes"]! * 60 - innerSeconds, jobName).toBe(
+        120,
+      );
+    }
   });
 
   it("requires live observer proof before deploying an isolated generated candidate", async () => {
@@ -701,6 +742,25 @@ describe("preview acceptance candidate workflow", () => {
     expect(finalProof).not.toContain("LISTENER_WORKFLOW_NUMBER");
     expect(finalProof).not.toContain("actions/runs/");
     expect(finalProof).not.toContain("GITHUB_OUTPUT");
+  });
+
+  it("routes restore re-admission through one output-capturing metadata executable", async () => {
+    const preview = await readWorkflow("preview.yml");
+    const readmission = readWorkflowStep(
+      preview,
+      "Re-admit same-commit role-probe closure immediately before restore",
+    );
+
+    expect(readmission).toContain(
+      "scripts/run-preview-restore-readmission.ts",
+    );
+    expect(readmission).not.toMatch(/^\s+gh (?:api|run)\b/gmu);
+    expect(readmission).not.toContain(
+      "scripts/validate-preview-rollback-lifecycle.ts --verify-run",
+    );
+    expect(readmission).not.toContain(
+      "scripts/validate-preview-rollback-lifecycle.ts --verify-closure",
+    );
   });
 
   it("runs the read-only Gateway verifier only for AI stop or dedicated AI evidence", async () => {

@@ -8,8 +8,8 @@ context string. Synchronization suppression keeps the two normal schedules;
 every other acceptance candidate adds the temporary one-minute schedule. The
 command adds the admitted temporary bindings without editing the normal
 artifact. Observe contexts carry their own canonical close instant. Calendar
-maintenance additionally carries the scheduled tick and must close exactly
-two minutes after that tick.
+artifact. Calendar-maintenance observe contexts carry only the canonical
+scheduled tick; the observer derives its two-minute close internally.
 
 ## `serializePreviewAcceptanceContext`
 
@@ -26,7 +26,7 @@ unsupported context and returns a deeply frozen workflow selection.
 Validates one context variant and rebuilds a new plain object in authoritative
 key order. Candidate dispatch timestamps must be ordered; a zero-width
 interval is valid. Evidence families must match their expected outcomes, and a
-maintenance close must equal its scheduled tick plus 120 seconds.
+maintenance context must carry exactly one canonical scheduled tick.
 
 ## `isBoundedAscii`
 
@@ -75,5 +75,5 @@ Supports canonical workflow-input verification and the fixed generated-file
 build mode. It never accepts the context as a shell argument, writes only the
 fixed acceptance artifact, and refuses to overwrite an existing file. Workflow
 verification emits only fixed snake-case scalar outputs, including evidence
-family, expected outcome, observer close, maintenance tick, and the single
+family, expected outcome, maintenance tick, and the single
 restore-admission gate name.

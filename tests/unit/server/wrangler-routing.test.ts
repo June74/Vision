@@ -778,7 +778,6 @@ describe("preview acceptance workflow input admission", () => {
       reviewedCommit: REVIEWED_COMMIT,
       evidenceFamily: "calendar_maintenance",
       expectedOutcome: "maintenance_repair_reserved",
-      observerClosesAt: "2026-07-30T18:17:00.000Z",
       maintenanceScheduledAt: "2026-07-30T18:15:00.000Z",
     });
 

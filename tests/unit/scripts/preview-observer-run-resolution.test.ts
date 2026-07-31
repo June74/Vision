@@ -24,6 +24,21 @@ function run(id = "41") {
   };
 }
 
+function unrelatedRun(id: string) {
+  return {
+    ...run(id),
+    head_sha: "b".repeat(40),
+  };
+}
+
+function fullPageWithMatch(id = "41") {
+  return [
+    ...Array.from({ length: 99 }, (_, index) =>
+      unrelatedRun(String(1_000 + index))),
+    run(id),
+  ];
+}
+
 function job(name: string, status = "in_progress", conclusion: string | null = null) {
   return {
     name,
@@ -154,6 +169,163 @@ describe("preview observer run resolution", () => {
       family: "foundation_probe",
     }, deps)).rejects.toThrow("Preview observer metadata is invalid.");
     expect(deps.sleep).toHaveBeenCalledTimes(24);
+  });
+
+  it("rejects a duplicate on page two after page one has 99 unrelated runs and one match", async () => {
+    let monotonic = 0;
+    const listRuns = vi.fn(async (page = 1) => ({
+      workflow_runs:
+        page === 1 ? fullPageWithMatch("41") : [run("42")],
+    }));
+    const deps: PreviewObserverResolutionDependencies = {
+      monotonicNow: () => monotonic,
+      sleep: vi.fn(async (milliseconds) => {
+        monotonic += milliseconds;
+      }),
+      listRuns,
+      readRun: vi.fn(async (handle) => run(String(handle))),
+      listJobs: vi.fn(async () => ({
+        jobs: [job("Capture foundation_probe signal")],
+      })),
+    };
+
+    await expect(resolvePreviewObserverRun({
+      expectedWorkflow: ".github/workflows/preview.yml",
+      expectedCommit: SHA,
+      dispatchStartedAt: START,
+      dispatchCompletedAt: END,
+      family: "foundation_probe",
+    }, deps)).rejects.toThrow("Preview observer metadata is invalid.");
+    expect(listRuns).toHaveBeenCalledWith(2);
+  });
+
+  it("keeps one run stable across every relevant page and poll", async () => {
+    let monotonic = 0;
+    const listRuns = vi.fn(async (page = 1) => ({
+      workflow_runs:
+        page === 1
+          ? fullPageWithMatch("41")
+          : [{ ...unrelatedRun("2001"), created_at: "2026-07-30T17:59:59Z" }],
+    }));
+    const deps: PreviewObserverResolutionDependencies = {
+      monotonicNow: () => monotonic,
+      sleep: vi.fn(async (milliseconds) => {
+        monotonic += milliseconds;
+      }),
+      listRuns,
+      readRun: vi.fn(async (handle) => run(String(handle))),
+      listJobs: vi.fn(async () => ({
+        jobs: [job("Capture foundation_probe signal")],
+      })),
+    };
+
+    await expect(resolvePreviewObserverRun({
+      expectedWorkflow: ".github/workflows/preview.yml",
+      expectedCommit: SHA,
+      dispatchStartedAt: START,
+      dispatchCompletedAt: END,
+      family: "foundation_probe",
+    }, deps)).resolves.toBe("41");
+    expect(listRuns).toHaveBeenCalledWith(2);
+    expect(listRuns.mock.calls.filter(([page]) => page === 2)).toHaveLength(25);
+  });
+
+  it("rejects a duplicate discovered on page two of the terminal poll", async () => {
+    let monotonic = 0;
+    let poll = 0;
+    const listRuns = vi.fn(async (page = 1) => {
+      if (page === 1) poll += 1;
+      return {
+        workflow_runs:
+          page === 1
+            ? fullPageWithMatch("41")
+            : poll === 25
+              ? [run("42")]
+              : [{ ...unrelatedRun("2001"), created_at: "2026-07-30T17:59:59Z" }],
+      };
+    });
+    const deps: PreviewObserverResolutionDependencies = {
+      monotonicNow: () => monotonic,
+      sleep: vi.fn(async (milliseconds) => {
+        monotonic += milliseconds;
+      }),
+      listRuns,
+      readRun: vi.fn(async (handle) => run(String(handle))),
+      listJobs: vi.fn(async () => ({
+        jobs: [job("Capture foundation_probe signal")],
+      })),
+    };
+
+    await expect(resolvePreviewObserverRun({
+      expectedWorkflow: ".github/workflows/preview.yml",
+      expectedCommit: SHA,
+      dispatchStartedAt: START,
+      dispatchCompletedAt: END,
+      family: "foundation_probe",
+    }, deps)).rejects.toThrow("Preview observer metadata is invalid.");
+    expect(poll).toBe(25);
+  });
+
+  it("fails closed when ten full relevant pages cannot prove the listing is complete", async () => {
+    let monotonic = 0;
+    const listRuns = vi.fn(async (page = 1) => ({
+      workflow_runs: Array.from({ length: 100 }, (_, index) =>
+        unrelatedRun(String(page * 1_000 + index + 1))),
+    }));
+    const deps: PreviewObserverResolutionDependencies = {
+      monotonicNow: () => monotonic,
+      sleep: vi.fn(async (milliseconds) => {
+        monotonic += milliseconds;
+      }),
+      listRuns,
+      readRun: vi.fn(async () => run()),
+      listJobs: vi.fn(async () => ({
+        jobs: [job("Capture foundation_probe signal")],
+      })),
+    };
+
+    await expect(resolvePreviewObserverRun({
+      expectedWorkflow: ".github/workflows/preview.yml",
+      expectedCommit: SHA,
+      dispatchStartedAt: START,
+      dispatchCompletedAt: END,
+      family: "foundation_probe",
+    }, deps)).rejects.toThrow("Preview observer metadata is invalid.");
+    expect(listRuns).toHaveBeenCalledWith(10);
+    expect(listRuns).toHaveBeenCalledTimes(10);
+  });
+
+  it("rejects a malformed exact-shape response on a later page", async () => {
+    let monotonic = 0;
+    const listRuns = vi.fn(async (page = 1) =>
+      page === 1
+        ? { workflow_runs: fullPageWithMatch("41") }
+        : {
+            workflow_runs: [
+              { ...unrelatedRun("2001"), created_at: "2026-07-30T17:59:59Z" },
+            ],
+            unexpected: true,
+          });
+    const deps: PreviewObserverResolutionDependencies = {
+      monotonicNow: () => monotonic,
+      sleep: vi.fn(async (milliseconds) => {
+        monotonic += milliseconds;
+      }),
+      listRuns,
+      readRun: vi.fn(async (handle) => run(String(handle))),
+      listJobs: vi.fn(async () => ({
+        jobs: [job("Capture foundation_probe signal")],
+      })),
+    };
+
+    await expect(resolvePreviewObserverRun({
+      expectedWorkflow: ".github/workflows/preview.yml",
+      expectedCommit: SHA,
+      dispatchStartedAt: START,
+      dispatchCompletedAt: END,
+      family: "foundation_probe",
+    }, deps)).rejects.toThrow("Preview observer metadata is invalid.");
+    expect(listRuns).toHaveBeenCalledWith(2);
   });
 
   it.each(["success", "failure", "cancelled", "timed_out"])(
@@ -296,37 +468,40 @@ describe("preview observer run resolution", () => {
     });
   });
 
-  it("accepts maintenance only after the exact tick plus 120-second close", async () => {
-    const maintenance = job(
-      "Capture calendar_maintenance uniqueness",
-      "completed",
-      "success",
-    );
-    maintenance.steps[0]!.completed_at = "2026-07-30T18:17:00.000Z";
-    const deps = dependencies([run()], [
-      maintenance,
-    ]);
-    await expect(
-      readPreviewMaintenanceObserverState(
-        "41" as never,
-        "calendar_maintenance",
-        TICK,
-        deps,
-      ),
-    ).resolves.toStrictEqual({
-      uniqueness: "succeeded",
-      maintenanceScheduledAt: TICK,
-    });
-  });
+  it.each([0, 1])(
+    "accepts maintenance completion at or after tick plus 120 seconds (%i ms)",
+    async (offset) => {
+      const maintenance = job(
+        "Capture calendar_maintenance uniqueness",
+        "completed",
+        "success",
+      );
+      maintenance.steps[0]!.completed_at = new Date(
+        TICK.getTime() + 120_000 + offset,
+      ).toISOString();
+      const deps = dependencies([run()], [maintenance]);
+      await expect(
+        readPreviewMaintenanceObserverState(
+          "41" as never,
+          "calendar_maintenance",
+          TICK,
+          deps,
+        ),
+      ).resolves.toStrictEqual({
+        uniqueness: "succeeded",
+        maintenanceScheduledAt: TICK,
+      });
+    },
+  );
 
-  it.each([-1, 1])("rejects maintenance completion %i ms from the exact close", async (offset) => {
+  it("rejects maintenance completion one millisecond before the close", async () => {
     const maintenance = job(
       "Capture calendar_maintenance uniqueness",
       "completed",
       "success",
     );
     maintenance.steps[0]!.completed_at = new Date(
-      TICK.getTime() + 120_000 + offset,
+      TICK.getTime() + 120_000 - 1,
     ).toISOString();
     const deps = dependencies([run()], [maintenance]);
     await expect(

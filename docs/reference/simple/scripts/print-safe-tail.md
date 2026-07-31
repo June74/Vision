@@ -22,9 +22,10 @@ exactly one terminal was admitted.
 
 ## `parseObserverConfiguration`
 
-Accepts one fixed observer mode plus unique `--expectation`, `--closes-at`, and
-only the mode-specific scenario or maintenance-tick flag. Every timestamp must
-be canonical UTC and every mode/outcome pairing must be exact.
+Accepts one fixed observer mode plus unique `--expectation` and only the
+mode-specific scenario or maintenance-tick flag. Maintenance derives its
+close as the scheduled tick plus 120 seconds; the removed `--closes-at` flag
+fails closed.
 
 ## `isCanonicalInstant`
 
@@ -42,9 +43,10 @@ result or the fixed no-event result.
 
 ## `runObserverTail`
 
-Runs the strict observer, uses the supplied close instant for uniqueness, and
-prints only allowlisted accepting-signal or successful uniqueness evidence.
-Restore, suppression, and maintenance success remain output-free.
+Runs the strict observer, derives maintenance close from its tick and other
+uniqueness close from the admitted terminal, and prints only allowlisted
+accepting-signal or successful uniqueness evidence. Restore, suppression, and
+maintenance success remain output-free.
 
 ## `complete`
 

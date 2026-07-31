@@ -10,7 +10,15 @@ shared with the captured-state validator.
 Polls at five-second intervals for at most 120 seconds. It requires zero or one
 matching run per read, re-reads the selected run, validates every expected
 listener job, and returns a branded positive-decimal handle only after the same
-candidate is stable across observations.
+candidate is stable across observations. Each read first completes a bounded
+newest-first page walk.
+
+## `listRelevantRuns`
+
+Requests pages 1 through at most 10, validates non-increasing creation time,
+and stops only after a short page or a run older than the dispatch start.
+Reaching the cap with a full relevant page is treated as truncation and fails
+closed.
 
 ## `readPreviewSignalObserverState`
 
@@ -31,7 +39,8 @@ scheduled tick plus 120 seconds and returns a defensive copy of that tick.
 
 Constructs the concrete GitHub adapter from a bounded repository name. It uses
 `execFile` argument arrays, fixed response limits, hidden child windows, and
-captured streams; it never invokes a shell or renders child output.
+captured streams. Run-list calls include the exact page number and a fixed
+`--jq` projection; the adapter never invokes a shell or renders child output.
 
 ## `invoke`
 
@@ -63,7 +72,8 @@ Requires exactly one step named `Print only allowlisted acceptance evidence`.
 
 ## `snapshotRuns`
 
-Requires one ordinary `workflow_runs` array within the fixed count limit.
+Requires an ordinary response with exactly one `workflow_runs` key and an
+array within the per-page count limit.
 
 ## `snapshotRun`
 
@@ -134,7 +144,7 @@ Implements the five-second poll interval.
 
 ## `listRuns`
 
-Calls the workflow-run listing endpoint through the captured adapter.
+Calls one numbered workflow-run listing page through the captured adapter.
 
 ## `readRun`
 

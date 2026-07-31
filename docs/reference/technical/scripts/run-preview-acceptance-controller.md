@@ -85,8 +85,9 @@ maintenance observation-only. Candidate families must pass attribution,
 pre-action idle, any required approval/action, signal timing, a single latched
 rollback, closure verification, and only then delayed uniqueness. A
 non-positive no-signal window, reversed timestamp, provider/local deadline
-miss, unexpected observer state, or retry after an uncertain rollback fails
-closed through one constant error surface.
+miss, action completion later than the paired wall sample, unexpected observer
+state, or retry after an uncertain rollback fails closed through one constant
+error surface.
 
 ## `rollbackAndClose`
 
@@ -121,8 +122,9 @@ requires success for the requested scheduled tick before expiry.
 ## `createObserveContext`
 
 Builds the canonical `observe` context with exact family/outcome pairing,
-fault scenario when required, and maintenance-only scheduled tick plus fixed
-close. Non-maintenance setup/deploy time cannot consume uniqueness.
+fault scenario when required, and only the maintenance scheduled tick. The
+fixed tick-plus-120 close is derived internally and the removed close key is
+not serialized. Non-maintenance setup/deploy time cannot consume uniqueness.
 
 ## `createCandidateContext`
 

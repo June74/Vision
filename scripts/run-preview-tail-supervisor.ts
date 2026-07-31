@@ -1,6 +1,6 @@
 /** Supervises one raw tail producer behind the privacy-safe observer process. */
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const FAILURE = "Preview tail supervision failed closed.";
@@ -16,19 +16,28 @@ export interface PreviewTailSupervisorResult {
   readonly producerTermination: "deliberate";
 }
 
+interface PreviewTailSupervisorDependencies {
+  readonly waitForChildClose?: (
+    child: ChildProcessWithoutNullStreams,
+  ) => Promise<void>;
+}
+
 /** Runs two argument-array children and owns the producer's successful teardown. */
 export function supervisePreviewTail(input: {
   readonly producer: PreviewTailChildCommand;
   readonly consumer: PreviewTailChildCommand;
-}): Promise<PreviewTailSupervisorResult> {
-  const producer = spawnCommand(input.producer);
-  const consumer = spawnCommand(input.consumer);
+}, dependencies: PreviewTailSupervisorDependencies = {}): Promise<PreviewTailSupervisorResult> {
+  const producerCommand = validateCommand(input.producer);
+  const consumerCommand = validateCommand(input.consumer);
+  const awaitChildClose =
+    dependencies.waitForChildClose ?? waitForChildClose;
+  const consumer = spawnCommand(consumerCommand);
+  let producer: ChildProcessWithoutNullStreams | null = null;
   let output = "";
   let settled = false;
+  let settling = false;
   let consumerSucceeded = false;
 
-  producer.stdout.pipe(consumer.stdin);
-  producer.stderr.resume();
   consumer.stderr.resume();
   consumer.stdout.setEncoding("utf8");
   // The observer may close stdin immediately after a valid signal. Swallow the
@@ -36,14 +45,20 @@ export function supervisePreviewTail(input: {
   consumer.stdin.on("error", () => undefined);
 
   return new Promise((resolvePromise, rejectPromise) => {
-    /** Stops both children and exposes only the constant failure. */
+    /** Stops every started child, waits for closure, and exposes one error. */
     const rejectClosed = () => {
-      if (settled) return;
-      settled = true;
-      producer.stdout.unpipe(consumer.stdin);
-      if (!producer.killed) producer.kill("SIGTERM");
-      if (!consumer.killed) consumer.kill("SIGTERM");
-      rejectPromise(new Error(FAILURE));
+      if (settled || settling) return;
+      settling = true;
+      if (producer !== null) producer.stdout.unpipe(consumer.stdin);
+      void Promise.all([
+        stopChild(consumer, awaitChildClose),
+        ...(producer === null
+          ? []
+          : [stopChild(producer, awaitChildClose)]),
+      ]).then(() => {
+        settled = true;
+        rejectPromise(new Error(FAILURE));
+      });
     };
 
     consumer.stdout.on("data", (chunk: string) => {
@@ -58,24 +73,36 @@ export function supervisePreviewTail(input: {
       }
       output += chunk;
     });
-    producer.on("error", rejectClosed);
     consumer.on("error", rejectClosed);
-    producer.on("close", () => {
-      if (!consumerSucceeded) rejectClosed();
+    consumer.once("spawn", () => {
+      if (settled || settling) return;
+      producer = spawnCommand(producerCommand);
+      producer.stderr.resume();
+      producer.stdout.pipe(consumer.stdin);
+      producer.on("error", rejectClosed);
+      producer.on("close", () => {
+        if (!consumerSucceeded) rejectClosed();
+      });
     });
     consumer.on("close", (code, signal) => {
-      if (settled) return;
+      if (settled || settling) return;
       if (code !== 0 || signal !== null) {
         rejectClosed();
         return;
       }
       consumerSucceeded = true;
-      producer.stdout.unpipe(consumer.stdin);
-      if (!producer.kill("SIGTERM")) {
+      if (producer === null) {
         rejectClosed();
         return;
       }
-      producer.once("close", () => {
+      settling = true;
+      producer.stdout.unpipe(consumer.stdin);
+      if (!producer.kill("SIGTERM")) {
+        settling = false;
+        rejectClosed();
+        return;
+      }
+      void awaitChildClose(producer).then(() => {
         if (settled) return;
         settled = true;
         resolvePromise(Object.freeze({
@@ -87,10 +114,10 @@ export function supervisePreviewTail(input: {
   });
 }
 
-/** Starts one bounded child with captured streams and no shell. */
-function spawnCommand(
+/** Snapshots one bounded argument-array command before any process starts. */
+function validateCommand(
   command: PreviewTailChildCommand,
-): ChildProcessWithoutNullStreams {
+): PreviewTailChildCommand {
   if (
     typeof command?.executable !== "string" ||
     command.executable.length === 0 ||
@@ -106,6 +133,16 @@ function spawnCommand(
   ) {
     throw new Error(FAILURE);
   }
+  return Object.freeze({
+    executable: command.executable,
+    arguments: Object.freeze([...command.arguments]),
+  });
+}
+
+/** Starts one validated child with captured streams and no shell. */
+function spawnCommand(
+  command: PreviewTailChildCommand,
+): ChildProcessWithoutNullStreams {
   return spawn(command.executable, [...command.arguments], {
     shell: false,
     windowsHide: true,
@@ -113,14 +150,57 @@ function spawnCommand(
   });
 }
 
+/** Waits for either a real child close or an unspawnable-child error. */
+function waitForChildClose(
+  child: ChildProcessWithoutNullStreams,
+): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return Promise.resolve();
+  }
+  return new Promise((resolvePromise) => {
+    child.once("close", () => resolvePromise());
+    child.once("error", () => resolvePromise());
+  });
+}
+
+/** Terminates one child and does not resolve until the child is reaped. */
+async function stopChild(
+  child: ChildProcessWithoutNullStreams,
+  awaitChildClose: (
+    child: ChildProcessWithoutNullStreams,
+  ) => Promise<void>,
+): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  if (!child.killed) child.kill("SIGTERM");
+  await awaitChildClose(child);
+}
+
 /** Runs the fixed workflow producer and the allowlisting observer consumer. */
 async function main(): Promise<void> {
-  const packageRunner = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
   try {
+    const defaultRunner = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+    const testExecutable = process.env.PREVIEW_TAIL_TEST_EXECUTABLE;
+    const testScript = process.env.PREVIEW_TAIL_TEST_SCRIPT;
+    const usingTestRunner =
+      process.env.NODE_ENV === "test" &&
+      testExecutable !== undefined &&
+      testScript !== undefined;
+    if (
+      (testExecutable === undefined) !== (testScript === undefined) ||
+      (usingTestRunner &&
+        (!isAbsolute(testExecutable) || !isAbsolute(testScript))) ||
+      (!usingTestRunner &&
+        (testExecutable !== undefined || testScript !== undefined))
+    ) {
+      throw new Error(FAILURE);
+    }
+    const packageRunner = usingTestRunner ? testExecutable : defaultRunner;
+    const packagePrefix = usingTestRunner ? [testScript] : [];
     const result = await supervisePreviewTail({
       producer: {
         executable: packageRunner,
         arguments: [
+          ...packagePrefix,
           "exec",
           "wrangler",
           "tail",
@@ -132,6 +212,7 @@ async function main(): Promise<void> {
       consumer: {
         executable: packageRunner,
         arguments: [
+          ...packagePrefix,
           "exec",
           "tsx",
           "scripts/print-safe-tail.ts",

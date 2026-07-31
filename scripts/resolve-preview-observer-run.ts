@@ -8,6 +8,7 @@ const FAILURE = "Preview observer metadata is invalid.";
 const LISTENER_STEP = "Print only allowlisted acceptance evidence";
 const MAX_RESPONSE_BYTES = 1_048_576;
 const MAX_RUNS = 100;
+const MAX_RUN_PAGES = 10;
 const MAX_JOBS = 100;
 const MAX_STEPS = 100;
 const POLL_MILLISECONDS = 5_000;
@@ -50,7 +51,7 @@ export const PREVIEW_OBSERVER_JOB_CONTRACT = Object.freeze({
 export interface PreviewObserverResolutionDependencies {
   monotonicNow(): number;
   sleep(milliseconds: number): Promise<void>;
-  listRuns(): Promise<unknown>;
+  listRuns(page: number): Promise<unknown>;
   readRun(handle: PreviewObserverRunHandle): Promise<unknown>;
   listJobs(handle: PreviewObserverRunHandle): Promise<unknown>;
 }
@@ -93,7 +94,7 @@ export async function resolvePreviewObserverRun(
   const started = deps.monotonicNow();
   let candidate: PreviewObserverRunHandle | null = null;
   for (;;) {
-    const runs = snapshotRuns(await deps.listRuns()).filter((run) =>
+    const runs = (await listRelevantRuns(input.dispatchStartedAt, deps)).filter((run) =>
       matchesRun(run, input)
     );
     if (runs.length > 1) fail();
@@ -114,6 +115,37 @@ export async function resolvePreviewObserverRun(
     if (deps.monotonicNow() - started >= RESOLUTION_MILLISECONDS) fail();
     await deps.sleep(POLL_MILLISECONDS);
   }
+}
+
+/** Lists every bounded page that could contain a dispatch-interval run. */
+async function listRelevantRuns(
+  dispatchStartedAt: Date,
+  deps: PreviewObserverResolutionDependencies,
+): Promise<readonly RunSnapshot[]> {
+  const runs: RunSnapshot[] = [];
+  let previousCreatedAt = Number.POSITIVE_INFINITY;
+  for (let page = 1; page <= MAX_RUN_PAGES; page += 1) {
+    const pageRuns = snapshotRuns(await deps.listRuns(page));
+    let crossedDispatchStart = false;
+    for (const run of pageRuns) {
+      const createdAt = Date.parse(run.createdAt);
+      if (
+        !Number.isFinite(createdAt) ||
+        createdAt > previousCreatedAt
+      ) {
+        fail();
+      }
+      previousCreatedAt = createdAt;
+      runs.push(run);
+      if (createdAt < dispatchStartedAt.getTime()) {
+        crossedDispatchStart = true;
+      }
+    }
+    if (pageRuns.length < MAX_RUNS || crossedDispatchStart) {
+      return Object.freeze(runs);
+    }
+  }
+  fail();
 }
 
 /** Reads the fast signal job state. */
@@ -179,7 +211,7 @@ export async function readPreviewMaintenanceObserverState(
   );
   if (
     state.state === "succeeded" &&
-    canonicalDate(state.listener.completedAt).getTime() !==
+    canonicalDate(state.listener.completedAt).getTime() <
       tick.getTime() + RESOLUTION_MILLISECONDS
   ) {
     fail();
@@ -227,7 +259,7 @@ export function createGitHubObserverResolutionDependencies(input: {
           setTimeout(resolvePromise, milliseconds)
         )),
     /** Lists bounded workflow-dispatch runs for resolution. */
-    listRuns: () =>
+    listRuns: (page) =>
       invoke([
         "api",
         "-X",
@@ -237,6 +269,10 @@ export function createGitHubObserverResolutionDependencies(input: {
         "event=workflow_dispatch",
         "-f",
         "per_page=100",
+        "-f",
+        `page=${page}`,
+        "--jq",
+        "{workflow_runs: [.workflow_runs[] | {id,event,head_sha,created_at,path,status,conclusion}]}",
       ]),
     /** Re-reads one selected run by its opaque handle. */
     readRun: (handle) =>
@@ -354,6 +390,12 @@ function exactListener(job: JobSnapshot): StepSnapshot {
 function snapshotRuns(payload: unknown): readonly RunSnapshot[] {
   try {
     const record = plainRecord(payload);
+    if (
+      Object.keys(record).length !== 1 ||
+      !Object.hasOwn(record, "workflow_runs")
+    ) {
+      fail();
+    }
     const value = ownData(record, "workflow_runs");
     if (!Array.isArray(value) || value.length > MAX_RUNS) fail();
     return value.map(snapshotRun);

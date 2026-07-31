@@ -310,8 +310,6 @@ describe("print-safe-tail", () => {
         "--calendar-maintenance-only",
         "--expectation",
         "maintenance_repair_reserved",
-        "--closes-at",
-        closesAt.toISOString(),
         "--maintenance-scheduled-at",
         scheduledAt,
       ],
@@ -344,16 +342,14 @@ describe("print-safe-tail", () => {
     ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
   });
 
-  it.each([-1, 1])(
-    "rejects a maintenance close %i ms from scheduled tick plus 120 seconds",
-    async (offset) => {
-      const scheduledAt = "2026-07-30T18:15:00.000Z";
-      await expect(runPrintSafeTail([
+  it("rejects the removed maintenance --closes-at argument", async () => {
+    const scheduledAt = "2026-07-30T18:15:00.000Z";
+    await expect(runPrintSafeTail([
         "--calendar-maintenance-only",
         "--expectation",
         "maintenance_repair_reserved",
         "--closes-at",
-        new Date(Date.parse(scheduledAt) + 120_000 + offset).toISOString(),
+        new Date(Date.parse(scheduledAt) + 120_000).toISOString(),
         "--maintenance-scheduled-at",
         scheduledAt,
       ], [maintenanceTail(maintenanceSuccess())])).resolves.toEqual({
@@ -361,8 +357,7 @@ describe("print-safe-tail", () => {
         stdout: "",
         stderr: "",
       });
-    },
-  );
+  });
 
   it("emits only foundation evidence in foundation-probe-only mode", async () => {
     const result = await runPrintSafeTail(
@@ -613,7 +608,6 @@ describe("bounded preview-tail observer modes", () => {
     const observer = createPreviewTailObserver({
       mode: "sync_suppression_signal",
       expectation: { kind: "sync_suppressed" },
-      closesAt: new Date("2026-07-30T18:02:00.000Z"),
     });
     expect(
       observer.push(suppression, new Date("2026-07-30T18:00:01.000Z")),
@@ -648,7 +642,6 @@ describe("bounded preview-tail observer modes", () => {
     const duplicate = createPreviewTailObserver({
       mode: "sync_suppression_uniqueness",
       expectation: { kind: "sync_suppressed" },
-      closesAt: new Date("2026-07-30T18:02:00.000Z"),
     });
     duplicate.push(suppression, new Date("2026-07-30T18:00:01.000Z"));
     expect(
@@ -658,7 +651,6 @@ describe("bounded preview-tail observer modes", () => {
     const zero = createPreviewTailObserver({
       mode: "restore_uniqueness",
       expectation: { kind: "restore_succeeded" },
-      closesAt: new Date("2026-07-30T18:02:00.000Z"),
     });
     expect(zero.finish(new Date("2026-07-30T18:02:00.000Z"))).toStrictEqual({
       done: true,
@@ -674,7 +666,6 @@ describe("bounded preview-tail observer modes", () => {
         kind: "maintenance_succeeded",
         maintenanceScheduledAt: "2026-07-30T18:15:00.000Z",
       },
-      closesAt: new Date("2026-07-30T18:17:00.000Z"),
     });
     observer.push(
       {

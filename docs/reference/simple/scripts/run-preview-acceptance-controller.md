@@ -85,7 +85,8 @@ dispatches rollback, and verifies closure.
 Polls the active observer every five seconds until success or a bounded
 failure. The absolute limit is the earlier of action completion plus two
 minutes or candidate expiry minus one minute, even when the action driver
-returns late.
+returns late. A driver completion timestamp later than the paired wall sample
+fails before deadline calculation.
 
 ## `assertPreActionIdleDeadline`
 
@@ -104,8 +105,9 @@ temporary maintenance candidate.
 
 ## `createObserveContext`
 
-Builds the exact observe context. Only maintenance carries a scheduled tick
-and fixed close; other families start uniqueness at their admitted terminal.
+Builds the exact observe context. Maintenance carries only its scheduled tick;
+the controller and printer derive the fixed close internally. Other families
+start uniqueness at their admitted terminal.
 
 ## `createCandidateContext`
 

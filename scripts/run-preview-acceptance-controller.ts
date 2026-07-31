@@ -396,7 +396,6 @@ export async function runPreviewAcceptanceController(
     const observeContext = createObserveContext(
       input,
       reviewedCommit,
-      observerClosesAt,
     );
     await dispatch(observeContext);
     const observerCompletedAt = safeNow(dependencies.wallNow());
@@ -405,7 +404,6 @@ export async function runPreviewAcceptanceController(
       expectedCommit: reviewedCommit,
       dispatchStartedAt: observerStartedAt,
       dispatchCompletedAt: observerCompletedAt,
-      ...(observerClosesAt === undefined ? {} : { observerClosesAt }),
       expectation: input.expectation,
     });
     dependencies.writeStatus("observer_ready");
@@ -496,6 +494,7 @@ export async function runPreviewAcceptanceController(
     }
     const sampledWall = safeNow(dependencies.wallNow());
     const sampledMonotonic = safeMonotonic(dependencies.monotonicNow());
+    if (actionCompletedAt.getTime() > sampledWall.getTime()) fail();
     const absoluteNoSignalDeadline = new Date(Math.min(
       actionCompletedAt.getTime() + UNIQUENESS_MILLISECONDS,
       expiresAt.getTime() - EXPIRY_BUFFER_MILLISECONDS,
@@ -661,11 +660,10 @@ async function waitForMaintenanceUniqueness(
   }
 }
 
-/** Creates the exact observe context, including close and maintenance tick. */
+/** Creates the exact observe context, including only the maintenance tick. */
 function createObserveContext(
   input: PreviewAcceptanceControllerInput,
   reviewedCommit: string,
-  observerClosesAt: Date | undefined,
 ): PreviewAcceptanceContext {
   const expectedOutcome = input.expectation.kind;
   const base = {
@@ -688,19 +686,13 @@ function createObserveContext(
     input.expectation.kind === "maintenance_succeeded" ||
     input.expectation.kind === "maintenance_repair_reserved"
   ) {
-    if (
-      input.family !== "calendar_maintenance" ||
-      observerClosesAt === undefined ||
-      Date.parse(input.expectation.maintenanceScheduledAt) + 120_000 !==
-        observerClosesAt.getTime()
-    ) {
+    if (input.family !== "calendar_maintenance") {
       fail();
     }
     return Object.freeze({
       ...base,
       evidenceFamily: "calendar_maintenance",
       expectedOutcome: input.expectation.kind,
-      observerClosesAt: observerClosesAt.toISOString(),
       maintenanceScheduledAt: input.expectation.maintenanceScheduledAt,
     });
   }
@@ -978,7 +970,7 @@ function snapshotObserverResolutionInput(
       "expectedCommit",
       "family",
     ],
-    ["observerClosesAt"],
+    [],
   );
   const family = ownData(record, "family");
   if (!isControllerFamily(family)) fail();
@@ -992,17 +984,7 @@ function snapshotObserverResolutionInput(
   const dispatchCompletedAt = safeNow(
     ownData(record, "dispatchCompletedAt") as Date,
   );
-  const rawObserverClosesAt = optionalOwnData(record, "observerClosesAt");
-  const observerClosesAt =
-    rawObserverClosesAt === undefined
-      ? null
-      : safeNow(rawObserverClosesAt as Date);
-  if (
-    dispatchCompletedAt.getTime() < dispatchStartedAt.getTime() ||
-    (family === "calendar_maintenance"
-      ? observerClosesAt === null
-      : observerClosesAt !== null)
-  ) {
+  if (dispatchCompletedAt.getTime() < dispatchStartedAt.getTime()) {
     fail();
   }
   const maintenanceScheduledAt =
@@ -1011,9 +993,9 @@ function snapshotObserverResolutionInput(
       ? canonicalDate(expectation.maintenanceScheduledAt)
       : null;
   if (
-    maintenanceScheduledAt !== null &&
-    observerClosesAt?.getTime() !==
-      maintenanceScheduledAt.getTime() + UNIQUENESS_MILLISECONDS
+    family === "calendar_maintenance"
+      ? maintenanceScheduledAt === null
+      : maintenanceScheduledAt !== null
   ) {
     fail();
   }

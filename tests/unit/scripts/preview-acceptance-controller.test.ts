@@ -220,10 +220,13 @@ describe("preview acceptance controller", () => {
     ]);
     expect(maintenance.dependencies.requestApproval).not.toHaveBeenCalled();
     expect(maintenance.dependencies.performAction).not.toHaveBeenCalled();
-    expect(JSON.parse(maintenance.dispatches[0]!.context)).toMatchObject({
+    const maintenanceContext = JSON.parse(
+      maintenance.dispatches[0]!.context,
+    ) as Record<string, unknown>;
+    expect(maintenanceContext).toMatchObject({
       maintenanceScheduledAt: "2026-07-30T18:00:00.000Z",
-      observerClosesAt: "2026-07-30T18:02:00.000Z",
     });
+    expect(maintenanceContext).not.toHaveProperty("observerClosesAt");
   });
 
   it("compares the remote tip immediately before every dispatch", async () => {
@@ -578,6 +581,38 @@ describe("preview acceptance controller", () => {
       "rollback",
     );
   });
+
+  it.each([
+    ["equal to paired wall sample", 0, true],
+    ["one millisecond after paired wall sample", 1, false],
+  ] as const)(
+    "validates driver action completion against the paired wall clock: %s",
+    async (_label, futureMilliseconds, accepted) => {
+      const fixture = harness();
+      vi.mocked(fixture.dependencies.performAction).mockImplementation(
+        async () =>
+          new Date(fixture.currentWall().getTime() + futureMilliseconds),
+      );
+      const run = runPreviewAcceptanceController({
+        family: "foundation_probe",
+        reviewedCommit: SHA,
+        expiresAt: "2026-07-30T18:10:00.000Z",
+        expectation: { kind: "foundation_succeeded" },
+      }, fixture.dependencies);
+
+      if (accepted) {
+        await expect(run).resolves.toBeUndefined();
+      } else {
+        await expect(run).rejects.toThrow(
+          "Preview acceptance controller failed closed.",
+        );
+      }
+      expect(fixture.dispatches.map(({ operation }) => operation)).toContain(
+        "rollback",
+      );
+      expect(fixture.dependencies.verifyClosure).toHaveBeenCalledOnce();
+    },
+  );
 
   it.each([
     ["exact boundary", 40_000, true],

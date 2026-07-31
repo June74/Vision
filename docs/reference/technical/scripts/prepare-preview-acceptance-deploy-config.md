@@ -24,9 +24,9 @@ deeply freezes the returned selection.
 Validates the version, operation, reviewed commit, lifecycle grammar,
 ordered candidate timestamp interval, evidence outcome pairing, and
 fault-scenario presence before constructing a new ordered plain object. Every
-observe context requires a canonical `observerClosesAt`; calendar maintenance
-also requires a canonical `maintenanceScheduledAt` whose value is exactly 120
-seconds earlier. Candidate bounds may be equal but may not be reversed.
+calendar-maintenance observe context requires only one canonical
+`maintenanceScheduledAt`; the removed `observerClosesAt` key is rejected.
+Candidate bounds may be equal but may not be reversed.
 
 ## `isBoundedAscii`
 
@@ -78,8 +78,8 @@ then proves dispatch and checkout commit equality before returning selection.
 `--verify-workflow-inputs` validates dispatch selection without reading or
 writing deployment artifacts. It emits only the fixed snake-case workflow
 outputs, derives candidate evidence families from the admitted selector, and
-emits expected outcome, observer close, and maintenance tick only for observe
-contexts. Restore admission has one canonical output key; no camel-case alias
-is emitted. Candidate generation accepts only the fixed artifact paths and
-attestation flag, then uses exclusive creation so an existing candidate cannot
-be overwritten.
+emits expected outcome and maintenance tick only for observe contexts. Restore
+admission has one canonical output key; no camel-case alias is emitted.
+Candidate generation accepts only the fixed artifact paths and attestation
+flag, then uses exclusive creation so an existing candidate cannot be
+overwritten.

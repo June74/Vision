@@ -2,117 +2,124 @@
 
 Status: final follow-up repaired and locally verified.
 
-Commit inventory:
+Commit sequence:
 
 - base before Task 3: `24e959f`
 - initial Task 3 controller commit: `38bed3e991d5`
 - first acceptance-gap repair: `b1935577c211`
-- final re-review repair: this follow-up commit
+- final re-review repair: `841bc01b600e`
+- final follow-up repair: this commit
 
 The full package inventory below covers the complete
 `24e959f..final-follow-up` range. The final-follow-up allowlist is listed
-separately so the three Task 3 changesets are not conflated.
+separately so its 29 paths can be compared exactly with the 74-path,
+four-commit package.
 
 ## RED, GREEN, and refactor evidence
 
-- Consolidated RED: the five targeted review suites reported 14 failures and
-  115 passes (129 tests). The failures reproduced the disconnected observer
-  executable, incomplete controller, provider/lifecycle gaps, broad R2
-  metadata, and workflow mapping defects.
-- Controller boundary RED: after adding real subprocess and entrypoint
-  assertions, 3 of 19 controller tests failed until the in-process opaque
-  observer port and closed action/closure protocol replaced serialized handles.
-- Scheduled-candidate RED: 1 of 19 controller tests proved that a scheduled
-  foundation candidate incorrectly requested approval instead of using
-  provider-confirmed deployment completion.
-- GREEN: the exact frozen 19-file Task 3 command passes 19 files and 435 tests.
-  The focused controller passes 19 of 19 tests, and the workflow structure
-  suite passes 20 of 20 tests.
-- Refactor: observer jobs now share one exact family/job contract; every tail
-  mode uses strict semantic arguments and terminal-anchored close behavior;
-  a real supervisor owns valid producer termination; controller
-  child processes use captured argument arrays and one constant error;
-  observer handles remain in a process-local opaque map; lifecycle artifacts
-  derive operation/profile transitions; provider checks derive their profile
-  from validated artifacts; and restore receives only the read catalog plus
-  its one-shot fence.
-- Final follow-up RED: the first focused group collected 70 tests with 11
-  expected failures plus one missing supervisor suite; the second group
-  collected 60 tests with 5 expected failures. They reproduced producer
-  supervision, terminal timing, absolute deadline, caller-controlled restore
-  admission, lifecycle bypass, resolver horizon, and exact job-set defects.
-- Final follow-up GREEN: the combined focused repair suite passes 7 files and
-  137 tests, including the executable supervisor's 5 cases.
+- RED: the first eight-file focused run collected 135 tests: 16 failed and
+  119 passed. The new restore re-admission suite also failed collection because
+  its implementation module did not exist. These failures reproduced every
+  final-review category: observer timeout arithmetic, spawn ordering and
+  teardown, cross-page uniqueness, caller-controlled maintenance close,
+  future action completion, uncaptured restore re-admission, and stale
+  inventory/report contracts.
+- Interim GREEN: after the implementation pass, the same focused scope
+  collected 137 tests: 134 passed and 3 failed. Those failures isolated exact
+  fixture/API drift without widening product scope.
+- GREEN: the identical eight-file focused scope passes all 137 tests. The
+  final cross-platform teardown and cleanup correction passes 2 files and
+  18 tests.
+- Package GREEN: the explicit Task 3 package passes 22 files and 476 tests.
+  The standalone parsed-workflow invariant passes 1 file and 2 tests.
+- Refactor: maintenance observation now has one canonical tick, shared child
+  teardown uses one exit-completion path, run-page validation is centralized,
+  and restore re-admission uses one argument-array helper and one fixed safe
+  failure. These changes preserve the reviewed lifecycle, including valid
+  role-to-cleanup transitions.
 
 ## Delivered
 
-- Observer-first dispatch, immutable reviewed-commit checks, exact attribution,
-  five-second polling, action-completion no-signal timing, immediate rollback,
-  signed-in closure, and scheduled-candidate deployment confirmation.
-- Family-exact signal/uniqueness workflows with expectation, close instant,
-  maintenance-only fixed tick/close, terminal-anchored non-maintenance
-  uniqueness, supervised producer teardown, and no persisted observer
-  identifier.
-- Absolute no-signal enforcement uses the earlier of action completion plus
-  120 seconds or expiry minus 60 seconds, subtracts driver-return delay, and
-  rejects local/provider evidence one millisecond late.
-- Restore input cannot carry its own admission gate. Restore requires a fresh
-  private same-commit role-probe closure recheck immediately before dispatch;
-  baseline and normal closures cannot dispatch restore.
-- Observer resolution retains one identity and exact active job contract
-  through the inclusive 120-second horizon. Unexpected `Capture` jobs are
-  accepted only when completed/skipped.
-- Current-workflow role-probe and replay-fenced restore routing, production
-  read-only restore construction, restore-pair provider validation, and closed
-  role-to-restore-to-cleanup lifecycle transitions.
-- Exact R2 backup metadata reconstruction without write/delete capability.
-- Maintenance evidence `vision.calendar-maintenance/v2`, with the exact
-  six-key schema and canonical scheduled-event attribution.
-- Mirrored simple/technical references and a name-only secret lifecycle note.
-  The backup key was not changed or rotated; required key version remains `1`.
+- All seven observer jobs have an 18-minute job timeout and a 16-minute inner
+  timeout. A parsed-YAML test enumerates the exact job set and proves the
+  two-minute outer margin.
+- The tail supervisor validates both command arrays before any spawn, starts
+  and confirms the consumer before starting the producer, and awaits every
+  started child during success and failure teardown. Real CLI entrypoint tests
+  cover success, producer failure, consumer failure, and private stream
+  canaries; an injected exit-completion gate proves teardown settlement is
+  awaited cross-platform.
+- Observer-run resolution walks all relevant pages, preserves uniqueness
+  across page boundaries, requires exact projected page shapes and
+  non-increasing creation order, stops only after the dispatch horizon is
+  crossed, and fails closed at the ten-page cap.
+- `observerClosesAt` was removed from the canonical maintenance observation
+  context, config output, workflow arguments, and public tail API. Maintenance
+  derives its close internally as scheduled tick plus 120 seconds, accepts
+  completion exactly at that close, and rejects earlier completion.
+- The controller pairs wall and monotonic samples and rejects an action
+  completion timestamp even one millisecond later than the paired wall sample
+  before calculating the remaining observation deadline.
+- Restore re-admission uses captured argument arrays, validates the completed
+  role-probe job and canonical closure, discards both child streams, exposes
+  only `Preview restore re-admission failed closed.`, and has secret-canary
+  coverage. A valid role closure may admit restore; the existing
+  role-to-cleanup lifecycle remains accepted.
+- Mirrored simple and technical references document the same contracts. No
+  backup key or required key version changed.
 
 ## Verification
 
-- Exact Task 3 suite: 19 files, 454 tests passed.
-- Focused final repair suite: 7 files, 137 tests passed.
-- Supervisor suite: 5 tests passed.
-- Controller suite: 23 tests passed.
-- Workflow structure suite: 20 tests passed.
-- Workflow YAML parse suite: 2 tests passed.
-- Canonical context/routing suite: 78 tests passed.
+- Focused final repair suite: 8 files, 137 tests passed.
+- Final supervisor/cleanup correction: 2 files, 18 tests passed.
+- Explicit Task 3 package: 22 files, 476 tests passed.
+- Parsed workflow YAML invariant: 1 file, 2 tests passed.
 - `pnpm.cmd typecheck`: passed.
+- Full unit stage: 95 files passed and 1 skipped; 1,336 tests passed and
+  1 skipped.
+- Full contract stage: 14 files and 179 tests passed.
+- Full worker stage: 7 files and 106 tests passed.
 - `pnpm.cmd docs:check`: passed.
+- Production build: passed.
 - `pnpm.cmd security:scan`: passed with fresh release evidence.
+- Full `pnpm.cmd check`: passed with `WRANGLER_LOG_PATH` directed to the
+  system temporary directory.
 - No live provider, deployment, database, R2, Queue, browser, remote query,
   push, or other remote mutation was performed.
 
-## Final-follow-up exact staged paths
+## Final-follow-up exact staged paths (29)
 
 - `.github/workflows/preview.yml`
 - `.superpowers/sdd/task-3-report.md`
+- `docs/reference/simple/scripts/prepare-preview-acceptance-deploy-config.md`
+- `docs/reference/simple/scripts/print-safe-tail.md`
+- `docs/reference/simple/scripts/resolve-preview-observer-run.md`
 - `docs/reference/simple/scripts/run-preview-acceptance-controller.md`
+- `docs/reference/simple/scripts/run-preview-restore-readmission.md`
 - `docs/reference/simple/scripts/run-preview-tail-supervisor.md`
-- `docs/reference/simple/scripts/validate-preview-rollback-lifecycle.md`
+- `docs/reference/technical/scripts/prepare-preview-acceptance-deploy-config.md`
+- `docs/reference/technical/scripts/print-safe-tail.md`
+- `docs/reference/technical/scripts/resolve-preview-observer-run.md`
 - `docs/reference/technical/scripts/run-preview-acceptance-controller.md`
+- `docs/reference/technical/scripts/run-preview-restore-readmission.md`
 - `docs/reference/technical/scripts/run-preview-tail-supervisor.md`
-- `docs/reference/technical/scripts/validate-preview-rollback-lifecycle.md`
 - `scripts/prepare-preview-acceptance-deploy-config.ts`
 - `scripts/print-safe-tail.ts`
 - `scripts/resolve-preview-observer-run.ts`
 - `scripts/run-preview-acceptance-controller.ts`
+- `scripts/run-preview-restore-readmission.ts`
 - `scripts/run-preview-tail-supervisor.ts`
-- `scripts/validate-preview-observer-state.ts`
-- `scripts/validate-preview-rollback-lifecycle.ts`
+- `tests/security/temporary-surface-cleanup.test.ts`
 - `tests/unit/ci/workflows.test.ts`
+- `tests/unit/scripts/preview-acceptance-context.test.ts`
 - `tests/unit/scripts/preview-acceptance-controller.test.ts`
 - `tests/unit/scripts/preview-observer-run-resolution.test.ts`
-- `tests/unit/scripts/preview-observer-state.test.ts`
-- `tests/unit/scripts/preview-rollback-lifecycle.test.ts`
+- `tests/unit/scripts/preview-restore-readmission.test.ts`
 - `tests/unit/scripts/preview-tail-supervisor.test.ts`
 - `tests/unit/scripts/print-safe-tail.test.ts`
 - `tests/unit/server/wrangler-routing.test.ts`
 
-## Complete three-commit package inventory
+## Complete four-commit package inventory (74)
 
 - `.github/workflows/preview.yml`
 - `.superpowers/sdd/task-3-report.md`
@@ -121,6 +128,7 @@ separately so the three Task 3 changesets are not conflated.
 - `docs/reference/simple/scripts/print-safe-tail.md`
 - `docs/reference/simple/scripts/resolve-preview-observer-run.md`
 - `docs/reference/simple/scripts/run-preview-acceptance-controller.md`
+- `docs/reference/simple/scripts/run-preview-restore-readmission.md`
 - `docs/reference/simple/scripts/run-preview-tail-supervisor.md`
 - `docs/reference/simple/scripts/safe-tail-classifier.md`
 - `docs/reference/simple/scripts/validate-preview-deploy-config.md`
@@ -135,6 +143,7 @@ separately so the three Task 3 changesets are not conflated.
 - `docs/reference/technical/scripts/print-safe-tail.md`
 - `docs/reference/technical/scripts/resolve-preview-observer-run.md`
 - `docs/reference/technical/scripts/run-preview-acceptance-controller.md`
+- `docs/reference/technical/scripts/run-preview-restore-readmission.md`
 - `docs/reference/technical/scripts/run-preview-tail-supervisor.md`
 - `docs/reference/technical/scripts/safe-tail-classifier.md`
 - `docs/reference/technical/scripts/validate-preview-deploy-config.md`
@@ -149,6 +158,7 @@ separately so the three Task 3 changesets are not conflated.
 - `scripts/print-safe-tail.ts`
 - `scripts/resolve-preview-observer-run.ts`
 - `scripts/run-preview-acceptance-controller.ts`
+- `scripts/run-preview-restore-readmission.ts`
 - `scripts/run-preview-tail-supervisor.ts`
 - `scripts/safe-tail-classifier.ts`
 - `scripts/validate-preview-deploy-config.ts`
@@ -168,12 +178,15 @@ separately so the three Task 3 changesets are not conflated.
 - `tests/integration/jobs/temporary-preview-restore.test.ts`
 - `tests/integration/jobs/temporary-preview-role-probe.test.ts`
 - `tests/security/secret-bundle.test.ts`
+- `tests/security/temporary-surface-cleanup.test.ts`
 - `tests/unit/ci/workflows.test.ts`
 - `tests/unit/domain/temporary-preview-fault.test.ts`
 - `tests/unit/jobs/calendar-maintenance-evidence.test.ts`
+- `tests/unit/scripts/preview-acceptance-context.test.ts`
 - `tests/unit/scripts/preview-acceptance-controller.test.ts`
 - `tests/unit/scripts/preview-observer-run-resolution.test.ts`
 - `tests/unit/scripts/preview-observer-state.test.ts`
+- `tests/unit/scripts/preview-restore-readmission.test.ts`
 - `tests/unit/scripts/preview-rollback-lifecycle.test.ts`
 - `tests/unit/scripts/preview-sync-acceptance.test.ts`
 - `tests/unit/scripts/preview-tail-supervisor.test.ts`

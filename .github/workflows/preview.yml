@@ -51,7 +51,6 @@ jobs:
       fault_scenario: ${{ steps.acceptance-selection.outputs.fault_scenario }}
       evidence_family: ${{ steps.acceptance-selection.outputs.evidence_family }}
       expected_outcome: ${{ steps.acceptance-selection.outputs.expected_outcome }}
-      observer_closes_at: ${{ steps.acceptance-selection.outputs.observer_closes_at }}
       maintenance_scheduled_at: ${{ steps.acceptance-selection.outputs.maintenance_scheduled_at }}
       selector: ${{ steps.acceptance-selection.outputs.selector }}
       restore_admission_gate: ${{ steps.acceptance-selection.outputs.restore_admission_gate }}
@@ -222,6 +221,7 @@ jobs:
     needs: selection
     runs-on: ubuntu-latest
     environment: preview
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with: { ref: "${{ github.sha }}" }
@@ -254,6 +254,7 @@ jobs:
     needs: selection
     runs-on: ubuntu-latest
     environment: preview
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with: { ref: "${{ github.sha }}" }
@@ -286,6 +287,7 @@ jobs:
     needs: selection
     runs-on: ubuntu-latest
     environment: preview
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with: { ref: "${{ github.sha }}" }
@@ -318,7 +320,7 @@ jobs:
     needs: selection
     runs-on: ubuntu-latest
     environment: preview
-    timeout-minutes: 4
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -338,7 +340,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Print only allowlisted acceptance evidence
         run: |
-          timeout 3m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+          timeout 16m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
             --sync-suppression-only \
             --expectation "$EXPECTED_OUTCOME"
         env:
@@ -352,7 +354,7 @@ jobs:
     needs: selection
     runs-on: ubuntu-latest
     environment: preview
-    timeout-minutes: 4
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with: { ref: "${{ github.sha }}" }
@@ -371,7 +373,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Print only allowlisted acceptance evidence
         run: |
-          timeout 3m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+          timeout 16m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
             --restore-only \
             --expectation "$EXPECTED_OUTCOME"
         env:
@@ -385,7 +387,7 @@ jobs:
     needs: selection
     runs-on: ubuntu-latest
     environment: preview
-    timeout-minutes: 4
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with: { ref: "${{ github.sha }}" }
@@ -404,16 +406,14 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Print only allowlisted acceptance evidence
         run: |
-          timeout 3m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+          timeout 16m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
             --calendar-maintenance-only \
             --expectation "$EXPECTED_OUTCOME" \
-            --closes-at "$OBSERVER_CLOSES_AT" \
             --maintenance-scheduled-at "$MAINTENANCE_SCHEDULED_AT"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
           EXPECTED_OUTCOME: ${{ needs.selection.outputs.expected_outcome }}
-          OBSERVER_CLOSES_AT: ${{ needs.selection.outputs.observer_closes_at }}
           MAINTENANCE_SCHEDULED_AT: ${{ needs.selection.outputs.maintenance_scheduled_at }}
 
   deploy_acceptance_candidate:
@@ -606,25 +606,14 @@ jobs:
           ROLLBACK_CLOSURE_RUN_ID: ${{ needs.selection.outputs.rollback_closure_run_ref }}
           VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}
         run: |
-          closure_run_file="$(mktemp)"
-          closure_jobs_file="$(mktemp)"
-          closure_dir="$(mktemp -d)"
-          trap 'rm -f "$closure_run_file" "$closure_jobs_file"; rm -rf "$closure_dir"' EXIT
-          [[ "$CANDIDATE_RUN_REF" != "baseline" ]]
-          [[ "$ROLLBACK_CLOSURE_RUN_ID" != "baseline" ]]
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ROLLBACK_CLOSURE_RUN_ID" > "$closure_run_file"
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ROLLBACK_CLOSURE_RUN_ID/jobs" > "$closure_jobs_file"
-          pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-run \
-            --run-file "$closure_run_file" \
-            --jobs-file "$closure_jobs_file" \
-            --commit "$VERIFIED_SHA" \
-            --job-name "Close restored normal preview"
-          gh run download "$ROLLBACK_CLOSURE_RUN_ID" --name vision-preview-rollback-closed --dir "$closure_dir" > /dev/null
-          pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-closure \
-            --closure-proof "$closure_dir/preview-rollback-closure.json" \
+          if ! pnpm exec tsx scripts/run-preview-restore-readmission.ts \
+            --repository "$GITHUB_REPOSITORY" \
             --candidate-run-ref "$CANDIDATE_RUN_REF" \
+            --closure-run-ref "$ROLLBACK_CLOSURE_RUN_ID" \
             --commit "$VERIFIED_SHA" \
-            --operation deploy_restore
+            > /dev/null 2> /dev/null; then
+            exit 1
+          fi
       - name: Deploy generated acceptance candidate
         if: ${{ steps.acceptance-token.outputs.deploy == 'true' }}
         run: pnpm exec wrangler deploy --config dist/vision/wrangler.acceptance.json --name vision-preview

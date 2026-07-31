@@ -8,7 +8,14 @@ workflow, resolver, and state validator on the same exact names.
 
 Polls every five seconds for one correctly attributed observer and requires
 the same active run to be observed twice within the two-minute resolution
-window.
+window. Every poll walks all relevant run-list pages before deciding
+uniqueness.
+
+## `listRelevantRuns`
+
+Walks newest-first pages until creation time crosses the dispatch start or a
+short final page proves completion. Ten full relevant pages fail closed rather
+than silently truncating.
 
 ## `readPreviewSignalObserverState`
 
@@ -25,7 +32,7 @@ Checks maintenance uniqueness and binds it to the requested scheduled tick.
 ## `createGitHubObserverResolutionDependencies`
 
 Builds the live GitHub metadata adapter with argument-array subprocess calls,
-bounded captured output, and no shell.
+bounded captured output, exact page projection, and no shell.
 
 ## `invoke`
 
@@ -55,7 +62,7 @@ Requires one exact allowlisted evidence-printing step.
 
 ## `snapshotRuns`
 
-Copies only a bounded provider run list.
+Requires the exact one-key page shape and copies only its bounded run list.
 
 ## `snapshotRun`
 
@@ -121,7 +128,7 @@ Waits between bounded metadata reads.
 
 ## `listRuns`
 
-Lists workflow-dispatch runs.
+Lists one numbered page of workflow-dispatch runs.
 
 ## `readRun`
 

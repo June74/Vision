@@ -719,40 +719,49 @@ const ACTIVE_SURFACE_ROOTS = [
 const EXPECTED_SHARED_RESIDUE_PATHS = [
   ".github/workflows/preview.yml",
   ...ACTIVE_OPERATIONS_SHARED_PATHS,
-  "docs/reference/simple/scripts/print-safe-tail.md",
   "docs/reference/simple/scripts/safe-tail-classifier.md",
   "docs/reference/simple/scripts/validate-preview-deploy-config.md",
   "docs/reference/simple/src/jobs/scheduled.md",
+  "docs/reference/simple/src/jobs/temporary-preview-restore-production.md",
   "docs/reference/simple/src/server/api/ai-category-proposal-routes.md",
   "docs/reference/simple/src/server/api/diagnostic-routes.md",
   "docs/reference/simple/src/server/client-binding-boundary.md",
   "docs/reference/simple/src/server/env.md",
-  "docs/reference/technical/scripts/print-safe-tail.md",
   "docs/reference/technical/scripts/safe-tail-classifier.md",
   "docs/reference/technical/scripts/validate-preview-deploy-config.md",
   "docs/reference/technical/src/jobs/scheduled.md",
+  "docs/reference/technical/src/jobs/temporary-preview-restore-production.md",
   "docs/reference/technical/src/server/api/ai-category-proposal-routes.md",
   "docs/reference/technical/src/server/api/diagnostic-routes.md",
   "docs/reference/technical/src/server/client-binding-boundary.md",
   "docs/reference/technical/src/server/env.md",
   "scripts/print-safe-tail.ts",
+  "scripts/run-preview-acceptance-controller.ts",
   "scripts/safe-tail-classifier.ts",
   "scripts/validate-preview-deploy-config.ts",
   "src/jobs/scheduled.ts",
+  "src/jobs/temporary-preview-restore-production.ts",
   "src/server/api/ai-category-proposal-routes.ts",
   "src/server/api/diagnostic-routes.ts",
   "src/server/client-binding-boundary.ts",
   "src/server/env.ts",
+  "src/server/webhooks/temporary-preview-sync-suppression.ts",
   "tests/e2e/foundation-diagnostics.spec.ts",
   "tests/integration/jobs/daily-backup.test.ts",
+  "tests/integration/jobs/temporary-preview-acceptance-routing.test.ts",
   "tests/security/secret-bundle.test.ts",
   "tests/unit/ci/workflows.test.ts",
+  "tests/unit/scripts/preview-acceptance-context.test.ts",
+  "tests/unit/scripts/preview-acceptance-controller.test.ts",
+  "tests/unit/scripts/preview-tail-supervisor.test.ts",
   "tests/unit/scripts/print-safe-tail.test.ts",
   "tests/unit/scripts/production-deploy-config.test.ts",
   "tests/unit/scripts/safe-tail-classifier.test.ts",
   "tests/unit/server/env.test.ts",
+  "tests/unit/server/temporary-preview-sync-suppression.test.ts",
   "tests/unit/server/wrangler-routing.test.ts",
   "tests/worker/diagnostics.test.ts",
+  "tests/worker/google-webhook.test.ts",
 ] as const;
 
 const APPROVED_ACTIVE_SCAN_EXCLUSIONS = new Set<string>([
@@ -998,7 +1007,7 @@ describe("post-acceptance temporary surface cleanup", () => {
       read("docs/reference/technical/src/server/env.md"),
     ]);
 
-    expect(simple).toContain("The eight");
+    expect(simple).toContain("The nine");
     expect(simple).toContain("temporary selectors are preview-only");
     expect(simple).toContain("temporary Gateway attestation");
     expect(simple).toContain("temporary restore database");
@@ -1254,8 +1263,8 @@ describe("post-acceptance temporary surface cleanup", () => {
     );
     expect(TEMPORARY_PATHS).toHaveLength(60);
     expect(new Set(TEMPORARY_PATHS)).toHaveLength(60);
-    expect(EXPECTED_SHARED_RESIDUE_PATHS).toHaveLength(39);
-    expect(new Set(EXPECTED_SHARED_RESIDUE_PATHS)).toHaveLength(39);
+    expect(EXPECTED_SHARED_RESIDUE_PATHS).toHaveLength(48);
+    expect(new Set(EXPECTED_SHARED_RESIDUE_PATHS)).toHaveLength(48);
     expect(new Set(PERMANENT_PATHS)).toHaveLength(PERMANENT_PATHS.length);
     expect(referenceInventory(TEMPORARY_PATHS, "simple")).toEqual(
       referenceInventory(TEMPORARY_PATHS, "technical"),
@@ -1358,7 +1367,7 @@ describe("post-acceptance temporary surface cleanup", () => {
     expect(backup).not.toMatch(/delete(?:All|Prefix)/u);
     expect(backup).not.toContain("delete(BACKUP_OBJECT_PREFIX");
     expect(restore).toContain("importBackup");
-    expect(maintenance).toContain("vision.calendar-maintenance/v1");
+    expect(maintenance).toContain("vision.calendar-maintenance/v2");
     expect(usage).toContain("calculateUsageWarnings");
     expect(previewWorkflow).toContain("vision-preview-observer");
     expect(previewWorkflow).toContain("vision-preview-mutation");

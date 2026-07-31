@@ -19,12 +19,15 @@ export function createPreviewTailObserver(input: {
     "sync_suppression_uniqueness" | "restore_signal" |
     "restore_uniqueness" | "maintenance_uniqueness";
   readonly expectation: PreviewObserverAcceptanceExpectation;
-  readonly closesAt?: Date;
 }) {
   let terminal: SafeTailResult | null = null;
   let uniquenessClosesAt: Date | null =
-    input.mode === "maintenance_uniqueness" && input.closesAt instanceof Date
-      ? new Date(input.closesAt.getTime())
+    input.mode === "maintenance_uniqueness" &&
+      (input.expectation.kind === "maintenance_succeeded" ||
+        input.expectation.kind === "maintenance_repair_reserved")
+      ? new Date(
+          Date.parse(input.expectation.maintenanceScheduledAt) + 120_000,
+        )
       : null;
   let failed = false;
   /** Creates the fixed observer result shape. */
@@ -136,7 +139,7 @@ function parseObserverConfiguration(
     const value = arguments_[index + 1];
     if (
       value === undefined ||
-      !["--expectation", "--closes-at", "--scenario",
+      !["--expectation", "--scenario",
         "--maintenance-scheduled-at"].includes(flag ?? "") ||
       values.has(flag!) ||
       value.length === 0
@@ -148,13 +151,9 @@ function parseObserverConfiguration(
   const expectationKind = values.get("--expectation") as
     | ExpectationKind
     | undefined;
-  const closesAtValue = values.get("--closes-at");
   if (!expectationKind || !EXPECTATIONS.includes(expectationKind)) {
     throw new Error("invalid");
   }
-  const closesAt = isCanonicalInstant(closesAtValue)
-    ? new Date(closesAtValue)
-    : undefined;
   let expectation: PreviewObserverAcceptanceExpectation;
   let observerMode: TailObserverMode;
   let outputSignalEvidence = true;
@@ -233,10 +232,8 @@ function parseObserverConfiguration(
       if (
         (expectationKind !== "maintenance_succeeded" &&
           expectationKind !== "maintenance_repair_reserved") ||
-        values.size !== 3 ||
-        !isCanonicalInstant(scheduledAt) ||
-        closesAt === undefined ||
-        closesAt.getTime() !== Date.parse(scheduledAt) + 120_000
+        values.size !== 2 ||
+        !isCanonicalInstant(scheduledAt)
       ) {
         throw new Error("invalid");
       }
@@ -252,7 +249,22 @@ function parseObserverConfiguration(
   return Object.freeze({
     mode: observerMode,
     expectation,
-    ...(closesAt === undefined ? {} : { closesAt }),
+    ...(observerMode === "maintenance_uniqueness"
+      ? {
+          closesAt: new Date(
+            Date.parse(
+              (expectation as Extract<
+                PreviewObserverAcceptanceExpectation,
+                {
+                  readonly kind:
+                    | "maintenance_succeeded"
+                    | "maintenance_repair_reserved";
+                }
+              >).maintenanceScheduledAt,
+            ) + 120_000,
+          ),
+        }
+      : {}),
     outputSignalEvidence,
   });
 }
