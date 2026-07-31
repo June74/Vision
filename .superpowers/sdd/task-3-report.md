@@ -1,7 +1,7 @@
 # Task 3 report
 
-Status: fifth package-review repair locally verified; sixth package re-review
-pending.
+Status: sixth package-review repairs locally verified; final sanitized-package
+re-review pending.
 
 Commit sequence:
 
@@ -18,6 +18,7 @@ Commit sequence:
 - fourth timing-envelope repair: `e9e8934`
 - fourth lifecycle/schema repair: `25830ea`
 - fifth package-review repair: `8ea5540`
+- sixth package-review repair: `68caff9`
 
 The full inventory below is the exact 78-path Task 3 implementation and
 report surface. The final lifecycle/package-review repairs change paths already
@@ -58,9 +59,11 @@ and excluded from implementation scope.
 
 ## Delivered
 
-- All seven acceptance jobs have a 48-minute job timeout and a 46-minute inner
-  listener/supervisor timeout. Parsed-workflow tests enumerate the exact job
-  set and prove the configured two-minute outer margin.
+- All seven acceptance jobs bound checkout, commit verification, pnpm setup,
+  Node setup, and locked install to 2, 1, 2, 2, and 5 minutes respectively,
+  followed by a 46-minute listener/supervisor inside a 60-minute job.
+  Parsed-workflow tests prove the 12-minute setup allowance, 2,710-second
+  restore path, 50-second listener slack, and two-minute teardown reserve.
 - The tail supervisor validates both command arrays before any spawn, starts
   and confirms the consumer before starting the producer, and awaits every
   started child during success and failure teardown. Real CLI entrypoint tests
@@ -99,7 +102,7 @@ and excluded from implementation scope.
 
 ## Verification
 
-- Fifth-review combined focused suite: 7 files and 175 tests passed.
+- Sixth-review combined focused suite: 7 files and 223 tests passed.
 - `pnpm.cmd typecheck`: passed.
 - `pnpm.cmd docs:check`: passed.
 - Complete repository gate: 96 unit files passed and 1 skipped with 1,490
@@ -216,15 +219,19 @@ from this implementation commit.
 ## Current canonical integration
 
 - Review base: `24e959f5`.
-- Latest implementation commit: `8ea5540`.
-- Integrated shape: 16 implementation commits and exactly 78 changed paths.
-- All seven acceptance jobs use a 46-minute listener/supervisor inside a
-  48-minute job. The complete restore evidence path is 2,710 seconds, leaving
-  50 seconds inside the listener bound.
+- Latest implementation commit: `68caff9`.
+- Integrated shape: 17 implementation commits and exactly 78 changed paths.
+- All seven acceptance jobs reserve an explicitly bounded 12-minute setup
+  allowance before a 46-minute listener/supervisor inside a 60-minute job. The
+  complete restore evidence path is 2,710 seconds, leaving 50 seconds inside
+  the listener and a tested two-minute teardown reserve after setup and
+  listener bounds.
 - New v2 candidate intents bind exact operation-specific provider
-  configuration. Valid v1 evidence has an explicit conservative recovery path:
-  a v1 run without the v2-only mutation artifact is `may_have_started`, while
-  v2 zero-artifact state remains `not_started`. Mixed-version evidence fails
+  configuration and the v2 mutation-boundary artifact. Valid v1 intents follow
+  an explicit workflow branch that does not download or verify that nonexistent
+  v2-only artifact, classifies zero-artifact state as `may_have_started`, and
+  admits only exact normal or exact allowlisted legacy candidate state. V2
+  zero-artifact state remains `not_started`; mixed-version evidence fails
   closed.
 - `may_have_started` admits only exact normal or the exact known candidate
   provider state, then unconditionally redeploys immutable normal, freshly
@@ -238,9 +245,11 @@ from this implementation commit.
   scripts or wrapper-process teardown.
 - The current focused and complete verification results are recorded once in
   the Verification section above.
-- Five independent review waves have completed. The fifth reported four
-  Important blockers, all with RED evidence and implemented repairs. A sixth
-  sanitized-package re-review is required before Task 3 is accepted.
+- Six independent review waves have completed. The sixth reported two
+  Important blockers: the v1 workflow's attempted v2-only artifact download
+  and the unproven observer job-timeout envelope. Both have RED evidence and
+  implemented repairs. A final sanitized-package re-review is required before
+  Task 3 is accepted.
 - The backup key remains version 1 and was not rotated.
 
 This canonical section and the 78-path inventory supersede earlier integration
