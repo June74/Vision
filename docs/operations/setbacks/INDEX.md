@@ -2,6 +2,7 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
+| [SB-20260731-154303-task3-review-sanitizer-assignment-scan](incidents/2026-07-31T154303Z-task3-review-sanitizer-assignment-scan.md) | closed | 2026-07-31T15:44:07.1469286Z | Phase B Task 3 second final package re-review | Task 3 review sanitizer left conservative assignment matches |
 | [SB-20260730-022329-backup-namespace-anchor-too-narrow](incidents/2026-07-30T022329Z-backup-namespace-anchor-too-narrow.md) | closed | 2026-07-30T02:24:21.2469115Z | Phase B acceptance instrumentation Task 7 final-fix wave 5 | Backup namespace anchor expected an immediate closing code tick |
 | [SB-20260730-020621-operations-root-literal-comparison](incidents/2026-07-30T020621Z-operations-root-literal-comparison.md) | closed | 2026-07-30T02:07:15.6050634Z | Phase B acceptance instrumentation Task 7 final-fix wave 5 | Operations-history disjointness used an impossible literal comparison |
 | [SB-20260730-020233-get-date-asutc-unsupported](incidents/2026-07-30T020233Z-get-date-asutc-unsupported.md) | closed | 2026-07-30T02:02:33.1614903Z | Phase B acceptance instrumentation Task 7 final-fix wave 5 | Windows PowerShell did not support Get-Date AsUTC |
