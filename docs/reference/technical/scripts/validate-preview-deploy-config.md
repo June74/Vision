@@ -3,13 +3,15 @@
 Requires exactly two additional secret names.
 
 ## `validatePreviewProviderStateForCandidateIntent`
-Reads provider details only from the commit-bound lifecycle intent and derives
-the exact live provider contract from its admitted operation and temporary
-values.
+Reads provider details and their generation only from the commit-bound lifecycle
+intent and derives the exact live provider contract from its admitted operation
+and temporary values.
 `deploy_sync_suppression` requires the normal two schedules; the other five
 candidate operations require those schedules plus the temporary one-minute
-schedule. Binding validation includes exact scenario and expiry values, AI
-attestation only for AI usage, and restore secrets only for a restore pair.
+schedule. Binding validation includes exact scenario and expiry values,
+version-specific AI bindings, and restore secrets only for a restore pair.
+Historical v2 AI requires its attestation but forbids the scheduled binding;
+v3 AI requires the exact scheduled value stored in the intent.
 
 ## `validatePreviewProviderStateForRollback`
 
@@ -22,7 +24,10 @@ mismatch maps to the generic provider-state failure.
 ## `matchesCandidateProviderBindings`
 
 Filters the exact temporary name set, verifies the remaining permanent
-contract, and matches each temporary name/type/text tuple to the v2 intent.
+contract, and matches each temporary name/type/text tuple to the versioned
+intent. Historical v2 AI requires its attestation without a scheduled binding.
+V3 AI requires the exact stored scheduled value; missing or drifted values fail
+closed, and no scheduled value is re-derived from expiry.
 
 ## `matchesProviderBinding`
 
@@ -32,7 +37,8 @@ without coercion.
 ## `matchesAnyLegacyCandidateProviderState`
 
 Recognizes only one exact generated selector inventory, matching schedules,
-AI rule, and restore-pair rule while recovering an old v1 intent. The legacy
+AI rule, and restore-pair rule while recovering an old v1 intent. A v1 AI
+inventory still requires its historical gateway-limit attestation. The legacy
 expiry must parse to a finite instant and equal its exact `toISOString()`
 round-trip, rejecting impossible or normalized calendar values.
 
@@ -69,7 +75,7 @@ and both maintenance and daily recovery crons. It rejects a serialized
 generated selector and derives its exact schedule contract. Synchronization
 suppression retains the normal two schedules; every other acceptance candidate
 adds the one-minute cron. Only the AI evidence selector may carry its
-attestation. The command entry point validates only the normal artifact and
+scheduled-at binding and attestation. The command entry point validates only the normal artifact and
 exits nonzero with one generic message when it is missing, malformed, or
 unsafe.
 
@@ -94,7 +100,8 @@ the two approved cron expressions.
 
 ## `validatePreviewAcceptanceDeployConfig`
 
-Requires one admitted selector and applies the acceptance artifact contract.
+Requires one admitted selector and applies the acceptance artifact contract,
+including the strict AI evidence window binding.
 
 ## `validateNormalPreviewProviderState`
 

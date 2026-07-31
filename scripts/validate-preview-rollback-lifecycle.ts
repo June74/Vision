@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { parseTemporaryPreviewAiEvidenceWindow } from "../src/domain/operations/temporary-preview-fault";
 
 const INVALID = "Preview rollback lifecycle proof is invalid.";
 const CANDIDATE_ARTIFACT_NAME = "vision-preview-candidate-intent";
@@ -33,6 +34,7 @@ export type PreviewCandidateMutationState =
 export interface PreviewCandidateAcceptanceBindings {
   readonly scenario: string;
   readonly expiresAt: string;
+  readonly evidenceScheduledAt?: string;
   readonly aiGatewayLimitAttested: "true" | null;
 }
 
@@ -49,14 +51,25 @@ export interface PreviewCandidateIntentV2 {
   readonly candidateConfigHash: string;
   readonly acceptanceBindings: PreviewCandidateAcceptanceBindings;
 }
+export interface PreviewAiCandidateIntentV3 {
+  readonly evidenceType: "vision.preview-candidate-intent/v3";
+  readonly candidateCommit: string;
+  readonly candidateOperation: "deploy_ai";
+  readonly bindingProfile: "normal";
+  readonly candidateConfigHash: string;
+  readonly acceptanceBindings: PreviewCandidateAcceptanceBindings &
+    Readonly<{ readonly evidenceScheduledAt: string }>;
+}
 export type PreviewCandidateIntent =
   | LegacyPreviewCandidateIntent
-  | PreviewCandidateIntentV2;
+  | PreviewCandidateIntentV2
+  | PreviewAiCandidateIntentV3;
 
 export type PreviewCandidateIntentDetails =
   | Readonly<{ readonly legacy: true }>
   | Readonly<{
       readonly legacy: false;
+      readonly intentVersion: "v2" | "v3";
       readonly operation: PreviewCandidateOperation;
       readonly bindingProfile: PreviewBindingProfile;
       readonly acceptanceBindings: PreviewCandidateAcceptanceBindings;
@@ -141,7 +154,7 @@ export type PreviewRollbackClosureProof =
 /** Creates the value-free marker uploaded before any candidate mutation. */
 export function createPreviewCandidateIntent(
   candidateCommit: unknown,
-): PreviewCandidateIntentV2 {
+): PreviewCandidateIntentV2 | PreviewAiCandidateIntentV3 {
   const candidateRecord = plainObject(candidateCommit);
   const commit = ownDataValue(candidateRecord, "candidateCommit");
   const operation = ownDataValue(candidateRecord, "operation");
@@ -152,15 +165,27 @@ export function createPreviewCandidateIntent(
   const acceptanceBindings = readCandidateAcceptanceBindings(
     candidateConfig,
     operation,
+    operation === "deploy_ai" ? "v3" : "v2",
   );
-  return Object.freeze({
-    evidenceType: "vision.preview-candidate-intent/v2",
-    candidateCommit: commit,
-    candidateOperation: operation,
-    bindingProfile: derivePreviewBindingProfile(operation),
-    candidateConfigHash: digestCanonicalValue(candidateConfig),
-    acceptanceBindings,
-  });
+  const candidateConfigHash = digestCanonicalValue(candidateConfig);
+  return operation === "deploy_ai"
+    ? Object.freeze({
+        evidenceType: "vision.preview-candidate-intent/v3" as const,
+        candidateCommit: commit,
+        candidateOperation: operation,
+        bindingProfile: "normal" as const,
+        candidateConfigHash,
+        acceptanceBindings: acceptanceBindings as
+          PreviewAiCandidateIntentV3["acceptanceBindings"],
+      })
+    : Object.freeze({
+        evidenceType: "vision.preview-candidate-intent/v2" as const,
+        candidateCommit: commit,
+        candidateOperation: operation,
+        bindingProfile: derivePreviewBindingProfile(operation),
+        candidateConfigHash,
+        acceptanceBindings,
+      });
 }
 
 /** Arms the point after which a candidate deployment may have started. */
@@ -172,7 +197,7 @@ export function createPreviewCandidateMutationBoundary(input: {
   const intent = parseCandidateIntent(input.candidateIntent);
   if (
     intent === undefined ||
-    intent.evidenceType !== "vision.preview-candidate-intent/v2" ||
+    intent.evidenceType === "vision.preview-candidate-intent/v1" ||
     !validNumericRunRef(input.candidateRunRef) ||
     intent.candidateConfigHash !== digestCanonicalValue(input.candidateConfig)
   ) {
@@ -201,7 +226,7 @@ export function assertPreviewCandidateMutationBoundary(input: {
     !validNumericRunRef(input.candidateRunRef) ||
     !validCommit(input.expectedCommit) ||
     intent.candidateCommit !== input.expectedCommit ||
-    intent.evidenceType !== "vision.preview-candidate-intent/v2" ||
+    intent.evidenceType === "vision.preview-candidate-intent/v1" ||
     (input.candidateConfig !== undefined &&
       intent.candidateConfigHash !== digestCanonicalValue(input.candidateConfig)) ||
     boundary.candidateIntentHash !== digestCandidateIntent(intent) ||
@@ -239,7 +264,7 @@ export function readPreviewCandidateMutationState(input: {
       ? "may_have_started"
       : "not_started";
   }
-  if (intent.evidenceType !== "vision.preview-candidate-intent/v2") {
+  if (intent.evidenceType === "vision.preview-candidate-intent/v1") {
     throw new Error(INVALID);
   }
 
@@ -258,12 +283,14 @@ export function readPreviewCandidateMutationState(input: {
 /** Returns only the exact parsed candidate-intent schema generation. */
 export function readPreviewCandidateIntentVersion(
   candidateIntent: unknown,
-): "v1" | "v2" {
+): "v1" | "v2" | "v3" {
   const intent = parseCandidateIntent(candidateIntent);
   if (intent === undefined) throw new Error(INVALID);
   return intent.evidenceType === "vision.preview-candidate-intent/v1"
     ? "v1"
-    : "v2";
+    : intent.evidenceType === "vision.preview-candidate-intent/v2"
+      ? "v2"
+      : "v3";
 }
 
 /** Binds a downloaded candidate marker to the reviewed workflow commit. */
@@ -292,7 +319,7 @@ export function readPreviewCandidateBindingProfile(input: {
   const intent = parseCandidateIntent(input.candidateIntent);
   if (
     intent === undefined ||
-    intent.evidenceType !== "vision.preview-candidate-intent/v2" ||
+    intent.evidenceType === "vision.preview-candidate-intent/v1" ||
     !validCommit(input.expectedCommit) ||
     intent.candidateCommit !== input.expectedCommit
   ) {
@@ -318,6 +345,10 @@ export function readPreviewCandidateIntentDetails(input: {
     ? Object.freeze({ legacy: true as const })
     : Object.freeze({
         legacy: false as const,
+        intentVersion: intent.evidenceType ===
+            "vision.preview-candidate-intent/v2"
+          ? "v2" as const
+          : "v3" as const,
         operation: intent.candidateOperation,
         bindingProfile: intent.bindingProfile,
         acceptanceBindings: intent.acceptanceBindings,
@@ -627,7 +658,8 @@ function parseCandidateIntent(
       "candidateOperation",
       "evidenceType",
     ]) ||
-    version !== "vision.preview-candidate-intent/v2" ||
+    (version !== "vision.preview-candidate-intent/v2" &&
+      version !== "vision.preview-candidate-intent/v3") ||
     !validCommit(ownDataValue(record, "candidateCommit")) ||
     !validDigest(ownDataValue(record, "candidateConfigHash")) ||
     !validCandidateOperation(ownDataValue(record, "candidateOperation"))
@@ -639,9 +671,12 @@ function parseCandidateIntent(
       derivePreviewBindingProfile(
         ownDataValue(record, "candidateOperation"),
       ) !== ownDataValue(record, "bindingProfile") ||
+      (version === "vision.preview-candidate-intent/v3" &&
+        ownDataValue(record, "candidateOperation") !== "deploy_ai") ||
       !validAcceptanceBindings(
         ownDataValue(record, "acceptanceBindings"),
         ownDataValue(record, "candidateOperation") as PreviewCandidateOperation,
+        version === "vision.preview-candidate-intent/v3" ? "v3" : "v2",
       )
     ) {
       return undefined;
@@ -649,7 +684,9 @@ function parseCandidateIntent(
   } catch {
     return undefined;
   }
-  return record as unknown as PreviewCandidateIntentV2;
+  return record as unknown as
+    | PreviewCandidateIntentV2
+    | PreviewAiCandidateIntentV3;
 }
 
 /** Parses one exact immutable marker for the may-mutate boundary. */
@@ -718,7 +755,7 @@ function allowedClosureTransition(
   }
   if (
     intent !== undefined &&
-    (intent.evidenceType !== "vision.preview-candidate-intent/v2" ||
+    (intent.evidenceType === "vision.preview-candidate-intent/v1" ||
       intent.candidateOperation !== closure.candidateOperation ||
       intent.bindingProfile !== closure.bindingProfile)
   ) {
@@ -899,6 +936,7 @@ function validProviderInstant(value: unknown): value is string {
 function readCandidateAcceptanceBindings(
   candidateConfig: unknown,
   operation: PreviewCandidateOperation,
+  intentVersion: "v2" | "v3",
 ): PreviewCandidateAcceptanceBindings {
   const config = plainObject(candidateConfig);
   const vars = plainObject(ownDataValue(config, "vars"));
@@ -907,6 +945,10 @@ function readCandidateAcceptanceBindings(
   const aiAttestation = ownDataValue(
     vars,
     "PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED",
+  );
+  const evidenceScheduledAt = ownDataValue(
+    vars,
+    "PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT",
   );
   const expectedScenario = operation === "deploy_foundation"
     ? "foundation_probe"
@@ -930,30 +972,78 @@ function readCandidateAcceptanceBindings(
     vars === undefined ||
     (!validFaultScenario && scenario !== expectedScenario) ||
     !validInstant(expiresAt) ||
+    (intentVersion === "v3" && operation !== "deploy_ai") ||
     (operation === "deploy_ai"
       ? aiAttestation !== "true"
       : Object.prototype.hasOwnProperty.call(
           vars,
           "PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED",
+        )) ||
+    (intentVersion === "v3"
+      ? !validCandidateAiEvidenceWindow(
+          scenario,
+          evidenceScheduledAt,
+          expiresAt,
+        )
+      : Object.prototype.hasOwnProperty.call(
+          vars,
+          "PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT",
         ))
   ) {
     throw new Error(INVALID);
   }
-  return Object.freeze({
-    scenario: scenario as string,
-    expiresAt,
-    aiGatewayLimitAttested: operation === "deploy_ai" ? "true" : null,
-  });
+  return intentVersion === "v3"
+    ? Object.freeze({
+        scenario: scenario as string,
+        expiresAt,
+        evidenceScheduledAt: evidenceScheduledAt as string,
+        aiGatewayLimitAttested: "true" as const,
+      })
+    : Object.freeze({
+        scenario: scenario as string,
+        expiresAt,
+        aiGatewayLimitAttested: operation === "deploy_ai" ? "true" : null,
+      });
+}
+
+/** Converts AI-window parser failures into the lifecycle's closed boolean. */
+function validCandidateAiEvidenceWindow(
+  scenario: unknown,
+  evidenceScheduledAt: unknown,
+  expiresAt: unknown,
+): boolean {
+  try {
+    return typeof evidenceScheduledAt === "string" &&
+      parseTemporaryPreviewAiEvidenceWindow({
+        VISION_ENV: "preview",
+        PREVIEW_ACCEPTANCE_SCENARIO: scenario,
+        PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT: evidenceScheduledAt,
+        PREVIEW_ACCEPTANCE_EXPIRES_AT: expiresAt,
+      }) !== undefined;
+  } catch {
+    return false;
+  }
 }
 
 /** Revalidates the immutable acceptance values embedded in a v2 intent. */
 function validAcceptanceBindings(
   value: unknown,
   operation: PreviewCandidateOperation,
+  intentVersion: "v2" | "v3",
 ): boolean {
   const record = plainObject(value);
   if (
-    !exactKeys(record, ["aiGatewayLimitAttested", "expiresAt", "scenario"])
+    !exactKeys(
+      record,
+      intentVersion === "v3"
+        ? [
+            "aiGatewayLimitAttested",
+            "evidenceScheduledAt",
+            "expiresAt",
+            "scenario",
+          ]
+        : ["aiGatewayLimitAttested", "expiresAt", "scenario"],
+    )
   ) {
     return false;
   }
@@ -964,10 +1054,25 @@ function validAcceptanceBindings(
       ...(ownDataValue(record, "aiGatewayLimitAttested") === "true"
         ? { PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true" }
         : {}),
+      ...(intentVersion === "v3"
+        ? {
+            PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT:
+              ownDataValue(record, "evidenceScheduledAt"),
+          }
+        : {}),
     };
-    const parsed = readCandidateAcceptanceBindings({ vars }, operation);
-    return ownDataValue(record, "aiGatewayLimitAttested") ===
-      parsed.aiGatewayLimitAttested;
+    const parsed = readCandidateAcceptanceBindings(
+      { vars },
+      operation,
+      intentVersion,
+    );
+    return (
+      ownDataValue(record, "aiGatewayLimitAttested") ===
+        parsed.aiGatewayLimitAttested &&
+      (intentVersion !== "v3" ||
+        ownDataValue(record, "evidenceScheduledAt") ===
+          parsed.evidenceScheduledAt)
+    );
   } catch {
     return false;
   }

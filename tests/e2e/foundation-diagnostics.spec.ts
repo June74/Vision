@@ -152,6 +152,22 @@ function createTask5WorkerApp() {
       }
       return repository;
     },
+    aiUsageSourceForOwner: (ownerId) => {
+      if (ownerId !== WORKER_OWNER_ID) {
+        throw new Error("E2E owner scope is unavailable.");
+      }
+      return {
+        countActiveRequests: async () => 0,
+        readCandidateRequestCounts: async () =>
+          ({
+            createdRequestCount: 1,
+            eligibleSettledRequestCount: 1,
+            providerRequestId: "must-not-leak",
+            tokenCount: 1,
+            rows: ["must-not-leak"],
+          }) as never,
+      };
+    },
   };
   return createApp({
     diagnostic: dependencies,
@@ -159,6 +175,42 @@ function createTask5WorkerApp() {
     logger: () => undefined,
   });
 }
+
+test("keeps temporary AI eligibility diagnostics aggregate-only", async () => {
+  const evidenceScheduledAt = "2026-07-25T17:15:00.000Z";
+  const response = await createTask5WorkerApp().fetch(
+    new Request("https://vision.example.test/api/diagnostics/status", {
+      headers: { cookie: `vision_session=${WORKER_SESSION_ID}` },
+    }),
+    {
+      VISION_ENV: "preview",
+      PREVIEW_ACCEPTANCE_SCENARIO: "ai_usage",
+      PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-25T17:15:30.000Z",
+      PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT: evidenceScheduledAt,
+      PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true",
+    } as Env,
+  );
+  const payload = await response.json();
+
+  expect(response.status).toBe(200);
+  expect(payload).toMatchObject({
+    aiAcceptance: {
+      activeRequestCount: 0,
+      createdRequestCount: 1,
+      eligibleSettledRequestCount: 1,
+      evidenceScheduledAt,
+    },
+  });
+  expect(Object.keys((payload as { aiAcceptance: object }).aiAcceptance)).toEqual([
+    "activeRequestCount",
+    "createdRequestCount",
+    "eligibleSettledRequestCount",
+    "evidenceScheduledAt",
+  ]);
+  expect(JSON.stringify(payload)).not.toMatch(
+    /providerRequestId|tokenCount|rows|must-not-leak/u,
+  );
+});
 
 /** Fulfills a browser GET from the injected Worker response without live network access. */
 async function fulfillFromTask5Worker(

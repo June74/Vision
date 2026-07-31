@@ -9,8 +9,10 @@ transition is bound to the reviewed commit and latest candidate run.
 
 ## `createPreviewCandidateIntent`
 
-Returns a frozen v2 intent after validating the commit and operation, deriving
-the exact acceptance bindings, and hashing the complete generated config.
+Returns the unchanged frozen v2 intent for non-AI operations or an AI-only v3
+intent after validating the commit and operation, deriving exact acceptance
+bindings, and hashing the complete generated config. V3 additionally carries
+the exact canonical evidence schedule.
 
 ## `createPreviewCandidateMutationBoundary`
 
@@ -26,9 +28,9 @@ the reviewed commit and candidate run to match.
 ## `readPreviewCandidateMutationState`
 
 Requires an exact candidate intent and zero-or-one artifact response for the
-candidate run. For v2, zero proves `not_started` and one current correctly
+candidate run. For v2 or v3, zero proves `not_started` and one current correctly
 owned boundary yields `may_have_started`. Exact v1 intents cannot possess the
-new v2-only boundary, so zero conservatively yields `may_have_started`; this
+config-bound boundary, so zero conservatively yields `may_have_started`; this
 admits only exact normal or an exact frozen-v1 known candidate inventory into
 the unconditional immutable-normal redeploy and fresh exact-normal
 verification. A v1 intent with a boundary, hybrid intents, duplicates, and
@@ -37,13 +39,12 @@ stale or foreign artifacts fail closed.
 ## `readPreviewCandidateIntentVersion`
 
 Reuses the exact candidate-intent parser and emits only the schema-generation
-label `v1` or `v2`; hybrids and malformed records fail closed. The workflow
-uses a closed version/state matrix: legacy `v1:may_have_started` alone bypasses
-the v2-only mutation-boundary artifact lookup, `v2:not_started` needs no
-boundary, and `v2:may_have_started` requires the exact boundary download and
-verification. Every admitted branch continues through exact provider-state
-admission, immutable-normal deployment, fresh exact-normal verification,
-restore proof, and closure.
+label `v1`, `v2`, or `v3`; hybrids and malformed records fail closed. The
+workflow uses a closed version/state matrix: legacy `v1:may_have_started`
+alone bypasses the config-bound mutation-boundary lookup, while v2 and v3 use
+the same exact not-started or boundary-verified uncertain branches. Every
+admitted branch continues through provider-state admission, immutable-normal
+deployment, fresh exact-normal verification, restore proof, and closure.
 
 ## `assertPreviewCandidateIntent`
 
@@ -57,8 +58,9 @@ derived from its operation.
 
 ## `readPreviewCandidateIntentDetails`
 
-Parses and commit-binds the intent, then exposes only provider-relevant v2
-fields or an explicit legacy-v1 recovery marker.
+Parses and commit-binds the intent, then exposes only provider-relevant v2 or
+v3 fields with their exact generation, or an explicit legacy-v1 recovery
+marker.
 
 ## `createPreviewRollbackRestoreProof`
 
@@ -100,8 +102,9 @@ their strict ordering shared by both schema generations.
 
 ## `parseCandidateIntent`
 
-Validates either the legacy two-key v1 marker or the full v2 config-bound
-marker; hybrid and in-place-mutated shapes are rejected.
+Validates the legacy two-key v1 marker, unchanged full v2 marker, or AI-only v3
+marker carrying the scheduled evidence instant. Hybrid and in-place-mutated
+shapes are rejected.
 
 ## `parseCandidateMutationBoundary`
 
@@ -115,13 +118,14 @@ normal-profile transition graph.
 
 ## `allowedIntentTransition`
 
-Applies the v2 transition graph and the explicit v1 migration rule. Legacy v1
-may recover into cleanup or a non-restore candidate, but never direct restore.
+Applies the config-bound v2/v3 transition graph and the explicit v1 migration
+rule. Legacy v1 may recover into cleanup or a non-restore candidate, but never
+direct restore.
 
 ## `allowedClosureTransition`
 
-Binds v2 closure operation/profile provenance to its candidate intent while
-allowing a newer independently verified deployment commit.
+Binds config-bound v2/v3 candidate operation/profile provenance to the v2
+closure proof while allowing a newer independently verified deployment commit.
 
 ## `isNonRestoreCandidateOperation`
 
@@ -185,11 +189,20 @@ Requires GitHub metadata to use its canonical whole-second UTC grammar.
 ## `readCandidateAcceptanceBindings`
 
 Derives the operation-specific scenario, canonical expiry, and AI-only
-attestation from the exact generated config variables.
+attestation from the exact generated config variables. AI creation requires a
+v3 canonical scheduled instant; v2 and non-AI shapes forbid that variable.
+
+## `validCandidateAiEvidenceWindow`
+
+Calls the canonical domain parser with an isolated preview AI binding snapshot
+and converts every parser failure to `false`, preventing domain error detail
+from crossing the lifecycle boundary.
 
 ## `validAcceptanceBindings`
 
-Reconstructs and revalidates the temporary binding subset stored in v2 intent.
+Reconstructs and revalidates the version-specific temporary binding subset.
+Historical v2 AI remains exact and recoverable without a scheduled field; v3
+requires the four-key AI binding shape.
 
 ## `digestCanonicalValue`
 

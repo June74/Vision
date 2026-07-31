@@ -105,6 +105,8 @@ caps all such extensions at one candidate-workflow verification ceiling. It
 still cannot accept uniqueness before the current close. Maintenance evidence
 whose semantic close exceeds the 46-minute listener envelope is rejected
 before observer dispatch and resolution.
+For AI evidence, it derives one strict 30-minute window before observer
+dispatch and reuses the same scheduled instant and expiry byte-for-byte.
 
 ## `rollbackAndClose`
 
@@ -146,7 +148,8 @@ monotonic deadlines permit provider settlement through close plus another
 ## `createObserveContext`
 
 Builds the canonical `observe` context with exact family/outcome pairing,
-fault scenario when required, and only the maintenance scheduled tick. The
+fault scenario when required, the AI-only scheduled instant and expiry, and
+only the maintenance scheduled tick. The
 fixed tick-plus-120 close is derived internally and the removed close key is
 not serialized. Non-maintenance setup/deploy time cannot consume uniqueness.
 
@@ -154,7 +157,8 @@ not serialized. Non-maintenance setup/deploy time cannot consume uniqueness.
 
 Builds the canonical candidate context with reviewed commit, attribution,
 authenticated-read gate, previous closure reference, and the inclusive
-observer dispatch interval.
+observer dispatch interval. Only `deploy_ai` appends the zero-active gate,
+scheduled instant, and expiry.
 
 ## `candidateOperation`
 

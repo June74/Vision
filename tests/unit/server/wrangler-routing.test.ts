@@ -199,6 +199,7 @@ function candidateProviderState(operation: CandidateOperation): ReturnType<
   for (const name of [
     "PREVIEW_ACCEPTANCE_EXPIRES_AT",
     "PREVIEW_ACCEPTANCE_SCENARIO",
+    "PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT",
     "PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED",
   ]) {
     if (candidateVars[name] !== undefined) {
@@ -442,6 +443,9 @@ describe("generated preview acceptance candidate", () => {
 
     expect(candidate.vars).toMatchObject({
       PREVIEW_ACCEPTANCE_SCENARIO: "ai_usage",
+      PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT:
+        "2026-07-29T04:30:00.000Z",
+      PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-29T04:30:00.001Z",
       PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true",
     });
     expect(() =>
@@ -613,6 +617,9 @@ describe("preview acceptance workflow input admission", () => {
       kind: "deploy_ai",
       reviewedCommit: REVIEWED_COMMIT,
       ...candidateLifecycle,
+      aiZeroActiveGate: "verified",
+      evidenceScheduledAt: "2026-07-29T04:28:00.000Z",
+      expiresAt: "2026-07-29T04:28:59.999Z",
     }),
     context({
       version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
@@ -634,6 +641,15 @@ describe("preview acceptance workflow input admission", () => {
       reviewedCommit: REVIEWED_COMMIT,
       candidateRunRef: "101",
       rollbackClosureRunRef: "303",
+    }),
+    context({
+      version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
+      kind: "observe",
+      reviewedCommit: REVIEWED_COMMIT,
+      evidenceFamily: "ai_usage",
+      expectedOutcome: "ai_succeeded",
+      evidenceScheduledAt: "2026-07-29T04:30:00.000Z",
+      expiresAt: "2026-07-29T04:30:00.250Z",
     }),
   ] as const;
 
@@ -668,6 +684,59 @@ describe("preview acceptance workflow input admission", () => {
     expect(serializePreviewAcceptanceContext(reordered)).toBe(
       JSON.stringify(validContexts[3]),
     );
+  });
+
+  it("serializes the AI-only context suffix in authoritative order", () => {
+    const ai = validContexts[6];
+    expect(Object.keys(JSON.parse(serializePreviewAcceptanceContext(ai)))).toEqual([
+      "version",
+      "kind",
+      "reviewedCommit",
+      "authenticatedReadsGate",
+      "candidateRunRef",
+      "rollbackClosureRunRef",
+      "observerDispatchStartedAt",
+      "observerDispatchCompletedAt",
+      "aiZeroActiveGate",
+      "evidenceScheduledAt",
+      "expiresAt",
+    ]);
+  });
+
+  it("rejects AI-only context fields on every other variant", () => {
+    for (const value of [validContexts[1], validContexts[3]]) {
+      expect(() =>
+        parsePreviewAcceptanceContext(
+          value.kind,
+          JSON.stringify({
+            ...value,
+            aiZeroActiveGate: "verified",
+            evidenceScheduledAt: "2026-07-29T04:28:00.000Z",
+            expiresAt: "2026-07-29T04:28:59.999Z",
+          }),
+        ),
+      ).toThrow(/acceptance workflow selection/i);
+    }
+  });
+
+  it("rejects AI activation after observer dispatch and less than 90 seconds of request margin", () => {
+    for (const value of [
+      {
+        ...validContexts[6],
+        observerDispatchStartedAt: "2026-07-29T03:58:59.998Z",
+      },
+      {
+        ...validContexts[6],
+        observerDispatchCompletedAt: "2026-07-29T04:26:30.001Z",
+      },
+    ]) {
+      expect(() =>
+        parsePreviewAcceptanceContext(
+          "deploy_ai",
+          JSON.stringify(value),
+        ),
+      ).toThrow(/acceptance workflow selection/i);
+    }
   });
 
   it("admits an explicit zero-width observer dispatch interval", () => {

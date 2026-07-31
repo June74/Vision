@@ -3,6 +3,10 @@ import type { Context, Hono } from "hono";
 import { z } from "zod";
 import { createWrappedKeyProvider } from "../../crypto/key-provider";
 import { createDb } from "../../data/db";
+import {
+  createPhaseBAiUsageSource,
+  type PhaseBAiUsageSource,
+} from "../../data/phase-b-ai-usage-source";
 import { createUsageWarningSource } from "../../data/usage-warning-source";
 import {
   createDiagnosticRepository,
@@ -15,6 +19,7 @@ import { calculateFoundationHealth } from "../../domain/operations/health";
 import {
   TEMPORARY_PREVIEW_FAULT_SCENARIOS,
   applyTemporaryPreviewFaultOverlay,
+  parseTemporaryPreviewAiEvidenceWindow,
   parseTemporaryPreviewAcceptanceAiGatewayAttestation,
   parseTemporaryPreviewAcceptanceSelector,
   type TemporaryPreviewFaultScenario,
@@ -48,6 +53,12 @@ export interface DiagnosticRouteDependencies {
   readonly now: () => Date;
   readonly sessions: Pick<EncryptedSessionRepository, "findSession">;
   readonly repositoryForOwner: (ownerId: string) => DiagnosticRepositoryPort;
+  readonly aiUsageSourceForOwner: (
+    ownerId: string,
+  ) => Pick<
+    PhaseBAiUsageSource,
+    "countActiveRequests" | "readCandidateRequestCounts"
+  >;
 }
 
 /** Resolves diagnostic dependencies lazily from bindings or deterministic tests. */
@@ -82,6 +93,39 @@ export function registerDiagnosticRoutes(
     const session = await authenticateDiagnosticRequest(context, dependencies);
     const repository = dependencies.repositoryForOwner(session.ownerId);
     try {
+      let aiAcceptance:
+        | {
+            readonly activeRequestCount: number;
+            readonly createdRequestCount: number | null;
+            readonly eligibleSettledRequestCount: number | null;
+            readonly evidenceScheduledAt: string | null;
+          }
+        | undefined;
+      if (context.env.VISION_ENV === "preview") {
+        const source = dependencies.aiUsageSourceForOwner(session.ownerId);
+        const activeRequestCount = await source.countActiveRequests();
+        if (selector === "ai_usage") {
+          const window = parseTemporaryPreviewAiEvidenceWindow(context.env);
+          if (!window) throw diagnosticsUnavailable();
+          const counts = await source.readCandidateRequestCounts({
+            activatedAt: window.activatedAt,
+            evidenceScheduledAt: window.evidenceScheduledAt,
+          });
+          aiAcceptance = {
+            activeRequestCount,
+            createdRequestCount: counts.createdRequestCount,
+            eligibleSettledRequestCount: counts.eligibleSettledRequestCount,
+            evidenceScheduledAt: window.evidenceScheduledAt.toISOString(),
+          };
+        } else {
+          aiAcceptance = {
+            activeRequestCount,
+            createdRequestCount: null,
+            eligibleSettledRequestCount: null,
+            evidenceScheduledAt: null,
+          };
+        }
+      }
       const observedAt = dependencies.now();
       const facts = await repository.readFoundationFacts(observedAt);
       const effectiveFacts = scenario
@@ -89,25 +133,29 @@ export function registerDiagnosticRoutes(
         : facts;
       const health = calculateFoundationHealth(effectiveFacts, observedAt);
       context.header("Cache-Control", "no-store");
-      return context.json({
-        status: {
-          state: health.state,
-          authorizationState: effectiveFacts.authorizationState,
-          lastSuccessfulSyncAt: effectiveFacts.lastSuccessfulSyncAt?.toISOString() ?? null,
-          syncDelayMs: health.syncDelayMs,
-          oldestQueuedJobAt: effectiveFacts.oldestQueuedJobAt?.toISOString() ?? null,
-          oldestJobDelayMs: health.oldestJobDelayMs,
-          queueRetryCount: effectiveFacts.queueRetryCount,
-          failedJobCount: effectiveFacts.failedJobCount,
-          channelExpiresAt: effectiveFacts.channelExpiresAt?.toISOString() ?? null,
-          aiSpendTier: health.aiSpendTier,
-          aiMonthlyCents: effectiveFacts.aiMonthlyCents,
-          databaseUsageWarning: effectiveFacts.databaseUsageWarning,
-          r2UsageWarning: effectiveFacts.r2UsageWarning,
-          safeErrorCode: effectiveFacts.safeErrorCode,
-          warningCodes: [...health.warningCodes],
-        },
-      });
+      const status = {
+        state: health.state,
+        authorizationState: effectiveFacts.authorizationState,
+        lastSuccessfulSyncAt:
+          effectiveFacts.lastSuccessfulSyncAt?.toISOString() ?? null,
+        syncDelayMs: health.syncDelayMs,
+        oldestQueuedJobAt:
+          effectiveFacts.oldestQueuedJobAt?.toISOString() ?? null,
+        oldestJobDelayMs: health.oldestJobDelayMs,
+        queueRetryCount: effectiveFacts.queueRetryCount,
+        failedJobCount: effectiveFacts.failedJobCount,
+        channelExpiresAt:
+          effectiveFacts.channelExpiresAt?.toISOString() ?? null,
+        aiSpendTier: health.aiSpendTier,
+        aiMonthlyCents: effectiveFacts.aiMonthlyCents,
+        databaseUsageWarning: effectiveFacts.databaseUsageWarning,
+        r2UsageWarning: effectiveFacts.r2UsageWarning,
+        safeErrorCode: effectiveFacts.safeErrorCode,
+        warningCodes: [...health.warningCodes],
+      };
+      return aiAcceptance === undefined
+        ? context.json({ status })
+        : context.json({ status, aiAcceptance });
     } catch {
       throw diagnosticsUnavailable();
     }
@@ -230,6 +278,15 @@ export async function createProductionDiagnosticDependencies(
         createAiEventRepositoryAccess(ownerId),
         usageWarningSource,
       );
+    },
+    /** Creates aggregate-only AI acceptance reads after session owner admission. */
+    aiUsageSourceForOwner: (ownerId) => {
+      if (ownerId !== auth.ownerId) {
+        throw new Error("Diagnostic owner scope is unavailable.");
+      }
+      const source = createPhaseBAiUsageSource(database, ownerId);
+      const { countActiveRequests, readCandidateRequestCounts } = source;
+      return Object.freeze({ countActiveRequests, readCandidateRequestCounts });
     },
   };
 }

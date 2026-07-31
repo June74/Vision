@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { validatePreviewProviderStateForCandidateIntent } from "../../../scripts/validate-preview-deploy-config";
 import {
   assertPreviewCandidateMutationBoundary,
   assertPreviewCandidateIntent,
@@ -10,14 +11,44 @@ import {
   derivePreviewBindingProfile,
   readLatestPreviewCandidateRunRef,
   readPreviewCandidateBindingProfile,
+  readPreviewCandidateIntentDetails,
   readPreviewCandidateIntentVersion,
   readPreviewCandidateMutationState,
   validateCompletedPreviewLifecycleRun,
 } from "../../../scripts/validate-preview-rollback-lifecycle";
+import { AI_PRICING_BINDING_CONTRACT } from "../../../src/server/ai-pricing-binding-contract";
 
 const COMMIT = "a".repeat(40);
 const OTHER_COMMIT = "b".repeat(40);
 const CANDIDATE_RUN_REF = "1201";
+const NORMAL_CRONS = ["*/15 * * * *", "5 6 * * *"] as const;
+const ACCEPTANCE_CRON = "* * * * *";
+const NORMAL_PROVIDER_BINDINGS = [
+  ...AI_PRICING_BINDING_CONTRACT.map(({ name, type, value }) => ({
+    name,
+    type,
+    text: value,
+  })),
+  { name: "AI_MONTHLY_HARD_LIMIT_CENTS", type: "plain_text" },
+  { name: "BACKUP_BUCKET", type: "r2_bucket" },
+  { name: "BACKUP_ENCRYPTION_KEY", type: "secret_text" },
+  { name: "BACKUP_KEY_VERSION", type: "plain_text" },
+  { name: "CALENDAR_SYNC_QUEUE", type: "queue" },
+  { name: "DATABASE_URL", type: "secret_text" },
+  { name: "DATABASE_USAGE_WARNING_BYTES", type: "plain_text" },
+  { name: "GOOGLE_ALLOWED_EMAIL", type: "secret_text" },
+  { name: "GOOGLE_ALLOWED_SUB", type: "secret_text" },
+  { name: "GOOGLE_CLIENT_ID", type: "secret_text" },
+  { name: "GOOGLE_CLIENT_SECRET", type: "secret_text" },
+  { name: "GOOGLE_REDIRECT_URI", type: "plain_text" },
+  { name: "KEY_ENCRYPTION_KEY", type: "secret_text" },
+  { name: "OPENAI_API_KEY", type: "secret_text" },
+  { name: "OPENAI_GATEWAY_BASE_URL", type: "secret_text" },
+  { name: "R2_USAGE_WARNING_BYTES", type: "plain_text" },
+  { name: "R2_USAGE_WARNING_OBJECTS", type: "plain_text" },
+  { name: "VISION_ENV", type: "plain_text" },
+  { name: "VISION_USER_TIME_ZONE", type: "secret_text" },
+] as const;
 
 function candidateConfig(operation = "deploy_foundation") {
   const selector = operation === "deploy_foundation"
@@ -34,9 +65,15 @@ function candidateConfig(operation = "deploy_foundation") {
   return {
     vars: {
       PREVIEW_ACCEPTANCE_SCENARIO: selector,
-      PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-30T18:30:00.000Z",
+      PREVIEW_ACCEPTANCE_EXPIRES_AT: operation === "deploy_ai"
+        ? "2026-07-30T18:30:00.001Z"
+        : "2026-07-30T18:30:00.000Z",
       ...(operation === "deploy_ai"
-        ? { PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true" }
+        ? {
+            PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT:
+              "2026-07-30T18:30:00.000Z",
+            PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true",
+          }
         : {}),
     },
   };
@@ -48,6 +85,64 @@ function candidateIntent(operation = "deploy_foundation") {
     operation,
     candidateConfig: candidateConfig(operation),
   });
+}
+
+function historicalV2AiIntent() {
+  return {
+    evidenceType: "vision.preview-candidate-intent/v2",
+    candidateCommit: COMMIT,
+    candidateOperation: "deploy_ai",
+    bindingProfile: "normal",
+    candidateConfigHash: "c".repeat(64),
+    acceptanceBindings: {
+      scenario: "ai_usage",
+      expiresAt: "2026-07-30T18:30:00.000Z",
+      aiGatewayLimitAttested: "true",
+    },
+  };
+}
+
+function aiProviderState(input: {
+  readonly expiresAt: string;
+  readonly evidenceScheduledAt?: string;
+}) {
+  return {
+    healthResponse: { status: "ok" },
+    schedulesResponse: {
+      success: true,
+      result: [...NORMAL_CRONS, ACCEPTANCE_CRON].map((cron) => ({ cron })),
+    },
+    settingsResponse: {
+      success: true,
+      result: {
+        bindings: [
+          ...structuredClone(NORMAL_PROVIDER_BINDINGS),
+          {
+            name: "PREVIEW_ACCEPTANCE_EXPIRES_AT",
+            type: "plain_text",
+            text: input.expiresAt,
+          },
+          {
+            name: "PREVIEW_ACCEPTANCE_SCENARIO",
+            type: "plain_text",
+            text: "ai_usage",
+          },
+          ...(input.evidenceScheduledAt === undefined
+            ? []
+            : [{
+                name: "PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT",
+                type: "plain_text",
+                text: input.evidenceScheduledAt,
+              }]),
+          {
+            name: "PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED",
+            type: "plain_text",
+            text: "true",
+          },
+        ],
+      },
+    },
+  };
 }
 
 function restoreProof(operation = "deploy_foundation") {
@@ -163,6 +258,255 @@ describe("preview rollback lifecycle", () => {
       closedAt: "2026-07-29T07:02:00.000Z",
     });
     expect(closed).toEqual(legacyClosure);
+  });
+
+  it("emits AI-only v3 intent while preserving the exact non-AI v2 shape", () => {
+    const nonAi = candidateIntent("deploy_foundation");
+    const ai = candidateIntent("deploy_ai");
+
+    expect(nonAi).toEqual({
+      evidenceType: "vision.preview-candidate-intent/v2",
+      candidateCommit: COMMIT,
+      candidateOperation: "deploy_foundation",
+      bindingProfile: "normal",
+      candidateConfigHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      acceptanceBindings: {
+        scenario: "foundation_probe",
+        expiresAt: "2026-07-30T18:30:00.000Z",
+        aiGatewayLimitAttested: null,
+      },
+    });
+    expect(Object.keys(nonAi)).toEqual([
+      "evidenceType",
+      "candidateCommit",
+      "candidateOperation",
+      "bindingProfile",
+      "candidateConfigHash",
+      "acceptanceBindings",
+    ]);
+    expect(Object.keys(nonAi.acceptanceBindings)).toEqual([
+      "scenario",
+      "expiresAt",
+      "aiGatewayLimitAttested",
+    ]);
+    expect(ai).toEqual({
+      evidenceType: "vision.preview-candidate-intent/v3",
+      candidateCommit: COMMIT,
+      candidateOperation: "deploy_ai",
+      bindingProfile: "normal",
+      candidateConfigHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      acceptanceBindings: {
+        scenario: "ai_usage",
+        expiresAt: "2026-07-30T18:30:00.001Z",
+        evidenceScheduledAt: "2026-07-30T18:30:00.000Z",
+        aiGatewayLimitAttested: "true",
+      },
+    });
+    expect(Object.keys(ai)).toEqual([
+      "evidenceType",
+      "candidateCommit",
+      "candidateOperation",
+      "bindingProfile",
+      "candidateConfigHash",
+      "acceptanceBindings",
+    ]);
+    expect(Object.keys(ai.acceptanceBindings)).toEqual([
+      "scenario",
+      "expiresAt",
+      "evidenceScheduledAt",
+      "aiGatewayLimitAttested",
+    ]);
+    expect(readPreviewCandidateIntentVersion(nonAi)).toBe("v2");
+    expect(readPreviewCandidateIntentVersion(ai)).toBe("v3");
+  });
+
+  it("keeps exact historical v2 AI intent recoverable and rejects hybrids", () => {
+    const historicalV2Ai = historicalV2AiIntent();
+
+    expect(readPreviewCandidateIntentVersion(historicalV2Ai)).toBe("v2");
+    expect(
+      readPreviewCandidateIntentDetails({
+        candidateIntent: historicalV2Ai,
+        expectedCommit: COMMIT,
+      }),
+    ).toMatchObject({
+      legacy: false,
+      intentVersion: "v2",
+      operation: "deploy_ai",
+    });
+    expect(() =>
+      assertPreviewCandidateIntent({
+        candidateIntent: {
+          ...historicalV2Ai,
+          acceptanceBindings: {
+            ...historicalV2Ai.acceptanceBindings,
+            evidenceScheduledAt: "2026-07-30T18:30:00.000Z",
+          },
+        },
+        expectedCommit: COMMIT,
+      }),
+    ).toThrow("Preview rollback lifecycle proof is invalid.");
+  });
+
+  it("matches historical v2 AI without scheduled binding and v3 with exact stored schedule", () => {
+    const historical = historicalV2AiIntent();
+    const v3 = candidateIntent("deploy_ai");
+    const exactV3 = aiProviderState({
+      expiresAt: v3.acceptanceBindings.expiresAt,
+      evidenceScheduledAt: v3.acceptanceBindings.evidenceScheduledAt,
+    });
+
+    expect(() =>
+      validatePreviewProviderStateForCandidateIntent({
+        candidateIntent: historical,
+        expectedCommit: COMMIT,
+        ...aiProviderState({
+          expiresAt: historical.acceptanceBindings.expiresAt,
+        }),
+      }),
+    ).not.toThrow();
+    expect(() =>
+      validatePreviewProviderStateForCandidateIntent({
+        candidateIntent: v3,
+        expectedCommit: COMMIT,
+        ...exactV3,
+      }),
+    ).not.toThrow();
+    for (const settingsResponse of [
+      {
+        success: true,
+        result: {
+          bindings: (
+            exactV3.settingsResponse.result.bindings as Array<
+              Record<string, unknown>
+            >
+          ).filter((binding) =>
+            binding.name !==
+              "PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT"
+          ),
+        },
+      },
+      {
+        success: true,
+        result: {
+          bindings: exactV3.settingsResponse.result.bindings.map((binding) =>
+            binding.name === "PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT"
+              ? { ...binding, text: "2026-07-30T18:29:00.000Z" }
+              : binding
+          ),
+        },
+      },
+    ]) {
+      expect(() =>
+        validatePreviewProviderStateForCandidateIntent({
+          candidateIntent: v3,
+          expectedCommit: COMMIT,
+          ...exactV3,
+          settingsResponse,
+        }),
+      ).toThrow("Normal preview provider state is invalid.");
+    }
+  });
+
+  it("preserves the historical v1 AI gateway-attestation provider contract", () => {
+    const legacyV1Ai = {
+      evidenceType: "vision.preview-candidate-intent/v1",
+      candidateCommit: COMMIT,
+    };
+    const exact = aiProviderState({
+      expiresAt: "2026-07-30T18:30:00.000Z",
+    });
+
+    expect(() =>
+      validatePreviewProviderStateForCandidateIntent({
+        candidateIntent: legacyV1Ai,
+        expectedCommit: COMMIT,
+        ...exact,
+      }),
+    ).not.toThrow();
+    expect(() =>
+      validatePreviewProviderStateForCandidateIntent({
+        candidateIntent: legacyV1Ai,
+        expectedCommit: COMMIT,
+        ...exact,
+        settingsResponse: {
+          success: true,
+          result: {
+            bindings: exact.settingsResponse.result.bindings.filter((binding) =>
+              binding.name !== "PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED"
+            ),
+          },
+        },
+      }),
+    ).toThrow("Normal preview provider state is invalid.");
+  });
+
+  it("rejects missing, invalid, or non-AI scheduled bindings", () => {
+    const ai = candidateConfig("deploy_ai");
+    const { PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT: _scheduled, ...missing } =
+      ai.vars;
+    for (const candidateConfigValue of [
+      { vars: missing },
+      {
+        vars: {
+          ...ai.vars,
+          PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT:
+            ai.vars.PREVIEW_ACCEPTANCE_EXPIRES_AT,
+        },
+      },
+      {
+        vars: {
+          ...candidateConfig("deploy_foundation").vars,
+          PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT:
+            "2026-07-30T18:30:00.000Z",
+        },
+      },
+    ]) {
+      expect(() =>
+        createPreviewCandidateIntent({
+          candidateCommit: COMMIT,
+          operation: candidateConfigValue.vars.PREVIEW_ACCEPTANCE_SCENARIO ===
+              "ai_usage"
+            ? "deploy_ai"
+            : "deploy_foundation",
+          candidateConfig: candidateConfigValue,
+        }),
+      ).toThrow("Preview rollback lifecycle proof is invalid.");
+    }
+  });
+
+  it("keeps mutation, restore, and closure proof generations unchanged for v3", () => {
+    const intent = candidateIntent("deploy_ai");
+    const boundary = createPreviewCandidateMutationBoundary({
+      candidateIntent: intent,
+      candidateRunRef: CANDIDATE_RUN_REF,
+      candidateConfig: candidateConfig("deploy_ai"),
+    });
+    expect(
+      readPreviewCandidateMutationState({
+        candidateIntent: intent,
+        artifactsResponse: { total_count: 0, artifacts: [] },
+        candidateRunRef: CANDIDATE_RUN_REF,
+      }),
+    ).toBe("not_started");
+    expect(() =>
+      assertPreviewCandidateMutationBoundary({
+        candidateIntent: intent,
+        mutationBoundary: boundary,
+        candidateRunRef: CANDIDATE_RUN_REF,
+        expectedCommit: COMMIT,
+        candidateConfig: candidateConfig("deploy_ai"),
+      }),
+    ).not.toThrow();
+    expect(boundary.evidenceType).toBe(
+      "vision.preview-candidate-mutation-boundary/v1",
+    );
+    expect(restoreProof("deploy_ai").evidenceType).toBe(
+      "vision.preview-rollback-restored/v2",
+    );
+    expect(closureProof("deploy_ai").evidenceType).toBe(
+      "vision.preview-rollback-closed/v2",
+    );
   });
 
   it("classifies only zero or one exact mutation-boundary artifact for the candidate run", () => {

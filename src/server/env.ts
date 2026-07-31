@@ -132,6 +132,19 @@ const previewAcceptanceExpiresAtSchema = z
       message: "PREVIEW_ACCEPTANCE_EXPIRES_AT must be a canonical UTC instant.",
     },
   );
+const previewAcceptanceAiEvidenceScheduledAtSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00\.000Z$/u)
+  .refine(
+    (value) => {
+      const instant = Date.parse(value);
+      return Number.isFinite(instant) && new Date(instant).toISOString() === value;
+    },
+    {
+      message:
+        "PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT must be a canonical UTC minute.",
+    },
+  );
 
 /** Validates only the server-side configuration needed by the OpenAI adapter. */
 export const OpenAiEnvSchema = z
@@ -253,6 +266,8 @@ export const RuntimeEnvSchema = z
       .optional(),
     PREVIEW_ACCEPTANCE_EXPIRES_AT:
       previewAcceptanceExpiresAtSchema.optional(),
+    PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT:
+      previewAcceptanceAiEvidenceScheduledAtSchema.optional(),
     PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: z
       .literal("true")
       .optional(),
@@ -287,6 +302,16 @@ export const RuntimeEnvSchema = z
         code: "custom",
         message:
           "PREVIEW_ACCEPTANCE_SCENARIO and PREVIEW_ACCEPTANCE_EXPIRES_AT must be configured together.",
+      });
+    }
+    if (
+      (environment.PREVIEW_ACCEPTANCE_SCENARIO === "ai_usage") !==
+      (environment.PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT !== undefined)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT is AI-candidate-only.",
       });
     }
     if (

@@ -2,11 +2,28 @@ import { describe, expect, it } from "vitest";
 import {
   parsePreviewAcceptanceContext,
   serializePreviewAcceptanceContext,
+  type PreviewAcceptanceContext,
 } from "../../../scripts/prepare-preview-acceptance-deploy-config";
 
 const SHA = "a".repeat(40);
 
 describe("preview acceptance context", () => {
+  it("keeps AI window fields out of the non-AI observe type", () => {
+    const nonAiObserveWithWindow = {
+      version: "vision.preview-acceptance-context/v1",
+      kind: "observe",
+      reviewedCommit: SHA,
+      evidenceFamily: "foundation_probe",
+      expectedOutcome: "foundation_succeeded",
+      evidenceScheduledAt: "2026-07-30T18:28:00.000Z",
+      expiresAt: "2026-07-30T18:28:00.250Z",
+    } as const;
+
+    // @ts-expect-error AI window fields are not part of a non-AI observe variant.
+    const rejected: PreviewAcceptanceContext = nonAiObserveWithWindow;
+    expect(rejected).toBe(nonAiObserveWithWindow);
+  });
+
   it.each([
     ["baseline", "baseline"],
     ["1201", "1202"],
@@ -93,4 +110,48 @@ describe("preview acceptance context", () => {
       ),
     ).toThrow("Preview acceptance workflow selection is invalid.");
   });
+
+  it.each([
+    ["foundation", "foundation_probe", "foundation_succeeded", {}],
+    [
+      "fault",
+      "preview_fault",
+      "fault_expected",
+      { faultScenario: "database_unavailable" },
+    ],
+    ["synchronization suppression", "sync_suppression", "sync_suppressed", {}],
+    ["role probe", "role_probe", "role_probe_succeeded", {}],
+    ["restore", "restore", "restore_succeeded", {}],
+    [
+      "maintenance success",
+      "calendar_maintenance",
+      "maintenance_succeeded",
+      { maintenanceScheduledAt: "2026-07-30T18:15:00.000Z" },
+    ],
+    [
+      "maintenance repair reservation",
+      "calendar_maintenance",
+      "maintenance_repair_reserved",
+      { maintenanceScheduledAt: "2026-07-30T18:15:00.000Z" },
+    ],
+  ] as const)(
+    "rejects AI-only window fields on the %s observe variant",
+    (_label, evidenceFamily, expectedOutcome, variantFields) => {
+      expect(() =>
+        parsePreviewAcceptanceContext(
+          "observe",
+          JSON.stringify({
+            version: "vision.preview-acceptance-context/v1",
+            kind: "observe",
+            reviewedCommit: SHA,
+            evidenceFamily,
+            expectedOutcome,
+            ...variantFields,
+            evidenceScheduledAt: "2026-07-30T18:28:00.000Z",
+            expiresAt: "2026-07-30T18:28:00.250Z",
+          }),
+        ),
+      ).toThrow("Preview acceptance workflow selection is invalid.");
+    },
+  );
 });

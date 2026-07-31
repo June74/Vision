@@ -88,6 +88,8 @@ backward. The controller rejects implausibly future advancement, extends its
 deadline only to the new semantic close, and keeps one fixed workflow-aware
 verification ceiling. Maintenance is rejected before observer dispatch when
 its tick-plus-two-minute semantic close would outlive the 46-minute listener.
+For AI evidence, it creates one 30-minute window before observer dispatch and
+reuses the same scheduled instant and expiry in both canonical contexts.
 
 ## `rollbackAndClose`
 
@@ -125,14 +127,15 @@ deadline.
 
 ## `createObserveContext`
 
-Builds the exact observe context. Maintenance carries only its scheduled tick;
+Builds the exact observe context. AI success carries only its scheduled instant
+and expiry. Maintenance carries only its scheduled tick;
 the controller and printer derive the fixed close internally. Other families
 start uniqueness at their admitted terminal.
 
 ## `createCandidateContext`
 
 Builds the exact candidate context with lifecycle and observer-dispatch
-bindings.
+bindings. Only `deploy_ai` adds the verified zero-active gate and exact window.
 
 ## `candidateOperation`
 

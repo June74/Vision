@@ -52,6 +52,8 @@ jobs:
       evidence_family: ${{ steps.acceptance-selection.outputs.evidence_family }}
       expected_outcome: ${{ steps.acceptance-selection.outputs.expected_outcome }}
       maintenance_scheduled_at: ${{ steps.acceptance-selection.outputs.maintenance_scheduled_at }}
+      evidence_scheduled_at: ${{ steps.acceptance-selection.outputs.evidence_scheduled_at }}
+      expires_at: ${{ steps.acceptance-selection.outputs.expires_at }}
       selector: ${{ steps.acceptance-selection.outputs.selector }}
       restore_admission_gate: ${{ steps.acceptance-selection.outputs.restore_admission_gate }}
       observer_dispatch_started_at: ${{ steps.acceptance-selection.outputs.observer_dispatch_started_at }}
@@ -793,7 +795,17 @@ jobs:
               ;;
             v2:not_started)
               ;;
+            v3:not_started)
+              ;;
             v2:may_have_started)
+              gh run download "$CANDIDATE_RUN_REF" --name vision-preview-candidate-mutation-boundary --dir "$mutation_dir" > /dev/null
+              pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-mutation-boundary \
+                --candidate-intent preview-candidate-intent.json \
+                --mutation-boundary "$mutation_dir/preview-candidate-mutation-boundary.json" \
+                --candidate-run-ref "$CANDIDATE_RUN_REF" \
+                --commit "$VERIFIED_SHA"
+              ;;
+            v3:may_have_started)
               gh run download "$CANDIDATE_RUN_REF" --name vision-preview-candidate-mutation-boundary --dir "$mutation_dir" > /dev/null
               pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-mutation-boundary \
                 --candidate-intent preview-candidate-intent.json \

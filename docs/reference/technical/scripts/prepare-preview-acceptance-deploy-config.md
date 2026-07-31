@@ -26,6 +26,9 @@ ordered candidate timestamp interval, evidence outcome pairing, and
 fault-scenario presence before constructing a new ordered plain object. Every
 calendar-maintenance observe context requires only one canonical
 `maintenanceScheduledAt`; the removed `observerClosesAt` key is rejected.
+The observe type is a closed discriminated union: only the paired
+`ai_usage`/`ai_succeeded` variant requires `evidenceScheduledAt` and
+`expiresAt`, while every non-AI variant forbids both fields.
 Candidate bounds may be equal but may not be reversed.
 The normal-deploy variant requires either the exact baseline pair or a
 candidate-run and closure-run pair; mixed or missing lifecycle references are
@@ -86,3 +89,9 @@ admission has one canonical output key; no camel-case alias is emitted.
 Candidate generation accepts only the fixed artifact paths and attestation
 flag, then uses exclusive creation so an existing candidate cannot be
 overwritten.
+
+## `parseCanonicalAiWindow`
+
+Constructs a private parser input around context-carried scheduled-at and
+expiry scalars, then requires the domain parser to return the canonical frozen
+AI window.

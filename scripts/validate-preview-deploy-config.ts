@@ -6,7 +6,10 @@ import {
   AI_PRICING_BINDING_CONTRACT,
   AI_PRICING_POLICY_VALUES,
 } from "../src/server/ai-pricing-binding-contract";
-import { TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS } from "../src/domain/operations/temporary-preview-fault";
+import {
+  parseTemporaryPreviewAiEvidenceWindow,
+  TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS,
+} from "../src/domain/operations/temporary-preview-fault";
 import type { PreviewAcceptanceSelector } from "./prepare-preview-acceptance-deploy-config";
 import {
   readPreviewCandidateIntentDetails,
@@ -161,6 +164,7 @@ export function validatePreviewProviderStateForCandidateIntent(input: {
       providerState.settingsResponse,
       details.acceptanceBindings,
       details.bindingProfile === "restore_pair",
+      details.intentVersion,
     )
   ) {
     throw new Error(INVALID_PROVIDER_STATE);
@@ -205,8 +209,19 @@ function matchesCandidateProviderBindings(
   settingsResponse: unknown,
   acceptance: PreviewCandidateAcceptanceBindings,
   restorePair: boolean,
+  intentVersion: "v2" | "v3" | undefined,
 ): boolean {
   const bindings = readProviderBindings(settingsResponse);
+  const expectsAiAttestation =
+    acceptance.aiGatewayLimitAttested === "true";
+  const expectsAiEvidenceSchedule =
+    expectsAiAttestation && intentVersion === "v3";
+  if (
+    expectsAiEvidenceSchedule &&
+    typeof acceptance.evidenceScheduledAt !== "string"
+  ) {
+    return false;
+  }
   const expectedTemporary: readonly ProviderBindingContract[] = [
     {
       name: "PREVIEW_ACCEPTANCE_EXPIRES_AT",
@@ -218,7 +233,16 @@ function matchesCandidateProviderBindings(
       type: "plain_text",
       text: acceptance.scenario,
     },
-    ...(acceptance.aiGatewayLimitAttested === "true"
+    ...(expectsAiEvidenceSchedule
+      ? [
+          {
+            name: "PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT",
+            type: "plain_text",
+            text: acceptance.evidenceScheduledAt!,
+          },
+        ]
+      : []),
+    ...(expectsAiAttestation
       ? [{
           name: "PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED",
           type: "plain_text",
@@ -320,6 +344,7 @@ function matchesAnyLegacyCandidateProviderState(
       input.settingsResponse,
       acceptanceBindings,
       restorePair,
+      undefined,
     );
 }
 
@@ -512,6 +537,19 @@ function validate(
   ) {
     throw new Error(errorMessage);
   }
+  const aiEvidenceScheduledAt =
+    expectedSelector === "ai_usage"
+      ? readOwnString(vars, "PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT")
+      : undefined;
+  if (expectedSelector === "ai_usage") {
+    try {
+      if (parseTemporaryPreviewAiEvidenceWindow(vars) === undefined) {
+        throw new Error(errorMessage);
+      }
+    } catch {
+      throw new Error(errorMessage);
+    }
+  }
   const expectedVars: Readonly<Record<string, string>> = {
     ...NORMAL_VAR_ENTRIES,
     ...(expectedSelector === undefined
@@ -521,7 +559,11 @@ function validate(
           PREVIEW_ACCEPTANCE_SCENARIO: expectedSelector,
         }),
     ...(expectedSelector === "ai_usage"
-      ? { PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true" }
+      ? {
+          PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT:
+            aiEvidenceScheduledAt!,
+          PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true",
+        }
       : {}),
   };
 

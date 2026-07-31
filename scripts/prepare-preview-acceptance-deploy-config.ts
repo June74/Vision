@@ -3,8 +3,12 @@ import { appendFile, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
+  assertPreviewAiRequestMargin,
+  createPreviewAiEvidenceWindow,
+  parseTemporaryPreviewAiEvidenceWindow,
   TEMPORARY_PREVIEW_ACCEPTANCE_SELECTORS,
   TEMPORARY_PREVIEW_FAULT_SCENARIOS,
+  type PreviewAiEvidenceWindow,
   type TemporaryPreviewAcceptanceSelector,
   type TemporaryPreviewFaultScenario,
 } from "../src/domain/operations/temporary-preview-fault";
@@ -50,6 +54,9 @@ export type PreviewAcceptanceOperation =
 export const PREVIEW_ACCEPTANCE_CONTEXT_VERSION =
   "vision.preview-acceptance-context/v1" as const;
 
+/** The sole closed operator attestation accepted for AI candidate admission. */
+export type PreviewAiZeroActiveGate = "verified";
+
 interface PreviewAcceptanceContextBase {
   readonly version: typeof PREVIEW_ACCEPTANCE_CONTEXT_VERSION;
   readonly kind: PreviewAcceptanceOperation;
@@ -72,40 +79,85 @@ interface PreviewAcceptanceCandidateContext
   readonly observerDispatchCompletedAt: string;
 }
 
+interface PreviewAcceptanceObserveContextBase
+  extends PreviewAcceptanceContextBase {
+  readonly kind: "observe";
+}
+
+type PreviewAcceptanceNonAiObserveContext =
+  PreviewAcceptanceObserveContextBase & {
+    readonly evidenceScheduledAt?: never;
+    readonly expiresAt?: never;
+  } & (
+      | {
+          readonly evidenceFamily: "foundation_probe";
+          readonly expectedOutcome: "foundation_succeeded";
+          readonly faultScenario?: never;
+          readonly maintenanceScheduledAt?: never;
+        }
+      | {
+          readonly evidenceFamily: "preview_fault";
+          readonly expectedOutcome: "fault_expected";
+          readonly faultScenario: TemporaryPreviewFaultScenario;
+          readonly maintenanceScheduledAt?: never;
+        }
+      | {
+          readonly evidenceFamily: "sync_suppression";
+          readonly expectedOutcome: "sync_suppressed";
+          readonly faultScenario?: never;
+          readonly maintenanceScheduledAt?: never;
+        }
+      | {
+          readonly evidenceFamily: "role_probe";
+          readonly expectedOutcome: "role_probe_succeeded";
+          readonly faultScenario?: never;
+          readonly maintenanceScheduledAt?: never;
+        }
+      | {
+          readonly evidenceFamily: "restore";
+          readonly expectedOutcome: "restore_succeeded";
+          readonly faultScenario?: never;
+          readonly maintenanceScheduledAt?: never;
+        }
+      | {
+          readonly evidenceFamily: "calendar_maintenance";
+          readonly expectedOutcome:
+            | "maintenance_succeeded"
+            | "maintenance_repair_reserved";
+          readonly faultScenario?: never;
+          readonly maintenanceScheduledAt: string;
+        }
+    );
+
+type PreviewAcceptanceAiObserveContext =
+  PreviewAcceptanceObserveContextBase & {
+    readonly evidenceFamily: "ai_usage";
+    readonly expectedOutcome: "ai_succeeded";
+    readonly faultScenario?: never;
+    readonly maintenanceScheduledAt?: never;
+    readonly evidenceScheduledAt: string;
+    readonly expiresAt: string;
+  };
+
 export type PreviewAcceptanceContext =
   | (PreviewAcceptanceContextBase & {
       readonly kind: "none";
       readonly candidateRunRef: string;
       readonly rollbackClosureRunRef: string;
     })
-  | (PreviewAcceptanceContextBase & {
-      readonly kind: "observe";
-      readonly evidenceFamily:
-        | "foundation_probe"
-        | "preview_fault"
-        | "ai_usage"
-        | "sync_suppression"
-        | "role_probe"
-        | "restore"
-        | "calendar_maintenance";
-      readonly expectedOutcome:
-        | "foundation_succeeded"
-        | "fault_expected"
-        | "ai_succeeded"
-        | "sync_suppressed"
-        | "role_probe_succeeded"
-        | "restore_succeeded"
-        | "maintenance_succeeded"
-        | "maintenance_repair_reserved";
-      readonly faultScenario?: TemporaryPreviewFaultScenario;
-      readonly maintenanceScheduledAt?: string;
-    })
+  | PreviewAcceptanceNonAiObserveContext
+  | PreviewAcceptanceAiObserveContext
   | (PreviewAcceptanceCandidateContext & {
       readonly kind:
         | "deploy_foundation"
         | "deploy_sync_suppression"
-        | "deploy_ai"
         | "deploy_role_probe";
+    })
+  | (PreviewAcceptanceCandidateContext & {
+      readonly kind: "deploy_ai";
+      readonly aiZeroActiveGate: PreviewAiZeroActiveGate;
+      readonly evidenceScheduledAt: string;
+      readonly expiresAt: string;
     })
   | (PreviewAcceptanceCandidateContext & {
       readonly kind: "deploy_fault";
@@ -260,6 +312,8 @@ function canonicalPreviewAcceptanceContext(
         evidenceFamily === "calendar_maintenance" &&
         (expectedOutcome === "maintenance_succeeded" ||
           expectedOutcome === "maintenance_repair_reserved");
+      const aiExpected =
+        evidenceFamily === "ai_usage" && expectedOutcome === "ai_succeeded";
       exactKeys(
         record,
         faultExpected
@@ -280,6 +334,16 @@ function canonicalPreviewAcceptanceContext(
                 "expectedOutcome",
                 "maintenanceScheduledAt",
               ]
+            : aiExpected
+              ? [
+                  "version",
+                  "kind",
+                  "reviewedCommit",
+                  "evidenceFamily",
+                  "expectedOutcome",
+                  "evidenceScheduledAt",
+                  "expiresAt",
+                ]
           : [
               "version",
               "kind",
@@ -304,6 +368,11 @@ function canonicalPreviewAcceptanceContext(
         maintenanceExpected;
       const faultScenario = dataValue(record, "faultScenario");
       const maintenanceScheduledAt = dataValue(record, "maintenanceScheduledAt");
+      const evidenceScheduledAt = dataValue(record, "evidenceScheduledAt");
+      const expiresAt = dataValue(record, "expiresAt");
+      if (aiExpected) {
+        parseCanonicalAiWindow(evidenceScheduledAt, expiresAt);
+      }
       if (
         !matchingOutcome ||
         (faultExpected &&
@@ -327,6 +396,12 @@ function canonicalPreviewAcceptanceContext(
         ...(maintenanceExpected
           ? { maintenanceScheduledAt: maintenanceScheduledAt as string }
           : {}),
+        ...(aiExpected
+          ? {
+              evidenceScheduledAt: evidenceScheduledAt as string,
+              expiresAt: expiresAt as string,
+            }
+          : {}),
       }) as PreviewAcceptanceContext;
     }
     case "deploy_foundation":
@@ -344,6 +419,9 @@ function canonicalPreviewAcceptanceContext(
         "rollbackClosureRunRef",
         "observerDispatchStartedAt",
         "observerDispatchCompletedAt",
+        ...(kind === "deploy_ai"
+          ? ["aiZeroActiveGate", "evidenceScheduledAt", "expiresAt"]
+          : []),
         ...(kind === "deploy_fault" ? ["faultScenario"] : []),
         ...(kind === "deploy_restore" ? ["restoreAdmissionGate"] : []),
       ]);
@@ -371,6 +449,9 @@ function canonicalPreviewAcceptanceContext(
         isRunRef(candidateRunRef) && isRunRef(rollbackClosureRunRef);
       const faultScenario = dataValue(record, "faultScenario");
       const restoreAdmissionGate = dataValue(record, "restoreAdmissionGate");
+      const aiZeroActiveGate = dataValue(record, "aiZeroActiveGate");
+      const evidenceScheduledAt = dataValue(record, "evidenceScheduledAt");
+      const expiresAt = dataValue(record, "expiresAt");
       const orderedDispatchInterval =
         isCanonicalInstant(observerDispatchStartedAt) &&
         isCanonicalInstant(observerDispatchCompletedAt) &&
@@ -384,9 +465,29 @@ function canonicalPreviewAcceptanceContext(
           !TEMPORARY_PREVIEW_FAULT_SCENARIOS.includes(
             faultScenario as TemporaryPreviewFaultScenario,
           )) ||
-        (kind === "deploy_restore" && restoreAdmissionGate !== "verified")
+        (kind === "deploy_restore" && restoreAdmissionGate !== "verified") ||
+        (kind === "deploy_ai" && aiZeroActiveGate !== "verified")
       ) {
         throw new Error(INVALID_SELECTION);
+      }
+      if (kind === "deploy_ai") {
+        const aiWindow = parseCanonicalAiWindow(
+          evidenceScheduledAt,
+          expiresAt,
+        );
+        const observerStartedAt = new Date(observerDispatchStartedAt as string);
+        const observerCompletedAt = new Date(
+          observerDispatchCompletedAt as string,
+        );
+        if (
+          aiWindow.activatedAt.getTime() > observerStartedAt.getTime()
+        ) {
+          throw new Error(INVALID_SELECTION);
+        }
+        assertPreviewAiRequestMargin(
+          observerCompletedAt,
+          aiWindow.evidenceScheduledAt,
+        );
       }
       return Object.freeze({
         ...base,
@@ -397,6 +498,13 @@ function canonicalPreviewAcceptanceContext(
         rollbackClosureRunRef,
         observerDispatchStartedAt,
         observerDispatchCompletedAt,
+        ...(kind === "deploy_ai"
+          ? {
+              aiZeroActiveGate: "verified" as const,
+              evidenceScheduledAt: evidenceScheduledAt as string,
+              expiresAt: expiresAt as string,
+            }
+          : {}),
         ...(kind === "deploy_fault"
           ? { faultScenario: faultScenario as TemporaryPreviewFaultScenario }
           : {}),
@@ -552,12 +660,28 @@ function isCanonicalInstant(value: unknown): value is string {
   return Number.isFinite(instant) && new Date(instant).toISOString() === value;
 }
 
+/** Reuses the domain parser for one canonical context-carried AI window. */
+function parseCanonicalAiWindow(
+  evidenceScheduledAt: unknown,
+  expiresAt: unknown,
+): PreviewAiEvidenceWindow {
+  const window = parseTemporaryPreviewAiEvidenceWindow({
+    VISION_ENV: "preview",
+    PREVIEW_ACCEPTANCE_SCENARIO: "ai_usage",
+    PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT: evidenceScheduledAt,
+    PREVIEW_ACCEPTANCE_EXPIRES_AT: expiresAt,
+  });
+  if (window === undefined) throw new Error(INVALID_SELECTION);
+  return window;
+}
+
 /** Returns a new exact candidate and leaves the pre-validated normal input untouched. */
 export function preparePreviewAcceptanceDeployConfig(input: {
   readonly normalConfig: unknown;
   readonly selector: PreviewAcceptanceSelector;
   readonly aiGatewayLimitAttested?: true;
   readonly activatedAt?: Date;
+  readonly aiEvidenceWindow?: PreviewAiEvidenceWindow;
 }): PreviewDeployConfig {
   try {
     validatePreviewDeployConfig(input.normalConfig);
@@ -567,7 +691,8 @@ export function preparePreviewAcceptanceDeployConfig(input: {
   if (
     !PREVIEW_ACCEPTANCE_SELECTORS.includes(input.selector) ||
     (input.selector === "ai_usage") !==
-      (input.aiGatewayLimitAttested === true)
+      (input.aiGatewayLimitAttested === true) ||
+    (input.selector !== "ai_usage" && input.aiEvidenceWindow !== undefined)
   ) {
     throw new Error(INVALID_CONFIG);
   }
@@ -580,17 +705,26 @@ export function preparePreviewAcceptanceDeployConfig(input: {
     input.selector === "sync_suppression"
       ? normalCrons
       : [...normalCrons, ACCEPTANCE_CRON];
+  const aiWindow =
+    input.selector === "ai_usage"
+      ? input.aiEvidenceWindow ??
+        createPreviewAiEvidenceWindow(input.activatedAt ?? new Date())
+      : undefined;
   const candidate: PreviewDeployConfig = {
     ...normal,
     vars: {
       ...(normal.vars as Readonly<Record<string, string>>),
       PREVIEW_ACCEPTANCE_SCENARIO: input.selector,
-      PREVIEW_ACCEPTANCE_EXPIRES_AT: createPreviewAcceptanceDeadline(
-        input.activatedAt ?? new Date(),
-        input.selector,
-      ),
+      PREVIEW_ACCEPTANCE_EXPIRES_AT:
+        aiWindow?.expiresAt.toISOString() ??
+        createPreviewAcceptanceDeadline(
+          input.activatedAt ?? new Date(),
+          input.selector,
+        ),
       ...(input.selector === "ai_usage"
         ? {
+            PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT:
+              aiWindow!.evidenceScheduledAt.toISOString(),
             PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true",
           }
         : {}),
@@ -707,6 +841,16 @@ async function main(): Promise<void> {
         context.kind === "observe"
           ? context.maintenanceScheduledAt ?? ""
           : "";
+      const evidenceScheduledAt =
+        (context.kind === "observe" && context.evidenceFamily === "ai_usage") ||
+        context.kind === "deploy_ai"
+          ? context.evidenceScheduledAt ?? ""
+          : "";
+      const expiresAt =
+        (context.kind === "observe" && context.evidenceFamily === "ai_usage") ||
+        context.kind === "deploy_ai"
+          ? context.expiresAt ?? ""
+          : "";
       await appendFile(
         outputPath,
         [
@@ -719,6 +863,8 @@ async function main(): Promise<void> {
           `evidence_family=${evidenceFamily}`,
           `expected_outcome=${expectedOutcome}`,
           `maintenance_scheduled_at=${maintenanceScheduledAt}`,
+          `evidence_scheduled_at=${evidenceScheduledAt}`,
+          `expires_at=${expiresAt}`,
           `selector=${selection.selector ?? ""}`,
           `restore_admission_gate=${selection.context.kind === "deploy_restore" ? selection.context.restoreAdmissionGate : ""}`,
           `observer_dispatch_started_at=${candidateContext?.observerDispatchStartedAt ?? ""}`,
@@ -747,11 +893,21 @@ async function main(): Promise<void> {
       throw new Error(INVALID_CONFIG);
     }
     const serialized = await readFile(resolve(NORMAL_INPUT), "utf8");
+    const contextAiWindow =
+      selection.context.kind === "deploy_ai"
+        ? parseCanonicalAiWindow(
+            selection.context.evidenceScheduledAt,
+            selection.context.expiresAt,
+          )
+        : undefined;
     const candidate = preparePreviewAcceptanceDeployConfig({
       normalConfig: JSON.parse(serialized),
       selector: selection.selector,
       ...(selection.selector === "ai_usage"
-        ? { aiGatewayLimitAttested: true }
+        ? {
+            aiGatewayLimitAttested: true,
+            aiEvidenceWindow: contextAiWindow!,
+          }
         : {}),
     });
     await writeFile(

@@ -7,6 +7,10 @@ Authenticated routes show safe foundation status and synchronized events. Changi
 Registers status, event list, template fallback, and category correction
 routes. Status validates the complete candidate selector and AI attestation,
 but applies an overlay only for one of the six fault selectors.
+Authenticated preview status also returns only aggregate AI acceptance counts.
+Normal preview leaves candidate fields empty; the AI candidate adds created
+and eligible counts plus its canonical evidence minute. Production omits the
+temporary aggregate entirely.
 
 ## `createProductionDiagnosticDependencies`
 
@@ -19,6 +23,12 @@ Reads current time for authentication, freshness, and corrections.
 ## `repositoryForOwner`
 
 Creates a repository only for the approved private-pilot owner.
+
+## `aiUsageSourceForOwner`
+
+Creates aggregate-only AI acceptance reads after authentication and owner
+admission. It never exposes request, reservation, provider, token, or content
+records.
 
 ## `authenticateDiagnosticRequest`
 

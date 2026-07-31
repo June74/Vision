@@ -42,9 +42,10 @@ All bindings are Worker-only. `GOOGLE_ALLOWED_SUB` and email define the private-
 
 The schema accepts `VISION_ENV`, Worker-only `DATABASE_URL`, Worker-only
 `KEY_ENCRYPTION_KEY`, and the server-only preview candidate bindings. The
-candidate selector admits the frozen six faults plus `foundation_probe` and
-`ai_usage` only in preview. `PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED` must
-be exactly `"true"` if and only if the selector is `ai_usage`. The key is
+candidate selector admits the complete eleven-value vocabulary only in
+preview. `PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED` must be exactly
+`"true"`, and `PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT` must be a
+canonical UTC minute, if and only if the selector is `ai_usage`. The key is
 prebounded to 43 characters, canonically decoded, re-encoded by the shared
 decoder, and required to produce exactly 32 bytes. This accepts all 16 legal
 final-character classes while rejecting padding, noncanonical trailing bits,

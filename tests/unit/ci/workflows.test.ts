@@ -503,6 +503,15 @@ describe("preview acceptance candidate workflow", () => {
     expect(selection).not.toContain(
       'echo "${{ inputs.acceptance_context }}"',
     );
+    expect(preview).toContain(
+      "evidence_scheduled_at: ${{ steps.acceptance-selection.outputs.evidence_scheduled_at }}",
+    );
+    expect(preview).toContain(
+      "expires_at: ${{ steps.acceptance-selection.outputs.expires_at }}",
+    );
+    expect(preview).not.toContain("ai_zero_active_gate:");
+    expect(preview).not.toContain("AI_ZERO_ACTIVE_GATE:");
+    expect(preview).not.toContain("--ai-zero-active-gate");
     for (const removed of [
       "fault_scenario",
       "authenticated_reads_gate",
@@ -1082,11 +1091,15 @@ describe("preview acceptance candidate workflow", () => {
     const legacyUncertain = rollbackMutation.indexOf("v1:may_have_started)");
     const v2NotStarted = rollbackMutation.indexOf("v2:not_started)");
     const v2Uncertain = rollbackMutation.indexOf("v2:may_have_started)");
+    const v3NotStarted = rollbackMutation.indexOf("v3:not_started)");
+    const v3Uncertain = rollbackMutation.indexOf("v3:may_have_started)");
     const invalidVersionState = rollbackMutation.indexOf("*)");
     expect(legacyUncertain).toBeGreaterThan(-1);
     expect(v2NotStarted).toBeGreaterThan(legacyUncertain);
-    expect(v2Uncertain).toBeGreaterThan(v2NotStarted);
-    expect(invalidVersionState).toBeGreaterThan(v2Uncertain);
+    expect(v3NotStarted).toBeGreaterThan(v2NotStarted);
+    expect(v2Uncertain).toBeGreaterThan(v3NotStarted);
+    expect(v3Uncertain).toBeGreaterThan(v2Uncertain);
+    expect(invalidVersionState).toBeGreaterThan(v3Uncertain);
     expect(
       rollbackMutation.slice(legacyUncertain, v2Uncertain),
     ).not.toContain("gh run download");
@@ -1097,6 +1110,12 @@ describe("preview acceptance candidate workflow", () => {
     );
     expect(
       rollbackMutation.slice(v2Uncertain, invalidVersionState),
+    ).toContain("--verify-mutation-boundary");
+    expect(
+      rollbackMutation.slice(v3NotStarted, v2Uncertain),
+    ).not.toContain("gh run download");
+    expect(
+      rollbackMutation.slice(v3Uncertain, invalidVersionState),
     ).toContain("--verify-mutation-boundary");
     expect(rollbackProfile).toContain("--verify-rollback-provider-state");
     expect(rollbackProfile).toContain(

@@ -6,6 +6,8 @@ import { BACKUP_TABLES } from "../../../src/domain/backup/manifest";
 import { PHASE_B_AI_USAGE_ACTION } from "../../../src/jobs/phase-b-ai-usage-evidence";
 import { createPreviewTailObserver } from "../../../scripts/print-safe-tail";
 
+const PRINT_SAFE_TAIL_PROCESS_TEST_TIMEOUT_MS = 15_000;
+
 /** Runs the safe-tail executable against synthetic, non-sensitive input. */
 async function runPrintSafeTail(
   args: readonly string[],
@@ -239,7 +241,10 @@ function syncSuppressionTail(): string {
   }]);
 }
 
-describe("print-safe-tail", () => {
+describe(
+  "print-safe-tail",
+  { timeout: PRINT_SAFE_TAIL_PROCESS_TEST_TIMEOUT_MS },
+  () => {
   it("keeps default mode backward compatible by emitting recovery evidence first", async () => {
     await expect(
       runPrintSafeTail([], [scheduledTail(), restoreTail(restoreFailure())]),
@@ -596,7 +601,8 @@ describe("print-safe-tail", () => {
       ),
     ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
   });
-});
+  },
+);
 
 describe("bounded preview-tail observer modes", () => {
   const suppression = {

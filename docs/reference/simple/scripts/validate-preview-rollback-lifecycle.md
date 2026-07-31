@@ -8,8 +8,9 @@ status labels, and commit/run bindings.
 
 ## `createPreviewCandidateIntent`
 
-Creates a v2 marker that binds the commit, operation, exact temporary values,
-and a digest of the generated candidate configuration.
+Creates the unchanged v2 marker for non-AI candidates and an AI-only v3 marker
+that also binds the exact scheduled evidence instant. Both bind the commit,
+operation, temporary values, and generated-config digest.
 
 ## `createPreviewCandidateMutationBoundary`
 
@@ -23,23 +24,23 @@ Rejects a boundary copied from another intent, run, or reviewed commit.
 
 ## `readPreviewCandidateMutationState`
 
-Reads the exact candidate-intent version before classifying artifacts. A v2
-intent with no boundary returns `not_started`; one current v2 boundary returns
+Reads the exact candidate-intent version before classifying artifacts. A v2 or
+v3 intent with no boundary returns `not_started`; one current boundary returns
 `may_have_started`. Because v1 workflows predate boundary artifacts, an exact
 v1 intent with no boundary conservatively returns `may_have_started`, allowing
 only exact normal or a frozen known v1 candidate state before the workflow
 still redeploys and freshly verifies immutable normal. A v1 intent paired with
-a v2 boundary, duplicates, expired artifacts, and foreign artifacts fail
-closed.
+a boundary, duplicates, expired artifacts, and foreign artifacts fail closed.
 
 ## `readPreviewCandidateIntentVersion`
 
-Returns only `v1` or `v2` after parsing the exact candidate intent. Hybrid or
-malformed markers fail closed. The rollback workflow combines this label with
-the mutation state in a closed matrix: only legacy `v1:may_have_started` skips
-the v2-only boundary download, while `v2:may_have_started` must download and
-verify that exact boundary. Both paths still pass provider admission, redeploy
-immutable normal, freshly verify normal, create restore proof, and close.
+Returns only `v1`, `v2`, or `v3` after parsing the exact candidate intent.
+Hybrid or malformed markers fail closed. The rollback workflow combines this
+label with the mutation state in a closed matrix: only legacy
+`v1:may_have_started` skips the config-bound boundary rules, while v2 and v3
+uncertain states download and verify the exact boundary. Every path still
+passes provider admission, redeploys immutable normal, freshly verifies
+normal, creates restore proof, and closes.
 
 ## `assertPreviewCandidateIntent`
 
@@ -52,8 +53,8 @@ candidate marker.
 
 ## `readPreviewCandidateIntentDetails`
 
-Returns only the validated provider-state details from a v2 marker, or a safe
-legacy label for an exact old v1 marker.
+Returns only the validated provider-state details and exact v2 or v3 generation,
+or a safe legacy label for an exact old v1 marker.
 
 ## `createPreviewRollbackRestoreProof`
 
@@ -87,7 +88,7 @@ Checks the fields and ordered local timestamps shared by both proof versions.
 
 ## `parseCandidateIntent`
 
-Accepts only the exact candidate marker shape.
+Accepts exact legacy v1, unchanged v2, or AI-only v3 candidate markers.
 
 ## `parseCandidateMutationBoundary`
 
@@ -99,8 +100,8 @@ Checks the one allowed same-commit follow-on operation.
 
 ## `allowedIntentTransition`
 
-Keeps old v1 markers recoverable while forbidding direct restore without v2
-operation provenance.
+Keeps old v1 markers recoverable while forbidding direct restore without
+config-bound v2 or v3 operation provenance.
 
 ## `allowedClosureTransition`
 
@@ -166,11 +167,17 @@ Checks the canonical whole-second UTC timestamps returned by GitHub.
 ## `readCandidateAcceptanceBindings`
 
 Reads the exact scenario, expiry, and AI-only attestation from a generated
-candidate configuration.
+candidate configuration. AI v3 also requires and binds the canonical scheduled
+evidence instant; v2 and every non-AI configuration reject that field.
+
+## `validCandidateAiEvidenceWindow`
+
+Validates the complete AI-only scheduled window while keeping parser failures
+inside the lifecycle's single safe failure category.
 
 ## `validAcceptanceBindings`
 
-Rechecks the temporary values embedded in a downloaded v2 intent.
+Rechecks the exact temporary values embedded in downloaded v2 or v3 intent.
 
 ## `digestCanonicalValue`
 

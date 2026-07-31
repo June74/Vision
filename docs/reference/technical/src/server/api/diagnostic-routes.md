@@ -9,6 +9,12 @@ Status admits the complete generated selector and AI-attestation pair, then
 applies a synthetic health overlay only when the selector belongs to the
 frozen six-fault tuple. Dedicated foundation and AI evidence candidates retain
 normal diagnostics.
+After session and owner admission, preview status constructs an owner-bound AI
+usage source. Every preview response reads the owner-wide active aggregate.
+Only `ai_usage` performs the single candidate-window aggregate read and
+returns created and eligible counts with the parsed canonical evidence minute.
+The response explicitly copies only those four aggregate fields; production
+omits the temporary `aiAcceptance` member and performs no aggregate read.
 
 ## `createProductionDiagnosticDependencies`
 
@@ -21,6 +27,13 @@ Returns a fresh `Date`. Status uses one shared observation instant for repositor
 ## `repositoryForOwner`
 
 Rejects any owner different from the OAuth-derived private-pilot owner and creates the owner-bound repository.
+
+## `aiUsageSourceForOwner`
+
+Runs only after authentication and owner admission. It repeats the approved
+owner check and exposes only `countActiveRequests` and
+`readCandidateRequestCounts`, preventing request-level rows or provider data
+from crossing into the route.
 
 ## `authenticateDiagnosticRequest`
 
@@ -52,4 +65,9 @@ Creates `DIAGNOSTICS_UNAVAILABLE` without retaining database, encryption, provid
 
 ## Covering tests
 
-`tests/worker/diagnostics.test.ts` covers session/CSRF boundaries, response redaction, single-time freshness, explicit correction, template availability, and the real exact-950 Worker survival contract with zero context/provider calls.
+`tests/worker/diagnostics.test.ts` covers session/CSRF boundaries,
+owner-before-aggregate ordering, preview-only aggregate shapes, candidate query
+isolation, response redaction, single-time freshness, explicit correction,
+template availability, and the real exact-950 Worker survival contract with
+zero context/provider calls. `tests/e2e/foundation-diagnostics.spec.ts` covers
+the aggregate-only deployed response shape without a production UI control.

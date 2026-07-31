@@ -1,5 +1,8 @@
 /** Defines preview-only diagnostic fault admission and pure fact overlays. */
-import { AI_HARD_STOP_CENTS } from "../budget/ai-budget";
+import {
+  AI_HARD_STOP_CENTS,
+  getChicagoBudgetMonth,
+} from "../budget/ai-budget";
 import { FOUNDATION_HEALTH_THRESHOLDS, type FoundationHealthFacts } from "./health";
 
 /** The only temporary acceptance scenarios admitted from a generated preview binding. */
@@ -49,8 +52,175 @@ type PreviewFaultBinding = {
   readonly VISION_ENV?: unknown;
   readonly PREVIEW_ACCEPTANCE_SCENARIO?: unknown;
   readonly PREVIEW_ACCEPTANCE_EXPIRES_AT?: unknown;
+  readonly PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT?: unknown;
   readonly PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED?: unknown;
 };
+
+/** One exact temporary interval in which a single AI evidence tick may run. */
+export interface PreviewAiEvidenceWindow {
+  readonly activatedAt: Date;
+  readonly evidenceScheduledAt: Date;
+  readonly expiresAt: Date;
+}
+
+const AI_EVIDENCE_LIFETIME_MILLISECONDS =
+  PREVIEW_ACCEPTANCE_MAX_LIFETIME_MINUTES * MILLISECONDS_PER_MINUTE;
+const AI_REQUEST_MARGIN_MILLISECONDS = 90_000;
+const AI_ROLLBACK_BOUND_MILLISECONDS = 60_000;
+const PERMANENT_QUARTER_HOUR_MILLISECONDS = 15 * MILLISECONDS_PER_MINUTE;
+const DAILY_SCHEDULE_UTC_MINUTE = 6 * 60 + 5;
+
+/** Creates the sole canonical 30-minute AI window before observer dispatch. */
+export function createPreviewAiEvidenceWindow(
+  activatedAt: Date,
+): PreviewAiEvidenceWindow {
+  const unadjustedActivation = validAcceptanceInstant(activatedAt);
+  const unadjustedExpiry =
+    unadjustedActivation + AI_EVIDENCE_LIFETIME_MILLISECONDS;
+  const equalityShift =
+    unadjustedExpiry % MILLISECONDS_PER_MINUTE === 0 ? 1 : 0;
+  const activation = unadjustedActivation + equalityShift;
+  const expiry = unadjustedExpiry + equalityShift;
+  const evidenceScheduledAt =
+    Math.floor(expiry / MILLISECONDS_PER_MINUTE) * MILLISECONDS_PER_MINUTE;
+  return validatedPreviewAiEvidenceWindow(
+    activation,
+    evidenceScheduledAt,
+    expiry,
+  );
+}
+
+/** Parses only the exact AI-only scheduled-at binding and snapshots its dates. */
+export function parseTemporaryPreviewAiEvidenceWindow(
+  environment: unknown,
+): PreviewAiEvidenceWindow | undefined {
+  try {
+    if (environment === null || typeof environment !== "object") {
+      throw invalidAiWindow();
+    }
+    const prototype = Object.getPrototypeOf(environment);
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw invalidAiWindow();
+    }
+    const record = environment as Readonly<Record<string, unknown>>;
+    const visionEnv = ownDataValue(record, "VISION_ENV");
+    const selector = ownDataValue(record, "PREVIEW_ACCEPTANCE_SCENARIO");
+    const scheduled = ownDataValue(
+      record,
+      "PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT",
+    );
+    const expires = ownDataValue(record, "PREVIEW_ACCEPTANCE_EXPIRES_AT");
+    if (selector !== "ai_usage") {
+      if (scheduled !== undefined) throw invalidAiWindow();
+      return undefined;
+    }
+    if (
+      visionEnv !== "preview" ||
+      !canonicalInstant(scheduled) ||
+      !canonicalInstant(expires)
+    ) {
+      throw invalidAiWindow();
+    }
+    const expiry = Date.parse(expires);
+    const evidenceScheduledAt = Date.parse(scheduled);
+    const activation = expiry - AI_EVIDENCE_LIFETIME_MILLISECONDS;
+    return validatedPreviewAiEvidenceWindow(
+      activation,
+      evidenceScheduledAt,
+      expiry,
+    );
+  } catch {
+    throw invalidAiWindow();
+  }
+}
+
+/** Requires a candidate to retain the full live-request margin. */
+export function assertPreviewAiRequestMargin(
+  now: Date,
+  evidenceScheduledAt: Date,
+): void {
+  const current = validAcceptanceInstant(now);
+  const evidence = validAcceptanceInstant(evidenceScheduledAt);
+  if (evidence - current < AI_REQUEST_MARGIN_MILLISECONDS) {
+    throw new Error(INVALID_TIMING);
+  }
+}
+
+/** Validates the whole canonical AI interval and returns detached frozen dates. */
+function validatedPreviewAiEvidenceWindow(
+  activation: number,
+  evidenceScheduledAt: number,
+  expiry: number,
+): PreviewAiEvidenceWindow {
+  if (
+    !Number.isFinite(activation) ||
+    !Number.isFinite(evidenceScheduledAt) ||
+    !Number.isFinite(expiry) ||
+    expiry - activation !== AI_EVIDENCE_LIFETIME_MILLISECONDS ||
+    evidenceScheduledAt % MILLISECONDS_PER_MINUTE !== 0 ||
+    Math.floor(expiry / MILLISECONDS_PER_MINUTE) * MILLISECONDS_PER_MINUTE !==
+      evidenceScheduledAt ||
+    !(activation < evidenceScheduledAt) ||
+    !(evidenceScheduledAt < expiry) ||
+    !(expiry < evidenceScheduledAt + MILLISECONDS_PER_MINUTE)
+  ) {
+    throw new Error(INVALID_TIMING);
+  }
+  const activatedDate = new Date(activation);
+  const evidenceDate = new Date(evidenceScheduledAt);
+  const expiresDate = new Date(expiry);
+  if (getChicagoBudgetMonth(activatedDate) !== getChicagoBudgetMonth(expiresDate)) {
+    throw new Error(INVALID_TIMING);
+  }
+  assertAvailableAcceptanceInterval(activation, expiry);
+  assertAiRollbackAvoidsPermanentSchedules(expiresDate);
+  return Object.freeze({
+    activatedAt: Object.freeze(new Date(activation)),
+    evidenceScheduledAt: Object.freeze(new Date(evidenceScheduledAt)),
+    expiresAt: Object.freeze(new Date(expiry)),
+  });
+}
+
+/** Prevents post-expiry rollback from crossing permanent scheduled work. */
+export function assertAiRollbackAvoidsPermanentSchedules(
+  expiresAt: Date,
+): void {
+  const expiry = validAcceptanceInstant(expiresAt);
+  const rollbackEndsAt = expiry + AI_ROLLBACK_BOUND_MILLISECONDS;
+  const nextQuarterHour =
+    Math.floor(expiry / PERMANENT_QUARTER_HOUR_MILLISECONDS + 1) *
+    PERMANENT_QUARTER_HOUR_MILLISECONDS;
+  if (nextQuarterHour < rollbackEndsAt) throw new Error(INVALID_TIMING);
+
+  const firstDay = Math.floor(expiry / MILLISECONDS_PER_DAY) - 1;
+  const lastDay = Math.floor(rollbackEndsAt / MILLISECONDS_PER_DAY) + 1;
+  for (let day = firstDay; day <= lastDay; day += 1) {
+    const daily =
+      day * MILLISECONDS_PER_DAY +
+      DAILY_SCHEDULE_UTC_MINUTE * MILLISECONDS_PER_MINUTE;
+    if (daily > expiry && daily < rollbackEndsAt) {
+      throw new Error(INVALID_TIMING);
+    }
+  }
+}
+
+/** Reads one own enumerable data property without invoking accessors. */
+function ownDataValue(
+  record: Readonly<Record<string, unknown>>,
+  key: string,
+): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(record, key);
+  return descriptor?.enumerable === true && "value" in descriptor
+    ? descriptor.value
+    : undefined;
+}
+
+/** Accepts only one byte-stable UTC timestamp string. */
+function canonicalInstant(value: unknown): value is string {
+  if (typeof value !== "string" || !CANONICAL_INSTANT.test(value)) return false;
+  const instant = Date.parse(value);
+  return Number.isFinite(instant) && new Date(instant).toISOString() === value;
+}
 
 /** Returns the exact maximum lifetime admitted for one acceptance selector. */
 export function previewAcceptanceMaxLifetimeMinutes(
@@ -267,4 +437,9 @@ function invalidScenario(): Error {
 /** Uses one constant error so malformed AI attestation cannot disclose its input. */
 function invalidAiAttestation(): Error {
   return new Error("Temporary preview AI Gateway attestation is invalid.");
+}
+
+/** Uses one constant error so malformed AI-window values cannot disclose input. */
+function invalidAiWindow(): Error {
+  return new Error("Temporary preview AI evidence window is invalid.");
 }

@@ -22,7 +22,7 @@ const TEMPORARY_ACTIVE_SURFACE_PATTERNS = [
   /prepare-preview-acceptance-deploy-config/u,
   /\b(?:foundationProbe|aiUsageEvidence|temporaryFaultR2Upload)\b/u,
   /\b(?:candidate selector|generated selector|generated candidate|generated preview candidate|AI[- ]attestation|six[- ]fault)\b/u,
-  /eight\s+temporary selectors/u,
+  /eleven\s+temporary selectors/u,
   /temporary Gateway attestation/u,
   /temporary restore database\s+binding/u,
 ] as const;
@@ -719,6 +719,7 @@ const ACTIVE_SURFACE_ROOTS = [
 const EXPECTED_SHARED_RESIDUE_PATHS = [
   ".github/workflows/preview.yml",
   ...ACTIVE_OPERATIONS_SHARED_PATHS,
+  "docs/reference/simple/scripts/run-preview-acceptance-controller.md",
   "docs/reference/simple/scripts/safe-tail-classifier.md",
   "docs/reference/simple/scripts/validate-preview-deploy-config.md",
   "docs/reference/simple/src/jobs/scheduled.md",
@@ -727,6 +728,7 @@ const EXPECTED_SHARED_RESIDUE_PATHS = [
   "docs/reference/simple/src/server/api/diagnostic-routes.md",
   "docs/reference/simple/src/server/client-binding-boundary.md",
   "docs/reference/simple/src/server/env.md",
+  "docs/reference/technical/scripts/run-preview-acceptance-controller.md",
   "docs/reference/technical/scripts/safe-tail-classifier.md",
   "docs/reference/technical/scripts/validate-preview-deploy-config.md",
   "docs/reference/technical/src/jobs/scheduled.md",
@@ -976,7 +978,7 @@ describe("post-acceptance temporary surface cleanup", () => {
       "Status validates the complete candidate selector and AI attestation.",
       "A generated preview candidate routes one dedicated evidence family.",
       'PREVIEW_ACCEPTANCE_SCENARIO: "foundation_probe"',
-      "The eight\ntemporary selectors are preview-only.",
+      "The\neleven temporary selectors are preview-only.",
       "temporary Gateway attestation",
       "temporary restore database\nbinding",
     ];
@@ -1009,11 +1011,12 @@ describe("post-acceptance temporary surface cleanup", () => {
       read("docs/reference/technical/src/server/env.md"),
     ]);
 
-    expect(simple).toContain("The nine");
-    expect(simple).toContain("temporary selectors are preview-only");
+    expect(simple).toContain("eleven temporary selectors are preview-only");
     expect(simple).toContain("temporary Gateway attestation");
+    expect(simple).toContain("canonical UTC evidence minute");
     expect(simple).toContain("temporary restore database");
     expect(technical).toContain("PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED");
+    expect(technical).toContain("PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT");
     expect(technical).toContain("PREVIEW_RESTORE_DATABASE_URL");
     expect(
       [simple, technical].filter(containsTemporaryActiveSurface),
@@ -1265,8 +1268,8 @@ describe("post-acceptance temporary surface cleanup", () => {
     );
     expect(TEMPORARY_PATHS).toHaveLength(60);
     expect(new Set(TEMPORARY_PATHS)).toHaveLength(60);
-    expect(EXPECTED_SHARED_RESIDUE_PATHS).toHaveLength(50);
-    expect(new Set(EXPECTED_SHARED_RESIDUE_PATHS)).toHaveLength(50);
+    expect(EXPECTED_SHARED_RESIDUE_PATHS).toHaveLength(52);
+    expect(new Set(EXPECTED_SHARED_RESIDUE_PATHS)).toHaveLength(52);
     expect(new Set(PERMANENT_PATHS)).toHaveLength(PERMANENT_PATHS.length);
     expect(referenceInventory(TEMPORARY_PATHS, "simple")).toEqual(
       referenceInventory(TEMPORARY_PATHS, "technical"),
@@ -1382,7 +1385,7 @@ describe("post-acceptance temporary surface cleanup", () => {
     expect(secretBundleTest).toContain("client secret-bundle boundary");
     expect(protectedSentinelTest).toContain("protected sentinel");
     expect(safeTailClassifierTest).toContain("safe tail");
-    expect(printSafeTailTest).toContain('describe("print-safe-tail"');
+    expect(printSafeTailTest).toMatch(/describe\(\s*"print-safe-tail"/u);
     expect(historicalPlan).toContain("Task 8: Remove Temporary Acceptance Surfaces");
     expect(setbackIndex).toContain("# Setback index");
     expect(credentialHistory).toContain("# Credential and key change log");

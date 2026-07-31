@@ -68,6 +68,7 @@ describe("client secret-bundle boundary", () => {
     expect(RUNTIME_CLIENT_FORBIDDEN_BINDING_NAMES).toEqual(
       expect.arrayContaining([
         "DATABASE_USAGE_WARNING_BYTES",
+        "PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT",
         "PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED",
         "PREVIEW_ACCEPTANCE_SCENARIO",
         "PREVIEW_RESTORE_DATABASE_URL",

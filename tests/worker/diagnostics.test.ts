@@ -53,6 +53,9 @@ function sessionDependencies(
 function createDiagnosticHarness(
   options: {
     authenticated?: boolean;
+    activeRequestCount?: number;
+    createdRequestCount?: number;
+    eligibleSettledRequestCount?: number;
     databaseUsageWarning?: boolean;
     r2UsageWarning?: boolean;
     aiMonthlyCents?: number;
@@ -117,19 +120,50 @@ function createDiagnosticHarness(
     if (ownerId !== OWNER_ID) throw new Error("wrong owner");
     return repository;
   });
+  const countActiveRequests = vi.fn(
+    async () => options.activeRequestCount ?? 0,
+  );
+  const readCandidateRequestCounts = vi.fn(async () =>
+    ({
+      createdRequestCount: options.createdRequestCount ?? 1,
+      eligibleSettledRequestCount:
+        options.eligibleSettledRequestCount ?? 1,
+      reservationId: "must-not-leak",
+      idempotencyKey: "must-not-leak",
+      model: "must-not-leak",
+      providerRequestId: "must-not-leak",
+      tokenCount: 9_999,
+      prompt: "must-not-leak",
+      response: "must-not-leak",
+      rows: ["must-not-leak"],
+    }) as never,
+  );
+  const aiUsageSourceForOwner = vi.fn((ownerId: string) => {
+    if (ownerId !== OWNER_ID) throw new Error("wrong owner");
+    return { countActiveRequests, readCandidateRequestCounts };
+  });
   const dependencies: DiagnosticRouteDependencies = {
     ...sessionDependencies(
       options.authenticated ?? true,
       options.sessionOwnerId ?? OWNER_ID,
     ),
     repositoryForOwner,
+    aiUsageSourceForOwner,
   };
   const app = createApp({
     diagnostic: dependencies,
     createRequestId: () => "req_diagnostics",
     logger: vi.fn(),
   });
-  return { app, dependencies, repository, repositoryForOwner };
+  return {
+    app,
+    dependencies,
+    repository,
+    repositoryForOwner,
+    aiUsageSourceForOwner,
+    countActiveRequests,
+    readCandidateRequestCounts,
+  };
 }
 
 function request(path: string, init: RequestInit = {}): Request {
@@ -218,6 +252,117 @@ describe("Vision Worker diagnostic routes", () => {
     });
   });
 
+  it("returns only the active aggregate in normal preview diagnostics", async () => {
+    const {
+      app,
+      aiUsageSourceForOwner,
+      countActiveRequests,
+      readCandidateRequestCounts,
+    } = createDiagnosticHarness({ activeRequestCount: 2 });
+
+    const response = await app.fetch(request("/api/diagnostics/status"), {
+      VISION_ENV: "preview",
+    } as Env);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      aiAcceptance: {
+        activeRequestCount: 2,
+        createdRequestCount: null,
+        eligibleSettledRequestCount: null,
+        evidenceScheduledAt: null,
+      },
+    });
+    expect(aiUsageSourceForOwner).toHaveBeenCalledOnce();
+    expect(aiUsageSourceForOwner).toHaveBeenCalledWith(OWNER_ID);
+    expect(countActiveRequests).toHaveBeenCalledOnce();
+    expect(readCandidateRequestCounts).not.toHaveBeenCalled();
+  });
+
+  it("returns one allowlisted atomic candidate aggregate only for ai_usage", async () => {
+    const {
+      app,
+      countActiveRequests,
+      readCandidateRequestCounts,
+    } = createDiagnosticHarness({
+      activeRequestCount: 0,
+      createdRequestCount: 1,
+      eligibleSettledRequestCount: 1,
+    });
+    const evidenceScheduledAt = "2026-07-25T17:15:00.000Z";
+    const response = await app.fetch(request("/api/diagnostics/status"), {
+      VISION_ENV: "preview",
+      PREVIEW_ACCEPTANCE_SCENARIO: "ai_usage",
+      PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-25T17:15:30.000Z",
+      PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT: evidenceScheduledAt,
+      PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true",
+    } as Env);
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload).toMatchObject({
+      aiAcceptance: {
+        activeRequestCount: 0,
+        createdRequestCount: 1,
+        eligibleSettledRequestCount: 1,
+        evidenceScheduledAt,
+      },
+    });
+    expect(Object.keys((payload as { aiAcceptance: object }).aiAcceptance)).toEqual([
+      "activeRequestCount",
+      "createdRequestCount",
+      "eligibleSettledRequestCount",
+      "evidenceScheduledAt",
+    ]);
+    expect(countActiveRequests).toHaveBeenCalledOnce();
+    expect(readCandidateRequestCounts).toHaveBeenCalledOnce();
+    expect(JSON.stringify(payload)).not.toMatch(
+      /reservationId|idempotencyKey|model|providerRequestId|tokenCount|prompt|response|rows|must-not-leak/u,
+    );
+  });
+
+  it("omits AI acceptance and performs no aggregate work outside preview", async () => {
+    const {
+      app,
+      aiUsageSourceForOwner,
+      countActiveRequests,
+      readCandidateRequestCounts,
+    } = createDiagnosticHarness();
+
+    const response = await app.fetch(
+      request("/api/diagnostics/status"),
+      { VISION_ENV: "production" } as Env,
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload).not.toHaveProperty("aiAcceptance");
+    expect(aiUsageSourceForOwner).not.toHaveBeenCalled();
+    expect(countActiveRequests).not.toHaveBeenCalled();
+    expect(readCandidateRequestCounts).not.toHaveBeenCalled();
+  });
+
+  it("performs zero aggregate work for unauthenticated and wrong-owner preview requests", async () => {
+    for (const options of [
+      { authenticated: false },
+      { sessionOwnerId: "usr_not_the_private_pilot" },
+    ]) {
+      const {
+        app,
+        aiUsageSourceForOwner,
+        countActiveRequests,
+        readCandidateRequestCounts,
+      } = createDiagnosticHarness(options);
+      await app.fetch(request("/api/diagnostics/status"), {
+        VISION_ENV: "preview",
+      } as Env);
+
+      expect(aiUsageSourceForOwner).not.toHaveBeenCalled();
+      expect(countActiveRequests).not.toHaveBeenCalled();
+      expect(readCandidateRequestCounts).not.toHaveBeenCalled();
+    }
+  });
+
   it.each([
     [
       "queue_delayed",
@@ -291,6 +436,12 @@ describe("Vision Worker diagnostic routes", () => {
           r2UsageWarning: false,
           safeErrorCode: null,
           ...expectedOverrides,
+        },
+        aiAcceptance: {
+          activeRequestCount: 0,
+          createdRequestCount: null,
+          eligibleSettledRequestCount: null,
+          evidenceScheduledAt: null,
         },
       });
       expect(JSON.stringify(payload)).not.toMatch(
@@ -457,6 +608,12 @@ describe("Vision Worker diagnostic routes", () => {
         r2UsageWarning: false,
         safeErrorCode: null,
         warningCodes: [],
+      },
+      aiAcceptance: {
+        activeRequestCount: 0,
+        createdRequestCount: null,
+        eligibleSettledRequestCount: null,
+        evidenceScheduledAt: null,
       },
     });
     expect(eventsResponse.status).toBe(200);

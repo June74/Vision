@@ -37,6 +37,55 @@ describe("RuntimeEnvSchema", () => {
     expect(() => RuntimeEnvSchema.parse({})).toThrow();
   });
 
+  it("admits the canonical AI evidence instant only on the AI candidate", () => {
+    const runtime = {
+      VISION_ENV: "preview",
+      DATABASE_URL: "postgresql://vision_app:secret@db.example.test/vision",
+      KEY_ENCRYPTION_KEY: encodeBase64Url(new Uint8Array(32)),
+      DATABASE_USAGE_WARNING_BYTES: "400000000",
+      R2_USAGE_WARNING_BYTES: "8000000000",
+      R2_USAGE_WARNING_OBJECTS: "100",
+      PREVIEW_ACCEPTANCE_SCENARIO: "ai_usage",
+      PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-31T20:15:30.000Z",
+      PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT:
+        "2026-07-31T20:15:00.000Z",
+      PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true",
+    };
+
+    expect(RuntimeEnvSchema.parse(runtime)).toMatchObject({
+      PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT:
+        "2026-07-31T20:15:00.000Z",
+    });
+
+    const { PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT, ...missing } =
+      runtime;
+    expect(() => RuntimeEnvSchema.parse(missing)).toThrow(/AI-candidate-only/u);
+    expect(PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT).toBe(
+      "2026-07-31T20:15:00.000Z",
+    );
+
+    for (const scheduledAt of [
+      "malformed",
+      "2026-07-31T20:15:01.000Z",
+      "2026-07-31T20:15:00Z",
+    ]) {
+      expect(() =>
+        RuntimeEnvSchema.parse({
+          ...runtime,
+          PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT: scheduledAt,
+        }),
+      ).toThrow();
+    }
+
+    expect(() =>
+      RuntimeEnvSchema.parse({
+        ...runtime,
+        PREVIEW_ACCEPTANCE_SCENARIO: "foundation_probe",
+        PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: undefined,
+      }),
+    ).toThrow(/AI-candidate-only/u);
+  });
+
   it("accepts only a database URL authenticated as the vision application role", () => {
     expect(
       RuntimeEnvSchema.parse({

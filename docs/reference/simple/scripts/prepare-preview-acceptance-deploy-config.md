@@ -28,6 +28,8 @@ Validates one context variant and rebuilds a new plain object in authoritative
 key order. Candidate dispatch timestamps must be ordered; a zero-width
 interval is valid. Evidence families must match their expected outcomes, and a
 maintenance context must carry exactly one canonical scheduled tick.
+Only the AI-success observe variant can carry its required evidence time and
+expiry; every other observe variant rejects both fields in its type and parser.
 Normal deployment requires a matched baseline pair or two positive lifecycle
 references so the workflow can prove there is no open candidate.
 
@@ -80,3 +82,8 @@ fixed acceptance artifact, and refuses to overwrite an existing file. Workflow
 verification emits only fixed snake-case scalar outputs, including evidence
 family, expected outcome, maintenance tick, and the single
 restore-admission gate name.
+
+## `parseCanonicalAiWindow`
+
+Reuses the strict domain parser for the scheduled-at and expiry values carried
+inside an AI observe or deploy context.

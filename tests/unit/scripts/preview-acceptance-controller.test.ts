@@ -125,6 +125,42 @@ function harness(
 }
 
 describe("preview acceptance controller", () => {
+  it("creates one AI window before observer dispatch and reuses it exactly", async () => {
+    const fixture = harness();
+
+    await runPreviewAcceptanceController(
+      {
+        family: "ai_usage",
+        reviewedCommit: SHA,
+        expiresAt: "2026-07-30T18:28:59.999Z",
+        expectation: { kind: "ai_succeeded" },
+      },
+      fixture.dependencies,
+    );
+
+    const observe = JSON.parse(fixture.dispatches[0]!.context) as Record<
+      string,
+      unknown
+    >;
+    const candidate = JSON.parse(fixture.dispatches[1]!.context) as Record<
+      string,
+      unknown
+    >;
+    expect(observe).toMatchObject({
+      kind: "observe",
+      evidenceFamily: "ai_usage",
+      expectedOutcome: "ai_succeeded",
+      evidenceScheduledAt: "2026-07-30T18:28:00.000Z",
+      expiresAt: "2026-07-30T18:28:59.999Z",
+    });
+    expect(candidate).toMatchObject({
+      kind: "deploy_ai",
+      aiZeroActiveGate: "verified",
+      evidenceScheduledAt: observe.evidenceScheduledAt,
+      expiresAt: observe.expiresAt,
+    });
+  });
+
   it("deploys and attributes the candidate before requesting approval or acting", async () => {
     const order: string[] = [];
     const fixture = harness({

@@ -20,7 +20,11 @@ import {
 } from "./resolve-preview-observer-run";
 import type { PreviewObserverAcceptanceExpectation } from "./safe-tail-classifier";
 import { assertSyncSuppressionMargin } from "./validate-preview-sync-acceptance";
-import { TEMPORARY_PREVIEW_FAULT_SCENARIOS } from "../src/domain/operations/temporary-preview-fault";
+import {
+  createPreviewAiEvidenceWindow,
+  type PreviewAiEvidenceWindow,
+  TEMPORARY_PREVIEW_FAULT_SCENARIOS,
+} from "../src/domain/operations/temporary-preview-fault";
 
 const FAILURE = "Preview acceptance controller failed closed.";
 const POLL_MILLISECONDS = 5_000;
@@ -452,7 +456,14 @@ export async function runPreviewAcceptanceController(
 ): Promise<void> {
   input = snapshotControllerInput(input);
   const reviewedCommit = validCommit(input.reviewedCommit);
-  const expiresAt = canonicalDate(input.expiresAt);
+  const requestedExpiresAt = canonicalDate(input.expiresAt);
+  const aiWindow =
+    input.family === "ai_usage"
+      ? createPreviewAiEvidenceWindow(
+          new Date(requestedExpiresAt.getTime() - 30 * 60_000),
+        )
+      : undefined;
+  const expiresAt = aiWindow?.expiresAt ?? requestedExpiresAt;
   /** Bounds each pre-signal child by both observer and expiry windows. */
   const nextPreSignalDeadline = (): number => {
     const wall = safeNow(dependencies.wallNow());
@@ -690,6 +701,7 @@ export async function runPreviewAcceptanceController(
     const observeContext = createObserveContext(
       input,
       reviewedCommit,
+      aiWindow,
     );
     await dispatch(observeContext, nextPreSignalDeadline());
     const observerCompletedAt = safeNow(dependencies.wallNow());
@@ -739,6 +751,7 @@ export async function runPreviewAcceptanceController(
       observerStartedAt,
       observerCompletedAt,
       restoreAdmission,
+      aiWindow,
     ), nextPreSignalDeadline());
     const candidateDispatchReturnedAt = safeNow(dependencies.wallNow());
     const attributedCandidateRunRef = candidate.runRef;
@@ -1236,6 +1249,7 @@ async function waitForMaintenanceUniqueness(
 function createObserveContext(
   input: PreviewAcceptanceControllerInput,
   reviewedCommit: string,
+  aiWindow: PreviewAiEvidenceWindow | undefined,
 ): PreviewAcceptanceContext {
   const expectedOutcome = input.expectation.kind;
   const base = {
@@ -1278,6 +1292,16 @@ function createObserveContext(
       expectedOutcome === "role_probe_succeeded") ||
     (input.family === "restore" && expectedOutcome === "restore_succeeded");
   if (!matching) fail();
+  if (input.family === "ai_usage") {
+    if (aiWindow === undefined) fail();
+    return Object.freeze({
+      ...base,
+      evidenceFamily: "ai_usage",
+      expectedOutcome: "ai_succeeded",
+      evidenceScheduledAt: aiWindow.evidenceScheduledAt.toISOString(),
+      expiresAt: aiWindow.expiresAt.toISOString(),
+    });
+  }
   return Object.freeze(base) as PreviewAcceptanceContext;
 }
 
@@ -1292,6 +1316,7 @@ function createCandidateContext(
   observerStartedAt: Date,
   observerCompletedAt: Date,
   restoreAdmission: "verified" | undefined,
+  aiWindow: PreviewAiEvidenceWindow | undefined,
 ): PreviewAcceptanceContext {
   const base = {
     version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
@@ -1317,6 +1342,16 @@ function createCandidateContext(
       ...base,
       kind: "deploy_restore",
       restoreAdmissionGate: "verified",
+    });
+  }
+  if (operation === "deploy_ai") {
+    if (aiWindow === undefined) fail();
+    return Object.freeze({
+      ...base,
+      kind: "deploy_ai",
+      aiZeroActiveGate: "verified",
+      evidenceScheduledAt: aiWindow.evidenceScheduledAt.toISOString(),
+      expiresAt: aiWindow.expiresAt.toISOString(),
     });
   }
   return Object.freeze(base) as PreviewAcceptanceContext;

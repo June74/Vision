@@ -4,9 +4,11 @@ Checks the restore-pair names.
 
 ## `validatePreviewProviderStateForCandidateIntent`
 Derives both binding and schedule checks from the commit-bound candidate
-intent. It requires the intent's exact scenario, expiry, AI-only attestation,
-and restore-only secret names. Synchronization suppression keeps the permanent
-schedules; each other candidate also requires the one-minute schedule.
+intent. It requires the intent's exact scenario, expiry, version-specific AI
+bindings, and restore-only secret names. Historical v2 AI requires its recorded
+attestation but no scheduled binding; v3 AI requires the exact recorded
+scheduled value. Synchronization suppression keeps the permanent schedules;
+each other candidate also requires the one-minute schedule.
 
 ## `validatePreviewProviderStateForRollback`
 
@@ -18,6 +20,9 @@ side of deployment; unknown states fail closed.
 ## `matchesCandidateProviderBindings`
 
 Checks the permanent inventory plus every intent-derived temporary binding.
+Historical v2 AI requires only its attestation binding, while v3 AI requires
+the exact stored evidence-scheduled-at value; it is never re-derived from
+expiry.
 
 ## `matchesProviderBinding`
 
@@ -26,7 +31,8 @@ Checks one exact provider name, type, and optional non-secret text value.
 ## `matchesAnyLegacyCandidateProviderState`
 
 Allows an exact known candidate inventory while safely recovering an old v1
-intent that did not record its operation. Its expiry must parse to a finite
+intent that did not record its operation. A v1 inventory whose selector is AI
+must still carry the historical gateway-limit attestation. Its expiry must parse to a finite
 instant and round-trip exactly as a UTC timestamp with millisecond precision.
 
 ## `matchesNormalProviderHealthAndSchedules`
@@ -68,7 +74,8 @@ private bucket, Queue behavior, and two normal schedules.
 ## `validatePreviewAcceptanceDeployConfig`
 
 Checks a generated candidate for exactly one expected selector, the exact
-selector-specific schedule set, and the AI-only attestation. Synchronization
+selector-specific schedule set, and the AI-only attestation and evidence
+instant. Synchronization
 suppression retains only the two normal schedules; every other acceptance
 candidate adds the temporary one-minute schedule.
 
