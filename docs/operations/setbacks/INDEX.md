@@ -2,8 +2,9 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
-| [SB-20260731-182141-task3-complete-check-failure](incidents/2026-07-31T182141Z-task3-complete-check-failure.md) | open | 2026-07-31T18:21:41.0720814Z | Phase B Task 3 complete repository verification | Task 3 combined changes failed the complete repository check |
-| [SB-20260731-181521-full-check-launch-timeout](incidents/2026-07-31T181521Z-full-check-launch-timeout.md) | open | 2026-07-31T18:19:00.0422643Z | Phase B Task 3 complete repository verification | Full-check wrapper used an insufficient timeout |
+| [SB-20260731-182610-cleanup-cross-lane-residue-inventory](incidents/2026-07-31T182610Z-cleanup-cross-lane-residue-inventory.md) | closed | 2026-07-31T18:27:33.1690763Z | Phase B Task 3 full-check regression repair | Cleanup test missed a test file changed by the parallel restore lane |
+| [SB-20260731-182141-task3-complete-check-failure](incidents/2026-07-31T182141Z-task3-complete-check-failure.md) | closed | 2026-07-31T18:34:34.1475347Z | Phase B Task 3 complete repository verification | Task 3 combined changes failed the complete repository check |
+| [SB-20260731-181521-full-check-launch-timeout](incidents/2026-07-31T181521Z-full-check-launch-timeout.md) | closed | 2026-07-31T18:34:34.1475347Z | Phase B Task 3 complete repository verification | Full-check wrapper used an insufficient timeout |
 | [SB-20260731-181336-wrangler-debug-log-permission](incidents/2026-07-31T181336Z-wrangler-debug-log-permission.md) | closed | 2026-07-31T18:13:36.9511937Z | Phase B Task 3 combined root verification | Build could not write Wrangler's optional external debug log |
 | [SB-20260731-181302-build-evidence-parallel-race](incidents/2026-07-31T181302Z-build-evidence-parallel-race.md) | closed | 2026-07-31T18:14:41.3924364Z | Phase B Task 3 combined root verification | Release evidence raced the production build |
 | [SB-20260731-181132-setback-patch-path-typo](incidents/2026-07-31T181132Z-setback-patch-path-typo.md) | closed | 2026-07-31T18:11:32.0116919Z | Phase B Task 3 setback-ledger update | Setback patch mistyped the Windows user directory |

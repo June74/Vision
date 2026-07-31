@@ -1,8 +1,8 @@
 # SB-20260731-181521-full-check-launch-timeout: Full-check wrapper used an insufficient timeout
 
-- **Status:** open
+- **Status:** closed
 - **First observed:** 2026-07-31T18:15:21.9412916Z
-- **Last observed:** 2026-07-31T18:19:00.0422643Z
+- **Last observed:** 2026-07-31T18:34:34.1475347Z
 - **Phase/task:** Phase B Task 3 complete repository verification
 - **Environment:** Local test runner
 - **Version/commit:** 0c3ea58 plus verified lifecycle and ledger edits
@@ -47,3 +47,5 @@ No provider, network, environment, secret, staging, or commit was touched.
 - 2026-07-31T18:19:00.0422643Z: Recurred because the next launch accidentally
   reused the one-second timeout instead of the documented 600000-millisecond
   bound. The mistake was caught before treating the result as evidence.
+- 2026-07-31T18:34:34.1475347Z: Closed after the complete check ran within the
+  verified 600000-millisecond bound and returned the authoritative exit code 0.
