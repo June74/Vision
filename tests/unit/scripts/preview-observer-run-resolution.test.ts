@@ -497,6 +497,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createGitHubObserverResolutionDependencies,
   parsePreviewObserverRunArguments,
+  readPreviewAiObserverState,
   readPreviewMaintenanceObserverState,
   readPreviewSignalObserverState,
   readPreviewTwoJobObserverState,
@@ -506,6 +507,50 @@ import {
   type PreviewObserverCommandRunner,
   type PreviewObserverResolutionDependencies,
 } from "../../../scripts/resolve-preview-observer-run";
+
+describe("AI observer metadata state", () => {
+  it("requires the exact concurrent signal and uniqueness jobs", async () => {
+    const candidate = run();
+    const signal = job("Capture ai_usage signal");
+    const uniqueness = job("Capture ai_usage uniqueness");
+    const deps = dependencies([], [signal, uniqueness]);
+    const handle = candidate.id as Parameters<
+      typeof readPreviewAiObserverState
+    >[0];
+
+    await expect(
+      readPreviewAiObserverState(handle, deps),
+    ).resolves.toStrictEqual({
+      signal: "listening",
+      uniqueness: "listening",
+      signalObservedAt: null,
+    });
+
+    const incomplete = dependencies([], [signal]);
+    await expect(
+      readPreviewAiObserverState(handle, incomplete),
+    ).rejects.toThrow("Preview observer metadata is invalid.");
+  });
+
+  it("returns only allowlisted signal state and listener completion time", async () => {
+    const candidate = run();
+    const signal = job("Capture ai_usage signal", "completed", "success");
+    signal.steps[0]!.completed_at = "2026-07-30T18:00:06Z";
+    const uniqueness = job("Capture ai_usage uniqueness");
+    const deps = dependencies([], [signal, uniqueness]);
+
+    await expect(
+      readPreviewAiObserverState(
+        candidate.id as Parameters<typeof readPreviewAiObserverState>[0],
+        deps,
+      ),
+    ).resolves.toStrictEqual({
+      signal: "succeeded",
+      uniqueness: "listening",
+      signalObservedAt: new Date("2026-07-30T18:00:06.000Z"),
+    });
+  });
+});
 
 const SHA = "a".repeat(40);
 const START = new Date("2026-07-30T18:00:00.000Z");

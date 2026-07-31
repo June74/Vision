@@ -11,6 +11,7 @@ import {
 } from "./prepare-preview-acceptance-deploy-config";
 import {
   createGitHubObserverResolutionDependencies,
+  readPreviewAiObserverState,
   readPreviewMaintenanceObserverState,
   readPreviewSignalObserverState,
   readPreviewTwoJobObserverState,
@@ -41,6 +42,8 @@ const CLOSURE_WORKFLOW_MILLISECONDS =
   15 * 60_000 + WORKFLOW_SETTLEMENT_MARGIN_MILLISECONDS;
 const LOCAL_SIGNAL_MILLISECONDS = 50_000;
 const PROVIDER_SIGNAL_MILLISECONDS = 59_000;
+const AI_UNIQUENESS_MARGIN_MILLISECONDS = 3 * 60_000;
+const AI_ABSOLUTE_TAIL_MILLISECONDS = 63 * 60_000;
 const PROVIDER_TIMESTAMP_UNCERTAINTY_MILLISECONDS = 999;
 const APPROVAL_MILLISECONDS = 60_000;
 const EXPIRY_BUFFER_MILLISECONDS = 60_000;
@@ -614,7 +617,11 @@ export async function runPreviewAcceptanceController(
       deadlineMonotonic,
       signal === undefined
         ? undefined
-        : () => assertRollbackDispatchDeadline(signal, dependencies),
+        : () => assertRollbackDispatchDeadline(
+            signal,
+            expiresAt,
+            dependencies,
+          ),
     );
     rollbackRunRef = rollback.runRef;
     const completedRollbackRunRef = rollback.runRef;
@@ -688,6 +695,25 @@ export async function runPreviewAcceptanceController(
 
   try {
     const observerStartedAt = safeNow(dependencies.wallNow());
+    const aiUniquenessClosesAt =
+      input.family === "ai_usage"
+        ? (() => {
+            const derived = new Date(
+              expiresAt.getTime() + AI_UNIQUENESS_MARGIN_MILLISECONDS,
+            );
+            if (!Number.isFinite(Date.prototype.getTime.call(derived))) {
+              fail();
+            }
+            return canonicalDate(derived.toISOString());
+          })()
+        : undefined;
+    if (
+      aiUniquenessClosesAt !== undefined &&
+      aiUniquenessClosesAt.getTime() >
+        observerStartedAt.getTime() + AI_ABSOLUTE_TAIL_MILLISECONDS
+    ) {
+      fail();
+    }
     const observerClosesAt =
       input.family === "calendar_maintenance"
         ? maintenanceObserverClosesAt(input.expectation)
@@ -847,10 +873,13 @@ export async function runPreviewAcceptanceController(
     const sampledWall = safeNow(dependencies.wallNow());
     const sampledMonotonic = safeMonotonic(dependencies.monotonicNow());
     if (actionCompletedAt.getTime() > sampledWall.getTime()) fail();
-    const absoluteNoSignalDeadline = new Date(Math.min(
-      actionCompletedAt.getTime() + UNIQUENESS_MILLISECONDS,
-      expiresAt.getTime() - EXPIRY_BUFFER_MILLISECONDS,
-    ));
+    const absoluteNoSignalDeadline =
+      input.family === "ai_usage"
+        ? new Date(expiresAt.getTime())
+        : new Date(Math.min(
+            actionCompletedAt.getTime() + UNIQUENESS_MILLISECONDS,
+            expiresAt.getTime() - EXPIRY_BUFFER_MILLISECONDS,
+          ));
     const remainingNoSignalMilliseconds =
       absoluteNoSignalDeadline.getTime() - sampledWall.getTime();
     if (remainingNoSignalMilliseconds < 0) fail();
@@ -870,21 +899,36 @@ export async function runPreviewAcceptanceController(
       if (!isTwoJobFamily(input.family)) fail();
       await waitForNoSignalUniqueness(
         observer,
-        nextVerificationDeadline(),
+        input.family === "ai_usage" && aiUniquenessClosesAt !== undefined
+          ? aiObserverVerificationDeadline(
+              aiUniquenessClosesAt,
+              observerStartedAt,
+              dependencies,
+            )
+          : nextVerificationDeadline(),
         dependencies,
       );
       fail();
     }
     dependencies.writeStatus("candidate_signal_seen");
     await rollbackAndClose(
-      rollbackCallDeadline(signal, dependencies),
+      rollbackCallDeadline(signal, expiresAt, dependencies),
       {
         detectedAtMonotonic: signal.detectedAtMonotonic,
         providerObservedAt: signal.providerObservedAt,
       },
     );
 
-    if (isTwoJobFamily(input.family)) {
+    if (input.family === "ai_usage") {
+      if (aiUniquenessClosesAt === undefined) fail();
+      await waitForAiUniqueness(
+        observer,
+        signal,
+        aiUniquenessClosesAt,
+        observerStartedAt,
+        dependencies,
+      );
+    } else if (isTwoJobFamily(input.family)) {
       let state = signal.state;
       if (
         state.uniquenessClosesAt === undefined ||
@@ -1127,6 +1171,80 @@ async function waitForNoSignalUniqueness(
   }
 }
 
+/** Derives the AI metadata-poll ceiling from its fixed 63/65 minute bounds. */
+function aiObserverVerificationDeadline(
+  closesAt: Date,
+  observerStartedAt: Date,
+  dependencies: PreviewAcceptanceControllerDependencies,
+): number {
+  const tailCeiling = observerStartedAt.getTime() +
+    AI_ABSOLUTE_TAIL_MILLISECONDS;
+  const jobCeiling = tailCeiling + 2 * 60_000;
+  if (closesAt.getTime() > tailCeiling) fail();
+  const nowWall = safeNow(dependencies.wallNow());
+  const nowMonotonic = safeMonotonic(dependencies.monotonicNow());
+  if (nowWall.getTime() > jobCeiling) fail();
+  const remaining = Math.max(
+    POLL_MILLISECONDS,
+    closesAt.getTime() + POLL_MILLISECONDS - nowWall.getTime(),
+  );
+  if (nowWall.getTime() + remaining > jobCeiling) fail();
+  return safeMonotonic(nowMonotonic + remaining);
+}
+
+/** Waits for exactly one AI terminal through the fixed expiry-derived close. */
+async function waitForAiUniqueness(
+  observer: unknown,
+  signal: Extract<
+    Awaited<ReturnType<typeof waitForSignal>>,
+    { readonly kind: "signal" }
+  >,
+  closesAt: Date,
+  observerStartedAt: Date,
+  dependencies: PreviewAcceptanceControllerDependencies,
+): Promise<void> {
+  const deadline = aiObserverVerificationDeadline(
+    closesAt,
+    observerStartedAt,
+    dependencies,
+  );
+  let state = signal.state;
+  for (;;) {
+    const wall = safeNow(dependencies.wallNow());
+    const monotonic = safeMonotonic(dependencies.monotonicNow());
+    if (
+      state.signal !== "succeeded" ||
+      state.signalObservedAt === null ||
+      safeNow(state.signalObservedAt).getTime() !==
+        signal.providerObservedAt.getTime() ||
+      state.uniqueness === "failed" ||
+      monotonic > deadline
+    ) {
+      fail();
+    }
+    if (
+      state.uniqueness === "succeeded" &&
+      wall.getTime() >= closesAt.getTime()
+    ) {
+      return;
+    }
+    const remaining = Math.min(
+      POLL_MILLISECONDS,
+      deadline - monotonic,
+      wall.getTime() < closesAt.getTime()
+        ? closesAt.getTime() - wall.getTime()
+        : POLL_MILLISECONDS,
+    );
+    if (remaining <= 0) fail();
+    await dependencies.sleep(remaining);
+    state = await runControllerCall(
+      deadline,
+      dependencies,
+      (boundary) => dependencies.readObserverState(observer, boundary),
+    );
+  }
+}
+
 /** Requires an approved action to begin before the generic idle boundary. */
 function assertPreActionIdleDeadline(now: Date, expiresAt: Date): void {
   if (now.getTime() >= expiresAt.getTime() - PRE_IDLE_MILLISECONDS) {
@@ -1140,19 +1258,22 @@ function assertRollbackDispatchDeadline(
     readonly detectedAtMonotonic: number;
     readonly providerObservedAt: Date;
   },
+  expiresAt: Date,
   dependencies: PreviewAcceptanceControllerDependencies,
 ): void {
   const localElapsed =
     safeMonotonic(dependencies.monotonicNow()) -
     signal.detectedAtMonotonic;
+  const currentWall = safeNow(dependencies.wallNow());
   const providerElapsed =
-    safeNow(dependencies.wallNow()).getTime() -
+    currentWall.getTime() -
     signal.providerObservedAt.getTime();
   if (
     localElapsed < 0 ||
     localElapsed > LOCAL_SIGNAL_MILLISECONDS ||
     providerElapsed < 0 ||
-    providerElapsed > PROVIDER_SIGNAL_MILLISECONDS
+    providerElapsed > PROVIDER_SIGNAL_MILLISECONDS ||
+    currentWall.getTime() > expiresAt.getTime()
   ) {
     fail();
   }
@@ -1164,6 +1285,7 @@ function rollbackCallDeadline(
     readonly detectedAtMonotonic: number;
     readonly providerObservedAt: Date;
   },
+  expiresAt: Date,
   dependencies: PreviewAcceptanceControllerDependencies,
 ): number {
   const nowMonotonic = safeMonotonic(dependencies.monotonicNow());
@@ -1175,8 +1297,14 @@ function rollbackCallDeadline(
     PROVIDER_SIGNAL_MILLISECONDS -
     nowWall.getTime();
   const providerDeadline = nowMonotonic + providerRemaining;
-  const deadline = Math.min(localDeadline, providerDeadline);
-  if (providerRemaining <= 0 || deadline < nowMonotonic) fail();
+  const expiryRemaining = expiresAt.getTime() - nowWall.getTime();
+  const expiryDeadline = nowMonotonic + expiryRemaining;
+  const deadline = Math.min(localDeadline, providerDeadline, expiryDeadline);
+  if (
+    providerRemaining <= 0 ||
+    expiryRemaining <= 0 ||
+    deadline < nowMonotonic
+  ) fail();
   return safeMonotonic(deadline + 1);
 }
 
@@ -1417,8 +1545,10 @@ function candidateOperation(
 /** Recognizes the two independent uniqueness families. */
 function isTwoJobFamily(
   family: PreviewAcceptanceFamily,
-): family is "sync_suppression" | "restore" {
-  return family === "sync_suppression" || family === "restore";
+): family is "ai_usage" | "sync_suppression" | "restore" {
+  return family === "ai_usage" ||
+    family === "sync_suppression" ||
+    family === "restore";
 }
 
 /** Distinguishes approved user actions from scheduled candidate confirmation. */
@@ -1540,6 +1670,13 @@ function createInProcessObserverPort(input: {
         return readPreviewTwoJobObserverState(
           state.handle,
           state.family,
+          dependencies,
+          boundary,
+        );
+      }
+      if (state.family === "ai_usage") {
+        return readPreviewAiObserverState(
+          state.handle,
           dependencies,
           boundary,
         );

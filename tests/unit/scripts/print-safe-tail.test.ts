@@ -245,6 +245,52 @@ describe(
   "print-safe-tail",
   { timeout: PRINT_SAFE_TAIL_PROCESS_TEST_TIMEOUT_MS },
   () => {
+  it("holds one AI terminal until exactly expiry plus three minutes", () => {
+    const expiresAt = new Date("2026-07-30T18:30:00.000Z");
+    const observer = createPreviewTailObserver({
+      mode: "ai_usage_uniqueness",
+      expectation: { kind: "ai_succeeded" },
+      expiresAt,
+    });
+    const terminal = aiUsageSuccess() as never;
+    expect(
+      observer.push(terminal, new Date("2026-07-30T18:29:00.000Z")),
+    ).toMatchObject({ done: false, succeeded: false });
+    expect(observer.finish(new Date("2026-07-30T18:32:59.999Z")))
+      .toMatchObject({ done: true, succeeded: false, output: null });
+    expect(observer.finish(new Date("2026-07-30T18:33:00.000Z")))
+      .toMatchObject({ done: true, succeeded: true, output: terminal });
+  });
+
+  it("rejects an AI expiry whose three-minute close overflows", () => {
+    expect(() => createPreviewTailObserver({
+      mode: "ai_usage_uniqueness",
+      expectation: { kind: "ai_succeeded" },
+      expiresAt: new Date(8_640_000_000_000_000),
+    })).toThrow("invalid");
+  });
+
+  it("rejects duplicate AI terminals and keeps the signal mode output-free", () => {
+    const expiresAt = new Date("2026-07-30T18:30:00.000Z");
+    const uniqueness = createPreviewTailObserver({
+      mode: "ai_usage_uniqueness",
+      expectation: { kind: "ai_succeeded" },
+      expiresAt,
+    });
+    const signal = createPreviewTailObserver({
+      mode: "ai_usage_signal",
+      expectation: { kind: "ai_succeeded" },
+    });
+    const terminal = aiUsageSuccess() as never;
+    uniqueness.push(terminal, new Date("2026-07-30T18:29:00.000Z"));
+    expect(
+      uniqueness.push(terminal, new Date("2026-07-30T18:29:00.001Z")),
+    ).toMatchObject({ done: true, succeeded: false, output: null });
+    expect(
+      signal.push(terminal, new Date("2026-07-30T18:29:00.000Z")),
+    ).toMatchObject({ done: true, succeeded: true, output: null });
+  });
+
   it("keeps default mode backward compatible by emitting recovery evidence first", async () => {
     await expect(
       runPrintSafeTail([], [scheduledTail(), restoreTail(restoreFailure())]),
@@ -387,10 +433,10 @@ describe(
     ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
   });
 
-  it("emits only AI evidence in ai-usage-only mode", async () => {
+  it("accepts one AI signal without emitting evidence", async () => {
     const evidence = aiUsageSuccess();
     const result = await runPrintSafeTail(
-      signalArguments("--ai-usage-only", "ai_succeeded"),
+      signalArguments("--ai-usage-signal-only", "ai_succeeded"),
       [
         scheduledTail(),
         aiUsageTail(evidence),
@@ -398,7 +444,7 @@ describe(
     );
 
     expect(result.exitCode).toBe(0);
-    expect(JSON.parse(result.stdout)).toEqual(evidence);
+    expect(result.stdout).toBe("");
     expect(result.stderr).toBe("");
   });
 
@@ -432,6 +478,12 @@ describe(
     await expect(
       runPrintSafeTail(
         signalArguments("--ai-usage-only", "ai_succeeded"),
+        [restoreTail(restoreFailure()), foundationTail(foundationSuccess())],
+      ),
+    ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
+    await expect(
+      runPrintSafeTail(
+        signalArguments("--ai-usage-signal-only", "ai_succeeded"),
         [restoreTail(restoreFailure()), foundationTail(foundationSuccess())],
       ),
     ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });

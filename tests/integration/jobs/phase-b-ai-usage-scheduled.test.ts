@@ -4,6 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { VisionDatabase } from "../../../src/data/db";
+import type { PreviewAiEvidenceWindow } from "../../../src/domain/operations/temporary-preview-fault";
 import {
   createProductionScheduledPhaseBAiUsageEvidenceDependencies,
   createScheduledPhaseBAiUsageEvidenceDependencies,
@@ -12,7 +13,13 @@ import {
 
 const OWNER = "owner";
 const NOW = new Date("2026-07-25T17:00:00.000Z");
+const EVIDENCE_AT = new Date("2026-07-25T17:05:00.000Z");
 const MONTH = "2026-07";
+const WINDOW: PreviewAiEvidenceWindow = Object.freeze({
+  activatedAt: new Date("2026-07-25T16:35:00.001Z"),
+  evidenceScheduledAt: EVIDENCE_AT,
+  expiresAt: new Date("2026-07-25T17:05:00.001Z"),
+});
 
 let postgres: PGlite;
 let database: VisionDatabase;
@@ -100,7 +107,8 @@ describe("scheduled Phase B AI usage candidate seam", () => {
     const write = vi.fn();
 
     await runScheduledPhaseBAiUsageEvidence(
-      NOW,
+      EVIDENCE_AT,
+      WINDOW,
       { ...created, readStatus, readCalendar },
       write,
     );
@@ -119,6 +127,121 @@ describe("scheduled Phase B AI usage candidate seam", () => {
         nonAiAvailable: true,
       }),
     });
+  });
+
+  it.each([
+    [0, 0],
+    [1, 0],
+  ] as const)(
+    "waits for candidate counts %i/%i without monthly, status, calendar, or terminal reads",
+    async (createdRequestCount, eligibleSettledRequestCount) => {
+      const dependencies = {
+        readCandidateRequestCounts: vi.fn(async () => ({
+          createdRequestCount,
+          eligibleSettledRequestCount,
+        })),
+        read: vi.fn(async () => ({ monthlyCents: 950 })),
+        readStatus: vi.fn(async () => undefined),
+        readCalendar: vi.fn(async () => undefined),
+        gatewayLimitMatches: true,
+      };
+      const write = vi.fn();
+
+      await expect(
+        runScheduledPhaseBAiUsageEvidence(
+          EVIDENCE_AT,
+          WINDOW,
+          dependencies,
+          write,
+        ),
+      ).resolves.toBe("waiting");
+
+      expect(dependencies.readCandidateRequestCounts).toHaveBeenCalledExactlyOnceWith({
+        activatedAt: WINDOW.activatedAt,
+        evidenceScheduledAt: WINDOW.evidenceScheduledAt,
+      });
+      expect(dependencies.read).not.toHaveBeenCalled();
+      expect(dependencies.readStatus).not.toHaveBeenCalled();
+      expect(dependencies.readCalendar).not.toHaveBeenCalled();
+      expect(write).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    [0, 1],
+    [1, 2],
+    [2, 0],
+    [2, 1],
+    [2, 2],
+    [-1, 0],
+    [1.5, 1],
+  ] as const)(
+    "emits one closed inconsistent terminal and rejects candidate counts %s/%s",
+    async (createdRequestCount, eligibleSettledRequestCount) => {
+      const dependencies = {
+        readCandidateRequestCounts: vi.fn(async () => ({
+          createdRequestCount,
+          eligibleSettledRequestCount,
+        })),
+        read: vi.fn(async () => ({ monthlyCents: 950 })),
+        readStatus: vi.fn(async () => undefined),
+        readCalendar: vi.fn(async () => undefined),
+        gatewayLimitMatches: true,
+      };
+      const write = vi.fn();
+
+      await expect(
+        runScheduledPhaseBAiUsageEvidence(
+          EVIDENCE_AT,
+          WINDOW,
+          dependencies,
+          write,
+        ),
+      ).rejects.toThrow("Phase B AI usage candidate is inconsistent.");
+
+      expect(dependencies.read).not.toHaveBeenCalled();
+      expect(dependencies.readStatus).not.toHaveBeenCalled();
+      expect(dependencies.readCalendar).not.toHaveBeenCalled();
+      expect(write).toHaveBeenCalledExactlyOnceWith({
+        action: "acceptance.ai-usage",
+        evidence: {
+          evidenceType: "vision.ai-usage/v1",
+          outcome: "failed",
+          category: "inconsistent",
+          monthlyCents: 0,
+          warningAtCents: 800,
+          optionalStopAtCents: 900,
+          hardStopAtCents: 950,
+          tier: "normal",
+          gatewayLimitMatches: false,
+          nonAiAvailable: false,
+        },
+      });
+    },
+  );
+
+  it("allows duplicate delivery to emit twice so observer uniqueness can reject it", async () => {
+    const dependencies = {
+      readCandidateRequestCounts: vi.fn(async () => ({
+        createdRequestCount: 1,
+        eligibleSettledRequestCount: 1,
+      })),
+      read: vi.fn(async () => ({ monthlyCents: 950 })),
+      readStatus: vi.fn(async () => undefined),
+      readCalendar: vi.fn(async () => undefined),
+      gatewayLimitMatches: true,
+    };
+    const write = vi.fn();
+
+    await expect(
+      runScheduledPhaseBAiUsageEvidence(EVIDENCE_AT, WINDOW, dependencies, write),
+    ).resolves.toBe("emitted");
+    await expect(
+      runScheduledPhaseBAiUsageEvidence(EVIDENCE_AT, WINDOW, dependencies, write),
+    ).resolves.toBe("emitted");
+
+    expect(dependencies.readCandidateRequestCounts).toHaveBeenCalledTimes(2);
+    expect(write).toHaveBeenCalledTimes(2);
   });
 
   it("rejects an unverified Task 6 admission boolean before any read", () => {

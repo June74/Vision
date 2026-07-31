@@ -56,14 +56,15 @@ cron routing and every other selector leave it unreachable.
 ## `aiUsageEvidence`
 
 Runs only after the generated `ai_usage` selector and exact same-run boolean
-attestation are parsed; normal cron routing and every other selector leave it
-unreachable.
+attestation are parsed and the one-minute event equals the immutable
+`evidenceScheduledAt`. The parsed window is passed unchanged; normal cron
+routing and every other selector leave this boundary unreachable.
 
 ## `createScheduledPhaseBAiUsageEvidenceDependencies`
 
 Requires the same-run verifier result to be exactly true, then composes the
-aggregate AI source and content-free status/calendar sources over one
-owner-bound database.
+atomic candidate-count and monthly aggregate AI source plus content-free
+status/calendar sources over one owner-bound database.
 
 ## `createProductionScheduledPhaseBAiUsageEvidenceDependencies`
 
@@ -102,9 +103,13 @@ UTF-8 byte array for the probe's `finally` cleanup.
 
 ## `runScheduledPhaseBAiUsageEvidence`
 
-Executes the composed job, writes exactly one
-`acceptance.ai-usage` terminal, and throws a fixed value-free error only after
-a failed record is emitted.
+Calls Task 4's atomic count read with only `activatedAt` and
+`evidenceScheduledAt`. `0/0` and `1/0` return `waiting` before all downstream
+reads; only `1/1` executes the established evidence job and returns `emitted`.
+Unsafe integers, impossible relationships, or counts above one emit one
+canonical inconsistent terminal and throw a fixed value-free error. No
+at-most-once state is introduced, so duplicate scheduled delivery can emit two
+records for the observer to reject.
 
 ## `emitTemporaryPreviewRoleProbeEvidence`
 Writes only the exact allowlisted action/evidence object.
@@ -121,14 +126,15 @@ Invokes the owner-scoped database-only projection retention boundary before cred
 Routes typed OAuth failure through the generation-safe maintenance checkpoint transition before rethrowing.
 ## `scheduled`
 Uses Cloudflare's scheduled time and exact cron string for
-capability-separated dispatch. Before any cron-specific dispatch, it parses the
-candidate selector, validates lifetime against injected wall-clock execution
-time, and validates any required AI attestation. A still-deployed invalid,
-expired, delayed, or unattested candidate therefore fails before maintenance or
-recovery dependency construction. The generated one-minute branch reuses the
-admitted selector and attestation, permits the role probe only when no selector
-and its explicit connection binding exist, and passes the original scheduled
-instant to evidence work.
+capability-separated dispatch. Candidate selector, same-run AI attestation,
+AI-window shape, mutual exclusion, and protected-window checks occur before
+cron work. Only the temporary one-minute AI branch compares the scheduled
+event with `evidenceScheduledAt`; a preceding or following minute returns
+before injected wall-clock access or dependency construction. The exact tick
+then applies the ordinary expiry guard before any read. Quarter-hour
+maintenance and daily recovery never enter tick matching, even at the same
+timestamp, but still reject malformed, expired, delayed, or protected
+candidates before permanent work.
 ## `createProductionScheduledEntryDependencies`
 Returns closures rather than constructed adapters, preserving lazy provider,
 database, Queue, and R2 initialization until after exact dispatch.

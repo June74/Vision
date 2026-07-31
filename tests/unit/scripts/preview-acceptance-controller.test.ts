@@ -161,6 +161,102 @@ describe("preview acceptance controller", () => {
     });
   });
 
+  it("rejects a maximum canonical AI expiry when the derived close is not canonical", async () => {
+    const fixture = harness({
+      wallNow: () => new Date("9999-12-31T23:30:00.000Z"),
+    });
+
+    await expect(runPreviewAcceptanceController({
+      family: "ai_usage",
+      reviewedCommit: SHA,
+      expiresAt: "9999-12-31T23:58:59.999Z",
+      expectation: { kind: "ai_succeeded" },
+    }, fixture.dependencies)).rejects.toThrow(
+      "Preview acceptance controller failed closed.",
+    );
+    expect(fixture.dependencies.assertRemoteTip).not.toHaveBeenCalled();
+    expect(fixture.dispatches).toEqual([]);
+  });
+
+  it("keeps AI signal polling open through expiry and uniqueness through expiry plus three minutes", async () => {
+    const expiresAt = new Date("2026-07-30T18:28:59.999Z");
+    const evidenceScheduledAt = new Date("2026-07-30T18:28:00.000Z");
+    const uniquenessClosesAt = new Date(expiresAt.getTime() + 180_000);
+    const fixture = harness();
+    vi.mocked(fixture.dependencies.readObserverState).mockImplementation(
+      async () => ({
+        signal:
+          fixture.currentWall().getTime() >= evidenceScheduledAt.getTime()
+            ? "succeeded" as const
+            : "listening" as const,
+        uniqueness:
+          fixture.currentWall().getTime() >= uniquenessClosesAt.getTime()
+            ? "succeeded" as const
+            : "listening" as const,
+        signalObservedAt:
+          fixture.currentWall().getTime() >= evidenceScheduledAt.getTime()
+            ? evidenceScheduledAt
+            : null,
+      }),
+    );
+
+    await expect(runPreviewAcceptanceController({
+      family: "ai_usage",
+      reviewedCommit: SHA,
+      expiresAt: expiresAt.toISOString(),
+      expectation: { kind: "ai_succeeded" },
+    }, fixture.dependencies)).resolves.toBeUndefined();
+
+    expect(fixture.currentWall().getTime()).toBeGreaterThanOrEqual(
+      uniquenessClosesAt.getTime(),
+    );
+    expect(fixture.dispatches.map(({ operation }) => operation)).toEqual([
+      "observe",
+      "deploy_ai",
+      "rollback",
+      "close_rollback",
+    ]);
+  });
+
+  it("dispatches AI rollback at actual expiry when no signal succeeds", async () => {
+    const expiresAt = new Date("2026-07-30T18:28:59.999Z");
+    const uniquenessClosesAt = new Date(expiresAt.getTime() + 180_000);
+    const fixture = harness();
+    const originalDispatch = vi
+      .mocked(fixture.dependencies.dispatch)
+      .getMockImplementation();
+    if (originalDispatch === undefined) throw new Error("missing dispatch");
+    let rollbackStartedAtMilliseconds: number | null = null;
+    vi.mocked(fixture.dependencies.dispatch).mockImplementation(
+      async (operation, context, boundary) => {
+        if (operation === "rollback") {
+          rollbackStartedAtMilliseconds = fixture.currentWall().getTime();
+        }
+        return originalDispatch(operation, context, boundary);
+      },
+    );
+    vi.mocked(fixture.dependencies.readObserverState).mockImplementation(
+      async () => ({
+        signal: "listening" as const,
+        uniqueness:
+          fixture.currentWall().getTime() >= uniquenessClosesAt.getTime()
+            ? "failed" as const
+            : "listening" as const,
+        signalObservedAt: null,
+      }),
+    );
+
+    await expect(runPreviewAcceptanceController({
+      family: "ai_usage",
+      reviewedCommit: SHA,
+      expiresAt: expiresAt.toISOString(),
+      expectation: { kind: "ai_succeeded" },
+    }, fixture.dependencies)).rejects.toThrow(
+      "Preview acceptance controller failed closed.",
+    );
+    expect(rollbackStartedAtMilliseconds).toBe(expiresAt.getTime());
+  });
+
   it("deploys and attributes the candidate before requesting approval or acting", async () => {
     const order: string[] = [];
     const fixture = harness({

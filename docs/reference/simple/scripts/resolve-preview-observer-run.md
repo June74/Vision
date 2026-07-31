@@ -39,6 +39,12 @@ completion reported later than the wall time sampled after that provider read.
 Each raw provider-derived uniqueness close must stay stable or move forward;
 backward evidence fails before the conservative close is cached.
 
+## `readPreviewAiObserverState`
+
+Checks the concurrent AI signal and uniqueness jobs from one metadata read. It
+returns only their closed states and the successful signal listener timestamp;
+the dynamic uniqueness close remains controller-owned.
+
 ## `readPreviewMaintenanceObserverState`
 
 Checks maintenance uniqueness, binds it to the requested scheduled tick, and
@@ -221,11 +227,11 @@ and failure both produce no provider metadata.
 
 ## Controller call boundaries
 
-The resolver and each observer-state reader accept an optional controller call
-boundary. Its earlier deadline and cancellation signal control every provider
-read and poll sleep. A cancelled call waits for the in-flight bounded operation
-to settle before it reports failure. Callers that omit the boundary retain the
-normal two-minute window.
+The resolver and each observer-state reader, including the AI two-job reader,
+accept an optional controller call boundary. Its earlier deadline and
+cancellation signal control every provider read and poll sleep. A cancelled
+call waits for the in-flight bounded operation to settle before it reports
+failure. Callers that omit the boundary retain the normal two-minute window.
 
 ## Full provider job lists
 

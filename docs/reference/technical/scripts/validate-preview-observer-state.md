@@ -15,7 +15,9 @@ Carries untrusted run and jobs data with the expected commit and evidence.
 ## `validatePreviewObserverState`
 
 Checks event, workflow path, commit, run state, unique job identity, unique
-step identity, and active status without rendering provider responses.
+step identity, and active status without rendering provider responses. The
+shared job contract requires two independently active AI jobs before candidate
+deployment.
 
 ## `activeExactListener`
 

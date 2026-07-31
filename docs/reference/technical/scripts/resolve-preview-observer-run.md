@@ -48,6 +48,13 @@ handle, and family. Each new raw close is compared with that prior raw close
 and rejected if it moves backward before the signal-derived and provider-derived
 anchors are merged into the monotonic conservative close.
 
+## `readPreviewAiObserverState`
+
+Reads exactly `Capture ai_usage signal` and `Capture ai_usage uniqueness` from
+one bounded job snapshot. It projects only the two closed job states and the
+successful signal listener's canonical provider timestamp; it never reads job
+logs or derives the expiry-owned uniqueness deadline.
+
 ## `readPreviewMaintenanceObserverState`
 
 Requires maintenance uniqueness success to complete at exactly the scheduled
@@ -258,7 +265,7 @@ process boundary. It emits neither run identifiers nor provider responses.
 ## Outer `PreviewObserverCallContext`
 
 `resolvePreviewObserverRun`, `readPreviewSignalObserverState`,
-`readPreviewTwoJobObserverState`, and
+`readPreviewTwoJobObserverState`, `readPreviewAiObserverState`, and
 `readPreviewMaintenanceObserverState` accept an optional final
 `PreviewObserverCallContext`. Internal deadlines are capped by the outer
 absolute deadline. A fresh operation controller links the outer abort signal to

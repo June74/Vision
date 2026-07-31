@@ -64,7 +64,10 @@ export type PreviewObserverCommandRunner = (
 export const PREVIEW_OBSERVER_JOB_CONTRACT = Object.freeze({
   foundation_probe: Object.freeze(["Capture foundation_probe signal"]),
   preview_fault: Object.freeze(["Capture preview_fault signal"]),
-  ai_usage: Object.freeze(["Capture ai_usage signal"]),
+  ai_usage: Object.freeze([
+    "Capture ai_usage signal",
+    "Capture ai_usage uniqueness",
+  ]),
   sync_suppression: Object.freeze([
     "Capture sync_suppression signal",
     "Capture sync_suppression uniqueness",
@@ -321,6 +324,36 @@ export async function readPreviewTwoJobObserverState(
       uniquenessCompletedAt,
       providerReadAt,
     ),
+  });
+}
+
+/** Reads the two AI jobs without exposing evidence or provider payloads. */
+export async function readPreviewAiObserverState(
+  handle: PreviewObserverRunHandle,
+  deps: PreviewObserverResolutionDependencies,
+  outerContext?: PreviewObserverCallContext,
+): Promise<{
+  readonly signal: "listening" | "succeeded" | "failed";
+  readonly uniqueness: "listening" | "succeeded" | "failed";
+  readonly signalObservedAt: Date | null;
+}> {
+  const jobs = await jobsFor(
+    handle,
+    deps,
+    stateReadDeadline(deps, outerContext),
+    outerContext,
+  );
+  const signal = observerJobState(exactJob(jobs, "Capture ai_usage signal"));
+  const uniqueness = observerJobState(
+    exactJob(jobs, "Capture ai_usage uniqueness"),
+  );
+  return Object.freeze({
+    signal: signal.state,
+    uniqueness: uniqueness.state,
+    signalObservedAt:
+      signal.state === "succeeded"
+        ? canonicalDate(signal.listener.completedAt)
+        : null,
   });
 }
 

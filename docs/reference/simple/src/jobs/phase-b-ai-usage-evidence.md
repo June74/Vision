@@ -7,6 +7,11 @@ Creates safe failed evidence.
 
 Creates one exact, privacy-safe AI usage acceptance record.
 
+The scheduled candidate receives both the existing monthly/non-AI reads and
+Task 4's atomic created/eligible request-count read. The count read itself is
+used by the scheduler before this module performs any monthly, status, or
+calendar work.
+
 ## `createPhaseBAiUsageEvidence`
 
 Uses the fixed 800, 900, and 950-cent boundaries. Exactly 950 is a successful

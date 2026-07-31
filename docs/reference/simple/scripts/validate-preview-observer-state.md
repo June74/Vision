@@ -5,7 +5,7 @@ allowlisted evidence-printing step before a candidate can deploy.
 
 ## `PreviewObserverEvidence`
 
-Lists the four admitted privacy-safe evidence families.
+Lists the admitted privacy-safe evidence families.
 
 ## `PreviewObserverState`
 
@@ -13,8 +13,9 @@ Groups the expected commit, evidence family, run response, and jobs response.
 
 ## `validatePreviewObserverState`
 
-Requires the matching workflow run, evidence job, and single allowlisted
-listener step all to be active.
+Requires the matching workflow run and exact family topology to be active.
+AI, suppression, and restore each require independent signal and uniqueness
+jobs; maintenance requires uniqueness only.
 
 ## `activeExactListener`
 

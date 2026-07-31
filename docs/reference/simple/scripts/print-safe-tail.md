@@ -4,7 +4,8 @@
 
 Creates a deadline-bound signal or uniqueness observer for one exact
 acceptance expectation. Fast accepting signals may return the allowlisted
-evidence; restore and suppression signals remain output-free.
+evidence; restore, suppression, and AI signals remain output-free. AI
+uniqueness closes only at the admitted expiry plus three minutes.
 
 ## `result`
 
@@ -25,7 +26,7 @@ exactly one terminal was admitted.
 Accepts one fixed observer mode plus unique `--expectation` and only the
 mode-specific scenario or maintenance-tick flag. Maintenance derives its
 close as the scheduled tick plus 120 seconds; the removed `--closes-at` flag
-fails closed.
+fails closed. AI uniqueness alone requires canonical `--expires-at`.
 
 ## `isCanonicalInstant`
 
@@ -47,6 +48,11 @@ Runs the strict observer, derives maintenance close from its tick and other
 uniqueness close from the admitted terminal, and prints only allowlisted
 accepting-signal or successful uniqueness evidence. Restore, suppression, and
 maintenance success remain output-free.
+
+## `copyValidDate`
+
+Copies one finite `Date` for the AI expiry boundary without retaining mutable
+caller state.
 
 ## `complete`
 

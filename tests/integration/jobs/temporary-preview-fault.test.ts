@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { PreviewAiEvidenceWindow } from "../../../src/domain/operations/temporary-preview-fault";
 import type { BackupObjectWriter } from "../../../src/jobs/create-daily-backup";
 import {
   TEMPORARY_PREVIEW_FAULT_ACTION,
@@ -16,6 +17,8 @@ import type { Env } from "../../../src/server/env";
 
 const NOW = new Date("2026-07-28T12:00:00.000Z");
 const ACTIVE_UNTIL = "2026-07-28T12:30:00.000Z";
+const AI_EVIDENCE_AT = new Date("2026-07-28T12:30:00.000Z");
+const AI_EXPIRES_AT = "2026-07-28T12:30:00.001Z";
 const CONTROLLER = {
   cron: TEMPORARY_PREVIEW_FAULT_CRON,
   scheduledTime: NOW.getTime(),
@@ -28,7 +31,10 @@ interface InjectedScheduledEntryDependencies {
   readonly recovery: (now: Date) => Promise<void>;
   readonly temporaryRoleProbe: (now: Date) => Promise<void>;
   readonly foundationProbe: (now: Date) => Promise<void>;
-  readonly aiUsageEvidence: (now: Date) => Promise<void>;
+  readonly aiUsageEvidence: (
+    now: Date,
+    window: PreviewAiEvidenceWindow,
+  ) => Promise<void>;
   readonly temporaryFaultR2Upload: (
     now: Date,
     writer: BackupObjectWriter,
@@ -44,6 +50,25 @@ const scheduledWithDependencies = scheduled as unknown as (
   context: ExecutionContext,
   dependencies: InjectedScheduledEntryDependencies,
 ) => Promise<void>;
+
+const scheduledWithFactory = scheduled as unknown as (
+  controller: ScheduledController,
+  environment: Env,
+  context: ExecutionContext,
+  dependencies: InjectedScheduledEntryDependencies | undefined,
+  factory: (environment: Env) => InjectedScheduledEntryDependencies,
+) => Promise<void>;
+
+function aiEnvironment(): Env {
+  return {
+    VISION_ENV: "preview",
+    PREVIEW_ACCEPTANCE_SCENARIO: "ai_usage",
+    PREVIEW_ACCEPTANCE_EXPIRES_AT: AI_EXPIRES_AT,
+    PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT:
+      AI_EVIDENCE_AT.toISOString(),
+    PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true",
+  } as Env;
+}
 
 function scheduledDependencies(): {
   readonly dependencies: InjectedScheduledEntryDependencies;
@@ -218,22 +243,32 @@ describe("temporary preview fault scheduled entry", () => {
   it("dispatches the dedicated attested AI candidate without entering any fault or foundation boundary", async () => {
     const { dependencies, writeTemporaryFaultEvidence } =
       scheduledDependencies();
+    const exactDependencies = {
+      ...dependencies,
+      currentTime: () => new Date("2026-07-28T12:29:59.999Z"),
+    };
+    const exactController = {
+      ...CONTROLLER,
+      scheduledTime: AI_EVIDENCE_AT.getTime(),
+    } as ScheduledController;
 
     await expect(
       scheduledWithDependencies(
-        CONTROLLER,
-        {
-          VISION_ENV: "preview",
-          PREVIEW_ACCEPTANCE_SCENARIO: "ai_usage",
-          PREVIEW_ACCEPTANCE_EXPIRES_AT: ACTIVE_UNTIL,
-          PREVIEW_ACCEPTANCE_AI_GATEWAY_LIMIT_ATTESTED: "true",
-        } as Env,
+        exactController,
+        aiEnvironment(),
         {} as ExecutionContext,
-        dependencies,
+        exactDependencies,
       ),
     ).resolves.toBeUndefined();
 
-    expect(dependencies.aiUsageEvidence).toHaveBeenCalledExactlyOnceWith(NOW);
+    expect(exactDependencies.aiUsageEvidence).toHaveBeenCalledExactlyOnceWith(
+      AI_EVIDENCE_AT,
+      {
+        activatedAt: new Date("2026-07-28T12:00:00.001Z"),
+        evidenceScheduledAt: AI_EVIDENCE_AT,
+        expiresAt: new Date(AI_EXPIRES_AT),
+      },
+    );
     expect(dependencies.foundationProbe).not.toHaveBeenCalled();
     expect(dependencies.temporaryFaultR2Upload).not.toHaveBeenCalled();
     expect(writeTemporaryFaultEvidence).not.toHaveBeenCalled();
@@ -241,6 +276,167 @@ describe("temporary preview fault scheduled entry", () => {
     expect(dependencies.recovery).not.toHaveBeenCalled();
     expect(dependencies.temporaryRoleProbe).not.toHaveBeenCalled();
   });
+
+  it.each([-60_000, 60_000])(
+    "returns for a noneligible AI tick at offset %i before lifetime, dependency construction, or evidence reads",
+    async (offset) => {
+      const factory = vi.fn(() => {
+        throw new Error("Scheduled dependency factory reached.");
+      });
+      const controller = {
+        ...CONTROLLER,
+        scheduledTime: AI_EVIDENCE_AT.getTime() + offset,
+      } as ScheduledController;
+
+      await expect(
+        scheduledWithFactory(
+          controller,
+          aiEnvironment(),
+          {} as ExecutionContext,
+          undefined,
+          factory,
+        ),
+      ).resolves.toBeUndefined();
+
+      expect(factory).not.toHaveBeenCalled();
+    },
+  );
+
+  it("rejects delayed exact-tick delivery at expiry before AI evidence reads", async () => {
+    const { dependencies } = scheduledDependencies();
+    const delayedDependencies = {
+      ...dependencies,
+      currentTime: vi.fn(() => new Date(AI_EXPIRES_AT)),
+    };
+
+    await expect(
+      scheduledWithDependencies(
+        {
+          ...CONTROLLER,
+          scheduledTime: AI_EVIDENCE_AT.getTime(),
+        } as ScheduledController,
+        aiEnvironment(),
+        {} as ExecutionContext,
+        delayedDependencies,
+      ),
+    ).rejects.toThrow("Preview acceptance timing is unavailable.");
+
+    expect(delayedDependencies.currentTime).toHaveBeenCalledOnce();
+    expect(delayedDependencies.aiUsageEvidence).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [CALENDAR_MAINTENANCE_CRON, "maintenance"],
+    [DAILY_BACKUP_CRON, "recovery"],
+  ] as const)(
+    "keeps the %s permanent path outside AI tick matching",
+    async (cron, expected) => {
+      for (const scheduledTime of [
+        AI_EVIDENCE_AT.getTime(),
+        AI_EVIDENCE_AT.getTime() - 60_000,
+      ]) {
+        const { dependencies } = scheduledDependencies();
+        const guardedDependencies = {
+          ...dependencies,
+          currentTime: () => new Date("2026-07-28T12:29:59.999Z"),
+        };
+
+        await expect(
+          scheduledWithDependencies(
+            { ...CONTROLLER, cron, scheduledTime } as ScheduledController,
+            aiEnvironment(),
+            {} as ExecutionContext,
+            guardedDependencies,
+          ),
+        ).resolves.toBeUndefined();
+
+        expect(guardedDependencies[expected]).toHaveBeenCalledExactlyOnceWith(
+          new Date(scheduledTime),
+        );
+        expect(guardedDependencies.aiUsageEvidence).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it("rejects a malformed AI window on a noneligible minute before dependency construction", async () => {
+    const factory = vi.fn(() => {
+      throw new Error("Scheduled dependency factory reached.");
+    });
+
+    await expect(
+      scheduledWithFactory(
+        {
+          ...CONTROLLER,
+          scheduledTime: AI_EVIDENCE_AT.getTime() - 60_000,
+        } as ScheduledController,
+        {
+          ...aiEnvironment(),
+          PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT: "malformed",
+        } as Env,
+        {} as ExecutionContext,
+        undefined,
+        factory,
+      ),
+    ).rejects.toThrow("Temporary preview AI evidence window is invalid.");
+
+    expect(factory).not.toHaveBeenCalled();
+  });
+
+  it.each([CALENDAR_MAINTENANCE_CRON, DAILY_BACKUP_CRON])(
+    "rejects malformed, expired, and protected candidates before %s permanent work",
+    async (cron) => {
+      const cases = [
+        {
+          environment: {
+            ...aiEnvironment(),
+            PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT: "malformed",
+          } as Env,
+          currentTime: new Date("2026-07-28T12:29:59.999Z"),
+          expectedError: "Temporary preview AI evidence window is invalid.",
+        },
+        {
+          environment: aiEnvironment(),
+          currentTime: new Date(AI_EXPIRES_AT),
+          expectedError: "Preview acceptance timing is unavailable.",
+        },
+        {
+          environment: {
+            ...aiEnvironment(),
+            PREVIEW_ACCEPTANCE_EXPIRES_AT: "2026-07-28T06:05:00.001Z",
+            PREVIEW_ACCEPTANCE_AI_EVIDENCE_SCHEDULED_AT:
+              "2026-07-28T06:05:00.000Z",
+          } as Env,
+          currentTime: new Date("2026-07-28T06:04:59.999Z"),
+          expectedError: "Temporary preview AI evidence window is invalid.",
+        },
+      ];
+
+      for (const testCase of cases) {
+        const { dependencies } = scheduledDependencies();
+        const guardedDependencies = {
+          ...dependencies,
+          currentTime: () => testCase.currentTime,
+        };
+
+        await expect(
+          scheduledWithDependencies(
+            {
+              ...CONTROLLER,
+              cron,
+              scheduledTime: AI_EVIDENCE_AT.getTime(),
+            } as ScheduledController,
+            testCase.environment,
+            {} as ExecutionContext,
+            guardedDependencies,
+          ),
+        ).rejects.toThrow(testCase.expectedError);
+
+        expect(guardedDependencies.maintenance).not.toHaveBeenCalled();
+        expect(guardedDependencies.recovery).not.toHaveBeenCalled();
+        expect(guardedDependencies.aiUsageEvidence).not.toHaveBeenCalled();
+      }
+    },
+  );
 
   it("enforces the ten-minute suppression lifetime before a normal schedule", async () => {
     const { dependencies } = scheduledDependencies();

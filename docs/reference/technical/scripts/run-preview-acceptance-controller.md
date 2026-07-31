@@ -167,8 +167,9 @@ maintenance has no candidate mapping.
 
 ## `isTwoJobFamily`
 
-Recognizes only suppression and restore, whose fast signal and two-minute
-uniqueness states are polled independently.
+Recognizes AI, suppression, and restore. AI uses its immutable
+expiry-plus-three-minute close; suppression and restore use their independently
+anchored two-minute uniqueness states.
 
 ## `isUserMediatedFamily`
 
@@ -409,6 +410,20 @@ provider returns a semantic close, every later read must preserve it and the
 terminal cannot precede it. If the provider returns null or omits the close,
 the local deadline bounds polling but is never promoted to provider evidence.
 
+## `aiObserverVerificationDeadline`
+
+Requires the semantic close at `expiresAt + 180 seconds` to fit the observer's
+63-minute tail ceiling, then maps the final metadata-poll allowance into the
+65-minute containing-job ceiling using paired wall and monotonic samples.
+
+## `waitForAiUniqueness`
+
+Polls only the closed AI signal/uniqueness metadata until the fixed semantic
+close. The signal completion timestamp must remain identical to the first
+successful observation. Failed uniqueness or the absolute job deadline fails
+closed; early uniqueness success is retained but never accepted until the
+paired wall clock reaches the semantic close.
+
 ## `serializePreviewRollbackSettlementInput`
 
 Validates the action fields and rollback run reference, then serializes only
@@ -417,9 +432,10 @@ for the settlement driver.
 
 ## `rollbackCallDeadline`
 
-Combines the signal-relative local deadline with the provider-observed wall
-deadline. The returned child boundary is exclusive by one millisecond so the
-documented inclusive rollback instant remains executable.
+Combines the signal-relative local deadline, provider-observed wall deadline,
+and actual candidate expiry. The returned child boundary is exclusive by one
+millisecond so the earliest documented inclusive rollback instant remains
+executable.
 
 ## `monotonicDeadlineForWall`
 

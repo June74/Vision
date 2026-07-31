@@ -47,11 +47,41 @@ describe("preview observer state validation", () => {
   it.each([
     "calendar_maintenance",
     "foundation_probe",
-    "ai_usage",
     "preview_fault",
     "role_probe",
   ] as const)("accepts only the exact active %s listener step", (evidence) => {
     expect(() => validatePreviewObserverState(validState(evidence))).not.toThrow();
+  });
+
+  it("requires concurrent signal and uniqueness listeners for AI usage", () => {
+    const input = validState("ai_usage");
+    input.jobsResponse.jobs = [
+      {
+        name: "Capture ai_usage signal",
+        status: "in_progress",
+        conclusion: null,
+        steps: [{
+          name: LISTENER_STEP,
+          status: "in_progress",
+          conclusion: null,
+        }],
+      },
+      {
+        name: "Capture ai_usage uniqueness",
+        status: "in_progress",
+        conclusion: null,
+        steps: [{
+          name: LISTENER_STEP,
+          status: "in_progress",
+          conclusion: null,
+        }],
+      },
+    ];
+    expect(() => validatePreviewObserverState(input)).not.toThrow();
+    input.jobsResponse.jobs.pop();
+    expect(() => validatePreviewObserverState(input)).toThrow(
+      "Preview observer state is invalid.",
+    );
   });
 
   it.each(["sync_suppression", "restore"] as const)(

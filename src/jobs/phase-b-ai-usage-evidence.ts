@@ -35,7 +35,10 @@ export interface PhaseBAiUsageEvidence {
 
 /** Read-only dependencies admitted by the scheduled candidate runner. */
 export interface PhaseBAiUsageEvidenceDependencies
-  extends Pick<PhaseBAiUsageSource, "read">,
+  extends Pick<
+      PhaseBAiUsageSource,
+      "read" | "readCandidateRequestCounts"
+    >,
     PhaseBNonAiReadSource {
   readonly gatewayLimitMatches: boolean;
 }

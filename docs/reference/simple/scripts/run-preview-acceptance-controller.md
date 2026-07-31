@@ -143,8 +143,9 @@ Maps each non-maintenance family to its one admitted deployment operation.
 
 ## `isTwoJobFamily`
 
-Recognizes restore and synchronization suppression, whose signal and
-uniqueness jobs remain separate.
+Recognizes AI, restore, and synchronization suppression as separate
+signal-plus-uniqueness families. AI uses its fixed expiry-derived close; the
+other two retain their provider-anchored two-minute closes.
 
 ## `isUserMediatedFamily`
 
@@ -353,6 +354,18 @@ for the expected no-signal uniqueness failure. When the provider supplies a
 true close it must remain stable and be reached; a missing or null provider
 close is never replaced with local time.
 
+## `aiObserverVerificationDeadline`
+
+Maps the AI expiry-plus-three-minute close to a monotonic metadata deadline,
+while enforcing the 63-minute tail and 65-minute observer-job ceilings.
+
+## `waitForAiUniqueness`
+
+Keeps polling only allowlisted AI job state through the expiry-derived close.
+It accepts one successful uniqueness result after that close and rejects a
+changed signal timestamp, failure, or deadline overrun. An early uniqueness
+success remains held and is rechecked until the real close.
+
 ## `serializePreviewRollbackSettlementInput`
 
 Serializes the exact candidate and rollback binding used by the private
@@ -360,7 +373,8 @@ settlement gate.
 
 ## `rollbackCallDeadline`
 
-Chooses the tighter local or provider rollback deadline after a signal.
+Chooses the earliest local, provider, or actual candidate-expiry rollback
+deadline after a signal.
 
 ## `monotonicDeadlineForWall`
 

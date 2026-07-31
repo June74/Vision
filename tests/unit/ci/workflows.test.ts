@@ -416,6 +416,29 @@ describe("preview live diagnostics policy", () => {
 });
 
 describe("preview acceptance candidate workflow", () => {
+  it("runs concurrent AI signal and dynamic uniqueness observers within 63/65 minute ceilings", async () => {
+    const preview = await readWorkflow("preview.yml");
+    const signal = readWorkflowJob(preview, "ai_signal");
+    const uniqueness = readWorkflowJob(preview, "ai_uniqueness");
+
+    expect(signal).toContain("name: Capture ai_usage signal");
+    expect(signal).toContain("timeout-minutes: 65");
+    expect(signal).toContain("timeout 63m");
+    expect(signal).toContain("--ai-usage-signal-only");
+    expect(signal).not.toContain("--expires-at");
+    expect(uniqueness).toContain("name: Capture ai_usage uniqueness");
+    expect(uniqueness).toContain("timeout-minutes: 65");
+    expect(uniqueness).toContain("timeout 63m");
+    expect(uniqueness).toContain("--ai-usage-only");
+    expect(uniqueness).toContain('--expires-at "$AI_EXPIRES_AT"');
+    expect(uniqueness).toContain(
+      "AI_EXPIRES_AT: ${{ needs.selection.outputs.expires_at }}",
+    );
+    expect(readWorkflowJob(preview, "tail")).not.toContain(
+      "ai_usage) evidence_flag=\"--ai-usage-only\"",
+    );
+  });
+
   it("binds every pre-verification checkout to the dispatch commit and proves the observer checkout before credentials", async () => {
     const preview = await readWorkflow("preview.yml");
     const observer = readWorkflowJob(preview, "tail");

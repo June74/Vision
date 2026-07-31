@@ -52,13 +52,14 @@ Runs only for the exact generated `foundation_probe` selector.
 
 ## `aiUsageEvidence`
 
-Runs only for the exact generated `ai_usage` selector after its same-run
-Gateway attestation is admitted.
+Runs only for the exact generated `ai_usage` selector, same-run Gateway
+attestation, and sole admitted evidence minute. It receives the already parsed
+30-minute window instead of reconstructing timing.
 
 ## `createScheduledPhaseBAiUsageEvidenceDependencies`
 
-Builds the owner-scoped usage, status, and calendar read set only from a true
-already-verified Gateway boolean.
+Builds the owner-scoped candidate-count, usage, status, and calendar read set
+only from a true already-verified Gateway boolean.
 
 ## `createProductionScheduledPhaseBAiUsageEvidenceDependencies`
 
@@ -94,8 +95,11 @@ caller cleanup.
 
 ## `runScheduledPhaseBAiUsageEvidence`
 
-Runs the three reads, emits exactly one fixed terminal record, and reports a
-failed record only through one fixed error.
+Reads the atomic created/eligible counts first. Counts `0/0` and `1/0` wait
+without monthly, status, calendar, or terminal work; exactly `1/1` runs the
+existing reads and emits one terminal. Every other count relationship emits
+one closed inconsistent terminal and fails. Duplicate exact-event delivery is
+allowed to emit twice so observer uniqueness can reject it.
 
 ## `emitTemporaryPreviewRoleProbeEvidence`
 Preserves the exact
@@ -110,14 +114,14 @@ Removes expired encrypted rebuild staging before Google credentials are needed.
 ## `recordCredentialFailure`
 Stores a safe credential failure before the scheduler reports it.
 ## `scheduled`
-Connects Cloudflare scheduled events to exact cron routing. It parses and
-admits any deployed candidate once, checking its lifetime against current
-execution time and validating any required AI attestation before dispatching
-the one-minute, 15-minute, or daily cron route. The one-minute route then uses
-the already-admitted selector or exact role-probe binding. A delayed event
-cannot run after the candidate deadline; evidence work keeps the original
-scheduled time. Missing or invalid candidate configuration cannot reach
-maintenance, recovery, or temporary dependencies.
+Connects Cloudflare scheduled events to exact cron routing. It validates the
+candidate structure, AI attestation, and protected 30-minute AI window before
+dispatch. An AI tick one minute before or after the sole evidence instant
+returns before wall-clock lifetime checks or dependency construction. The
+exact tick must still execute before expiry. Quarter-hour maintenance and
+daily recovery keep their permanent paths even when their supplied timestamp
+equals the evidence minute; malformed, expired, or protected candidates still
+fail before permanent work.
 ## `createProductionScheduledEntryDependencies`
 Builds lazy closures for each isolated scheduled capability without opening
 one before the cron and candidate have been selected.

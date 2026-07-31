@@ -212,7 +212,7 @@ jobs:
 
   tail:
     name: Capture ${{ needs.selection.outputs.evidence_family }} signal
-    if: ${{ inputs.acceptance_operation == 'observe' && inputs.configure_ai_budget == false && !contains(fromJSON('["calendar_maintenance","sync_suppression","restore","role_probe"]'), needs.selection.outputs.evidence_family) }}
+    if: ${{ inputs.acceptance_operation == 'observe' && inputs.configure_ai_budget == false && !contains(fromJSON('["ai_usage","calendar_maintenance","sync_suppression","restore","role_probe"]'), needs.selection.outputs.evidence_family) }}
     needs: selection
     runs-on: ubuntu-latest
     environment: preview
@@ -254,7 +254,6 @@ jobs:
           case "$OBSERVER_EVIDENCE" in
             calendar_maintenance) evidence_flag="--calendar-maintenance-only" ;;
             foundation_probe) evidence_flag="--foundation-probe-only" ;;
-            ai_usage) evidence_flag="--ai-usage-only" ;;
             preview_fault) evidence_flag="--preview-fault-only" ;;
             *) exit 1 ;;
           esac
@@ -266,6 +265,84 @@ jobs:
             "$evidence_flag" \
             --expectation "$EXPECTED_OUTCOME" \
             "${scenario_args[@]}"
+
+  ai_signal:
+    name: Capture ai_usage signal
+    if: ${{ inputs.acceptance_operation == 'observe' && needs.selection.outputs.evidence_family == 'ai_usage' }}
+    needs: selection
+    runs-on: ubuntu-latest
+    environment: preview
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        timeout-minutes: 2
+        with: { ref: "${{ github.sha }}" }
+      - name: Verify observer checkout matches dispatch commit
+        timeout-minutes: 1
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          REVIEWED_SHA: ${{ needs.selection.outputs.reviewed_commit }}
+        run: |
+          actual_sha="$(git rev-parse HEAD)"
+          [[ "$actual_sha" == "$EXPECTED_SHA" ]]
+          [[ "$actual_sha" == "$REVIEWED_SHA" ]]
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        timeout-minutes: 2
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        timeout-minutes: 2
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+        timeout-minutes: 5
+      - name: Print only allowlisted acceptance evidence
+        run: |
+          timeout 63m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+            --ai-usage-signal-only \
+            --expectation "$EXPECTED_OUTCOME"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
+          EXPECTED_OUTCOME: ${{ needs.selection.outputs.expected_outcome }}
+
+  ai_uniqueness:
+    name: Capture ai_usage uniqueness
+    if: ${{ inputs.acceptance_operation == 'observe' && needs.selection.outputs.evidence_family == 'ai_usage' }}
+    needs: selection
+    runs-on: ubuntu-latest
+    environment: preview
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        timeout-minutes: 2
+        with: { ref: "${{ github.sha }}" }
+      - name: Verify observer checkout matches dispatch commit
+        timeout-minutes: 1
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          REVIEWED_SHA: ${{ needs.selection.outputs.reviewed_commit }}
+        run: |
+          actual_sha="$(git rev-parse HEAD)"
+          [[ "$actual_sha" == "$EXPECTED_SHA" ]]
+          [[ "$actual_sha" == "$REVIEWED_SHA" ]]
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        timeout-minutes: 2
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        timeout-minutes: 2
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+        timeout-minutes: 5
+      - name: Print only allowlisted acceptance evidence
+        run: |
+          timeout 63m pnpm exec tsx scripts/run-preview-tail-supervisor.ts \
+            --ai-usage-only \
+            --expectation "$EXPECTED_OUTCOME" \
+            --expires-at "$AI_EXPIRES_AT"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_PREVIEW }}
+          EXPECTED_OUTCOME: ${{ needs.selection.outputs.expected_outcome }}
+          AI_EXPIRES_AT: ${{ needs.selection.outputs.expires_at }}
 
   suppression_signal:
     name: Capture sync_suppression signal

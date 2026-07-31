@@ -50,7 +50,9 @@ import { PHASE_B_PRIVILEGE_MANIFEST } from "../domain/operations/phase-b-privile
 import {
   TEMPORARY_PREVIEW_FAULT_SCENARIOS,
   assertTemporaryPreviewAcceptanceLifetime,
+  parseTemporaryPreviewAiEvidenceWindow,
   parseTemporaryPreviewAcceptanceAiGatewayAttestation,
+  type PreviewAiEvidenceWindow,
   parseTemporaryPreviewAcceptanceSelector,
   type TemporaryPreviewFaultScenario,
 } from "../domain/operations/temporary-preview-fault";
@@ -62,6 +64,7 @@ import {
 } from "./temporary-preview-fault";
 import type { BackupObjectWriter } from "./create-daily-backup";
 import {
+  createPhaseBAiUsageEvidence,
   emitPhaseBAiUsageEvidence,
   runPhaseBAiUsageEvidence,
   type PhaseBAiUsageEvidenceDependencies,
@@ -119,7 +122,10 @@ export interface ScheduledJobDependencies {
    * Runnable Task 4 candidate boundary. Task 6 alone binds this member to its
    * generated selector and one-minute cron.
    */
-  readonly aiUsageEvidence: (now: Date) => Promise<void>;
+  readonly aiUsageEvidence: (
+    now: Date,
+    window: PreviewAiEvidenceWindow,
+  ) => Promise<void>;
 }
 
 /** Recovery operations kept separate so retention can run only after verified creation. */
@@ -189,6 +195,7 @@ export function createScheduledPhaseBAiUsageEvidenceDependencies(
   const nonAi = createPhaseBNonAiReadSource(database, ownerId);
   return Object.freeze({
     read: usage.read,
+    readCandidateRequestCounts: usage.readCandidateRequestCounts,
     readStatus: nonAi.readStatus,
     readCalendar: nonAi.readCalendar,
     gatewayLimitMatches: true,
@@ -217,17 +224,42 @@ export async function createProductionScheduledPhaseBAiUsageEvidenceDependencies
   );
 }
 
-/** Runs and emits exactly one terminal AI record for an admitted candidate. */
+/** Closed result for one exact temporary AI evidence tick. */
+export type ScheduledPhaseBAiUsageResult = "waiting" | "emitted";
+
+/** Waits for one exact eligible request, then emits one terminal AI record. */
 export async function runScheduledPhaseBAiUsageEvidence(
-  now: Date,
+  scheduledAt: Date,
+  window: PreviewAiEvidenceWindow,
   dependencies: PhaseBAiUsageEvidenceDependencies,
   write: (entry: PhaseBAiUsageEvidenceEntry) => void = console.info,
-): Promise<void> {
-  const evidence = await runPhaseBAiUsageEvidence(now, dependencies);
+): Promise<ScheduledPhaseBAiUsageResult> {
+  const counts = await dependencies.readCandidateRequestCounts({
+    activatedAt: window.activatedAt,
+    evidenceScheduledAt: window.evidenceScheduledAt,
+  });
+  const created = counts.createdRequestCount;
+  const eligible = counts.eligibleSettledRequestCount;
+  if ((created === 0 && eligible === 0) || (created === 1 && eligible === 0)) {
+    return "waiting";
+  }
+  if (created !== 1 || eligible !== 1) {
+    emitPhaseBAiUsageEvidence(
+      createPhaseBAiUsageEvidence({
+        monthlyCents: Number.NaN,
+        gatewayLimitMatches: false,
+        nonAiAvailable: false,
+      }),
+      write,
+    );
+    throw new Error("Phase B AI usage candidate is inconsistent.");
+  }
+  const evidence = await runPhaseBAiUsageEvidence(scheduledAt, dependencies);
   emitPhaseBAiUsageEvidence(evidence, write);
   if (evidence.outcome !== "succeeded") {
     throw new Error("Phase B AI usage evidence failed.");
   }
+  return "emitted";
 }
 
 /** Emits only the fixed role-probe action and its already-closed evidence. */
@@ -344,18 +376,46 @@ export async function scheduled(
 ): Promise<void> {
   const scheduledAt = new Date(controller.scheduledTime);
   const selector = parseTemporaryPreviewAcceptanceSelector(environment);
-  const dependencies =
-    providedDependencies ?? productionFactory(environment);
+  if (
+    selector === undefined &&
+    environment.PREVIEW_ACCEPTANCE_EXPIRES_AT !== undefined
+  ) {
+    throw new Error("Temporary preview acceptance candidate is invalid.");
+  }
+  const gatewayLimitMatches =
+    parseTemporaryPreviewAcceptanceAiGatewayAttestation(environment);
+  const aiWindow = parseTemporaryPreviewAiEvidenceWindow(environment);
+
+  if (
+    controller.cron === TEMPORARY_PREVIEW_FAULT_CRON &&
+    selector === "ai_usage" &&
+    gatewayLimitMatches
+  ) {
+    if (!aiWindow) {
+      throw new Error("Temporary preview candidate is invalid.");
+    }
+    if (
+      scheduledAt.getTime() !== aiWindow.evidenceScheduledAt.getTime()
+    ) {
+      return;
+    }
+    const dependencies =
+      providedDependencies ?? productionFactory(environment);
+    assertTemporaryPreviewAcceptanceLifetime(
+      dependencies.currentTime(),
+      environment,
+    );
+    await dependencies.aiUsageEvidence(scheduledAt, aiWindow);
+    return;
+  }
+
+  const dependencies = providedDependencies ?? productionFactory(environment);
   if (selector !== undefined) {
     assertTemporaryPreviewAcceptanceLifetime(
       dependencies.currentTime(),
       environment,
     );
-  } else if (environment.PREVIEW_ACCEPTANCE_EXPIRES_AT !== undefined) {
-    throw new Error("Temporary preview acceptance candidate is invalid.");
   }
-  const gatewayLimitMatches =
-    parseTemporaryPreviewAcceptanceAiGatewayAttestation(environment);
 
   if (controller.cron === TEMPORARY_PREVIEW_FAULT_CRON) {
     if (
@@ -387,10 +447,6 @@ export async function scheduled(
         throw new Error("Temporary preview candidate is invalid.");
       }
       await dependencies.temporaryRestore(scheduledAt);
-      return;
-    }
-    if (selector === "ai_usage" && gatewayLimitMatches) {
-      await dependencies.aiUsageEvidence(scheduledAt);
       return;
     }
     throw new Error("Temporary preview candidate is invalid.");
@@ -480,7 +536,7 @@ export function createProductionScheduledEntryDependencies(
       );
     },
     /** Builds the AI source only after the generated same-run attestation is admitted. */
-    aiUsageEvidence: async (scheduledAt) => {
+    aiUsageEvidence: async (scheduledAt, window) => {
       const dependencies =
         await createProductionScheduledPhaseBAiUsageEvidenceDependencies(
           environment,
@@ -488,6 +544,7 @@ export function createProductionScheduledEntryDependencies(
         );
       await runScheduledPhaseBAiUsageEvidence(
         scheduledAt,
+        window,
         dependencies,
       );
     },

@@ -15,6 +15,7 @@ describe("Phase B AI usage evidence", () => {
         new Date("2026-08-01T04:59:59.999Z"),
         {
           read,
+          readCandidateRequestCounts: vi.fn(),
           gatewayLimitMatches: true,
           readStatus,
           readCalendar,
@@ -76,6 +77,7 @@ describe("Phase B AI usage evidence", () => {
       new Date("2026-07-25T17:00:00.000Z"),
       {
         read: vi.fn(async () => ({ monthlyCents: 950 })),
+        readCandidateRequestCounts: vi.fn(),
         gatewayLimitMatches: true,
         readStatus: vi.fn(async () => {
           throw new Error("safe test failure");

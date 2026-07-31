@@ -3,8 +3,10 @@
 ## `createPreviewTailObserver`
 
 Creates one clocked observer in `accepting_signal`, restore/suppression signal,
-restore/suppression uniqueness, or maintenance uniqueness mode. It evaluates
-the complete semantic expectation rather than only the evidence marker.
+restore/suppression uniqueness, AI signal/uniqueness, or maintenance
+uniqueness mode. It evaluates the complete semantic expectation rather than
+only the evidence marker. AI uniqueness uses the immutable expiry plus three
+minutes and rejects terminals observed after expiry.
 
 ## `result`
 
@@ -26,7 +28,8 @@ terminal.
 Parses one closed mode plus unique flag/value pairs. It requires canonical
 mode/expectation agreement, a fault scenario only for `fault_expected`, and
 `--maintenance-scheduled-at` only for the two maintenance outcomes. It rejects
-the removed `--closes-at` flag and derives maintenance close internally.
+the removed `--closes-at` flag, derives maintenance close internally, and
+requires canonical `--expires-at` only for AI uniqueness.
 
 ## `isCanonicalInstant`
 
@@ -47,6 +50,11 @@ recovery diagnostic and its fixed no-event fallback.
 Feeds reconstructed safe records into the configured observer, installs the
 true uniqueness deadline, and never echoes raw input. A closed stdin before a
 valid signal or before successful uniqueness is a failure.
+
+## `copyValidDate`
+
+Requires a real finite `Date` using intrinsic access and returns a defensive
+copy for the AI expiry gate.
 
 ## `complete`
 

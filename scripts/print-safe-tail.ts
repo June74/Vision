@@ -17,12 +17,20 @@ import {
 export function createPreviewTailObserver(input: {
   readonly mode: "accepting_signal" | "sync_suppression_signal" |
     "sync_suppression_uniqueness" | "restore_signal" |
-    "restore_uniqueness" | "maintenance_uniqueness";
+    "restore_uniqueness" | "maintenance_uniqueness" |
+    "ai_usage_signal" | "ai_usage_uniqueness";
   readonly expectation: PreviewObserverAcceptanceExpectation;
+  readonly expiresAt?: Date;
 }) {
   let terminal: SafeTailResult | null = null;
+  const aiExpiresAt =
+    input.mode === "ai_usage_uniqueness"
+      ? copyValidDate(input.expiresAt)
+      : null;
   let uniquenessClosesAt: Date | null =
-    input.mode === "maintenance_uniqueness" &&
+    aiExpiresAt !== null
+      ? copyValidDate(new Date(aiExpiresAt.getTime() + 180_000))
+      : input.mode === "maintenance_uniqueness" &&
       (input.expectation.kind === "maintenance_succeeded" ||
         input.expectation.kind === "maintenance_repair_reserved")
       ? new Date(
@@ -38,6 +46,8 @@ export function createPreviewTailObserver(input: {
     push(evidence: SafeTailResult, observedAt: Date) {
       if (
         failed ||
+        (aiExpiresAt !== null &&
+          observedAt.getTime() > aiExpiresAt.getTime()) ||
         (uniquenessClosesAt !== null &&
           observedAt.getTime() > uniquenessClosesAt.getTime()) ||
         !matchesPreviewAcceptanceExpectation(evidence, input.expectation)
@@ -86,6 +96,7 @@ const ROLE_PROBE_ONLY_ARGUMENT = "--role-probe-only";
 const CALENDAR_MAINTENANCE_ONLY_ARGUMENT = "--calendar-maintenance-only";
 const FOUNDATION_PROBE_ONLY_ARGUMENT = "--foundation-probe-only";
 const AI_USAGE_ONLY_ARGUMENT = "--ai-usage-only";
+const AI_USAGE_SIGNAL_ONLY_ARGUMENT = "--ai-usage-signal-only";
 const PREVIEW_FAULT_ONLY_ARGUMENT = "--preview-fault-only";
 const OBSERVER_MODES = Object.freeze([
   RESTORE_ONLY_ARGUMENT,
@@ -96,6 +107,7 @@ const OBSERVER_MODES = Object.freeze([
   CALENDAR_MAINTENANCE_ONLY_ARGUMENT,
   FOUNDATION_PROBE_ONLY_ARGUMENT,
   AI_USAGE_ONLY_ARGUMENT,
+  AI_USAGE_SIGNAL_ONLY_ARGUMENT,
   PREVIEW_FAULT_ONLY_ARGUMENT,
 ] as const);
 type ObserverModeArgument = (typeof OBSERVER_MODES)[number];
@@ -104,6 +116,7 @@ interface ObserverConfiguration {
   readonly mode: TailObserverMode;
   readonly expectation: PreviewObserverAcceptanceExpectation;
   readonly closesAt?: Date;
+  readonly expiresAt?: Date;
   readonly outputSignalEvidence: boolean;
 }
 const EXPECTATIONS = Object.freeze([
@@ -140,7 +153,7 @@ function parseObserverConfiguration(
     if (
       value === undefined ||
       !["--expectation", "--scenario",
-        "--maintenance-scheduled-at"].includes(flag ?? "") ||
+        "--maintenance-scheduled-at", "--expires-at"].includes(flag ?? "") ||
       values.has(flag!) ||
       value.length === 0
     ) {
@@ -205,11 +218,24 @@ function parseObserverConfiguration(
       observerMode = "accepting_signal";
       break;
     case AI_USAGE_ONLY_ARGUMENT:
+      if (
+        expectationKind !== "ai_succeeded" ||
+        values.size !== 2 ||
+        !isCanonicalInstant(values.get("--expires-at"))
+      ) {
+        throw new Error("invalid");
+      }
+      expectation = { kind: "ai_succeeded" };
+      observerMode = "ai_usage_uniqueness";
+      outputSignalEvidence = false;
+      break;
+    case AI_USAGE_SIGNAL_ONLY_ARGUMENT:
       if (expectationKind !== "ai_succeeded" || values.size !== 1) {
         throw new Error("invalid");
       }
       expectation = { kind: "ai_succeeded" };
-      observerMode = "accepting_signal";
+      observerMode = "ai_usage_signal";
+      outputSignalEvidence = false;
       break;
     case PREVIEW_FAULT_ONLY_ARGUMENT: {
       const scenario = values.get("--scenario") as
@@ -264,6 +290,15 @@ function parseObserverConfiguration(
             ) + 120_000,
           ),
         }
+      : observerMode === "ai_usage_uniqueness"
+      ? {
+          closesAt: new Date(
+            Date.parse(values.get("--expires-at")!) + 180_000,
+          ),
+        }
+      : {}),
+    ...(observerMode === "ai_usage_uniqueness"
+      ? { expiresAt: new Date(Date.parse(values.get("--expires-at")!)) }
       : {}),
     outputSignalEvidence,
   });
@@ -334,12 +369,13 @@ function runObserverTail(configuration: ObserverConfiguration): void {
     lines.close();
     process.stdin.destroy();
   };
-  if (
-    configuration.mode === "maintenance_uniqueness" &&
-    configuration.closesAt !== undefined
-  ) {
+  if (configuration.closesAt !== undefined) {
     const delay = configuration.closesAt.getTime() - Date.now();
-    if (delay <= 0) {
+    if (
+      delay <= 0 ||
+      (configuration.mode === "ai_usage_uniqueness" &&
+        delay > 63 * 60_000)
+    ) {
       complete(false);
       return;
     }
@@ -382,6 +418,14 @@ function runObserverTail(configuration: ObserverConfiguration): void {
     const result = observer.finish(new Date());
     complete(result.succeeded, result.output);
   });
+}
+
+/** Copies one valid Date without retaining caller-owned mutable state. */
+function copyValidDate(value: unknown): Date {
+  if (!(value instanceof Date)) throw new Error("invalid");
+  const milliseconds = Date.prototype.getTime.call(value);
+  if (!Number.isFinite(milliseconds)) throw new Error("invalid");
+  return new Date(milliseconds);
 }
 
 /** Parses and runs the executable without a free-form error surface. */
