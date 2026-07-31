@@ -413,6 +413,7 @@
 | [SB-20260731-214144-task4-review-assumed-test-path](incidents/2026-07-31T214144Z-task4-review-assumed-test-path.md) | contained | 2026-07-31T21:42:57.9668422Z | Phase B Task 4 final package review | Review assumed a rollback test filename |
 | [SB-20260731-214507-task4-v1-ai-provider-compatibility](incidents/2026-07-31T214507Z-task4-v1-ai-provider-compatibility.md) | closed | 2026-07-31T21:48:44.0535215Z | Phase B Task 4 final package review | Task 4 compatibility repair weakened historical v1 AI provider verification |
 | [SB-20260731-214632-task4-start-process-path-collision](incidents/2026-07-31T214632Z-task4-start-process-path-collision.md) | contained | 2026-07-31T21:46:32.8280569Z | Phase B Task 4 v1 AI compatibility repair | Captured Task 4 test did not start because Path keys collided |
+| [SB-20260731-215653-task5-assumed-plan-directories](incidents/2026-07-31T215653Z-task5-assumed-plan-directories.md) | contained | 2026-07-31T21:56:53.3451279Z | Phase B Task 5 discovery | Task 5 discovery assumed absent plan directories |
 
 ## Legacy history
 
