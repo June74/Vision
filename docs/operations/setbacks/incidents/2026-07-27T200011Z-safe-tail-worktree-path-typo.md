@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T20:00:11Z
-- **Last observed:** 2026-07-31T04:20:06.3651997Z
+- **Last observed:** 2026-07-31T14:05:00.9419278Z
 - **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
 - **Environment:** Local Windows worktree
 - **Version/commit:** `b9ec10c`
@@ -68,3 +68,10 @@ The next status check uses the canonical worktree path.
   canonical worktree path directly from the last successful call.
 - 2026-07-31T04:20:06.3651997Z: Closed after all replacement controller
   verification calls used the canonical path and completed successfully.
+- 2026-07-31T05:56:10.7406518Z: Reopened as contained after the resolver
+  writer mistyped the working directory for a bounded RED-classification
+  command. The process did not start; four boundary tests remain green and
+  three full-list tests retain valid RED collection. No source state was lost
+  and no provider or external state changed.
+- 2026-07-31T14:05:00.9419278Z: Closed after all replacement resolver
+  verification used the exact canonical worktree and completed successfully.

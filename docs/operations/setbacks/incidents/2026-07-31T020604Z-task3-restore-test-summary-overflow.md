@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T02:06:04.595659Z
-- **Last observed:** 2026-07-31T05:26:43.5989902Z
+- **Last observed:** 2026-07-31T14:11:03.5905501Z
 - **Phase/task:** Phase B Task 3 isolated integration diagnosis
 - **Environment:** Isolated restore/controller worktrees; bounded diagnostic output
 - **Version/commit:** 2bfbc23f13c44e60b01bbffcecc9748d322765b5 plus restore repair
@@ -95,3 +95,11 @@ completed without another output overflow.
   ranges and count-only searches.
 - 2026-07-31T05:26:43.5989902Z: Closed after the reviewer completed the
   package-only workflow review using bounded reads without another overflow.
+- 2026-07-31T14:10:00Z: Reopened as contained after a ledger `apply_patch`
+  response exceeded the model-output bound and was truncated. No source,
+  credential, provider data, protected identifier, external state, or raw
+  runtime stream was exposed; whether the small documentation patch applied
+  was initially unknown.
+- 2026-07-31T14:11:03.5905501Z: Closed after bounded exact-file reads proved
+  the earlier documentation-incident closure had applied and no unsafe output
+  or state change occurred.

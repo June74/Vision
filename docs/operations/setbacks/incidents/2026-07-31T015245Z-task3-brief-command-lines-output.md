@@ -1,8 +1,8 @@
 # SB-20260731-015245-task3-brief-command-lines-output: Task 3 brief redaction emitted verification command lines
 
-- **Status:** contained
+- **Status:** closed
 - **First observed:** 2026-07-31T01:52:45.884060Z
-- **Last observed:** 2026-07-31T04:25:23.8664542Z
+- **Last observed:** 2026-07-31T14:05:00.9419278Z
 - **Phase/task:** Phase B Task 3 isolated controller integration verification
 - **Environment:** Isolated controller-hardening worktree; read-only brief inspection
 - **Version/commit:** 2bfbc23f13c44e60b01bbffcecc9748d322765b5
@@ -49,13 +49,15 @@ The command was read-only.
   during this lane; evidence should be test names, safe categories, counts,
   and exact symbols only.
 - **Owner:** Codex and project owner.
-- **Next diagnostic step:** None; proceed to RED tests from the supplied
-  contract.
+- **Next diagnostic step:** None.
 
 ## Verification and related work
 
 The controller writer was redirected away from all further brief-source
-output before any implementation edit.
+output before any implementation edit. The resolver repair subsequently
+completed its 66-test file, TypeScript gate, documentation gate, and owned
+diff check using bounded evidence without another prohibited source or command
+render.
 
 ## Recurrence history
 
@@ -65,3 +67,11 @@ output before any implementation edit.
   unit failures. No secret value, live provider data, credential, mutation,
   network action, or external state was involved. Further diagnosis uses only
   structured source-line categories.
+- 2026-07-31T05:34:23.4450515Z: A resolver-repair source filter emitted
+  provider invocation argument/path structure because its match was too broad.
+  No secret, credential value, runtime environment value, user data, edit,
+  test, Git action, or external mutation occurred. Further source inspection is
+  restricted to count-only structure.
+- 2026-07-31T14:05:00.9419278Z: Closed after the resolver lane completed all
+  focused tests, TypeScript, documentation, and owned-diff verification with
+  bounded categories and no recurrence.

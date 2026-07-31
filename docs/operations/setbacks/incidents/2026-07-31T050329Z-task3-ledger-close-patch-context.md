@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T05:03:29.3393807Z
-- **Last observed:** 2026-07-31T05:23:56.8935134Z
+- **Last observed:** 2026-07-31T05:37:14.7000515Z
 - **Phase/task:** Phase B Task 3 canonical verification evidence
 - **Environment:** Main Phase B worktree
 - **Version/commit:** 5f11f52 plus verified test-timeout correction
@@ -66,3 +66,8 @@ their exact current contexts.
   now be applied separately from exact current context.
 - 2026-07-31T05:23:56.8935134Z: Closed after the incident file and exact
   current index row were updated successfully as separate patches.
+- 2026-07-31T05:35:24.6016146Z: Reopened as contained after another recurrence
+  update assumed a stale ledger sentence and failed atomically. No ledger,
+  source, test, Git, provider, or external state changed.
+- 2026-07-31T05:37:14.7000515Z: Closed after exact current tail inspection and
+  separate incident/index updates succeeded.
