@@ -747,11 +747,12 @@ const EXPECTED_SHARED_RESIDUE_PATHS = [
   "src/server/env.ts",
   "src/server/webhooks/temporary-preview-sync-suppression.ts",
   "tests/e2e/foundation-diagnostics.spec.ts",
-  "tests/integration/jobs/daily-backup.test.ts",
-  "tests/integration/jobs/temporary-preview-acceptance-routing.test.ts",
-  "tests/security/secret-bundle.test.ts",
-  "tests/unit/ci/workflows.test.ts",
-  "tests/unit/scripts/preview-acceptance-context.test.ts",
+      "tests/integration/jobs/daily-backup.test.ts",
+      "tests/integration/jobs/temporary-preview-acceptance-routing.test.ts",
+      "tests/security/secret-bundle.test.ts",
+      "tests/unit/ci/workflows.test.ts",
+      "tests/unit/jobs/temporary-preview-restore-production.test.ts",
+      "tests/unit/scripts/preview-acceptance-context.test.ts",
   "tests/unit/scripts/preview-acceptance-controller.test.ts",
   "tests/unit/scripts/preview-tail-supervisor.test.ts",
   "tests/unit/scripts/print-safe-tail.test.ts",
@@ -1263,8 +1264,8 @@ describe("post-acceptance temporary surface cleanup", () => {
     );
     expect(TEMPORARY_PATHS).toHaveLength(60);
     expect(new Set(TEMPORARY_PATHS)).toHaveLength(60);
-    expect(EXPECTED_SHARED_RESIDUE_PATHS).toHaveLength(48);
-    expect(new Set(EXPECTED_SHARED_RESIDUE_PATHS)).toHaveLength(48);
+    expect(EXPECTED_SHARED_RESIDUE_PATHS).toHaveLength(49);
+    expect(new Set(EXPECTED_SHARED_RESIDUE_PATHS)).toHaveLength(49);
     expect(new Set(PERMANENT_PATHS)).toHaveLength(PERMANENT_PATHS.length);
     expect(referenceInventory(TEMPORARY_PATHS, "simple")).toEqual(
       referenceInventory(TEMPORARY_PATHS, "technical"),
