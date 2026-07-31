@@ -2,10 +2,10 @@
 
 - **Status:** contained
 - **First observed:** 2026-07-31T14:52:01.4047691Z
-- **Last observed:** 2026-07-31T17:01:33.6452020Z
+- **Last observed:** 2026-07-31T17:45:17.1307988Z
 - **Phase/task:** Phase B Task 3 final package re-review
 - **Environment:** Independent sanitized package-only lifecycle review
-- **Version/commit:** 6f7c7be
+- **Version/commit:** c58a75f
 
 ## Symptom
 
@@ -120,3 +120,17 @@ Pending.
   an unbounded future semantic instant, so no finite observer lifetime is safe
   until the controller ties that instant to the same listener envelope. The
   active repair set is now six Important findings.
+- 2026-07-31T17:38:26.4927483Z: The fourth package timing review found one
+  Important blocker so far. The 2,590-second restore derivation begins after
+  observer dispatch returns, but the listener already runs during a dispatch
+  that may consume 120 seconds. The true valid path is about 2,710 seconds, so
+  a 44-minute listener can expire early. The repair must include dispatch time
+  and add an advancing-clock full-dispatch regression.
+- 2026-07-31T17:45:17.1307988Z: The fourth package wave completed with six
+  unique Important findings. In addition to observer dispatch time, candidate
+  validation omits temporary acceptance bindings; uncertain deployment cannot
+  safely reconcile exact normal state; provider metadata incorrectly uses the
+  millisecond local-proof grammar; mandatory fields were added incompatibly to
+  `/v1` artifacts; and a prior closure is checked against a later deployment
+  commit. One independent candidate-workflow reviewer reported no blockers.
+  The full six-finding set requires another coordinated test-first repair.
