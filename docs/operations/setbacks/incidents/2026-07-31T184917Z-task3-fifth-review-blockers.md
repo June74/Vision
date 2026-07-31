@@ -1,8 +1,8 @@
 # SB-20260731-184917-task3-fifth-review-blockers: Fifth Task 3 review found four Important blockers
 
-- **Status:** open
+- **Status:** closed
 - **First observed:** 2026-07-31T18:49:17.5535045Z
-- **Last observed:** 2026-07-31T18:49:17.5535045Z
+- **Last observed:** 2026-07-31T19:43:05.2194960Z
 - **Phase/task:** Phase B Task 3 fifth sanitized package review
 - **Environment:** Local read-only independent review
 - **Version/commit:** sanitized package from 24e959f5 through 7d78e14
@@ -58,3 +58,7 @@ review.
 
 - 2026-07-31T18:49:17.5535045Z: Fifth review completed with four unique
   Important blockers; Task 3 remained contained.
+- 2026-07-31T19:43:05.2194960Z: Closed after the shell-free real-entrypoint
+  supervisor, canonical legacy expiry, conservative v1 classification, and
+  consolidated report passed focused and complete gates and were validated by
+  the sixth review. Later sixth-review findings are tracked separately.
