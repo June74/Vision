@@ -1,8 +1,8 @@
 # SB-20260726-185307-incorrect-skill-root: Incorrect local skill root used
 
-- **Status:** closed
+- **Status:** contained
 - **First observed:** 2026-07-26T18:53:07.263429Z
-- **Last observed:** 2026-07-30T00:21:28.0141470Z
+- **Last observed:** 2026-07-31T01:30:11.4699741Z
 - **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 3
 - **Environment:** Local Codex workspace
 - **Version/commit:** `codex/phase-b-foundation`
@@ -49,7 +49,8 @@ The configured skill catalog maps both affected skills to
 - **Prevention:** Expand each skill's declared root alias before accessing its
   files; do not infer roots from neighboring skills.
 - **Owner:** Codex and project owner.
-- **Next diagnostic step:** None while closed.
+- **Next diagnostic step:** Complete the Task 3 adjudication without another
+  inferred skill path, then close the recurrence.
 
 ## Verification and related work
 
@@ -96,3 +97,17 @@ path investigation began.
   `scope-gate` and `trace-live-call-path`, both catalog-declared `r1` skills.
   The read-only failures occurred before implementation work; no project,
   provider, or private state changed.
+- 2026-07-30T20:41:43.4474977Z: The Task 3 implementer used `r0` for the
+  catalog-declared `r1` scope-gate skill. The single read-only lookup failed
+  before repository work; no file, provider, or private state changed. The
+  implementer was redirected to the exact declared root.
+- 2026-07-30T23:23:52.8198469Z: The Task 3 final-repair implementer repeated
+  the same `r0` lookup for the catalog-declared `r1` scope-gate skill. The
+  read-only failure occurred before repair work; no repository, provider, or
+  private state changed. The implementer was again redirected to the exact
+  catalog path.
+- 2026-07-31T01:30:11.4699741Z: The Task 3 timestamp/lifecycle adjudicator
+  again inferred the `r0` path for the catalog-declared `r1` scope-gate skill.
+  It stopped before repository inspection, emitted no private value, and
+  changed no state. The resumed task is given the exact declared root and is
+  forbidden from inferring any other skill location.

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T04:30:46.4130206Z
-- **Last observed:** 2026-07-30T20:37:56.4287329Z
+- **Last observed:** 2026-07-31T04:31:59.3465504Z
 - **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 4
 - **Environment:** Managed local sandbox and linked Git worktree
 - **Version/commit:** Uncommitted review fixes based on `1880cf9`
@@ -59,3 +59,22 @@ On 2026-07-30T20:37:56.4287329Z the dedicated setback-ledger stage hit the
 same linked-worktree index boundary. Git exited before staging any path; the
 setback files remain intact. The exact setback-only stage requires the same
 narrow repository-metadata permission.
+
+On 2026-07-30T23:03:07.1839924Z the Task 3 exact-allowlist stage hit the same
+linked-worktree index boundary. Git exited before staging any path; all green
+implementation and documentation changes remain intact. The identical scoped
+stage requires narrow repository-metadata permission.
+
+On 2026-07-31T00:43:09.8934480Z the final bounded Task 3 exact-allowlist stage
+hit the same linked-worktree index boundary. Git exited before staging any path;
+the identical 29-path operation was retried with narrow repository-metadata
+permission.
+
+On 2026-07-31T04:31:21.1301691Z the isolated controller repair's exact
+four-path stage hit the linked-worktree index-lock boundary. Git exited before
+staging any path. The identical allowlisted operation requires narrow
+repository-metadata permission.
+
+On 2026-07-31T04:31:59.3465504Z the identical four-path stage succeeded with
+narrow repository-metadata permission; cached inventory and whitespace checks
+matched exactly and the incident closed.

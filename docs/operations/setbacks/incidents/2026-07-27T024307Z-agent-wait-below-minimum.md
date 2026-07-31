@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T02:43:07Z
-- **Last observed:** 2026-07-28T22:28:02.5459525Z
-- **Phase/task:** Phase B acceptance instrumentation Task 1 review
+- **Last observed:** 2026-07-31T03:41:42.1841609Z
+- **Phase/task:** Phase B live-acceptance closure Tasks 7-10 preflight
 - **Environment:** Codex agent coordination
 - **Version/commit:** `574ea0a`
 
@@ -60,3 +60,7 @@ A valid ten-second wait completed normally.
 - 2026-07-28T22:28:02.5459525Z: Recurred while checking the resumed Task 3
   implementer. The one-second wait was rejected immediately, no state changed,
   and subsequent waits use at least the documented ten-second minimum.
+- 2026-07-31T03:41:42.1841609Z: Recurred in the Tasks 7-10 read-only scout
+  after its document read stopped. The invalid wait was rejected immediately;
+  no state changed. The scout is prohibited from issuing another wait and will
+  return directly after sequential reads.

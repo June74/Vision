@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T04:24:16.3267175Z
-- **Last observed:** 2026-07-30T19:20:38.9747919Z
+- **Last observed:** 2026-07-30T20:53:12.3702257Z
 - **Phase/task:** Phase B live-acceptance closure Task 1
 - **Environment:** Local Phase B worktree
 - **Version/commit:** Uncommitted wave-2 fixes based on `41d3e74`
@@ -72,3 +72,6 @@ the final complete gate.
 - 2026-07-30T19:20:38.9747919Z: A second combined replacement retained one
   inferred lifecycle environment name and was also rejected atomically. The
   correction now uses literal one-line substitutions only.
+- 2026-07-30T20:53:12.3702257Z: A Task 3 domain-test patch guessed a describe
+  label that differs from the current file. The hunk was rejected atomically
+  and changed no file; the retry uses symbol-only current context.

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T04:02:13Z
-- **Last observed:** 2026-07-30T20:38:40.2393105Z
+- **Last observed:** 2026-07-31T02:24:53.1224621Z
 - **Phase/task:** Phase B acceptance instrumentation formal final review
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `4420f6d`
@@ -157,3 +157,8 @@ this incident was recorded.
   emitted the same normalization metadata for its exact documentation paths.
   No semantic rewrite or external action occurred; the immediate bookkeeping
   restage is part of this same closed recurrence.
+- 2026-07-31T02:24:53.1224621Z: The isolated restore repair's final
+  `git diff --check` exited zero and reported expected Windows working-copy
+  normalization metadata for four changed text files. No whitespace error,
+  content rewrite, path output, or external state change occurred; staged
+  blobs will be verified without changing line-ending configuration.

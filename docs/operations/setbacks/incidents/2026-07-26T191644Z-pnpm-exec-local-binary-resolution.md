@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:16:44.091309Z
-- **Last observed:** 2026-07-30T20:11:11.7052165Z
+- **Last observed:** 2026-07-30T23:28:36.7050043Z
 - **Phase/task:** Phase B live-acceptance closure Task 1
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** `7d2f9f6`; reviewed candidate `0f08fc1`
@@ -92,6 +92,14 @@ files with 59 passing tests.
   did not start the local test process; no Task 2 source or provider state
   changed. The already approved repository-local Windows wrapper remains the
   equivalent runner.
+- 2026-07-30T21:05:32.6506918Z: Recurred when Task 3 ran the frozen 19-file RED
+  command. No test process started and no repository or provider state changed.
+  The retry uses the repository-local Vitest Windows wrapper with the identical
+  project and file arguments.
+- 2026-07-30T23:28:36.7050043Z: Recurred during the Task 3 final-repair
+  focused RED run. The test process did not start, only RED test edits existed,
+  and no production or provider state changed. The identical scope is retried
+  through the repository-local Vitest Windows wrapper.
 
 The repository-local wrapper reached the candidate script, confirming the
 package-runner resolution boundary. The workflow-equivalent local Node loader

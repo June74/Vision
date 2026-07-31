@@ -2,9 +2,9 @@
 
 - **Status:** contained
 - **First observed:** 2026-07-26T23:27:35Z
-- **Last observed:** 2026-07-26T23:27:35Z
-- **Phase/task:** Phase B AI Gateway navigation
-- **Environment:** Cloudflare dashboard through Codex in-app browser control
+- **Last observed:** 2026-07-31T03:29:24.0599195Z
+- **Phase/task:** Phase B provider navigation and live-acceptance closure Tasks 5-6
+- **Environment:** Provider dashboard and read-only repository preflight
 - **Version/commit:** `d7da15d`
 
 ## Symptom
@@ -56,6 +56,14 @@ The exposed value was limited to one opaque `.vision-backup` path segment.
 
 Containment was immediate; the diagnostic itself was read-only.
 
+The later source-preflight recurrence was also contained immediately. It
+exposed only a fixed checked-in prefix literal, not an object key or provider
+value, and the nonessential scout was retired.
+
 ## Recurrence history
 
 - 2026-07-26T23:27:35Z: First observed and contained.
+- 2026-07-31T03:29:24.0599195Z: A Task 5/6 source-symbol extraction returned
+  one fixed backup-prefix literal. It was not a concrete object key, provider
+  value, credential, or protected identifier. The scout stopped without
+  mutation, network access, or further reads and was retired.

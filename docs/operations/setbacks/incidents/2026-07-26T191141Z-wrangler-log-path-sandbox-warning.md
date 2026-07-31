@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-07-30T03:32:34.1083650Z
-- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 5
+- **Last observed:** 2026-07-31T03:37:02.9850425Z
+- **Phase/task:** Phase B live-acceptance closure Task 3 integration verification
 - **Environment:** Local managed sandbox
 - **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`; `6ebabd1`
 - **Latest recurrence:** 2026-07-30T03:32:34.1083650Z — the segmented Gate 0
@@ -189,3 +189,15 @@ security validation passed.
   1,181 unit/integration/security tests passed and one intentional skip, 179
   contract tests passed, 94 Worker tests passed, and typecheck, documentation,
   build, and release security validation passing.
+- 2026-07-31T00:29:23.4847341Z: Recurred during the final bounded Task 3 build
+  because Wrangler used its default user-profile debug-log path. The build
+  exited zero and produced both expected artifacts; the clean rerun routes only
+  optional diagnostics to an approved temporary path.
+- 2026-07-31T03:36:10.9872703Z: Recurred during the integrated resolver and
+  restore build because the approved task-local Wrangler log path was omitted.
+  The build and production crypto boundary still exited zero; no provider,
+  credential, repository, or private-data state changed. A clean rerun must
+  use the approved worktree-local temporary log path.
+- 2026-07-31T03:37:02.9850425Z: Closed after the identical build and
+  production crypto-boundary validation passed with the approved
+  worktree-local Wrangler log path and no sandbox warning.

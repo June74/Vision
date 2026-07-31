@@ -1,10 +1,10 @@
 # SB-20260727-035801-provider-url-source-output: Provider URL entered command output
 
-- **Status:** closed
+- **Status:** contained
 - **First observed:** 2026-07-27T03:58:01Z
-- **Last observed:** 2026-07-30T20:02:49.5514598Z
-- **Phase/task:** Phase B live-acceptance closure Task 1
-- **Environment:** Local Phase B worktree
+- **Last observed:** 2026-07-31T03:58:15.2441612Z
+- **Phase/task:** Phase B live-acceptance closure Tasks 1-6
+- **Environment:** Local Phase B worktree and read-only review agents
 - **Version/commit:** `1d6ad12`; `d24e24d`; `c8879b2`; `6bd0e45`; `7d5ca8a`
 
 ## Symptom
@@ -73,6 +73,10 @@ pass category. It reported zero raw values.
 The 2026-07-30 push recurrence was closed by a separate local/remote reference
 comparison that emitted only `remote_matches_reviewed_head=True` and
 `tracked_worktree_clean=True`.
+
+The 2026-07-30 Task 3 security-review recurrence was closed after the reviewer
+completed from the already sanitized package and previously gathered line
+evidence without any further source or tool inspection.
 
 ## Recurrence history
 
@@ -187,3 +191,80 @@ comparison that emitted only `remote_matches_reviewed_head=True` and
   data, provider response, file mutation, or external action was involved.
   Re-review resumes from the sanitized package plus redacted or symbol-only
   checks.
+- 2026-07-30T20:42:22.4939631Z: An optional Task 3 timing pre-audit searched
+  local memory despite its exact-document constraint and emitted one stored
+  deployment location. The agent stopped and produced no checklist. No secret,
+  token, provider identifier, environment value, source configuration, file
+  mutation, network call, or live action was involved. The audit will not be
+  retried; Task 3 proceeds from exact repository briefs only.
+- 2026-07-30T20:46:08.6351406Z: The Task 3 implementer used a broad read of
+  the committed preview workflow instead of bounded redacted matching and
+  rendered checked-in URL literals. It stopped before edits. No secret, token,
+  private response, provider identifier, live data, file mutation, or external
+  action was involved. Workflow inspection resumes only through targeted
+  redacted matches and the frozen brief.
+- 2026-07-30T21:09:18.5069934Z: The first Task 3 RED output expanded a workflow
+  assertion diff and re-rendered committed URL literals. It contained no
+  protected or live value and changed no state. Subsequent test child streams
+  are captured in memory and reduced to sanitized summary/failure-category
+  lines before output.
+- 2026-07-30T21:41:49.9099244Z: The Task 3 security reviewer used a local
+  workflow excerpt that rendered checked-in URL literals. The reviewer stopped
+  immediately. No credential, token, account data, provider response, file
+  mutation, network request, or external state change occurred. Review resumes
+  only from the sanitized package and already gathered line evidence.
+- 2026-07-30T21:47:23.5515181Z: A Task 3 repair audit memory search rendered a
+  previously recorded location. The audit stopped the search and did not
+  reproduce the value. No credential, token, account data, provider response,
+  file mutation, network request, or external state change occurred. Repair
+  work continues from exact repository artifacts only.
+- 2026-07-30T21:55:47.8388546Z: The disjoint Task 3 restore audit used a
+  targeted source-range read that rendered one checked-in endpoint literal.
+  The child stopped before edits or tests and did not reproduce the value. No
+  credential, live provider data, mutation, network request, or external state
+  change occurred. The parallel child lane was retired; the main implementer
+  continues from its finalized RED suite.
+- 2026-07-30T22:49:53.6030429Z: A bounded Task 3 documentation excerpt rendered
+  the checked-in public OAuth redirect location because the output was not
+  URL-sanitized. The lane stopped and did not reproduce it. No authorization
+  code, token, secret, account data, live response, mutation, network request,
+  or external state change occurred. Further inspection of that source is
+  prohibited except through URL-redacted boolean or count output.
+- 2026-07-31T01:14:41.3727233Z: A read-only Task 4 preparation command masked
+  HTTP(S) text but rendered one synthetic PostgreSQL-shaped unit-test fixture.
+  It contained sentinel test data only, not a real credential, provider value,
+  database location, protected row, or account identifier. The agent stopped
+  raw source dumps and changed subsequent inspection to scheme-wide URI and
+  credential-shaped-fixture redaction.
+- 2026-07-31T01:33:54.2568243Z: A bounded Task 3 deadline-adjudication excerpt
+  extended into a synthetic URL canary near the end of a unit-test range. It
+  was test-only and contained no live credential, provider value, account
+  data, protected row, or external response. The lane made no change and was
+  retired instead of resuming source excerpts.
+- 2026-07-31T01:44:57.4793587Z: The isolated controller worktree's failed
+  offline package install included a public external package location in its
+  error output. It contained no credential, authorization material, provider
+  account data, or private package source. No online retry occurred; setup
+  switched to a verified local dependency tree.
+- 2026-07-31T01:44:57.4793587Z: The isolated restore writer printed a bounded
+  integration-test excerpt containing a synthetic connection URI and
+  synthetic identifiers. They were fixture-only, not live database,
+  credential, provider, account, or protected values. The writer stopped raw
+  excerpts and was restricted to scheme-wide redaction plus line/count
+  evidence.
+- 2026-07-31T03:27:05.5154688Z: A bounded Task 5/6 workflow inspection
+  returned surrounding checked-in context containing a public endpoint
+  literal. No secret, environment value, live provider data, file mutation,
+  network action, or external state was involved. The scout stopped and may
+  resume only with context-free selection or in-memory scheme-wide redaction.
+- 2026-07-31T03:49:42.3108772Z: A failed isolated-worktree package-manager
+  verification printed public package registry and documentation locations.
+  No credential, package mutation, provider data, protected value, or external
+  state was involved. No network retry is authorized; subsequent verification
+  uses direct local binaries with captured output.
+- 2026-07-31T03:58:15.2441612Z: A bounded controller type-error source read
+  used a range that extended into a synthetic URL canary and branch fixture.
+  Both were test-only; no live credential, provider value, account data,
+  protected row, mutation, network request, or external state was involved.
+  Further inspection is limited to exact diagnostic lines or in-memory
+  classifications.

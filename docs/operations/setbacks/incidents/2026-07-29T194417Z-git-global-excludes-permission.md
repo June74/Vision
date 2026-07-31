@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T19:44:17Z
-- **Last observed:** 2026-07-30T20:11:11.7052165Z
+- **Last observed:** 2026-07-31T02:31:39.1928445Z
 - **Phase/task:** Phase B live-acceptance closure Task 1
 - **Environment:** Local Phase B linked worktree under the managed sandbox
 - **Version/commit:** `44d8e93802ce834fd0c8ca620d81472e23431b00`
@@ -28,14 +28,19 @@ were still available, but later Git commands may repeat the warning.
 ## Correction and prevention
 
 - **Correction:** Continue with repository-local tracked-file inspection and
-  treat any repeated identical warning as this closed incident.
+  use a command-scoped empty excludes value when a Git operation cannot
+  tolerate the inaccessible user path.
 - **Prevention:** Do not change user Git configuration during this scoped fix.
+  Do not use the Windows `NUL` device as `core.excludesFile` for `git status`;
+  it is not accepted consistently across Git subcommands.
 - **Owner:** Local tooling environment.
-- **Next diagnostic step:** None unless a Git result becomes incomplete.
+- **Next diagnostic step:** None.
 
 ## Verification and related work
 
-The same command returned a clean worktree at the required base commit.
+The final resolver inventory used a command-scoped empty excludes value and
+returned exactly four non-setback modified allowlist paths, zero staged paths,
+and zero other Task 3 paths.
 
 ## Recurrence history
 
@@ -72,3 +77,36 @@ The same command returned a clean worktree at the required base commit.
   repeated the same warning. Git still returned the exact expected head and
   dirty-path boundary; no persistent configuration, repository content, or
   provider state changed.
+- 2026-07-30T20:40:16.3618367Z: The post-commit setback-ledger cleanliness
+  check repeated the same warning after the dedicated documentation commit
+  succeeded. Both working-tree diff checks still exited zero; no persistent
+  configuration or external state changed.
+- 2026-07-30T20:43:17.0300786Z: The Task 3 prerequisite HEAD/status check
+  repeated the same user-level excludes warning twice while returning the exact
+  expected head and dirty-setback boundary. No repository or provider state
+  changed.
+- 2026-07-31T01:30:48.3225676Z: The Task 3 decisive-repair inventory check
+  repeated the same warning while returning the complete expected status and
+  confirming that only controller-owned setback paths were dirty. No Task 3
+  file, repository metadata, provider state, or user Git configuration
+  changed.
+- 2026-07-31T01:42:27.7681219Z: The initial status checks in both isolated
+  Task 3 controller and restore repair worktrees repeated the same warning.
+  Each command still returned complete repository-local status, both
+  worktrees remained unmodified, and no provider or user Git configuration
+  changed.
+- 2026-07-31T02:12:02.9563725Z: The resolver writer's exact inventory used
+  `core.excludesFile=NUL`; `git status` rejected that temporary value even
+  though an earlier tracked-file command accepted it. No inventory state was
+  produced and no staging or configuration change occurred. The retry uses an
+  empty command-scoped value with output captured and sanitized.
+- 2026-07-31T02:13:26.1766509Z: Closed after `core.excludesFile=` returned the
+  complete exact resolver inventory: four allowlist modifications, no staged
+  path, and no non-setback extra.
+- 2026-07-31T02:21:26.4685969Z: The restore writer repeated the retired
+  `core.excludesFile=NUL` form, and this Git build rejected it before returning
+  status. No paths were printed or state changed. The retry must use the
+  already proven empty value.
+- 2026-07-31T02:31:39.1928445Z: Closed after the restore lane committed exactly
+  six allowlist files, zero setback files, and reported a clean worktree using
+  the compatible command-scoped handling.

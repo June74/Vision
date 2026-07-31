@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T20:00:11Z
-- **Last observed:** 2026-07-30T19:54:17.6284485Z
+- **Last observed:** 2026-07-31T04:20:06.3651997Z
 - **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
 - **Environment:** Local Windows worktree
 - **Version/commit:** `b9ec10c`
@@ -43,3 +43,28 @@ The next status check uses the canonical worktree path.
   worktree path, so process creation failed before execution. No file,
   repository, private-data, provider, or external state changed. The agent
   completed its brief only from already captured safe evidence.
+- 2026-07-30T20:42:22.4939631Z: A Task 3 restore pre-audit treated the linked
+  worktree name from an unlabeled listing as a repository-root child. The
+  filename-only read failed with path-not-found before any closure document,
+  source, or private value was read; no state changed. The optional audit was
+  not retried.
+- 2026-07-31T01:58:45.9187356Z: The isolated Task 3 controller writer
+  mistyped one character in its assigned worktree path during a read-only
+  symbol inspection. The process failed before execution, printed no protected
+  value, and changed no state. All later calls reuse the exact assigned path
+  verbatim.
+- 2026-07-31T02:16:55.6984524Z: The isolated Task 3 restore writer supplied a
+  nonexistent shortened worktree path for a bounded diagnostic. Process
+  creation failed before execution and emitted no data. Further diagnosis must
+  copy the exact canonical assigned worktree path verbatim.
+- 2026-07-31T04:12:39.9400042Z: A finite controller failure classifier omitted
+  one character from the canonical user-directory segment, so process creation
+  failed before execution. No file, repository, provider, private-data, or
+  external state changed. The exact verified controller worktree path is copied
+  verbatim for the replacement.
+- 2026-07-31T04:16:54.4324095Z: The same one-character omission recurred in a
+  read-only rollback-fixture symbol check. Process creation failed before
+  execution and changed no state. All subsequent controller calls must copy the
+  canonical worktree path directly from the last successful call.
+- 2026-07-31T04:20:06.3651997Z: Closed after all replacement controller
+  verification calls used the canonical path and completed successfully.
