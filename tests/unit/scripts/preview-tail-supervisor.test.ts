@@ -2,9 +2,10 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  createDefaultPreviewTailCommandPlan,
   supervisePreviewTail,
   type PreviewTailChildCommand,
 } from "../../../scripts/run-preview-tail-supervisor";
@@ -82,6 +83,29 @@ if(producer){
 }
 
 describe("preview tail producer supervision", () => {
+  it("builds shell-free default commands from installed entrypoints", () => {
+    const forwarded = [
+      "--expectation",
+      "foundation_succeeded&still-one-argument",
+    ];
+    const plan = createDefaultPreviewTailCommandPlan(forwarded);
+
+    expect(plan.producer.executable).toBe(process.execPath);
+    expect(plan.consumer.executable).toBe(process.execPath);
+    expect(plan.producer.arguments[0]).toMatch(/wrangler[\\/]bin[\\/]wrangler\.js$/u);
+    expect(plan.producer.arguments.slice(1)).toEqual([
+      "tail",
+      "vision-preview",
+      "--format",
+      "json",
+    ]);
+    expect(isAbsolute(plan.producer.arguments[0]!)).toBe(true);
+    expect(isAbsolute(plan.consumer.arguments[0]!)).toBe(true);
+    expect(isAbsolute(plan.consumer.arguments[1]!)).toBe(true);
+    expect(plan.consumer.arguments.slice(2)).toEqual(forwarded);
+    expect(JSON.stringify(plan)).not.toMatch(/(?:pnpm\.cmd|cmd\.exe|shell)/iu);
+  });
+
   it.each([
     ["success", 0, "accepted\n"],
     ["producer_failure", 1, ""],

@@ -4,6 +4,12 @@ Runs the raw preview tail behind the privacy-safe observer. It captures both
 children, never prints raw producer output, and owns the producer shutdown
 after the observer has proved success.
 
+## `createDefaultPreviewTailCommandPlan`
+
+Resolves the installed Wrangler and TSX program files and builds two fixed
+Node argument arrays. Forwarded observer arguments stay separate array
+elements; no command shell or platform-specific command script is used.
+
 ## `supervisePreviewTail`
 
 Validates both argument arrays before starting anything, starts and confirms
@@ -36,5 +42,7 @@ Terminates one live child and waits for closure before supervision settles.
 ## `main`
 
 Uses the fixed Wrangler tail producer and the allowlisting
-`print-safe-tail.ts` observer used by the preview workflow. Spawned CLI tests
-may supply an absolute executable/script pair only while `NODE_ENV=test`.
+`print-safe-tail.ts` observer used by the preview workflow. Production launches
+both installed program files through the current Node executable with no shell.
+Spawned CLI tests may supply an absolute executable/script pair only while
+`NODE_ENV=test`.

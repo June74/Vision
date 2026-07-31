@@ -1042,6 +1042,33 @@ describe("normal preview live provider-state validation", () => {
     ).toThrow("Normal preview provider state is invalid.");
   });
 
+  it.each([
+    ["impossible calendar date", "2026-02-30T18:30:00.000Z"],
+    ["noncanonical midnight rollover", "2026-07-30T24:00:00.000Z"],
+  ])("rejects a legacy candidate with %s expiry", (_label, expiresAt) => {
+    const providerState = candidateProviderState("deploy_foundation");
+    const settings = providerState.settingsResponse as {
+      result: { bindings: Array<Record<string, unknown>> };
+    };
+    const expiryBinding = settings.result.bindings.find(
+      (binding) => binding.name === "PREVIEW_ACCEPTANCE_EXPIRES_AT",
+    );
+    expect(expiryBinding).toBeDefined();
+    expiryBinding!.text = expiresAt;
+
+    expect(() =>
+      validatePreviewProviderStateForRollback({
+        candidateIntent: {
+          evidenceType: "vision.preview-candidate-intent/v1",
+          candidateCommit: REVIEWED_COMMIT,
+        },
+        expectedCommit: REVIEWED_COMMIT,
+        mutationState: "may_have_started",
+        ...providerState,
+      }),
+    ).toThrow("Normal preview provider state is invalid.");
+  });
+
   it("fails closed for unknown recovery state and stale intent", () => {
     for (const override of [
       { mutationState: "unknown" },

@@ -1,10 +1,12 @@
 /** Supervises one raw tail producer behind the privacy-safe observer process. */
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { isAbsolute, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { createRequire } from "node:module";
+import { dirname, isAbsolute, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const FAILURE = "Preview tail supervision failed closed.";
 const MAX_CAPTURE_BYTES = 65_536;
+const moduleRequire = createRequire(import.meta.url);
 
 export interface PreviewTailChildCommand {
   readonly executable: string;
@@ -14,6 +16,44 @@ export interface PreviewTailChildCommand {
 export interface PreviewTailSupervisorResult {
   readonly stdout: string;
   readonly producerTermination: "deliberate";
+}
+
+export interface PreviewTailCommandPlan {
+  readonly producer: PreviewTailChildCommand;
+  readonly consumer: PreviewTailChildCommand;
+}
+
+/** Builds the shell-free commands used by the production CLI entrypoint. */
+export function createDefaultPreviewTailCommandPlan(
+  forwardedArguments: readonly string[],
+): PreviewTailCommandPlan {
+  const wranglerManifest = moduleRequire.resolve("wrangler/package.json");
+  const wranglerBin = resolve(
+    dirname(wranglerManifest),
+    "bin",
+    "wrangler.js",
+  );
+  const tsxCli = moduleRequire.resolve("tsx/cli");
+  const safeTailScript = resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    "print-safe-tail.ts",
+  );
+  return Object.freeze({
+    producer: validateCommand({
+      executable: process.execPath,
+      arguments: [
+        wranglerBin,
+        "tail",
+        "vision-preview",
+        "--format",
+        "json",
+      ],
+    }),
+    consumer: validateCommand({
+      executable: process.execPath,
+      arguments: [tsxCli, safeTailScript, ...forwardedArguments],
+    }),
+  });
 }
 
 interface PreviewTailSupervisorDependencies {
@@ -58,6 +98,9 @@ export function supervisePreviewTail(input: {
       ]).then(() => {
         settled = true;
         rejectPromise(new Error(FAILURE));
+      }, () => {
+        settled = true;
+        rejectPromise(new Error(FAILURE));
       });
     };
 
@@ -97,18 +140,19 @@ export function supervisePreviewTail(input: {
       }
       settling = true;
       producer.stdout.unpipe(consumer.stdin);
-      if (!producer.kill("SIGTERM")) {
-        settling = false;
-        rejectClosed();
-        return;
-      }
-      void awaitChildClose(producer).then(() => {
+      void stopChild(
+        producer,
+        awaitChildClose,
+      ).then(() => {
         if (settled) return;
         settled = true;
         resolvePromise(Object.freeze({
           stdout: output,
           producerTermination: "deliberate" as const,
         }));
+      }, () => {
+        settled = true;
+        rejectPromise(new Error(FAILURE));
       });
     });
   });
@@ -178,7 +222,6 @@ async function stopChild(
 /** Runs the fixed workflow producer and the allowlisting observer consumer. */
 async function main(): Promise<void> {
   try {
-    const defaultRunner = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
     const testExecutable = process.env.PREVIEW_TAIL_TEST_EXECUTABLE;
     const testScript = process.env.PREVIEW_TAIL_TEST_SCRIPT;
     const usingTestRunner =
@@ -194,32 +237,34 @@ async function main(): Promise<void> {
     ) {
       throw new Error(FAILURE);
     }
-    const packageRunner = usingTestRunner ? testExecutable : defaultRunner;
-    const packagePrefix = usingTestRunner ? [testScript] : [];
-    const result = await supervisePreviewTail({
-      producer: {
-        executable: packageRunner,
-        arguments: [
-          ...packagePrefix,
-          "exec",
-          "wrangler",
-          "tail",
-          "vision-preview",
-          "--format",
-          "json",
-        ],
-      },
-      consumer: {
-        executable: packageRunner,
-        arguments: [
-          ...packagePrefix,
-          "exec",
-          "tsx",
-          "scripts/print-safe-tail.ts",
-          ...process.argv.slice(2),
-        ],
-      },
-    });
+    const forwardedArguments = process.argv.slice(2);
+    const plan = usingTestRunner
+      ? Object.freeze({
+          producer: {
+            executable: testExecutable,
+            arguments: [
+              testScript,
+              "exec",
+              "wrangler",
+              "tail",
+              "vision-preview",
+              "--format",
+              "json",
+            ],
+          },
+          consumer: {
+            executable: testExecutable,
+            arguments: [
+              testScript,
+              "exec",
+              "tsx",
+              "scripts/print-safe-tail.ts",
+              ...forwardedArguments,
+            ],
+          },
+        })
+      : createDefaultPreviewTailCommandPlan(forwardedArguments);
+    const result = await supervisePreviewTail(plan);
     process.stdout.write(result.stdout);
   } catch {
     process.exitCode = 1;

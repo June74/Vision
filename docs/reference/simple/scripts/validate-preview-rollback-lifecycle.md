@@ -23,9 +23,14 @@ Rejects a boundary copied from another intent, run, or reviewed commit.
 
 ## `readPreviewCandidateMutationState`
 
-Returns `not_started` only when the candidate run has no mutation-boundary
-artifact. Exactly one current artifact returns `may_have_started`; duplicates,
-expired artifacts, and artifacts from another run fail closed.
+Reads the exact candidate-intent version before classifying artifacts. A v2
+intent with no boundary returns `not_started`; one current v2 boundary returns
+`may_have_started`. Because v1 workflows predate boundary artifacts, an exact
+v1 intent with no boundary conservatively returns `may_have_started`, allowing
+only exact normal or a frozen known v1 candidate state before the workflow
+still redeploys and freshly verifies immutable normal. A v1 intent paired with
+a v2 boundary, duplicates, expired artifacts, and foreign artifacts fail
+closed.
 
 ## `assertPreviewCandidateIntent`
 

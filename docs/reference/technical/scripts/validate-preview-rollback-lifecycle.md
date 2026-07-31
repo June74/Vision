@@ -25,9 +25,14 @@ the reviewed commit and candidate run to match.
 
 ## `readPreviewCandidateMutationState`
 
-Requires an exact zero-or-one artifact response for the candidate run. Zero
-proves `not_started`; one current correctly owned boundary yields
-`may_have_started`; duplicates and stale or foreign artifacts fail closed.
+Requires an exact candidate intent and zero-or-one artifact response for the
+candidate run. For v2, zero proves `not_started` and one current correctly
+owned boundary yields `may_have_started`. Exact v1 intents cannot possess the
+new v2-only boundary, so zero conservatively yields `may_have_started`; this
+admits only exact normal or an exact frozen-v1 known candidate inventory into
+the unconditional immutable-normal redeploy and fresh exact-normal
+verification. A v1 intent with a boundary, hybrid intents, duplicates, and
+stale or foreign artifacts fail closed.
 
 ## `assertPreviewCandidateIntent`
 

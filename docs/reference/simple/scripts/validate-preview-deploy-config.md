@@ -26,7 +26,8 @@ Checks one exact provider name, type, and optional non-secret text value.
 ## `matchesAnyLegacyCandidateProviderState`
 
 Allows an exact known candidate inventory while safely recovering an old v1
-intent that did not record its operation.
+intent that did not record its operation. Its expiry must parse to a finite
+instant and round-trip exactly as a UTC timestamp with millisecond precision.
 
 ## `matchesNormalProviderHealthAndSchedules`
 Checks healthy runtime and exactly the two permanent schedules.

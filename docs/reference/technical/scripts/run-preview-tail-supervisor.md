@@ -4,6 +4,15 @@ Supervises the long-running Wrangler producer and the bounded evidence
 consumer as separate captured child processes. Raw producer stdout is routed
 only to the consumer; producer and consumer stderr are discarded.
 
+## `createDefaultPreviewTailCommandPlan`
+
+Resolves `wrangler/package.json`, derives its absolute `bin/wrangler.js`, and
+resolves the installed `tsx/cli` entrypoint. Both commands use
+`process.execPath`; the producer receives the fixed Wrangler tail arguments
+and the consumer receives the absolute safe-tail script followed by exact
+forwarded array elements. No `pnpm.cmd`, `cmd.exe`, shell string, or shell
+interpolation is involved.
+
 ## `supervisePreviewTail`
 
 Snapshots both commands before any process starts, spawns and confirms the
@@ -40,8 +49,7 @@ failure cleanup and early-consumer handling.
 
 ## `main`
 
-Builds the fixed `pnpm exec wrangler tail vision-preview --format json`
-producer and fixed `pnpm exec tsx scripts/print-safe-tail.ts` consumer,
-forwarding only the observer's already-validated stdout. The spawned CLI
-acceptance harness can substitute one absolute test executable/script pair
-only under `NODE_ENV=test`; partial or production overrides fail closed.
+Uses the shell-free default command plan and forwards only the observer's
+already-validated stdout. The spawned CLI acceptance harness can substitute
+one absolute test executable/script pair only under `NODE_ENV=test`; partial
+or production overrides fail closed.

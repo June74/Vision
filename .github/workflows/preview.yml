@@ -748,6 +748,7 @@ jobs:
           trap 'rm -f "$artifacts_file"; rm -rf "$mutation_dir"' EXIT
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN_REF/artifacts?name=vision-preview-candidate-mutation-boundary&per_page=100" > "$artifacts_file"
           mutation_state="$(pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --classify-mutation-artifacts \
+            --candidate-intent preview-candidate-intent.json \
             --artifacts-file "$artifacts_file" \
             --candidate-run-ref "$CANDIDATE_RUN_REF")"
           if [[ "$mutation_state" == "may_have_started" ]]; then

@@ -1037,6 +1037,9 @@ describe("preview acceptance candidate workflow", () => {
       "vision-preview-candidate-mutation-boundary",
     );
     expect(rollbackMutation).toContain("--classify-mutation-artifacts");
+    expect(rollbackMutation).toMatch(
+      /--classify-mutation-artifacts \\\r?\n\s+--candidate-intent preview-candidate-intent\.json \\/u,
+    );
     expect(rollbackMutation).toContain("--verify-mutation-boundary");
     expect(rollbackMutation).toContain("may_have_started");
     expect(rollbackMutation).toContain("not_started");
@@ -1054,6 +1057,11 @@ describe("preview acceptance candidate workflow", () => {
       "scripts/validate-preview-rollback-lifecycle.ts --write-restore-proof",
     );
     expect(restoreProof).toContain('--provider-state "verified"');
+    expect(
+      rollbackNames.indexOf("Verify rollback admission provider state"),
+    ).toBeLessThan(
+      rollbackNames.indexOf("Deploy immutable normal preview Worker"),
+    );
     expect(
       rollbackNames.indexOf("Deploy immutable normal preview Worker"),
     ).toBeLessThan(

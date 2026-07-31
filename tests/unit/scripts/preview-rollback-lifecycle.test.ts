@@ -167,6 +167,7 @@ describe("preview rollback lifecycle", () => {
   it("classifies only zero or one exact mutation-boundary artifact for the candidate run", () => {
     expect(
       readPreviewCandidateMutationState({
+        candidateIntent: candidateIntent(),
         artifactsResponse: { total_count: 0, artifacts: [] },
         candidateRunRef: CANDIDATE_RUN_REF,
       }),
@@ -179,6 +180,7 @@ describe("preview rollback lifecycle", () => {
     };
     expect(
       readPreviewCandidateMutationState({
+        candidateIntent: candidateIntent(),
         artifactsResponse: { total_count: 1, artifacts: [artifact] },
         candidateRunRef: CANDIDATE_RUN_REF,
       }),
@@ -196,7 +198,43 @@ describe("preview rollback lifecycle", () => {
     ]) {
       expect(() =>
         readPreviewCandidateMutationState({
+          candidateIntent: candidateIntent(),
           artifactsResponse,
+          candidateRunRef: CANDIDATE_RUN_REF,
+        }),
+      ).toThrow("Preview rollback lifecycle proof is invalid.");
+    }
+  });
+
+  it("treats a missing v1-only mutation boundary conservatively", () => {
+    const legacyIntent = {
+      evidenceType: "vision.preview-candidate-intent/v1",
+      candidateCommit: COMMIT,
+    };
+    expect(
+      readPreviewCandidateMutationState({
+        candidateIntent: legacyIntent,
+        artifactsResponse: { total_count: 0, artifacts: [] },
+        candidateRunRef: CANDIDATE_RUN_REF,
+      }),
+    ).toBe("may_have_started");
+
+    const v2BoundaryArtifact = {
+      name: "vision-preview-candidate-mutation-boundary",
+      expired: false,
+      workflow_run: { id: Number(CANDIDATE_RUN_REF) },
+    };
+    for (const candidateIntentValue of [
+      legacyIntent,
+      { ...legacyIntent, candidateOperation: "deploy_foundation" },
+    ]) {
+      expect(() =>
+        readPreviewCandidateMutationState({
+          candidateIntent: candidateIntentValue,
+          artifactsResponse: {
+            total_count: 1,
+            artifacts: [v2BoundaryArtifact],
+          },
           candidateRunRef: CANDIDATE_RUN_REF,
         }),
       ).toThrow("Preview rollback lifecycle proof is invalid.");

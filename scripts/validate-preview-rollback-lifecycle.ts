@@ -214,13 +214,16 @@ export function assertPreviewCandidateMutationBoundary(input: {
 
 /** Distinguishes a proven pre-mutation failure from any uncertain deployment. */
 export function readPreviewCandidateMutationState(input: {
+  readonly candidateIntent: unknown;
   readonly artifactsResponse: unknown;
   readonly candidateRunRef: unknown;
 }): PreviewCandidateMutationState {
+  const intent = parseCandidateIntent(input.candidateIntent);
   const response = plainObject(input.artifactsResponse);
   const total = ownDataValue(response, "total_count");
   const artifacts = ownDataValue(response, "artifacts");
   if (
+    intent === undefined ||
     response === undefined ||
     !validNumericRunRef(input.candidateRunRef) ||
     !Number.isSafeInteger(total) ||
@@ -231,7 +234,14 @@ export function readPreviewCandidateMutationState(input: {
   ) {
     throw new Error(INVALID);
   }
-  if (artifacts.length === 0) return "not_started";
+  if (artifacts.length === 0) {
+    return intent.evidenceType === "vision.preview-candidate-intent/v1"
+      ? "may_have_started"
+      : "not_started";
+  }
+  if (intent.evidenceType !== "vision.preview-candidate-intent/v2") {
+    throw new Error(INVALID);
+  }
 
   const artifact = plainObject(artifacts[0]);
   const workflowRun = plainObject(ownDataValue(artifact, "workflow_run"));
@@ -1090,9 +1100,10 @@ async function main(): Promise<void> {
       );
     } else if (
       mode === "--classify-mutation-artifacts" &&
-      parsed.size === 2
+      parsed.size === 3
     ) {
       successOutput = `${readPreviewCandidateMutationState({
+        candidateIntent: await readJson(parsed.get("--candidate-intent")),
         artifactsResponse: await readJson(parsed.get("--artifacts-file")),
         candidateRunRef: parsed.get("--candidate-run-ref"),
       })}\n`;

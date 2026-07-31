@@ -32,7 +32,9 @@ without coercion.
 ## `matchesAnyLegacyCandidateProviderState`
 
 Recognizes only one exact generated selector inventory, matching schedules,
-AI rule, and restore-pair rule while recovering an old v1 intent.
+AI rule, and restore-pair rule while recovering an old v1 intent. The legacy
+expiry must parse to a finite instant and equal its exact `toISOString()`
+round-trip, rejecting impossible or normalized calendar values.
 
 ## `matchesNormalProviderHealthAndSchedules`
 Requires `status=ok`, a successful schedules envelope, and exactly the two

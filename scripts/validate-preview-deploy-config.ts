@@ -295,11 +295,16 @@ function matchesAnyLegacyCandidateProviderState(
   ) return false;
   const scenario = ownDataValue(scenarioBinding, "text");
   const expiresAt = ownDataValue(expiresBinding, "text");
+  const expiresAtMs = typeof expiresAt === "string"
+    ? Date.parse(expiresAt)
+    : Number.NaN;
   if (
     typeof scenario !== "string" ||
     typeof expiresAt !== "string" ||
     !ACCEPTANCE_SELECTORS.has(scenario as PreviewAcceptanceSelector) ||
-    !CANONICAL_INSTANT.test(expiresAt)
+    !CANONICAL_INSTANT.test(expiresAt) ||
+    !Number.isFinite(expiresAtMs) ||
+    new Date(expiresAtMs).toISOString() !== expiresAt
   ) return false;
   const acceptanceBindings: PreviewCandidateAcceptanceBindings = {
     scenario,
