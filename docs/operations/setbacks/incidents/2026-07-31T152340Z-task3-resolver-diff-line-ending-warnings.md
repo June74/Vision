@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T15:23:40.5189569Z
-- **Last observed:** 2026-07-31T15:30:50.5669463Z
+- **Last observed:** 2026-07-31T17:00:37.6209419Z
 - **Phase/task:** Phase B Task 3 final resolver review repair
 - **Environment:** Windows Git owned-diff verification
 - **Version/commit:** 73191b7 plus unstaged GREEN repairs and setback records
@@ -64,3 +64,7 @@ root ordinary output-suppressed integration diff check also exited zero.
   diff validation.
 - 2026-07-31T15:30:50.5669463Z: Closed after warning-free resolver evidence
   and successful root integration diff verification.
+- 2026-07-31T17:00:37.6209419Z: Recurred during the fourth-wave resolver
+  owned-path audit. The diff check exited successfully across the exact four
+  owned paths; only expected Windows normalization advisories appeared. The
+  incident remains closed as non-blocking.

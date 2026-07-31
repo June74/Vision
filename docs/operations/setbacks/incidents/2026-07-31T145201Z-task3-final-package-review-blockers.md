@@ -2,7 +2,7 @@
 
 - **Status:** contained
 - **First observed:** 2026-07-31T14:52:01.4047691Z
-- **Last observed:** 2026-07-31T16:50:22.2835097Z
+- **Last observed:** 2026-07-31T17:01:33.6452020Z
 - **Phase/task:** Phase B Task 3 final package re-review
 - **Environment:** Independent sanitized package-only lifecycle review
 - **Version/commit:** 6f7c7be
@@ -114,3 +114,9 @@ Pending.
   despite contradictory topology. The R2/restore security reviewer reported
   no blockers. The third-wave set is five Important findings requiring one
   coordinated test-first repair and another package review.
+- 2026-07-31T17:01:33.6452020Z: Read-only timeout analysis added one Important
+  contract finding. Restore requires 2,590 seconds, so the listener and job
+  must increase to 44 and 46 minutes respectively; however maintenance accepts
+  an unbounded future semantic instant, so no finite observer lifetime is safe
+  until the controller ties that instant to the same listener envelope. The
+  active repair set is now six Important findings.

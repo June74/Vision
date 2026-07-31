@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:30:35.2961897Z
-- **Last observed:** 2026-07-30T04:21:35.4114952Z
+- **Last observed:** 2026-07-31T16:54:31.0457568Z
 - **Phase/task:** Phase B live-acceptance specification finalization
 - **Environment:** Local Phase B worktree under the managed sandbox
 - **Version/commit:** Written-spec candidate based on `38c35eb`
@@ -167,3 +167,8 @@ commit `4420f6d`.
   specification, and the staged whitespace check exited successfully before
   the known warning. No workaround, provider action, or unrelated repository
   mutation was attempted.
+- 2026-07-31T16:54:31.0457568Z: Recurred during the fourth-wave resolver
+  repair preflight. Repository-local status succeeded before the sandbox denied
+  the optional user-level ignore read. No configuration change, file edit,
+  provider action, secret access, or external mutation occurred; the lane may
+  continue without consulting or modifying global Git configuration.

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T15:22:11.0697118Z
-- **Last observed:** 2026-07-31T16:39:42.5185006Z
+- **Last observed:** 2026-07-31T17:16:12.2795090Z
 - **Phase/task:** Phase B Task 3 final controller review repair
 - **Environment:** Windows Git owned-diff verification
 - **Version/commit:** 73191b7 plus unstaged GREEN repairs and setback records
@@ -74,3 +74,7 @@ exit-code confirmation remains part of the controller handoff.
   all 19 implementation paths. The implementation set had zero missing and
   zero extra paths, the output-suppressed diff check exited successfully, and
   no formatting churn was applied.
+- 2026-07-31T17:16:12.2795090Z: Recurred during the fourth-wave candidate
+  lifecycle owned-path audit. The diff check exited successfully and all 154
+  owned plus 63 cross-boundary tests passed; only expected Windows
+  normalization advisories appeared. The incident remains closed.

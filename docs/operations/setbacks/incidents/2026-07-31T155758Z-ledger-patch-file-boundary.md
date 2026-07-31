@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T15:57:58.8592092Z
-- **Last observed:** 2026-07-31T16:52:38.9496404Z
+- **Last observed:** 2026-07-31T17:17:35.7060721Z
 - **Phase/task:** Phase B Task 3 second-wave blocker repair
 - **Environment:** Local setback-ledger edit
 - **Version/commit:** 6dfdd38
@@ -53,3 +53,9 @@ protected value was involved.
   partial change occurred. All remaining index updates use one row per patch.
 - 2026-07-31T16:52:38.9496404Z: Closed after all three one-row index updates
   applied and matched their incident files exactly.
+- 2026-07-31T17:16:51.7569523Z: Reopened after a line-warning recurrence patch
+  assumed the wrong wrapping for the previous entry and failed atomically. No
+  source, provider, network, secret, or external state changed. The retry uses
+  the exact current tail returned by a bounded read.
+- 2026-07-31T17:17:35.7060721Z: Closed after the exact-tail incident update and
+  its one-row index update applied successfully.

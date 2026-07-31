@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T02:06:04.595659Z
-- **Last observed:** 2026-07-31T16:50:22.2835097Z
+- **Last observed:** 2026-07-31T17:01:33.6452020Z
 - **Phase/task:** Phase B Task 3 isolated integration diagnosis
 - **Environment:** Isolated restore/controller worktrees; bounded diagnostic output
 - **Version/commit:** 2bfbc23f13c44e60b01bbffcecc9748d322765b5 plus restore repair
@@ -151,3 +151,11 @@ completed without another output overflow.
   from retained package-only evidence and must return only its bounded verdict.
 - 2026-07-31T16:50:22.2835097Z: Closed after the reviewer returned a bounded
   three-finding verdict without another oversized excerpt.
+- 2026-07-31T16:55:06.0345866Z: Reopened after the read-only timeout analyst
+  combined several individually bounded controller ranges in one invocation,
+  exceeding the 220-line total, and loaded the full file before slicing. URL
+  lines were suppressed and no edit, provider, network, environment, Git, log,
+  secret, or external state was involved. The retry streams one range with at
+  most 220 total lines per invocation.
+- 2026-07-31T17:01:33.6452020Z: Closed after streaming bounded reads produced
+  the complete per-family timeout derivation without another overflow.
