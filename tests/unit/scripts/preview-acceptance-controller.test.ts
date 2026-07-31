@@ -310,8 +310,8 @@ describe("preview acceptance controller", () => {
   );
 
   it.each([
-    ["exact listener boundary", 44 * 60_000, true],
-    ["one millisecond beyond the listener", 44 * 60_000 + 1, false],
+    ["exact listener boundary", 46 * 60_000, true],
+    ["one millisecond beyond the listener", 46 * 60_000 + 1, false],
   ] as const)(
     "admits maintenance only when its semantic close fits the %s",
     async (_label, closeOffset, accepted) => {
@@ -352,7 +352,7 @@ describe("preview acceptance controller", () => {
     },
   );
 
-  it("settles a valid 2,590-second restore critical path inside the listener envelope", async () => {
+  it("settles the full 2,710-second restore path inside the listener envelope", async () => {
     let signalObservedAt: Date | null = null;
     let uniquenessClosesAt: Date | null = null;
     const fixture = harness({
@@ -365,7 +365,9 @@ describe("preview acceptance controller", () => {
         return "verified" as const;
       }),
       dispatch: vi.fn(async (operation) => {
-        if (operation === "deploy_restore") fixture.advanceTime(120_000);
+        if (operation === "observe" || operation === "deploy_restore") {
+          fixture.advanceTime(120_000);
+        }
         return {
           runRef:
             operation === "observe"
@@ -392,13 +394,13 @@ describe("preview acceptance controller", () => {
             signalObservedAt.getTime() + 120_000,
           );
         }
-        if (fixture.currentMonotonic() === 2_589_999) {
+        if (fixture.currentMonotonic() === 2_709_999) {
           fixture.advanceTime(1);
         }
         return {
           signal: "succeeded" as const,
           uniqueness:
-            fixture.currentMonotonic() >= 2_590_000
+            fixture.currentMonotonic() >= 2_710_000
               ? "succeeded" as const
               : "listening" as const,
           signalObservedAt,
@@ -409,7 +411,7 @@ describe("preview acceptance controller", () => {
     vi.mocked(fixture.dependencies.sleep).mockImplementation(
       async (milliseconds) => {
         fixture.advanceTime(
-          fixture.currentMonotonic() === 2_585_000 && milliseconds === 5_000
+          fixture.currentMonotonic() === 2_705_000 && milliseconds === 5_000
             ? 4_999
             : milliseconds,
         );
@@ -424,7 +426,7 @@ describe("preview acceptance controller", () => {
       priorCandidateRunRef: "41",
       rollbackClosureRunRef: "42",
     }, fixture.dependencies)).resolves.toBeUndefined();
-    expect(fixture.currentMonotonic()).toBe(2_590_000);
+    expect(fixture.currentMonotonic()).toBe(2_710_000);
     expect(fixture.statuses).toEqual([
       "observer_ready",
       "candidate_dispatched",
@@ -433,7 +435,8 @@ describe("preview acceptance controller", () => {
       "closure_verified",
     ]);
     expect(fixture.currentMonotonic()).toBeGreaterThan(42 * 60_000);
-    expect(fixture.currentMonotonic()).toBeLessThanOrEqual(44 * 60_000);
+    expect(fixture.currentMonotonic()).toBeGreaterThan(44 * 60_000);
+    expect(fixture.currentMonotonic()).toBeLessThanOrEqual(46 * 60_000);
   });
 
   it("does not accept maintenance success one millisecond before local close and accepts it at close", async () => {
