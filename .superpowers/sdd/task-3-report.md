@@ -1,6 +1,6 @@
 # Task 3 report
 
-Status: second package-review repair locally verified; third package re-review
+Status: third package-review repair locally verified; fourth package re-review
 pending.
 
 Commit sequence:
@@ -128,7 +128,7 @@ and excluded from implementation scope.
 - `tests/unit/scripts/preview-observer-run-resolution.test.ts`
 - `tests/unit/scripts/preview-restore-readmission.test.ts`
 
-## Complete final package inventory (77)
+## Complete final package inventory (78)
 
 - `.github/workflows/preview.yml`
 - `.superpowers/sdd/task-3-report.md`
@@ -190,6 +190,7 @@ and excluded from implementation scope.
 - `tests/integration/jobs/temporary-preview-role-probe.test.ts`
 - `tests/security/secret-bundle.test.ts`
 - `tests/security/temporary-surface-cleanup.test.ts`
+- `tests/unit/ci/workflow-yaml.test.ts`
 - `tests/unit/ci/workflows.test.ts`
 - `tests/unit/domain/temporary-preview-fault.test.ts`
 - `tests/unit/jobs/calendar-maintenance-evidence.test.ts`
@@ -214,8 +215,8 @@ from this implementation commit.
 ## Final canonical integration
 
 - Review base: `24e959f5`
-- Integrated implementation tip: `d6a6432`
-- Integrated implementation shape: 12 implementation commits and 77 changed
+- Integrated implementation tip: `f37fb4c`
+- Integrated implementation shape: 13 implementation commits and 78 changed
   paths
 - Decisive repair commits:
   - `00cd3c7` restores the production restore facade and acceptance contract.
@@ -235,11 +236,19 @@ from this implementation commit.
     candidate window; uniqueness close may move only within bounded later
     provider evidence; candidate rollback verifies the exact schedule profile;
     and malformed R2 pagination envelopes fail closed.
+  - `f37fb4c` closes the third package-review findings: never-deployed intents
+    recover only after exact normal-state proof; normal deployment cannot
+    bypass an open candidate; raw backward uniqueness and contradictory queued
+    topology fail closed; restore has a 44-minute listener inside a 46-minute
+    job; and maintenance evidence is bounded to the same listener envelope.
 - The first fresh package-review wave reported 2 Critical and 6 Important
   findings. Each finding has a dedicated RED case and an implemented repair;
   the second wave reported a deduplicated 2 Critical and 3 Important findings.
   Every second-wave finding also has a dedicated RED case and an implemented
-  repair. A third package-review wave remains required.
+  repair. The third wave reported five Important findings, and its bounded
+  timeout analysis added one Important maintenance-envelope finding. All six
+  have dedicated RED coverage and an implemented repair. A fourth package
+  review remains required.
 - Resolver verification: 71 passed tests, zero failures.
 - Controller verification: 53 passed tests, zero failures.
 - Restore reader/selection verification: 38 passed tests, zero failures.
@@ -249,6 +258,12 @@ from this implementation commit.
 - Second-wave observer/controller/workflow verification: 154 passed tests,
   zero failures.
 - Integrated second-wave focused verification: 6 files and 263 passed tests,
+  zero failures.
+- Third-wave resolver verification: 76 passed tests, zero failures.
+- Third-wave controller-envelope verification: 59 passed tests, zero failures.
+- Third-wave candidate lifecycle verification: 154 owned tests and 63
+  cross-boundary tests, zero failures.
+- Integrated third-wave focused verification: 9 files and 301 passed tests,
   zero failures.
 - The combined controller, resolver, and workflow focused group passed from
   the main worktree with zero failures.
@@ -263,6 +278,6 @@ from this implementation commit.
   diagnosed and corrected; the complete repository gate then passed.
 - The backup key remains version 1 and was not rotated.
 
-This final integration section and 77-path inventory supersede the earlier
-five-commit wording. Final package re-review remains required before Task 3 is
-accepted. Setback evidence remains separately controller-owned.
+This final integration section and 78-path inventory supersede the earlier
+five-commit wording. Fourth package re-review remains required before Task 3
+is accepted. Setback evidence remains separately controller-owned.
