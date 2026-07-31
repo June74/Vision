@@ -1,6 +1,6 @@
 /** Privately re-admits one same-commit role closure before restore. */
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, open, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -12,6 +12,7 @@ import {
 
 const FAILURE = "Preview restore re-admission failed closed.";
 const MAX_CAPTURE_BYTES = 1_048_576;
+export const MAX_CLOSURE_PROOF_BYTES = 8_192;
 const RUN_REF_PATTERN = /^[1-9][0-9]{0,19}$/u;
 const COMMIT_PATTERN = /^[a-f0-9]{40}$/u;
 const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u;
@@ -33,8 +34,8 @@ export interface PreviewRestoreReadmissionDependencies {
   ): ReturnType<PreviewRestoreReadmissionCommandRunner>;
   /** Creates one private workspace for the downloaded closure proof. */
   makeTemporaryDirectory(): Promise<string>;
-  /** Reads one downloaded proof without rendering its contents. */
-  readFile(path: string): Promise<string>;
+  /** Reads at most the closure-proof cap plus one byte. */
+  readFile(path: string): Promise<Uint8Array>;
   /** Removes the private proof workspace before the boundary settles. */
   removeTemporaryDirectory(path: string): Promise<void>;
 }
@@ -101,10 +102,17 @@ export async function readmitPreviewRestore(
         temporaryDirectory,
       ]),
     );
+    const closureProofBytes = await dependencies.readFile(
+      join(temporaryDirectory, "preview-rollback-closure.json"),
+    );
+    if (
+      !(closureProofBytes instanceof Uint8Array) ||
+      closureProofBytes.byteLength > MAX_CLOSURE_PROOF_BYTES
+    ) {
+      fail();
+    }
     const closureProof = JSON.parse(
-      await dependencies.readFile(
-        join(temporaryDirectory, "preview-rollback-closure.json"),
-      ),
+      new TextDecoder("utf-8", { fatal: true }).decode(closureProofBytes),
     ) as unknown;
     assertPreviewRollbackClosure({
       closureProof,
@@ -129,7 +137,7 @@ export async function readmitPreviewRestore(
 }
 
 /** Creates the concrete captured argument-array process/file boundary. */
-function createPreviewRestoreReadmissionDependencies():
+export function createPreviewRestoreReadmissionDependencies():
   PreviewRestoreReadmissionDependencies {
   /** Runs one fully captured argument-array metadata command. */
   const runCommand: PreviewRestoreReadmissionCommandRunner =
@@ -149,12 +157,34 @@ function createPreviewRestoreReadmissionDependencies():
     /** Creates one private workspace for the downloaded closure proof. */
     makeTemporaryDirectory: () =>
       mkdtemp(join(tmpdir(), "preview-restore-readmission-")),
-    /** Reads one downloaded proof without rendering its contents. */
-    readFile: (path: string) => readFile(path, "utf8"),
+    /** Reads at most the closure-proof cap plus one byte. */
+    readFile: readBoundedClosureProof,
     /** Removes the private proof workspace before the boundary settles. */
     removeTemporaryDirectory: (path: string) =>
       rm(path, { recursive: true, force: true }),
   });
+}
+
+/** Reads no more than max plus one bytes before any UTF-8 decoding. */
+async function readBoundedClosureProof(path: string): Promise<Uint8Array> {
+  const handle = await open(path, "r");
+  try {
+    const bytes = Buffer.allocUnsafe(MAX_CLOSURE_PROOF_BYTES + 1);
+    let offset = 0;
+    while (offset < bytes.byteLength) {
+      const result = await handle.read(
+        bytes,
+        offset,
+        bytes.byteLength - offset,
+        offset,
+      );
+      if (result.bytesRead === 0) break;
+      offset += result.bytesRead;
+    }
+    return bytes.subarray(0, offset);
+  } finally {
+    await handle.close();
+  }
 }
 
 /** Requires one exact public input before any child is invoked. */

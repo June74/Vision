@@ -584,6 +584,7 @@ async function waitForSignal(
       if (
         detectedAtMonotonic < actionCompletedMonotonic ||
         providerElapsed < 0 ||
+        observedAt.getTime() > detectedAtWall.getTime() ||
         observedAt.getTime() > absoluteNoSignalDeadline.getTime()
       ) {
         fail();
@@ -635,28 +636,52 @@ function assertRollbackDispatchDeadline(
   }
 }
 
-/** Waits only for the already-running permanent maintenance observer. */
+/** Waits through the reserved post-close settlement margin. */
 async function waitForMaintenanceUniqueness(
   observer: unknown,
   closesAt: Date,
   dependencies: PreviewAcceptanceControllerDependencies,
 ): Promise<void> {
+  const anchorWall = safeNow(dependencies.wallNow());
+  const anchorMonotonic = safeMonotonic(dependencies.monotonicNow());
+  const settlementAt = new Date(
+    closesAt.getTime() + UNIQUENESS_MILLISECONDS,
+  );
+  const settlementRemaining =
+    settlementAt.getTime() - anchorWall.getTime();
+  if (settlementRemaining < 0) fail();
+  const settlementMonotonic =
+    anchorMonotonic + settlementRemaining;
   for (;;) {
     const state = await dependencies.readObserverState(observer);
-    if (state.uniqueness === "succeeded") return;
+    const detectedAtWall = safeNow(dependencies.wallNow());
+    const detectedAtMonotonic = safeMonotonic(
+      dependencies.monotonicNow(),
+    );
     if (
       state.uniqueness === "failed" ||
-      safeNow(dependencies.wallNow()).getTime() >
-        closesAt.getTime() + POLL_MILLISECONDS
+      detectedAtWall.getTime() > settlementAt.getTime() ||
+      detectedAtMonotonic < anchorMonotonic ||
+      detectedAtMonotonic > settlementMonotonic
     ) {
       fail();
     }
-    const remaining =
-      closesAt.getTime() +
-      POLL_MILLISECONDS -
-      safeNow(dependencies.wallNow()).getTime();
+    if (
+      state.uniqueness === "succeeded" &&
+      detectedAtWall.getTime() >= closesAt.getTime()
+    ) {
+      return;
+    }
+    const remaining = Math.min(
+      POLL_MILLISECONDS,
+      settlementAt.getTime() - detectedAtWall.getTime(),
+      settlementMonotonic - detectedAtMonotonic,
+      state.uniqueness === "succeeded"
+        ? closesAt.getTime() - detectedAtWall.getTime()
+        : Number.POSITIVE_INFINITY,
+    );
     if (remaining <= 0) fail();
-    await dependencies.sleep(Math.min(POLL_MILLISECONDS, remaining));
+    await dependencies.sleep(remaining);
   }
 }
 

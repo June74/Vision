@@ -108,7 +108,7 @@ describe("preview observer run resolution", () => {
       readPreviewSignalObserverState("41" as never, "role_probe", deps),
     ).resolves.toStrictEqual({ signal: "failed", signalObservedAt: null });
   });
-  it("polls every five seconds through the inclusive 120-second deadline", async () => {
+  it("admits one observation only on the inclusive terminal poll after the full horizon", async () => {
     let calls = 0;
     let monotonic = 0;
     const deps: PreviewObserverResolutionDependencies = {
@@ -140,8 +140,11 @@ describe("preview observer run resolution", () => {
     );
 
     expect(String(handle)).toBe("41");
+    expect(calls).toBe(25);
     expect(deps.sleep).toHaveBeenCalledTimes(24);
     expect(deps.sleep).toHaveBeenCalledWith(5_000);
+    expect(deps.readRun).toHaveBeenCalledOnce();
+    expect(deps.listJobs).toHaveBeenCalledOnce();
   });
 
   it("retains one stable identity through the deadline and rejects a last-poll duplicate", async () => {
@@ -454,6 +457,29 @@ describe("preview observer run resolution", () => {
     });
   });
 
+  it.each([
+    ["missing", null],
+    ["malformed", "not-a-provider-instant"],
+    ["fractional", "2026-07-30T18:00:10.001Z"],
+    ["lower precision", "2026-07-30T18:00Z"],
+    ["noncanonical date", "2026-02-30T18:00:10Z"],
+  ] as const)(
+    "rejects a %s provider signal completion timestamp",
+    async (_label, completedAt) => {
+      const signal = job(
+        "Capture role_probe signal",
+        "completed",
+        "success",
+      );
+      signal.steps[0]!.completed_at = completedAt;
+      const deps = dependencies([run()], [signal]);
+
+      await expect(
+        readPreviewSignalObserverState("41" as never, "role_probe", deps),
+      ).rejects.toThrow("Preview observer metadata is invalid.");
+    },
+  );
+
   it("keeps two-job uniqueness separate from the fast signal", async () => {
     const deps = dependencies([run()], [
       job("Capture restore signal", "completed", "success"),
@@ -468,17 +494,20 @@ describe("preview observer run resolution", () => {
     });
   });
 
-  it.each([0, 1])(
-    "accepts maintenance completion at or after tick plus 120 seconds (%i ms)",
-    async (offset) => {
+  it.each([
+    ["the semantic close", 120_000],
+    ["the inclusive settlement deadline", 240_000],
+  ] as const)(
+    "accepts maintenance completion at %s",
+    async (_label, offset) => {
       const maintenance = job(
         "Capture calendar_maintenance uniqueness",
         "completed",
         "success",
       );
       maintenance.steps[0]!.completed_at = new Date(
-        TICK.getTime() + 120_000 + offset,
-      ).toISOString();
+        TICK.getTime() + offset,
+      ).toISOString().replace(".000Z", "Z");
       const deps = dependencies([run()], [maintenance]);
       await expect(
         readPreviewMaintenanceObserverState(
@@ -494,14 +523,18 @@ describe("preview observer run resolution", () => {
     },
   );
 
-  it("rejects maintenance completion one millisecond before the close", async () => {
+  it.each([
+    ["one millisecond before the close", 120_000 - 1],
+    ["one millisecond after the settlement deadline", 240_000 + 1],
+    ["one full second after the settlement deadline", 241_000],
+  ] as const)("rejects maintenance completion %s", async (_label, offset) => {
     const maintenance = job(
       "Capture calendar_maintenance uniqueness",
       "completed",
       "success",
     );
     maintenance.steps[0]!.completed_at = new Date(
-      TICK.getTime() + 120_000 - 1,
+      TICK.getTime() + offset,
     ).toISOString();
     const deps = dependencies([run()], [maintenance]);
     await expect(

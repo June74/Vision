@@ -229,6 +229,106 @@ describe("preview acceptance controller", () => {
     expect(maintenanceContext).not.toHaveProperty("observerClosesAt");
   });
 
+  it("polls maintenance metadata beyond five seconds after close within the settlement margin", async () => {
+    const providerSuccessAt = START.getTime() + 130_000;
+    const fixture = harness();
+    vi.mocked(fixture.dependencies.readObserverState).mockImplementation(
+      async () => ({
+        signal: "listening",
+        uniqueness:
+          fixture.currentWall().getTime() >= providerSuccessAt
+            ? "succeeded"
+            : "listening",
+        signalObservedAt: null,
+      }),
+    );
+
+    await expect(runPreviewAcceptanceController({
+      family: "calendar_maintenance",
+      reviewedCommit: SHA,
+      expiresAt: "2026-07-30T18:10:00.000Z",
+      expectation: {
+        kind: "maintenance_succeeded",
+        maintenanceScheduledAt: START.toISOString(),
+      },
+    }, fixture.dependencies)).resolves.toBeUndefined();
+    expect(fixture.currentWall().getTime()).toBeGreaterThanOrEqual(
+      providerSuccessAt,
+    );
+  });
+
+  it.each([
+    ["exact settlement deadline", 240_000, true],
+    ["one millisecond after settlement", 240_001, false],
+  ] as const)(
+    "applies the paired maintenance settlement boundary at %s",
+    async (_label, offset, accepted) => {
+      const fixture = harness();
+      vi.mocked(fixture.dependencies.readObserverState).mockImplementation(
+        async () => {
+          fixture.advanceTime(
+            START.getTime() + offset - fixture.currentWall().getTime(),
+          );
+          return {
+            signal: "listening",
+            uniqueness: "succeeded",
+            signalObservedAt: null,
+          };
+        },
+      );
+      const run = runPreviewAcceptanceController({
+        family: "calendar_maintenance",
+        reviewedCommit: SHA,
+        expiresAt: "2026-07-30T18:10:00.000Z",
+        expectation: {
+          kind: "maintenance_succeeded",
+          maintenanceScheduledAt: START.toISOString(),
+        },
+      }, fixture.dependencies);
+
+      if (accepted) {
+        await expect(run).resolves.toBeUndefined();
+      } else {
+        await expect(run).rejects.toThrow(
+          "Preview acceptance controller failed closed.",
+        );
+        expect(fixture.statuses.at(-1)).toBe("failed_closed");
+      }
+    },
+  );
+
+  it("does not accept maintenance success one millisecond before local close and accepts it at close", async () => {
+    const close = START.getTime() + 120_000;
+    const fixture = harness();
+    let reads = 0;
+    vi.mocked(fixture.dependencies.readObserverState).mockImplementation(
+      async () => {
+        reads += 1;
+        if (reads === 1) {
+          fixture.advanceTime(close - 1 - fixture.currentWall().getTime());
+        }
+        return {
+          signal: "listening",
+          uniqueness: "succeeded",
+          signalObservedAt: null,
+        };
+      },
+    );
+
+    await expect(runPreviewAcceptanceController({
+      family: "calendar_maintenance",
+      reviewedCommit: SHA,
+      expiresAt: "2026-07-30T18:10:00.000Z",
+      expectation: {
+        kind: "maintenance_succeeded",
+        maintenanceScheduledAt: START.toISOString(),
+      },
+    }, fixture.dependencies)).resolves.toBeUndefined();
+    expect(reads).toBe(2);
+    expect(fixture.dependencies.sleep).toHaveBeenCalledWith(1);
+    expect(fixture.currentWall().getTime()).toBe(close);
+  });
+
   it("compares the remote tip immediately before every dispatch", async () => {
     const fixture = harness();
     await runPreviewAcceptanceController(
@@ -346,6 +446,47 @@ describe("preview acceptance controller", () => {
       "close_rollback",
     ]);
   });
+
+  it.each([
+    ["equal to paired detection wall", 0, true],
+    ["one millisecond after paired detection wall", 1, false],
+    ["one second after paired detection wall", 1_000, false],
+  ] as const)(
+    "requires the provider signal timestamp to be no later than detection: %s",
+    async (_label, futureMilliseconds, accepted) => {
+      const fixture = harness();
+      vi.mocked(fixture.dependencies.readObserverState).mockImplementation(
+        async () => ({
+          signal: "succeeded",
+          uniqueness: "succeeded",
+          signalObservedAt: new Date(
+            fixture.currentWall().getTime() + futureMilliseconds,
+          ),
+        }),
+      );
+      const run = runPreviewAcceptanceController({
+        family: "foundation_probe",
+        reviewedCommit: SHA,
+        expiresAt: "2026-07-30T18:10:00.000Z",
+        expectation: { kind: "foundation_succeeded" },
+      }, fixture.dependencies);
+
+      if (accepted) {
+        await expect(run).resolves.toBeUndefined();
+      } else {
+        await expect(run).rejects.toThrow(
+          "Preview acceptance controller failed closed.",
+        );
+      }
+      expect(fixture.dispatches.map(({ operation }) => operation)).toEqual([
+        "observe",
+        "deploy_foundation",
+        "rollback",
+        "close_rollback",
+      ]);
+      expect(fixture.dependencies.verifyClosure).toHaveBeenCalledOnce();
+    },
+  );
 
   it("checks rollback dispatch at exactly 50 local seconds and 59 provider seconds", async () => {
     const fixture = harness();

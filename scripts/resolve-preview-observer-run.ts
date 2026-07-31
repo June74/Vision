@@ -13,6 +13,8 @@ const MAX_JOBS = 100;
 const MAX_STEPS = 100;
 const POLL_MILLISECONDS = 5_000;
 const RESOLUTION_MILLISECONDS = 120_000;
+const PROVIDER_INSTANT_PATTERN =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/u;
 const execFileAsync = promisify(execFile);
 
 export type PreviewObserverRunHandle = string & {
@@ -209,12 +211,14 @@ export async function readPreviewMaintenanceObserverState(
   const state = observerJobState(
     exactJob(jobs, `Capture ${family} uniqueness`),
   );
-  if (
-    state.state === "succeeded" &&
-    canonicalDate(state.listener.completedAt).getTime() <
-      tick.getTime() + RESOLUTION_MILLISECONDS
-  ) {
-    fail();
+  if (state.state === "succeeded") {
+    const completedAt = canonicalDate(state.listener.completedAt);
+    if (
+      completedAt.getTime() < tick.getTime() + RESOLUTION_MILLISECONDS ||
+      completedAt.getTime() > tick.getTime() + 2 * RESOLUTION_MILLISECONDS
+    ) {
+      fail();
+    }
   }
   return Object.freeze({
     uniqueness: state.state,
@@ -364,9 +368,9 @@ function observerJobState(job: JobSnapshot): {
     job.status === "completed" &&
     job.conclusion === "success" &&
     listener.status === "completed" &&
-    listener.conclusion === "success" &&
-    listener.completedAt !== null
+    listener.conclusion === "success"
   ) {
+    if (listener.completedAt === null) fail();
     canonicalDate(listener.completedAt);
     return { state: "succeeded", listener };
   }
@@ -554,11 +558,18 @@ function nullableBoundedString(value: unknown): string | null {
   return boundedString(value);
 }
 
-/** Parses one provider timestamp. */
+/** Parses one exact canonical provider-second timestamp. */
 function canonicalDate(value: unknown): Date {
-  if (typeof value !== "string") fail();
+  if (typeof value !== "string" || !PROVIDER_INSTANT_PATTERN.test(value)) {
+    fail();
+  }
   const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) fail();
+  if (
+    !Number.isFinite(parsed) ||
+    new Date(parsed).toISOString() !== value.replace("Z", ".000Z")
+  ) {
+    fail();
+  }
   return new Date(parsed);
 }
 

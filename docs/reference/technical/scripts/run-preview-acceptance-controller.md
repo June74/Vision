@@ -101,7 +101,9 @@ retry an ambiguous mutation.
 Polls every five seconds against paired wall/monotonic samples and the absolute
 earlier of action completion plus 120 seconds or expiry minus 60 seconds. It
 rejects local or provider timestamps one millisecond late while admitting the
-exact boundary.
+exact boundary. A provider signal later than the paired local detection sample
+fails before remote-tip or rollback acceptance, then enters the ordinary
+single cleanup path.
 
 ## `assertPreActionIdleDeadline`
 
@@ -116,8 +118,11 @@ seconds since the provider listener completed.
 
 ## `waitForMaintenanceUniqueness`
 
-Polls only the already-running normal maintenance uniqueness observer and
-requires success for the requested scheduled tick before expiry.
+Polls only the already-running normal maintenance uniqueness observer.
+Semantic success remains anchored to scheduled tick plus 120 seconds and is
+never accepted while the paired local wall is earlier. Paired wall and
+monotonic deadlines permit provider settlement through close plus another
+120 seconds, inclusive, and reject either clock one millisecond later.
 
 ## `createObserveContext`
 

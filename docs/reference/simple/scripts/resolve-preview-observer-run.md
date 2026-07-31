@@ -6,10 +6,10 @@ workflow, resolver, and state validator on the same exact names.
 
 ## `resolvePreviewObserverRun`
 
-Polls every five seconds for one correctly attributed observer and requires
-the same active run to be observed twice within the two-minute resolution
-window. Every poll walks all relevant run-list pages before deciding
-uniqueness.
+Polls every five seconds across the complete two-minute horizon. A run first
+found on the inclusive terminal poll has a deliberate single-observation
+exception; otherwise the same active run must remain stable. Every poll walks
+all relevant pages, so a duplicate discovered on the last poll still fails.
 
 ## `listRelevantRuns`
 
@@ -19,7 +19,8 @@ than silently truncating.
 
 ## `readPreviewSignalObserverState`
 
-Checks the fast signal.
+Checks the fast signal and accepts only an exact canonical provider timestamp
+with whole-second UTC precision.
 
 ## `readPreviewTwoJobObserverState`
 
@@ -27,7 +28,9 @@ Checks signal and uniqueness separately.
 
 ## `readPreviewMaintenanceObserverState`
 
-Checks maintenance uniqueness and binds it to the requested scheduled tick.
+Checks maintenance uniqueness, binds it to the requested scheduled tick, and
+requires provider completion from tick plus two minutes through the inclusive
+two-minute settlement margin.
 
 ## `createGitHubObserverResolutionDependencies`
 
@@ -103,7 +106,7 @@ Accepts a bounded provider string or `null`.
 
 ## `canonicalDate`
 
-Parses a timestamp.
+Parses only `YYYY-MM-DDTHH:MM:SSZ` when it round-trips to the same real instant.
 
 ## `validDate`
 

@@ -85,8 +85,9 @@ dispatches rollback, and verifies closure.
 Polls the active observer every five seconds until success or a bounded
 failure. The absolute limit is the earlier of action completion plus two
 minutes or candidate expiry minus one minute, even when the action driver
-returns late. A driver completion timestamp later than the paired wall sample
-fails before deadline calculation.
+returns late. A driver completion or provider signal timestamp later than its
+paired wall sample fails before deadline calculation or rollback; the
+candidate is still cleaned up.
 
 ## `assertPreActionIdleDeadline`
 
@@ -101,7 +102,10 @@ Requires rollback dispatch to start within 50 seconds of local detection and
 ## `waitForMaintenanceUniqueness`
 
 Waits only for the permanent maintenance observer; it never dispatches a
-temporary maintenance candidate.
+temporary maintenance candidate. Success cannot settle before the exact
+tick-plus-two-minute close. Paired wall and monotonic clocks bound continued
+provider polling through the inclusive close-plus-two-minute settlement
+deadline.
 
 ## `createObserveContext`
 

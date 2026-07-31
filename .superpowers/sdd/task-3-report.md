@@ -1,6 +1,6 @@
 # Task 3 report
 
-Status: final follow-up repaired and locally verified.
+Status: decisive follow-up repaired and locally verified.
 
 Commit sequence:
 
@@ -8,12 +8,13 @@ Commit sequence:
 - initial Task 3 controller commit: `38bed3e991d5`
 - first acceptance-gap repair: `b1935577c211`
 - final re-review repair: `841bc01b600e`
-- final follow-up repair: this commit
+- final follow-up repair: `870de3980789`
+- decisive boundary repair: this commit
 
 The full package inventory below covers the complete
-`24e959f..final-follow-up` range. The final-follow-up allowlist is listed
-separately so its 29 paths can be compared exactly with the 74-path,
-four-commit package.
+`24e959f..decisive-follow-up` range. The decisive-follow-up allowlist is listed
+separately so its 13 paths can be compared exactly with the 74-path,
+five-commit package.
 
 ## RED, GREEN, and refactor evidence
 
@@ -37,6 +38,15 @@ four-commit package.
   and restore re-admission uses one argument-array helper and one fixed safe
   failure. These changes preserve the reviewed lifecycle, including valid
   role-to-cleanup transitions.
+- Decisive RED: the three-file boundary suite ran 70 tests: 13 failed and
+  57 passed. The failures reproduced early/short maintenance settlement,
+  permissive or future provider timestamps, unbounded injected proof input,
+  and the absent production max-plus-one reader.
+- Decisive GREEN: the identical three-file suite passes all 70 tests.
+  The exact Task 3 package passes 22 files and 492 tests.
+- Decisive refactor: maintenance settlement uses one paired clock loop,
+  provider-second parsing uses one canonical helper, and proof bytes are
+  bounded before the existing decoder/parser/lifecycle pipeline.
 
 ## Delivered
 
@@ -56,15 +66,26 @@ four-commit package.
 - `observerClosesAt` was removed from the canonical maintenance observation
   context, config output, workflow arguments, and public tail API. Maintenance
   derives its close internally as scheduled tick plus 120 seconds, accepts
-  completion exactly at that close, and rejects earlier completion.
+  completion exactly at that close, never accepts while paired local wall time
+  is earlier, and polls provider metadata through the inclusive close-plus-120
+  settlement margin.
 - The controller pairs wall and monotonic samples and rejects an action
   completion timestamp even one millisecond later than the paired wall sample
-  before calculating the remaining observation deadline.
+  before calculating the remaining observation deadline. Provider signal time
+  must also be no later than paired detection wall time; future signals enter
+  the ordinary rollback-and-closure cleanup path.
 - Restore re-admission uses captured argument arrays, validates the completed
   role-probe job and canonical closure, discards both child streams, exposes
   only `Preview restore re-admission failed closed.`, and has secret-canary
   coverage. A valid role closure may admit restore; the existing
-  role-to-cleanup lifecycle remains accepted.
+  role-to-cleanup lifecycle remains accepted. The closure proof is capped at
+  8,192 bytes, with production retaining at most 8,193 raw bytes before
+  overflow rejection, strict UTF-8 decoding, or JSON parsing.
+- Resolver signal timestamps accept only exact whole-second canonical UTC
+  instants. Maintenance provider completion is bounded inclusively from
+  semantic close through settlement. Resolver documentation records the sole
+  terminal-poll single-observation exception while preserving full-horizon
+  polling and late-duplicate rejection.
 - Mirrored simple and technical references document the same contracts. No
   backup key or required key version changed.
 
@@ -72,10 +93,11 @@ four-commit package.
 
 - Focused final repair suite: 8 files, 137 tests passed.
 - Final supervisor/cleanup correction: 2 files, 18 tests passed.
-- Explicit Task 3 package: 22 files, 476 tests passed.
-- Parsed workflow YAML invariant: 1 file, 2 tests passed.
+- Decisive boundary suite: 3 files, 70 tests passed.
+- Explicit Task 3 package: 22 files, 492 tests passed.
+- Workflow suite, including the parsed-YAML invariant: 1 file, 22 tests passed.
 - `pnpm.cmd typecheck`: passed.
-- Full unit stage: 95 files passed and 1 skipped; 1,336 tests passed and
+- Full unit stage: 95 files passed and 1 skipped; 1,352 tests passed and
   1 skipped.
 - Full contract stage: 14 files and 179 tests passed.
 - Full worker stage: 7 files and 106 tests passed.
@@ -87,39 +109,23 @@ four-commit package.
 - No live provider, deployment, database, R2, Queue, browser, remote query,
   push, or other remote mutation was performed.
 
-## Final-follow-up exact staged paths (29)
+## Decisive-follow-up exact staged paths (13)
 
-- `.github/workflows/preview.yml`
 - `.superpowers/sdd/task-3-report.md`
-- `docs/reference/simple/scripts/prepare-preview-acceptance-deploy-config.md`
-- `docs/reference/simple/scripts/print-safe-tail.md`
 - `docs/reference/simple/scripts/resolve-preview-observer-run.md`
 - `docs/reference/simple/scripts/run-preview-acceptance-controller.md`
 - `docs/reference/simple/scripts/run-preview-restore-readmission.md`
-- `docs/reference/simple/scripts/run-preview-tail-supervisor.md`
-- `docs/reference/technical/scripts/prepare-preview-acceptance-deploy-config.md`
-- `docs/reference/technical/scripts/print-safe-tail.md`
 - `docs/reference/technical/scripts/resolve-preview-observer-run.md`
 - `docs/reference/technical/scripts/run-preview-acceptance-controller.md`
 - `docs/reference/technical/scripts/run-preview-restore-readmission.md`
-- `docs/reference/technical/scripts/run-preview-tail-supervisor.md`
-- `scripts/prepare-preview-acceptance-deploy-config.ts`
-- `scripts/print-safe-tail.ts`
 - `scripts/resolve-preview-observer-run.ts`
 - `scripts/run-preview-acceptance-controller.ts`
 - `scripts/run-preview-restore-readmission.ts`
-- `scripts/run-preview-tail-supervisor.ts`
-- `tests/security/temporary-surface-cleanup.test.ts`
-- `tests/unit/ci/workflows.test.ts`
-- `tests/unit/scripts/preview-acceptance-context.test.ts`
 - `tests/unit/scripts/preview-acceptance-controller.test.ts`
 - `tests/unit/scripts/preview-observer-run-resolution.test.ts`
 - `tests/unit/scripts/preview-restore-readmission.test.ts`
-- `tests/unit/scripts/preview-tail-supervisor.test.ts`
-- `tests/unit/scripts/print-safe-tail.test.ts`
-- `tests/unit/server/wrangler-routing.test.ts`
 
-## Complete four-commit package inventory (74)
+## Complete five-commit package inventory (74)
 
 - `.github/workflows/preview.yml`
 - `.superpowers/sdd/task-3-report.md`

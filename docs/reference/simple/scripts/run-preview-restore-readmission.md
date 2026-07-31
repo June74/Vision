@@ -8,7 +8,13 @@ prints neither provider metadata nor lifecycle identifiers.
 
 Reads the exact closure run and jobs, downloads its closed proof, applies the
 existing lifecycle validators, and returns only `{ admission: "verified" }`.
-Any failure becomes one fixed safe error after temporary files are removed.
+The proof must fit within 8,192 UTF-8 bytes before decoding or JSON parsing.
+Any failure becomes one fixed safe error after temporary files are removed
+exactly once.
+
+## `MAX_CLOSURE_PROOF_BYTES`
+
+Sets the closure-proof artifact limit to 8,192 bytes.
 
 ## `runCommand`
 
@@ -20,7 +26,8 @@ Creates the private workspace for the downloaded proof.
 
 ## `readFile`
 
-Reads the downloaded proof without printing it.
+Returns at most 8,193 raw bytes from the downloaded proof without printing or
+decoding it.
 
 ## `removeTemporaryDirectory`
 
@@ -29,7 +36,12 @@ Removes the private proof workspace before success or failure returns.
 ## `createPreviewRestoreReadmissionDependencies`
 
 Builds the production file and argument-array command boundary with bounded
-captured streams and no shell.
+captured streams, a bounded file-handle read, and no shell.
+
+## `readBoundedClosureProof`
+
+Reads at most the proof limit plus one byte so overflow is detected before
+UTF-8 decoding.
 
 ## `validateInput`
 

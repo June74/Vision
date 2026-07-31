@@ -12,8 +12,14 @@ It requests fixed `--jq` projections for the closure run and jobs, verifies the
 successful `Close restored normal preview` job at the reviewed commit,
 downloads the closure artifact with captured streams, and admits
 `deploy_restore` only from the matching role-probe closure. Cleanup failure,
-command failure, malformed JSON, or lifecycle mismatch all collapse to the
-constant error. The only returned shape is `{ admission: "verified" }`.
+command failure, proof input above 8,192 bytes, invalid UTF-8, malformed JSON,
+or lifecycle mismatch all collapse to the constant error. Proof size is
+checked before decoding, temporary cleanup runs exactly once, and the only
+returned shape is `{ admission: "verified" }`.
+
+## `MAX_CLOSURE_PROOF_BYTES`
+
+Defines the explicit 8,192-byte closure-proof artifact ceiling.
 
 ## `runCommand`
 
@@ -26,7 +32,9 @@ Creates one isolated download directory before the first metadata request.
 
 ## `readFile`
 
-Reads only the expected closure-proof path inside that private directory.
+Returns raw bytes only from the expected closure-proof path. Production reads
+at most 8,193 bytes, allowing the caller to detect overflow without retaining
+the rest of the file.
 
 ## `removeTemporaryDirectory`
 
@@ -36,8 +44,14 @@ an otherwise valid admission into the constant failure.
 ## `createPreviewRestoreReadmissionDependencies`
 
 Creates the concrete `gh` runner with UTF-8 capture, hidden child windows,
-one-megabyte buffers, `shell: false`, temporary-directory creation, bounded
-file read, and recursive cleanup.
+one-megabyte buffers, `shell: false`, temporary-directory creation, a
+file-handle proof read capped at maximum plus one byte, and recursive cleanup.
+
+## `readBoundedClosureProof`
+
+Opens the proof read-only, fills one 8,193-byte buffer at most, returns the
+bytes actually read, and closes the handle in `finally`. Decoding and JSON
+parsing occur only after the caller rejects an over-limit result.
 
 ## `validateInput`
 

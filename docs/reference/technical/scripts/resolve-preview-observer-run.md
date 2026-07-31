@@ -9,9 +9,10 @@ shared with the captured-state validator.
 
 Polls at five-second intervals for at most 120 seconds. It requires zero or one
 matching run per read, re-reads the selected run, validates every expected
-listener job, and returns a branded positive-decimal handle only after the same
-candidate is stable across observations. Each read first completes a bounded
-newest-first page walk.
+listener job, and normally retains the same candidate across observations.
+Only a run first discovered on the inclusive terminal poll may use one complete
+observation. All 24 sleeps and the terminal page walk still occur, and a
+duplicate found on any page of that last poll fails closed.
 
 ## `listRelevantRuns`
 
@@ -23,7 +24,8 @@ closed.
 ## `readPreviewSignalObserverState`
 
 Reads one non-maintenance signal job and returns its closed state plus the
-listener completion timestamp only after success.
+listener completion timestamp only after success. The timestamp must be the
+exact canonical whole-second UTC provider form.
 
 ## `readPreviewTwoJobObserverState`
 
@@ -33,7 +35,8 @@ uniqueness states independent.
 ## `readPreviewMaintenanceObserverState`
 
 Requires maintenance uniqueness success to complete no earlier than the
-scheduled tick plus 120 seconds and returns a defensive copy of that tick.
+scheduled tick plus 120 seconds and no later than the inclusive tick plus
+240-second settlement deadline, then returns a defensive copy of that tick.
 
 ## `createGitHubObserverResolutionDependencies`
 
@@ -118,7 +121,9 @@ Admits `null` or delegates to the bounded string check.
 
 ## `canonicalDate`
 
-Parses one provider timestamp to a fresh `Date`.
+Requires `YYYY-MM-DDTHH:MM:SSZ`, a finite parse, and exact round-trip identity
+before returning a fresh `Date`. Missing, fractional, lower-precision, or
+normalized impossible dates fail closed.
 
 ## `validDate`
 
