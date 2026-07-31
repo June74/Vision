@@ -11,10 +11,11 @@ Commit sequence:
 - final follow-up repair: `870de3980789`
 - decisive boundary repair: `2bfbc23f13c`
 - final lifecycle integration: `b4f6dce`
+- final package-review repair: `328b748`
 
 The full inventory below remains the exact 75-path Task 3 implementation and
-report surface. The final lifecycle integration changes eight already
-inventoried paths. All setback-ledger paths remain separately controller-owned
+report surface. The final lifecycle/package-review repairs change paths already
+in that inventory. All setback-ledger paths remain separately controller-owned
 and excluded from implementation scope.
 
 ## RED, GREEN, and refactor evidence
@@ -210,8 +211,8 @@ from this implementation commit.
 ## Final canonical integration
 
 - Review base: `24e959f5`
-- Integrated implementation tip: `b4f6dce`
-- Integrated implementation shape: 10 implementation commits and 75 changed
+- Integrated implementation tip: `328b748`
+- Integrated implementation shape: 11 implementation commits and 75 changed
   paths
 - Decisive repair commits:
   - `00cd3c7` restores the production restore facade and acceptance contract.
@@ -222,8 +223,16 @@ from this implementation commit.
     and all state readers, preserves the stable provider close, settles
     rollback before closure, and gives reconciliation/cleanup fresh bounded
     deadlines.
-- Resolver verification: 66 passed tests, zero failures.
-- Controller verification: 51 passed tests, zero failures.
+  - `328b748` closes the fresh package-review findings: provider commands
+    abort and settle; provider closes require bounded provider evidence;
+    rollback dispatch is reconciled; workflow stages receive separate bounded
+    deadlines; and restore bodies/pages/candidates are fixed-size bounded.
+- The first fresh package-review wave reported 2 Critical and 6 Important
+  findings. Each finding has a dedicated RED case and an implemented repair;
+  a new package-review wave remains required.
+- Resolver verification: 71 passed tests, zero failures.
+- Controller verification: 53 passed tests, zero failures.
+- Restore reader/selection verification: 38 passed tests, zero failures.
 - The combined controller, resolver, and workflow focused group passed from
   the main worktree with zero failures.
 - Focused schema and restore verification: 8 passed tests, zero failures.
