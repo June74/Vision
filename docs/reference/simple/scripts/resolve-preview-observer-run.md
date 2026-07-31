@@ -10,12 +10,16 @@ Polls every five seconds across the complete two-minute horizon. A run first
 found on the inclusive terminal poll has a deliberate single-observation
 exception; otherwise the same active run must remain stable. Every poll walks
 all relevant pages, so a duplicate discovered on the last poll still fails.
+Every metadata read shares one absolute, interruptible monotonic deadline. The
+inclusive terminal poll gets one fixed five-second settlement cap without
+moving the two-minute observation close.
 
 ## `listRelevantRuns`
 
-Walks newest-first pages until creation time crosses the dispatch start or a
-short final page proves completion. Ten full relevant pages fail closed rather
-than silently truncating.
+Walks newest-first pages until a whole provider-second bucket is entirely
+before the millisecond dispatch start or a short final page proves completion.
+Overlapping boundary seconds and same-second duplicates remain visible. Ten
+full relevant pages fail closed rather than silently truncating.
 
 ## `readPreviewSignalObserverState`
 
@@ -29,22 +33,61 @@ Checks signal and uniqueness separately.
 ## `readPreviewMaintenanceObserverState`
 
 Checks maintenance uniqueness, binds it to the requested scheduled tick, and
-requires provider completion from tick plus two minutes through the inclusive
-two-minute settlement margin.
+requires and preserves provider completion at exactly tick plus two minutes.
 
 ## `createGitHubObserverResolutionDependencies`
 
 Builds the live GitHub metadata adapter with argument-array subprocess calls,
-bounded captured output, exact page projection, and no shell.
+bounded captured output, exact run, run-detail, job, and step projections, and
+no shell.
 
 ## `invoke`
 
-Runs one captured metadata command and returns parsed JSON; every child,
-size, or parse failure becomes the fixed resolver error.
+Runs one captured metadata command before its absolute deadline, validates the
+exact projected key set, and returns parsed JSON. Every child, size, timeout,
+or parse failure becomes the fixed resolver error.
 
 ## `jobsFor`
 
-Reads the observer jobs.
+Reads observer jobs against the caller's absolute deadline.
+
+## `callBeforeDeadline`
+
+Gives each metadata call the same deadline and aborts it when time expires.
+
+## `sleepBeforeDeadline`
+
+Keeps polling sleeps inside the same absolute window.
+
+## `stateReadDeadline`
+
+Creates a bounded deadline for a standalone signal or uniqueness read.
+
+## `runCapturedProviderCommand`
+
+Runs the real captured child with both timeout and abort support, then waits
+for the child boundary to settle.
+
+## `raceCommandAgainstDeadline`
+
+Fails an injected command on timeout or cancellation without retaining either
+captured stream.
+
+## `interruptibleSleep`
+
+Ends a pending sleep promptly when its caller aborts.
+
+## `abort`
+
+Cancels one pending poll delay with the fixed safe failure.
+
+## `validatedRunHandle`
+
+Revalidates the process-local positive decimal handle before command assembly.
+
+## `validMonotonic`
+
+Accepts only finite nonnegative monotonic instants.
 
 ## `exactJob`
 
@@ -69,15 +112,17 @@ Requires the exact one-key page shape and copies only its bounded run list.
 
 ## `snapshotRun`
 
-Copies the allowlisted fields of one provider run.
+Requires the exact run keys, whole-second creation timestamp, and positive
+decimal handle before copying allowlisted fields.
 
 ## `snapshotJobs`
 
-Copies bounded job and listener-step metadata.
+Requires exact job and step keys before copying bounded metadata.
 
 ## `matchesRun`
 
-Checks workflow attribution.
+Checks workflow attribution and overlap between the provider's whole-second
+creation bucket and the closed millisecond dispatch interval.
 
 ## `validateResolutionInput`
 
@@ -96,6 +141,10 @@ Reads one required own data property without invoking a getter.
 
 Reads one optional own data property without invoking a getter.
 
+## `exactKeys`
+
+Rejects missing or extra provider keys.
+
 ## `boundedString`
 
 Bounds provider-controlled strings.
@@ -108,6 +157,10 @@ Accepts a bounded provider string or `null`.
 
 Parses only `YYYY-MM-DDTHH:MM:SSZ` when it round-trips to the same real instant.
 
+## `canonicalContextDate`
+
+Parses only exact millisecond UTC context timestamps.
+
 ## `validDate`
 
 Checks one real `Date` without coercion.
@@ -116,10 +169,11 @@ Checks one real `Date` without coercion.
 
 Returns one safe error.
 
-## `parseArguments`
+## `parsePreviewObserverRunArguments`
 
 Accepts only the exact live resolver flags; calendar maintenance alone
-requires the scheduled-tick flag.
+requires the scheduled-tick flag. Dispatch bounds and that tick use exact
+millisecond UTC precision.
 
 ## `monotonicNow`
 
@@ -140,6 +194,11 @@ Reads one selected run again for stable attribution.
 ## `listJobs`
 
 Lists the selected run's jobs.
+
+## `runPreviewObserverCli`
+
+Runs the same parse-and-resolve path used by the executable and returns only a
+fixed success or failure code.
 
 ## `main`
 

@@ -1,9 +1,17 @@
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
+  createGitHubObserverResolutionDependencies,
+  parsePreviewObserverRunArguments,
   readPreviewMaintenanceObserverState,
   readPreviewSignalObserverState,
   readPreviewTwoJobObserverState,
   resolvePreviewObserverRun,
+  runPreviewObserverCli,
+  type PreviewObserverCallContext,
+  type PreviewObserverCommandRunner,
   type PreviewObserverResolutionDependencies,
 } from "../../../scripts/resolve-preview-observer-run";
 
@@ -11,6 +19,36 @@ const SHA = "a".repeat(40);
 const START = new Date("2026-07-30T18:00:00.000Z");
 const END = new Date("2026-07-30T18:00:02.000Z");
 const TICK = new Date("2026-07-30T18:15:00.000Z");
+
+/** Runs the real resolver entrypoint while capturing both process streams. */
+async function runResolverCli(arguments_: readonly string[]): Promise<{
+  readonly exitCode: number | null;
+  readonly stdout: string;
+  readonly stderr: string;
+}> {
+  const child = spawn(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      resolve(process.cwd(), "scripts", "resolve-preview-observer-run.ts"),
+      ...arguments_,
+    ],
+    { stdio: ["ignore", "pipe", "pipe"] },
+  );
+  let stdout = "";
+  let stderr = "";
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+  child.stderr.on("data", (chunk: string) => {
+    stderr += chunk;
+  });
+  const [exitCode] = (await once(child, "close")) as [number | null];
+  return { exitCode, stdout, stderr };
+}
 
 function run(id = "41") {
   return {
@@ -73,6 +111,513 @@ function dependencies(
 }
 
 describe("preview observer run resolution", () => {
+  it.each([
+    ["zero milliseconds", "2026-07-30T18:00:00.000Z"],
+    ["nonzero milliseconds", "2026-07-30T18:00:00.123Z"],
+  ] as const)(
+    "parses canonical millisecond CLI dispatch bounds with %s",
+    (_label, instant) => {
+      const parsed = parsePreviewObserverRunArguments([
+        "--repository",
+        "owner/repository",
+        "--workflow",
+        ".github/workflows/preview.yml",
+        "--sha",
+        SHA,
+        "--dispatch-started-at",
+        instant,
+        "--dispatch-completed-at",
+        "2026-07-30T18:00:02.456Z",
+        "--family",
+        "foundation_probe",
+      ]);
+
+      expect(parsed.dispatchStartedAt).toEqual(new Date(instant));
+      expect(parsed.dispatchCompletedAt).toEqual(
+        new Date("2026-07-30T18:00:02.456Z"),
+      );
+    },
+  );
+
+  it.each([
+    "2026-07-30T18:00:00Z",
+    "2026-07-30T18:00:00.00Z",
+    "2026-07-30T18:00:00.0000Z",
+  ])("rejects noncanonical CLI dispatch precision: %s", (instant) => {
+    expect(() =>
+      parsePreviewObserverRunArguments([
+        "--repository",
+        "owner/repository",
+        "--workflow",
+        ".github/workflows/preview.yml",
+        "--sha",
+        SHA,
+        "--dispatch-started-at",
+        instant,
+        "--dispatch-completed-at",
+        "2026-07-30T18:00:02.000Z",
+        "--family",
+        "foundation_probe",
+      ])
+    ).toThrow("Preview observer metadata is invalid.");
+  });
+
+  it.each([
+    ["zero milliseconds", "2026-07-30T18:00:00.000Z"],
+    ["nonzero milliseconds", "2026-07-30T18:00:00.123Z"],
+  ] as const)(
+    "runs the exported CLI path with %s",
+    async (_label, dispatchStartedAt) => {
+      const createDependencies = vi.fn(() =>
+        dependencies(
+          [run()],
+          [job("Capture foundation_probe signal")],
+        )
+      );
+      await expect(runPreviewObserverCli([
+        "--repository",
+        "owner/repository",
+        "--workflow",
+        ".github/workflows/preview.yml",
+        "--sha",
+        SHA,
+        "--dispatch-started-at",
+        dispatchStartedAt,
+        "--dispatch-completed-at",
+        "2026-07-30T18:00:02.456Z",
+        "--family",
+        "foundation_probe",
+      ], createDependencies)).resolves.toBe(0);
+      expect(createDependencies).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("accepts a canonical millisecond maintenance input through the exported CLI path", async () => {
+    const createDependencies = vi.fn(() =>
+      dependencies(
+        [run()],
+        [job("Capture calendar_maintenance uniqueness")],
+      )
+    );
+    await expect(runPreviewObserverCli([
+      "--repository",
+      "owner/repository",
+      "--workflow",
+      ".github/workflows/preview.yml",
+      "--sha",
+      SHA,
+      "--dispatch-started-at",
+      "2026-07-30T18:00:00.000Z",
+      "--dispatch-completed-at",
+      "2026-07-30T18:00:02.456Z",
+      "--family",
+      "calendar_maintenance",
+      "--maintenance-scheduled-at",
+      "2026-07-30T18:15:00.123Z",
+    ], createDependencies)).resolves.toBe(0);
+    expect(createDependencies).toHaveBeenCalledOnce();
+  });
+
+  it("fails the real CLI before provider access for invalid dispatch precision", async () => {
+    const result = await runResolverCli([
+      "--repository",
+      "owner/repository",
+      "--workflow",
+      ".github/workflows/preview.yml",
+      "--sha",
+      SHA,
+      "--dispatch-started-at",
+      "2026-07-30T18:00:00Z",
+      "--dispatch-completed-at",
+      "2026-07-30T18:00:02.000Z",
+      "--family",
+      "foundation_probe",
+    ]);
+    expect(result).toEqual({ exitCode: 1, stdout: "", stderr: "" });
+  });
+
+  it("treats one provider-created second as an interval overlapping a millisecond dispatch bound", async () => {
+    const overlappingRun = {
+      ...run(),
+      created_at: "2026-07-30T18:00:00Z",
+    };
+    const deps = dependencies(
+      [overlappingRun],
+      [job("Capture foundation_probe signal")],
+    );
+    deps.readRun = vi.fn(async () => overlappingRun);
+
+    await expect(resolvePreviewObserverRun({
+      expectedWorkflow: ".github/workflows/preview.yml",
+      expectedCommit: SHA,
+      dispatchStartedAt: new Date("2026-07-30T18:00:00.500Z"),
+      dispatchCompletedAt: new Date("2026-07-30T18:00:00.750Z"),
+      family: "foundation_probe",
+    }, deps)).resolves.toBe("41");
+  });
+
+  it("continues pagination through the dispatch lower-bound second and exposes a same-second duplicate", async () => {
+    let monotonic = 0;
+    const lowerBoundBucket = Array.from({ length: 100 }, (_, index) => ({
+      ...(index === 99
+        ? run("41")
+        : unrelatedRun(String(3_000 + index))),
+      created_at: "2026-07-30T18:00:00Z",
+    }));
+    const listRuns = vi.fn(async (page = 1) => ({
+      workflow_runs:
+        page === 1
+          ? lowerBoundBucket
+          : [{
+              ...run("42"),
+              created_at: "2026-07-30T18:00:00Z",
+            }],
+    }));
+    const deps: PreviewObserverResolutionDependencies = {
+      monotonicNow: () => monotonic,
+      sleep: vi.fn(async (milliseconds) => {
+        monotonic += milliseconds;
+      }),
+      listRuns,
+      readRun: vi.fn(async (handle) => ({
+        ...run(String(handle)),
+        created_at: "2026-07-30T18:00:00Z",
+      })),
+      listJobs: vi.fn(async () => ({
+        jobs: [job("Capture foundation_probe signal")],
+      })),
+    };
+
+    await expect(resolvePreviewObserverRun({
+      expectedWorkflow: ".github/workflows/preview.yml",
+      expectedCommit: SHA,
+      dispatchStartedAt: new Date("2026-07-30T18:00:00.500Z"),
+      dispatchCompletedAt: new Date("2026-07-30T18:00:00.750Z"),
+      family: "foundation_probe",
+    }, deps)).rejects.toThrow("Preview observer metadata is invalid.");
+    expect(listRuns).toHaveBeenCalledWith(2, expect.anything());
+  });
+
+  it("uses exact provider projections and passes one absolute interruptible deadline to every command", async () => {
+    const calls: Array<{
+      readonly arguments_: readonly string[];
+      readonly context: PreviewObserverCallContext;
+    }> = [];
+    const responses = [
+      { workflow_runs: [run()] },
+      run(),
+      { jobs: [job("Capture foundation_probe signal")] },
+    ];
+    const runCommand: PreviewObserverCommandRunner = vi.fn(
+      async (_executable, arguments_, context) => {
+        calls.push({ arguments_: [...arguments_], context });
+        return {
+          stdout: JSON.stringify(responses.shift()),
+          stderr: "discarded-provider-canary",
+        };
+      },
+    );
+    const dependencies = createGitHubObserverResolutionDependencies({
+      repository: "owner/repository",
+      executable: "provider-cli",
+      monotonicNow: () => 0,
+      runCommand,
+    });
+    const controller = new AbortController();
+    const context = Object.freeze({
+      deadlineMonotonic: 10_000,
+      signal: controller.signal,
+    });
+
+    await expect(dependencies.listRuns(1, context)).resolves.toEqual({
+      workflow_runs: [run()],
+    });
+    await expect(
+      dependencies.readRun("41" as never, context),
+    ).resolves.toEqual(run());
+    await expect(
+      dependencies.listJobs("41" as never, context),
+    ).resolves.toEqual({
+      jobs: [job("Capture foundation_probe signal")],
+    });
+
+    expect(calls.map(({ arguments_ }) => arguments_)).toEqual([
+      [
+        "api",
+        "-X",
+        "GET",
+        "repos/owner/repository/actions/runs",
+        "-f",
+        "event=workflow_dispatch",
+        "-f",
+        "per_page=100",
+        "-f",
+        "page=1",
+        "--jq",
+        "{workflow_runs: [.workflow_runs[] | {id,event,head_sha,created_at,path,status,conclusion}]}",
+      ],
+      [
+        "api",
+        "-X",
+        "GET",
+        "repos/owner/repository/actions/runs/41",
+        "--jq",
+        "{id,event,head_sha,created_at,path,status,conclusion}",
+      ],
+      [
+        "api",
+        "-X",
+        "GET",
+        "repos/owner/repository/actions/runs/41/jobs",
+        "-f",
+        "per_page=100",
+        "--jq",
+        "{jobs: [.jobs[] | {name,status,conclusion,steps: [.steps[] | {name,status,conclusion,completed_at}]}]}",
+      ],
+    ]);
+    for (const call of calls) {
+      expect(call.context).toBe(context);
+      expect(call.context.signal).toBe(controller.signal);
+      expect(call.context.deadlineMonotonic).toBe(10_000);
+    }
+  });
+
+  it.each([
+    [
+      "run-list envelope",
+      "listRuns",
+      { workflow_runs: [run()], provider_canary: "must-not-cross" },
+    ],
+    [
+      "run record",
+      "readRun",
+      { ...run(), provider_canary: "must-not-cross" },
+    ],
+    [
+      "job-list envelope",
+      "listJobs",
+      {
+        jobs: [job("Capture foundation_probe signal")],
+        provider_canary: "must-not-cross",
+      },
+    ],
+    [
+      "job record",
+      "listJobs",
+      {
+        jobs: [{
+          ...job("Capture foundation_probe signal"),
+          provider_canary: "must-not-cross",
+        }],
+      },
+    ],
+    [
+      "step record",
+      "listJobs",
+      {
+        jobs: [{
+          ...job("Capture foundation_probe signal"),
+          steps: [{
+            ...job("Capture foundation_probe signal").steps[0],
+            provider_canary: "must-not-cross",
+          }],
+        }],
+      },
+    ],
+  ] as const)(
+    "rejects a projected provider canary on the %s inside the adapter boundary",
+    async (_label, operation, payload) => {
+      const runCommand: PreviewObserverCommandRunner = vi.fn(async () => ({
+        stdout: JSON.stringify(payload),
+        stderr: "",
+      }));
+      const dependencies = createGitHubObserverResolutionDependencies({
+        repository: "owner/repository",
+        executable: "provider-cli",
+        monotonicNow: () => 0,
+        runCommand,
+      });
+      const context = Object.freeze({
+        deadlineMonotonic: 10_000,
+        signal: new AbortController().signal,
+      });
+      const read =
+        operation === "listRuns"
+          ? dependencies.listRuns(1, context)
+          : operation === "readRun"
+            ? dependencies.readRun("41" as never, context)
+            : dependencies.listJobs("41" as never, context);
+
+      await expect(read).rejects.toThrow(
+        "Preview observer metadata is invalid.",
+      );
+    },
+  );
+
+  it.each(["listRuns", "readRun", "listJobs"] as const)(
+    "aborts and settles a never-resolving %s provider call at the shared absolute deadline",
+    async (blockedCall) => {
+      vi.useFakeTimers();
+      try {
+        let callContext: PreviewObserverCallContext | undefined;
+        let terminationObserved = false;
+        const never = (_value: unknown, context: PreviewObserverCallContext) => {
+          callContext = context;
+          return new Promise<never>((_resolvePromise, rejectPromise) => {
+            context.signal.addEventListener("abort", () => {
+              terminationObserved = true;
+              rejectPromise(new Error("discarded-provider-canary"));
+            }, { once: true });
+          });
+        };
+        const deps: PreviewObserverResolutionDependencies = {
+          monotonicNow: () => 0,
+          sleep: vi.fn(async () => undefined),
+          listRuns:
+            blockedCall === "listRuns"
+              ? vi.fn(never)
+              : vi.fn(async () => ({ workflow_runs: [run()] })),
+          readRun:
+            blockedCall === "readRun"
+              ? vi.fn(never)
+              : vi.fn(async () => run()),
+          listJobs:
+            blockedCall === "listJobs"
+              ? vi.fn(never)
+              : vi.fn(async () => ({
+                  jobs: [job("Capture foundation_probe signal")],
+                })),
+        };
+        let rejection: unknown;
+        const pending = resolvePreviewObserverRun({
+          expectedWorkflow: ".github/workflows/preview.yml",
+          expectedCommit: SHA,
+          dispatchStartedAt: START,
+          dispatchCompletedAt: END,
+          family: "foundation_probe",
+        }, deps).catch((error: unknown) => {
+          rejection = error;
+        });
+
+        await vi.advanceTimersByTimeAsync(120_000);
+        await pending;
+
+        expect(rejection).toBeInstanceOf(Error);
+        expect((rejection as Error).message).toBe(
+          "Preview observer metadata is invalid.",
+        );
+        expect(callContext?.deadlineMonotonic).toBe(120_000);
+        expect(callContext?.signal.aborted).toBe(true);
+        expect(terminationObserved).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it("bounds a standalone observer-state metadata read with an interruptible absolute deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      let callContext: PreviewObserverCallContext | undefined;
+      const deps: PreviewObserverResolutionDependencies = {
+        monotonicNow: () => 50,
+        sleep: vi.fn(async () => undefined),
+        listRuns: vi.fn(async () => ({ workflow_runs: [] })),
+        readRun: vi.fn(async () => run()),
+        listJobs: vi.fn((_handle, context) => {
+          callContext = context;
+          return new Promise<never>((_resolvePromise, rejectPromise) => {
+            context.signal.addEventListener(
+              "abort",
+              () => rejectPromise(new Error("discarded-provider-canary")),
+              { once: true },
+            );
+          });
+        }),
+      };
+      let rejection: unknown;
+      const pending = readPreviewSignalObserverState(
+        "41" as never,
+        "foundation_probe",
+        deps,
+      ).catch((error: unknown) => {
+        rejection = error;
+      });
+
+      await vi.advanceTimersByTimeAsync(120_000);
+      await pending;
+
+      expect(rejection).toBeInstanceOf(Error);
+      expect((rejection as Error).message).toBe(
+        "Preview observer metadata is invalid.",
+      );
+      expect(callContext?.deadlineMonotonic).toBe(120_050);
+      expect(callContext?.signal.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("gives the inclusive terminal poll one fixed settlement cap without renewing the 120-second close", async () => {
+    vi.useFakeTimers();
+    try {
+      let monotonic = 0;
+      let calls = 0;
+      let terminalContext: PreviewObserverCallContext | undefined;
+      const deps: PreviewObserverResolutionDependencies = {
+        monotonicNow: () => monotonic,
+        sleep: vi.fn(async (milliseconds) => {
+          monotonic += milliseconds;
+        }),
+        listRuns: vi.fn((_page, context) => {
+          calls += 1;
+          if (calls === 25) {
+            terminalContext = context;
+            return new Promise<never>((_resolvePromise, rejectPromise) => {
+              context.signal.addEventListener(
+                "abort",
+                () => rejectPromise(new Error("discarded-provider-canary")),
+                { once: true },
+              );
+            });
+          }
+          return Promise.resolve({ workflow_runs: [run()] });
+        }),
+        readRun: vi.fn(async () => run()),
+        listJobs: vi.fn(async () => ({
+          jobs: [job("Capture foundation_probe signal")],
+        })),
+      };
+      let rejection: unknown;
+      const pending = resolvePreviewObserverRun({
+        expectedWorkflow: ".github/workflows/preview.yml",
+        expectedCommit: SHA,
+        dispatchStartedAt: START,
+        dispatchCompletedAt: END,
+        family: "foundation_probe",
+      }, deps).catch((error: unknown) => {
+        rejection = error;
+      });
+      for (let index = 0; index < 500 && calls < 25; index += 1) {
+        await Promise.resolve();
+      }
+
+      expect(calls).toBe(25);
+      expect(monotonic).toBe(120_000);
+      expect(terminalContext?.deadlineMonotonic).toBe(125_000);
+
+      await vi.advanceTimersByTimeAsync(5_000);
+      await pending;
+      expect(rejection).toBeInstanceOf(Error);
+      expect((rejection as Error).message).toBe(
+        "Preview observer metadata is invalid.",
+      );
+      expect(terminalContext?.signal.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("filters a realistic full workflow job list and finds the named listener among setup steps", async () => {
     const listener = job("Capture restore signal");
     listener.steps = [
@@ -142,7 +687,7 @@ describe("preview observer run resolution", () => {
     expect(String(handle)).toBe("41");
     expect(calls).toBe(25);
     expect(deps.sleep).toHaveBeenCalledTimes(24);
-    expect(deps.sleep).toHaveBeenCalledWith(5_000);
+    expect(deps.sleep).toHaveBeenCalledWith(5_000, expect.anything());
     expect(deps.readRun).toHaveBeenCalledOnce();
     expect(deps.listJobs).toHaveBeenCalledOnce();
   });
@@ -199,7 +744,7 @@ describe("preview observer run resolution", () => {
       dispatchCompletedAt: END,
       family: "foundation_probe",
     }, deps)).rejects.toThrow("Preview observer metadata is invalid.");
-    expect(listRuns).toHaveBeenCalledWith(2);
+    expect(listRuns).toHaveBeenCalledWith(2, expect.anything());
   });
 
   it("keeps one run stable across every relevant page and poll", async () => {
@@ -229,7 +774,7 @@ describe("preview observer run resolution", () => {
       dispatchCompletedAt: END,
       family: "foundation_probe",
     }, deps)).resolves.toBe("41");
-    expect(listRuns).toHaveBeenCalledWith(2);
+    expect(listRuns).toHaveBeenCalledWith(2, expect.anything());
     expect(listRuns.mock.calls.filter(([page]) => page === 2)).toHaveLength(25);
   });
 
@@ -294,7 +839,7 @@ describe("preview observer run resolution", () => {
       dispatchCompletedAt: END,
       family: "foundation_probe",
     }, deps)).rejects.toThrow("Preview observer metadata is invalid.");
-    expect(listRuns).toHaveBeenCalledWith(10);
+    expect(listRuns).toHaveBeenCalledWith(10, expect.anything());
     expect(listRuns).toHaveBeenCalledTimes(10);
   });
 
@@ -328,7 +873,7 @@ describe("preview observer run resolution", () => {
       dispatchCompletedAt: END,
       family: "foundation_probe",
     }, deps)).rejects.toThrow("Preview observer metadata is invalid.");
-    expect(listRuns).toHaveBeenCalledWith(2);
+    expect(listRuns).toHaveBeenCalledWith(2, expect.anything());
   });
 
   it.each(["success", "failure", "cancelled", "timed_out"])(
@@ -368,6 +913,7 @@ describe("preview observer run resolution", () => {
     [[{ ...run(), head_sha: "b".repeat(40) }]],
     [[{ ...run(), event: "push" }]],
     [[{ ...run(), created_at: "2026-07-30T17:59:59Z" }]],
+    [[{ ...run(), created_at: "2026-07-30T18:00:01.001Z" }]],
     [[{ ...run(), id: "0" }]],
     [[{ ...run(), id: "01" }]],
   ])("fails closed for zero, ambiguous, misattributed, or malformed runs", async (runs) => {
@@ -494,19 +1040,16 @@ describe("preview observer run resolution", () => {
     });
   });
 
-  it.each([
-    ["the semantic close", 120_000],
-    ["the inclusive settlement deadline", 240_000],
-  ] as const)(
-    "accepts maintenance completion at %s",
-    async (_label, offset) => {
+  it(
+    "accepts and preserves maintenance provider completion only at the semantic close",
+    async () => {
       const maintenance = job(
         "Capture calendar_maintenance uniqueness",
         "completed",
         "success",
       );
       maintenance.steps[0]!.completed_at = new Date(
-        TICK.getTime() + offset,
+        TICK.getTime() + 120_000,
       ).toISOString().replace(".000Z", "Z");
       const deps = dependencies([run()], [maintenance]);
       await expect(
@@ -519,14 +1062,15 @@ describe("preview observer run resolution", () => {
       ).resolves.toStrictEqual({
         uniqueness: "succeeded",
         maintenanceScheduledAt: TICK,
+        maintenanceCompletedAt: new Date(TICK.getTime() + 120_000),
       });
     },
   );
 
   it.each([
     ["one millisecond before the close", 120_000 - 1],
-    ["one millisecond after the settlement deadline", 240_000 + 1],
-    ["one full second after the settlement deadline", 241_000],
+    ["one millisecond after the close", 120_000 + 1],
+    ["one full second after the close", 121_000],
   ] as const)("rejects maintenance completion %s", async (_label, offset) => {
     const maintenance = job(
       "Capture calendar_maintenance uniqueness",

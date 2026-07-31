@@ -13,6 +13,9 @@ const MAX_JOBS = 100;
 const MAX_STEPS = 100;
 const POLL_MILLISECONDS = 5_000;
 const RESOLUTION_MILLISECONDS = 120_000;
+const TERMINAL_POLL_SETTLEMENT_MILLISECONDS = POLL_MILLISECONDS;
+const CONTEXT_INSTANT_PATTERN =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const PROVIDER_INSTANT_PATTERN =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/u;
 const execFileAsync = promisify(execFile);
@@ -28,6 +31,25 @@ export type PreviewObserverFamily =
   | "role_probe"
   | "restore"
   | "calendar_maintenance";
+
+/** Absolute monotonic deadline and cancellation signal for one provider call. */
+export interface PreviewObserverCallContext {
+  readonly deadlineMonotonic: number;
+  readonly signal: AbortSignal;
+}
+
+/** Captured provider result; neither child stream may be forwarded. */
+export interface PreviewObserverCommandResult {
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
+/** Argument-array provider command boundary used by the concrete adapter. */
+export type PreviewObserverCommandRunner = (
+  executable: string,
+  arguments_: readonly string[],
+  context: PreviewObserverCallContext,
+) => Promise<PreviewObserverCommandResult>;
 
 /** Shared exact job-name contract used by workflow and validators. */
 export const PREVIEW_OBSERVER_JOB_CONTRACT = Object.freeze({
@@ -52,10 +74,22 @@ export const PREVIEW_OBSERVER_JOB_CONTRACT = Object.freeze({
 
 export interface PreviewObserverResolutionDependencies {
   monotonicNow(): number;
-  sleep(milliseconds: number): Promise<void>;
-  listRuns(page: number): Promise<unknown>;
-  readRun(handle: PreviewObserverRunHandle): Promise<unknown>;
-  listJobs(handle: PreviewObserverRunHandle): Promise<unknown>;
+  sleep(
+    milliseconds: number,
+    context: PreviewObserverCallContext,
+  ): Promise<void>;
+  listRuns(
+    page: number,
+    context: PreviewObserverCallContext,
+  ): Promise<unknown>;
+  readRun(
+    handle: PreviewObserverRunHandle,
+    context: PreviewObserverCallContext,
+  ): Promise<unknown>;
+  listJobs(
+    handle: PreviewObserverRunHandle,
+    context: PreviewObserverCallContext,
+  ): Promise<unknown>;
 }
 
 interface RunSnapshot {
@@ -93,53 +127,79 @@ export async function resolvePreviewObserverRun(
   deps: PreviewObserverResolutionDependencies,
 ): Promise<PreviewObserverRunHandle> {
   validateResolutionInput(input);
-  const started = deps.monotonicNow();
+  const started = validMonotonic(deps.monotonicNow());
+  const deadline = started + RESOLUTION_MILLISECONDS;
   let candidate: PreviewObserverRunHandle | null = null;
   for (;;) {
-    const runs = (await listRelevantRuns(input.dispatchStartedAt, deps)).filter((run) =>
-      matchesRun(run, input)
-    );
+    const pollStarted = validMonotonic(deps.monotonicNow());
+    const pollDeadline =
+      pollStarted >= deadline
+        ? deadline + TERMINAL_POLL_SETTLEMENT_MILLISECONDS
+        : deadline;
+    const runs = (
+      await listRelevantRuns(input.dispatchStartedAt, pollDeadline, deps)
+    ).filter((run) => matchesRun(run, input));
     if (runs.length > 1) fail();
     if (runs.length === 1) {
       const handle = runs[0]!.id as PreviewObserverRunHandle;
       if (candidate !== null && candidate !== handle) fail();
-      const detailed = snapshotRun(await deps.readRun(handle));
+      const detailed = snapshotRun(
+        await callBeforeDeadline(
+          pollDeadline,
+          deps,
+          (context) => deps.readRun(handle, context),
+        ),
+      );
       if (detailed.id !== handle || !matchesRun(detailed, input)) fail();
-      const jobs = await jobsFor(handle, deps);
+      const jobs = await jobsFor(handle, deps, pollDeadline);
       assertExpectedActiveJobs(jobs, input.family);
-      if (deps.monotonicNow() - started >= RESOLUTION_MILLISECONDS) {
+      if (
+        validMonotonic(deps.monotonicNow()) - started >=
+          RESOLUTION_MILLISECONDS
+      ) {
         return handle;
       }
       candidate = handle;
     } else if (candidate !== null) {
       fail();
     }
-    if (deps.monotonicNow() - started >= RESOLUTION_MILLISECONDS) fail();
-    await deps.sleep(POLL_MILLISECONDS);
+    if (
+      validMonotonic(deps.monotonicNow()) - started >=
+        RESOLUTION_MILLISECONDS
+    ) {
+      fail();
+    }
+    await sleepBeforeDeadline(POLL_MILLISECONDS, deadline, deps);
   }
 }
 
 /** Lists every bounded page that could contain a dispatch-interval run. */
 async function listRelevantRuns(
   dispatchStartedAt: Date,
+  deadline: number,
   deps: PreviewObserverResolutionDependencies,
 ): Promise<readonly RunSnapshot[]> {
   const runs: RunSnapshot[] = [];
   let previousCreatedAt = Number.POSITIVE_INFINITY;
   for (let page = 1; page <= MAX_RUN_PAGES; page += 1) {
-    const pageRuns = snapshotRuns(await deps.listRuns(page));
+    const pageRuns = snapshotRuns(
+      await callBeforeDeadline(
+        deadline,
+        deps,
+        (context) => deps.listRuns(page, context),
+      ),
+    );
     let crossedDispatchStart = false;
     for (const run of pageRuns) {
-      const createdAt = Date.parse(run.createdAt);
+      const createdAt = canonicalDate(run.createdAt).getTime();
       if (
-        !Number.isFinite(createdAt) ||
         createdAt > previousCreatedAt
       ) {
         fail();
       }
       previousCreatedAt = createdAt;
       runs.push(run);
-      if (createdAt < dispatchStartedAt.getTime()) {
+      if (createdAt + 999 < dispatchStartedAt.getTime()) {
         crossedDispatchStart = true;
       }
     }
@@ -159,7 +219,7 @@ export async function readPreviewSignalObserverState(
   readonly signal: "listening" | "succeeded" | "failed";
   readonly signalObservedAt: Date | null;
 }> {
-  const jobs = await jobsFor(handle, deps);
+  const jobs = await jobsFor(handle, deps, stateReadDeadline(deps));
   const job = exactJob(jobs, `Capture ${family} signal`);
   const state = observerJobState(job);
   return Object.freeze({
@@ -181,7 +241,7 @@ export async function readPreviewTwoJobObserverState(
   readonly uniqueness: "listening" | "succeeded" | "failed";
   readonly signalObservedAt: Date | null;
 }> {
-  const jobs = await jobsFor(handle, deps);
+  const jobs = await jobsFor(handle, deps, stateReadDeadline(deps));
   const signal = observerJobState(exactJob(jobs, `Capture ${family} signal`));
   const uniqueness = observerJobState(
     exactJob(jobs, `Capture ${family} uniqueness`),
@@ -205,24 +265,25 @@ export async function readPreviewMaintenanceObserverState(
 ): Promise<{
   readonly uniqueness: "listening" | "succeeded" | "failed";
   readonly maintenanceScheduledAt: Date;
+  readonly maintenanceCompletedAt: Date | null;
 }> {
   if (!validDate(tick)) fail();
-  const jobs = await jobsFor(handle, deps);
+  const jobs = await jobsFor(handle, deps, stateReadDeadline(deps));
   const state = observerJobState(
     exactJob(jobs, `Capture ${family} uniqueness`),
   );
+  let maintenanceCompletedAt: Date | null = null;
   if (state.state === "succeeded") {
     const completedAt = canonicalDate(state.listener.completedAt);
-    if (
-      completedAt.getTime() < tick.getTime() + RESOLUTION_MILLISECONDS ||
-      completedAt.getTime() > tick.getTime() + 2 * RESOLUTION_MILLISECONDS
-    ) {
+    if (completedAt.getTime() !== tick.getTime() + RESOLUTION_MILLISECONDS) {
       fail();
     }
+    maintenanceCompletedAt = completedAt;
   }
   return Object.freeze({
     uniqueness: state.state,
     maintenanceScheduledAt: new Date(tick.getTime()),
+    maintenanceCompletedAt,
   });
 }
 
@@ -232,39 +293,59 @@ export function createGitHubObserverResolutionDependencies(input: {
   readonly executable?: string;
   readonly monotonicNow?: () => number;
   readonly sleep?: (milliseconds: number) => Promise<void>;
+  readonly runCommand?: PreviewObserverCommandRunner;
 }): PreviewObserverResolutionDependencies {
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(input.repository)) fail();
   const executable = input.executable ?? "gh";
+  const monotonicNow = input.monotonicNow ?? (() => performance.now());
+  const runCommand =
+    input.runCommand ??
+    ((command, arguments_, context) =>
+      runCapturedProviderCommand(
+        command,
+        arguments_,
+        context,
+        monotonicNow,
+      ));
   /** Invokes one captured metadata command without a shell. */
-  const invoke = async (arguments_: readonly string[]): Promise<unknown> => {
+  const invoke = async (
+    arguments_: readonly string[],
+    context: PreviewObserverCallContext,
+    validateProjection: (payload: unknown) => void,
+  ): Promise<unknown> => {
     try {
-      const result = await execFileAsync(executable, [...arguments_], {
-        encoding: "utf8",
-        maxBuffer: MAX_RESPONSE_BYTES,
-        windowsHide: true,
-      });
+      const result = await raceCommandAgainstDeadline(
+        runCommand(executable, [...arguments_], context),
+        context,
+        monotonicNow,
+      );
       if (
+        typeof result?.stdout !== "string" ||
+        typeof result.stderr !== "string" ||
         Buffer.byteLength(result.stdout, "utf8") > MAX_RESPONSE_BYTES ||
-        result.stderr.length > MAX_RESPONSE_BYTES
+        Buffer.byteLength(result.stderr, "utf8") > MAX_RESPONSE_BYTES
       ) {
         fail();
       }
-      return JSON.parse(result.stdout) as unknown;
+      const payload = JSON.parse(result.stdout) as unknown;
+      validateProjection(payload);
+      return payload;
     } catch {
       fail();
     }
   };
   const dependencies: PreviewObserverResolutionDependencies = {
-    monotonicNow: input.monotonicNow ?? (() => performance.now()),
+    monotonicNow,
     sleep:
       input.sleep ??
-      ((milliseconds: number) =>
-        new Promise<void>((resolvePromise) =>
-          setTimeout(resolvePromise, milliseconds)
-        )),
+      ((milliseconds: number, context: PreviewObserverCallContext) =>
+        interruptibleSleep(milliseconds, context)),
     /** Lists bounded workflow-dispatch runs for resolution. */
-    listRuns: (page) =>
-      invoke([
+    listRuns: (page, context) => {
+      if (!Number.isSafeInteger(page) || page < 1 || page > MAX_RUN_PAGES) {
+        fail();
+      }
+      return invoke([
         "api",
         "-X",
         "GET",
@@ -277,25 +358,40 @@ export function createGitHubObserverResolutionDependencies(input: {
         `page=${page}`,
         "--jq",
         "{workflow_runs: [.workflow_runs[] | {id,event,head_sha,created_at,path,status,conclusion}]}",
-      ]),
+      ], context, (payload) => {
+        snapshotRuns(payload);
+      });
+    },
     /** Re-reads one selected run by its opaque handle. */
-    readRun: (handle) =>
-      invoke([
+    readRun: (handle, context) => {
+      const runRef = validatedRunHandle(handle);
+      return invoke([
         "api",
         "-X",
         "GET",
-        `repos/${input.repository}/actions/runs/${handle}`,
-      ]),
+        `repos/${input.repository}/actions/runs/${runRef}`,
+        "--jq",
+        "{id,event,head_sha,created_at,path,status,conclusion}",
+      ], context, (payload) => {
+        snapshotRun(payload);
+      });
+    },
     /** Lists bounded jobs for one selected observer run. */
-    listJobs: (handle) =>
-      invoke([
+    listJobs: (handle, context) => {
+      const runRef = validatedRunHandle(handle);
+      return invoke([
         "api",
         "-X",
         "GET",
-        `repos/${input.repository}/actions/runs/${handle}/jobs`,
+        `repos/${input.repository}/actions/runs/${runRef}/jobs`,
         "-f",
         "per_page=100",
-      ]),
+        "--jq",
+        "{jobs: [.jobs[] | {name,status,conclusion,steps: [.steps[] | {name,status,conclusion,completed_at}]}]}",
+      ], context, (payload) => {
+        snapshotJobs(payload);
+      });
+    },
   };
   return Object.freeze(dependencies);
 }
@@ -304,8 +400,182 @@ export function createGitHubObserverResolutionDependencies(input: {
 async function jobsFor(
   handle: PreviewObserverRunHandle,
   deps: PreviewObserverResolutionDependencies,
+  deadline: number,
 ): Promise<readonly JobSnapshot[]> {
-  return snapshotJobs(await deps.listJobs(handle));
+  return snapshotJobs(
+    await callBeforeDeadline(
+      deadline,
+      deps,
+      (context) => deps.listJobs(handle, context),
+    ),
+  );
+}
+
+/** Runs one metadata call against the resolver's shared absolute deadline. */
+async function callBeforeDeadline<T>(
+  deadlineMonotonic: number,
+  deps: PreviewObserverResolutionDependencies,
+  operation: (context: PreviewObserverCallContext) => Promise<T>,
+): Promise<T> {
+  const deadline = validMonotonic(deadlineMonotonic);
+  const remaining = deadline - validMonotonic(deps.monotonicNow());
+  if (remaining < 0) fail();
+  const controller = new AbortController();
+  const context = Object.freeze({
+    deadlineMonotonic: deadline,
+    signal: controller.signal,
+  });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const timeout = new Promise<never>((_resolvePromise, rejectPromise) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        rejectPromise(new Error(FAILURE));
+      }, Math.max(1, remaining));
+    });
+    return await Promise.race([operation(context), timeout]);
+  } catch {
+    throw new Error(FAILURE);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    if (!controller.signal.aborted) controller.abort();
+  }
+}
+
+/** Sleeps no later than the next poll while retaining the shared deadline. */
+async function sleepBeforeDeadline(
+  milliseconds: number,
+  deadlineMonotonic: number,
+  deps: PreviewObserverResolutionDependencies,
+): Promise<void> {
+  const deadline = validMonotonic(deadlineMonotonic);
+  const remaining = deadline - validMonotonic(deps.monotonicNow());
+  if (
+    !Number.isFinite(milliseconds) ||
+    milliseconds <= 0 ||
+    remaining <= 0
+  ) {
+    fail();
+  }
+  const controller = new AbortController();
+  try {
+    await deps.sleep(
+      Math.min(milliseconds, remaining),
+      Object.freeze({
+        deadlineMonotonic: deadline,
+        signal: controller.signal,
+      }),
+    );
+  } catch {
+    fail();
+  } finally {
+    controller.abort();
+  }
+}
+
+/** Gives one standalone observer-state read a bounded absolute deadline. */
+function stateReadDeadline(
+  deps: PreviewObserverResolutionDependencies,
+): number {
+  return validMonotonic(deps.monotonicNow()) + RESOLUTION_MILLISECONDS;
+}
+
+/** Captures and bounds one real provider child until it has settled. */
+async function runCapturedProviderCommand(
+  executable: string,
+  arguments_: readonly string[],
+  context: PreviewObserverCallContext,
+  monotonicNow: () => number,
+): Promise<PreviewObserverCommandResult> {
+  const remaining =
+    validMonotonic(context.deadlineMonotonic) -
+    validMonotonic(monotonicNow());
+  if (remaining < 0 || context.signal.aborted) fail();
+  const result = await execFileAsync(executable, [...arguments_], {
+    encoding: "utf8",
+    maxBuffer: MAX_RESPONSE_BYTES,
+    windowsHide: true,
+    signal: context.signal,
+    timeout: Math.max(1, remaining),
+    killSignal: "SIGTERM",
+  });
+  return Object.freeze({
+    stdout: result.stdout,
+    stderr: result.stderr,
+  });
+}
+
+/** Settles an injected command no later than its absolute deadline. */
+async function raceCommandAgainstDeadline(
+  command: Promise<PreviewObserverCommandResult>,
+  context: PreviewObserverCallContext,
+  monotonicNow: () => number,
+): Promise<PreviewObserverCommandResult> {
+  const remaining =
+    validMonotonic(context.deadlineMonotonic) -
+    validMonotonic(monotonicNow());
+  if (remaining < 0 || context.signal.aborted) fail();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let rejectAbort: (() => void) | undefined;
+  const aborted = new Promise<never>((_resolvePromise, rejectPromise) => {
+    rejectAbort = () => rejectPromise(new Error(FAILURE));
+    context.signal.addEventListener("abort", rejectAbort, { once: true });
+  });
+  const timeout = new Promise<never>((_resolvePromise, rejectPromise) => {
+    timer = setTimeout(
+      () => rejectPromise(new Error(FAILURE)),
+      Math.max(1, remaining),
+    );
+  });
+  try {
+    return await Promise.race([command, aborted, timeout]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    if (rejectAbort !== undefined) {
+      context.signal.removeEventListener("abort", rejectAbort);
+    }
+  }
+}
+
+/** Implements one sleep that rejects promptly when its caller aborts. */
+function interruptibleSleep(
+  milliseconds: number,
+  context: PreviewObserverCallContext,
+): Promise<void> {
+  if (
+    !Number.isFinite(milliseconds) ||
+    milliseconds < 0 ||
+    context.signal.aborted
+  ) {
+    return Promise.reject(new Error(FAILURE));
+  }
+  return new Promise<void>((resolvePromise, rejectPromise) => {
+    let timer: ReturnType<typeof setTimeout>;
+    /** Cancels the pending delay without retaining a provider failure. */
+    const abort = () => {
+      clearTimeout(timer);
+      rejectPromise(new Error(FAILURE));
+    };
+    context.signal.addEventListener("abort", abort, { once: true });
+    timer = setTimeout(() => {
+      context.signal.removeEventListener("abort", abort);
+      resolvePromise();
+    }, milliseconds);
+  });
+}
+
+/** Revalidates the opaque decimal handle before command construction. */
+function validatedRunHandle(handle: PreviewObserverRunHandle): string {
+  if (typeof handle !== "string" || !/^[1-9][0-9]{0,19}$/u.test(handle)) {
+    fail();
+  }
+  return handle;
+}
+
+/** Admits one finite nonnegative monotonic instant. */
+function validMonotonic(value: number): number {
+  if (!Number.isFinite(value) || value < 0) fail();
+  return value;
 }
 
 /** Requires one exact job and rejects duplicate named jobs. */
@@ -412,6 +682,15 @@ function snapshotRuns(payload: unknown): readonly RunSnapshot[] {
 function snapshotRun(value: unknown): RunSnapshot {
   try {
     const record = plainRecord(value);
+    exactKeys(record, [
+      "id",
+      "event",
+      "head_sha",
+      "created_at",
+      "path",
+      "status",
+      "conclusion",
+    ]);
     const id = ownData(record, "id");
     const snapshot = {
       id: String(id),
@@ -424,7 +703,8 @@ function snapshotRun(value: unknown): RunSnapshot {
     };
     if (
       typeof id === "boolean" ||
-      !/^[1-9][0-9]{0,19}$/u.test(snapshot.id)
+      !/^[1-9][0-9]{0,19}$/u.test(snapshot.id) ||
+      !validDate(canonicalDate(snapshot.createdAt))
     ) {
       fail();
     }
@@ -438,14 +718,17 @@ function snapshotRun(value: unknown): RunSnapshot {
 function snapshotJobs(payload: unknown): readonly JobSnapshot[] {
   try {
     const record = plainRecord(payload);
+    exactKeys(record, ["jobs"]);
     const values = ownData(record, "jobs");
     if (!Array.isArray(values) || values.length > MAX_JOBS) fail();
     return values.map((value) => {
       const job = plainRecord(value);
+      exactKeys(job, ["name", "status", "conclusion", "steps"]);
       const rawSteps = ownData(job, "steps");
       if (!Array.isArray(rawSteps) || rawSteps.length > MAX_STEPS) fail();
       const steps = rawSteps.map((stepValue) => {
         const step = plainRecord(stepValue);
+        exactKeys(step, ["name", "status", "conclusion", "completed_at"]);
         return Object.freeze({
           name: boundedString(ownData(step, "name")),
           status: boundedString(ownData(step, "status")),
@@ -477,15 +760,15 @@ function matchesRun(
     readonly dispatchCompletedAt: Date;
   },
 ): boolean {
-  const created = Date.parse(run.createdAt);
+  const created = canonicalDate(run.createdAt).getTime();
+  const createdBucketEndsAt = created + 999;
   return (
-    Number.isFinite(created) &&
     run.event === "workflow_dispatch" &&
     run.headSha === input.expectedCommit &&
     run.path === input.expectedWorkflow &&
     run.status === "in_progress" &&
     run.conclusion === null &&
-    created >= input.dispatchStartedAt.getTime() &&
+    createdBucketEndsAt >= input.dispatchStartedAt.getTime() &&
     created <= input.dispatchCompletedAt.getTime()
   );
 }
@@ -546,6 +829,20 @@ function optionalOwnData(
   return descriptor.value;
 }
 
+/** Requires one exact allowlisted key set. */
+function exactKeys(
+  record: Record<string, unknown>,
+  expected: readonly string[],
+): void {
+  const keys = Object.keys(record);
+  if (
+    keys.length !== expected.length ||
+    expected.some((key) => !Object.hasOwn(record, key))
+  ) {
+    fail();
+  }
+}
+
 /** Admits one bounded provider string. */
 function boundedString(value: unknown): string {
   if (typeof value !== "string" || value.length > 256) fail();
@@ -573,6 +870,18 @@ function canonicalDate(value: unknown): Date {
   return new Date(parsed);
 }
 
+/** Parses one exact canonical millisecond context timestamp. */
+function canonicalContextDate(value: unknown): Date {
+  if (typeof value !== "string" || !CONTEXT_INSTANT_PATTERN.test(value)) {
+    fail();
+  }
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed) || new Date(parsed).toISOString() !== value) {
+    fail();
+  }
+  return new Date(parsed);
+}
+
 /** Recognizes one valid Date without coercion. */
 function validDate(value: unknown): value is Date {
   return value instanceof Date && Number.isFinite(value.getTime());
@@ -584,7 +893,7 @@ function fail(): never {
 }
 
 /** Parses one strict live resolver command. */
-function parseArguments(arguments_: readonly string[]): {
+export function parsePreviewObserverRunArguments(arguments_: readonly string[]): {
   readonly repository: string;
   readonly expectedWorkflow: string;
   readonly expectedCommit: string;
@@ -630,30 +939,45 @@ function parseArguments(arguments_: readonly string[]): {
     repository: values.get("--repository") ?? "",
     expectedWorkflow: values.get("--workflow") ?? "",
     expectedCommit: values.get("--sha") ?? "",
-    dispatchStartedAt: canonicalDate(values.get("--dispatch-started-at")),
-    dispatchCompletedAt: canonicalDate(values.get("--dispatch-completed-at")),
+    dispatchStartedAt: canonicalContextDate(values.get("--dispatch-started-at")),
+    dispatchCompletedAt: canonicalContextDate(
+      values.get("--dispatch-completed-at"),
+    ),
     family,
     ...(maintenance === undefined
       ? {}
-      : { maintenanceScheduledAt: canonicalDate(maintenance) }),
+       : { maintenanceScheduledAt: canonicalContextDate(maintenance) }),
   };
   validateResolutionInput(result);
   return result;
 }
 
-/** Resolves the observer while keeping its identifier process-local. */
-async function main(): Promise<void> {
-  try {
-    const input = parseArguments(process.argv.slice(2));
-    await resolvePreviewObserverRun(
-      input,
+/** Runs the real CLI path while keeping its identifier and failures private. */
+export async function runPreviewObserverCli(
+  arguments_: readonly string[],
+  createDependencies: (
+    input: ReturnType<typeof parsePreviewObserverRunArguments>,
+  ) => PreviewObserverResolutionDependencies =
+    (input) =>
       createGitHubObserverResolutionDependencies({
         repository: input.repository,
       }),
+): Promise<0 | 1> {
+  try {
+    const input = parsePreviewObserverRunArguments(arguments_);
+    await resolvePreviewObserverRun(
+      input,
+      createDependencies(input),
     );
+    return 0;
   } catch {
-    process.exitCode = 1;
+    return 1;
   }
+}
+
+/** Resolves the observer while keeping its identifier process-local. */
+async function main(): Promise<void> {
+  process.exitCode = await runPreviewObserverCli(process.argv.slice(2));
 }
 
 if (
