@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T02:06:04.595659Z
-- **Last observed:** 2026-07-31T15:40:49.4392607Z
+- **Last observed:** 2026-07-31T16:17:56.4875463Z
 - **Phase/task:** Phase B Task 3 isolated integration diagnosis
 - **Environment:** Isolated restore/controller worktrees; bounded diagnostic output
 - **Version/commit:** 2bfbc23f13c44e60b01bbffcecc9748d322765b5 plus restore repair
@@ -131,3 +131,16 @@ completed without another output overflow.
   then confirmed the intended incident and index updates had applied.
 - 2026-07-31T15:40:49.4392607Z: Closed after bounded reads confirmed both the
   77-path inventory incident and index were updated exactly as intended.
+- 2026-07-31T15:56:03.1833828Z: Reopened as contained after the workflow
+  repair lane's first call-path scan emitted a truncated table because wrapped
+  absolute paths expanded every match. Only repository paths and match context
+  were involved; no sensitive value, edit, provider call, network action, or
+  external mutation occurred. The lane must resume with repository-relative,
+  line-number-only bounded searches.
+- 2026-07-31T15:57:58.8592092Z: The same lane combined six nominally bounded
+  controller source ranges into one call and again exceeded the output bound.
+  No edit, sensitive value, provider call, network action, or external mutation
+  occurred. Future source reads are capped at one section and 220 lines.
+- 2026-07-31T16:17:56.4875463Z: Closed after the lane completed bounded,
+  URL-redacted inspection, strict TDD, and final verification without another
+  output overflow.

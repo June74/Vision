@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:16:44.091309Z
-- **Last observed:** 2026-07-30T23:28:36.7050043Z
+- **Last observed:** 2026-07-31T16:17:56.4875463Z
 - **Phase/task:** Phase B live-acceptance closure Task 1
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** `7d2f9f6`; reviewed candidate `0f08fc1`
@@ -100,6 +100,26 @@ files with 59 passing tests.
   focused RED run. The test process did not start, only RED test edits existed,
   and no production or provider state changed. The identical scope is retried
   through the repository-local Vitest Windows wrapper.
+- 2026-07-31T15:59:20.1695396Z: Recurred in the R2 pagination repair lane when
+  `pnpm exec` again failed to resolve Vitest before starting tests. Only the
+  assigned adversarial test file had changed; no source, provider, network,
+  secret, or external state was affected. The identical RED scope must use the
+  repository-local `vitest.cmd` wrapper.
+- 2026-07-31T16:01:39.9190720Z: Recurred independently in the candidate
+  rollback-validation lane after test-only RED changes. The test process did
+  not start, and no implementation, documentation, provider, network, secret,
+  or external state was affected. That lane must also use the explicit local
+  Windows wrapper.
+- 2026-07-31T16:05:53.0217012Z: Closed after the explicit local Windows
+  wrapper ran the R2 reader suite with 25 passing tests and the candidate
+  provider-state suite with 84 passing tests.
+- 2026-07-31T16:06:37.0618565Z: Reopened when the observer/controller lane's
+  focused RED command used `pnpm exec` and failed before starting tests. Only
+  owned test files had changed; no production, workflow, provider, network,
+  secret, or external state was affected. The exact four-file scope must use
+  the same repository-local Windows wrapper.
+- 2026-07-31T16:17:56.4875463Z: Closed after the explicit local wrapper ran
+  the final observer/controller scope with all 154 tests passing.
 
 The repository-local wrapper reached the candidate script, confirming the
 package-runner resolution boundary. The workflow-equivalent local Node loader

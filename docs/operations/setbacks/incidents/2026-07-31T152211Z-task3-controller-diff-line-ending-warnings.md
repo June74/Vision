@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T15:22:11.0697118Z
-- **Last observed:** 2026-07-31T15:22:11.0697118Z
+- **Last observed:** 2026-07-31T16:39:42.5185006Z
 - **Phase/task:** Phase B Task 3 final controller review repair
 - **Environment:** Windows Git owned-diff verification
 - **Version/commit:** 73191b7 plus unstaged GREEN repairs and setback records
@@ -65,3 +65,12 @@ exit-code confirmation remains part of the controller handoff.
 
 - 2026-07-31T15:22:11.0697118Z: Observed, classified as non-blocking, and
   closed without formatting churn.
+- 2026-07-31T16:16:40.0494899Z: Recurred during the second-wave workflow
+  repair's owned-path audit. The diff check exited successfully across the ten
+  owned paths; only expected Windows normalization advisories appeared. The
+  lane avoids further content-printing diff calls and keeps the incident
+  closed as non-blocking.
+- 2026-07-31T16:39:42.5185006Z: Recurred during the root exact-scope audit for
+  all 19 implementation paths. The implementation set had zero missing and
+  zero extra paths, the output-suppressed diff check exited successfully, and
+  no formatting churn was applied.
