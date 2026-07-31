@@ -1,8 +1,8 @@
 # SB-20260730-231546-task3-final-rereview-contract-gaps: Task 3 final re-review found remaining timing and lifecycle gaps
 
-- **Status:** contained
+- **Status:** closed
 - **First observed:** 2026-07-30T23:15:46.928753Z
-- **Last observed:** 2026-07-31T05:26:43.5989902Z
+- **Last observed:** 2026-07-31T19:47:32.5520638Z
 - **Phase/task:** Phase B live-acceptance closure Task 3 final re-review
 - **Environment:** Sanitized full-range Task 3 independent re-review
 - **Version/commit:** `b1935577c211`; `2bfbc23f13c4`
@@ -151,3 +151,6 @@ Pending implementation, full local verification, and independent re-review.
   separation, and production uniqueness-close defects. It additionally
   requires rollback settlement before closure dispatch unless workflow
   serialization proves that order. No mutation or provider access occurred.
+- 2026-07-31T19:47:32.5520638Z: Closed after all timing, reconciliation,
+  uniqueness, rollback-order, and lifecycle-contract repairs passed the full
+  repository gate and three final independent reviewers returned no blockers.
