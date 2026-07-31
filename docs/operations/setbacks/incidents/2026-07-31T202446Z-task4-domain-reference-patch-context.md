@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T20:24:46.884785Z
-- **Last observed:** 2026-07-31T21:47:31.0672274Z
+- **Last observed:** 2026-07-31T22:22:02.6141163Z
 - **Phase/task:** Phase B Task 4 deterministic references
 - **Environment:** Local Phase B worktree reference pages
 - **Version/commit:** c23e301 plus Task 4 working changes
@@ -69,3 +69,7 @@ Fresh `docs:check` exited zero after all eight matching reference pages were upd
   the final prose line was inside the recurrence section. Patch verification
   rejected the whole patch; correction uses separate exact header, recurrence,
   and index edits.
+- 2026-07-31T22:22:02.6141163Z: Recurred when a combined reviewer-setback
+  ledger patch used an index-row context that failed verification. The patch
+  was rejected atomically; correction splits incident and index edits against
+  freshly read exact rows.

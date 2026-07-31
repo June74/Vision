@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:24:05.647183Z
-- **Last observed:** 2026-07-30T20:21:08.1772169Z
+- **Last observed:** 2026-07-31T22:41:29.9852547Z
 - **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 5
 - **Environment:** Local managed sandbox Worker test pool
 - **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`; `6ebabd1`;
@@ -149,3 +149,8 @@ documentation, typecheck, and security validation also passed.
   the same restricted-filesystem/static-analysis warning while all 32 Worker
   assertions passed. Typecheck, documentation validation, and the security scan
   also exited zero; no provider or external state changed.
+- 2026-07-31T22:28:15.2681194Z: Recurred during the Task 5 Worker route-contract
+  suite under the same restricted filesystem. Static export analysis remained
+  advisory and all 11 tests passed with exit zero.
+- 2026-07-31T22:41:29.9852547Z: Recurred during the final complete Task 5 gate;
+  all seven Worker files and 110 tests passed with exit zero.

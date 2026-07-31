@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T20:15:14.8462626Z
-- **Last observed:** 2026-07-31T21:05:10.5459084Z
-- **Phase/task:** Phase B Task 4 aggregate data GREEN verification
+- **Last observed:** 2026-07-31T22:14:54.1781132Z
+- **Phase/task:** Phase B Tasks 4 and 5 concurrent GREEN verification
 - **Environment:** Local captured TypeScript and documentation checks
 - **Version/commit:** 2cf0ff1 plus uncommitted Task 4 data lane
 
@@ -66,3 +66,7 @@ remaining missing headings, zero of them in the owned data source.
   run confirmed zero owned-path omissions and 18 concurrent-lane omissions.
 - 2026-07-31T21:05:10.5459084Z: Closed after integrated Task 4 documentation
   coverage and TypeScript checks both exited zero.
+- 2026-07-31T22:14:54.1781132Z: Recurred when the Task 5 scheduled-evidence
+  lane's 66-green-test verification reached the shared typecheck while the
+  controller lane still had one logged test-only Date narrowing error. No
+  assigned scheduled path error was reported; integrated typecheck owns close.

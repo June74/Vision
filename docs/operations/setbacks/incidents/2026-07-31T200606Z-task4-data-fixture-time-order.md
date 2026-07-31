@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T20:06:06.6240319Z
-- **Last observed:** 2026-07-31T20:08:18.4872536Z
-- **Phase/task:** Phase B Task 4 aggregate data TDD RED
+- **Last observed:** 2026-07-31T22:08:29.2557706Z
+- **Phase/task:** Phase B Tasks 4 and 5 time-fixture TDD
 - **Environment:** Local PGlite integration test only
 - **Version/commit:** 2cf0ff1 plus Task 4 RED tests
 
@@ -67,3 +67,9 @@ classification found zero query/parameter diagnostic markers.
   or external-state mutation.
 - 2026-07-31T20:08:18.4872536Z: Closed after monotonic fixture separation and
   an exact, safely classified missing-method RED.
+- 2026-07-31T22:06:59.3984398Z: Recurred in the Task 5 browser helper's first
+  GREEN run when the exact-60-second start case reused a completion instant
+  earlier than that start. Eleven of twelve tests passed; correction updates
+  only the invalid fixture before rerunning the same suite.
+- 2026-07-31T22:08:29.2557706Z: Closed after the corrected timeline fixture
+  passed the identical browser-helper suite with 1 file and 12 tests green.

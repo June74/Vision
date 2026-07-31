@@ -2,7 +2,7 @@
 
 - **Status:** contained
 - **First observed:** 2026-07-31T21:56:53.3451279Z
-- **Last observed:** 2026-07-31T21:56:53.3451279Z
+- **Last observed:** 2026-07-31T22:14:54.1781132Z
 - **Phase/task:** Phase B Task 5 discovery
 - **Environment:** Local Phase B worktree
 - **Version/commit:** 84f3a0a
@@ -34,3 +34,7 @@ provider, network, database, deployment, or external state changed.
 ## Recurrence history
 
 - 2026-07-31T21:56:53.3451279Z: Contained before implementation work began.
+- 2026-07-31T22:14:54.1781132Z: Recurred when the browser-package reviewer
+  guessed `.superpowers/plans` and `.superpowers/specs`; this worktree keeps
+  those authoring documents under `docs/superpowers`. The read-only listing
+  changed nothing and review resumes from confirmed paths.

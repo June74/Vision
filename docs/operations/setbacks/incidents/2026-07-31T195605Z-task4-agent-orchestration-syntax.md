@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T19:56:05.9881048Z
-- **Last observed:** 2026-07-31T19:56:05.9881048Z
-- **Phase/task:** Phase B Task 4 diagnostics contract review
+- **Last observed:** 2026-07-31T22:21:30.0858749Z
+- **Phase/task:** Phase B Tasks 4 and 5 agent orchestration
 - **Environment:** Read-only subagent tool orchestration
 - **Version/commit:** 2cf0ff1
 
@@ -37,4 +37,13 @@ changed. The read-only review paused until the error was recorded.
 
 - 2026-07-31T19:56:05.9881048Z: Observed, contained, and closed before any
   nested tool execution.
-
+- 2026-07-31T22:14:54.1781132Z: Recurred when the Task 5 browser reviewer
+  requested a 1,280-millisecond agent wait below the 10,000-millisecond
+  minimum. Validation rejected it before any wait or state change.
+- 2026-07-31T22:19:52.1664250Z: Recurred when the root attempted to spawn the
+  scheduled-package reviewer while four team threads still occupied the
+  concurrency tree. The dispatch was rejected before review work or mutation;
+  independent review waits for a repair lane to finish.
+- 2026-07-31T22:21:30.0858749Z: Recurred when the scheduled reviewer supplied
+  `timeout` instead of the required `timeout_ms` field to the agent wait tool.
+  Schema validation rejected the call before execution or state change.

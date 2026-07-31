@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T04:24:16.3267175Z
-- **Last observed:** 2026-07-30T20:53:12.3702257Z
-- **Phase/task:** Phase B live-acceptance closure Task 1
+- **Last observed:** 2026-07-31T22:34:55.7355372Z
+- **Phase/task:** Phase B live-acceptance closure Tasks 1, 3, and 5
 - **Environment:** Local Phase B worktree
 - **Version/commit:** Uncommitted wave-2 fixes based on `41d3e74`
 
@@ -75,3 +75,14 @@ the final complete gate.
 - 2026-07-30T20:53:12.3702257Z: A Task 3 domain-test patch guessed a describe
   label that differs from the current file. The hunk was rejected atomically
   and changed no file; the retry uses symbol-only current context.
+- 2026-07-31T22:05:04.4124051Z: Recurred when the Task 5 observer lane's first
+  RED multi-file patch assumed a workflow-test describe heading that is not in
+  the current file. The entire patch was rejected; the retry reads and patches
+  one exact test anchor at a time.
+- 2026-07-31T22:07:43.6150662Z: Recurred when the Task 5 browser fixture repair
+  assumed whitespace around a parameterized test declaration. The patch was
+  rejected with no change; correction uses the exact current line only.
+- 2026-07-31T22:34:55.7355372Z: Recurred when the Task 5 blocker-fix docs patch
+  assumed the technical `isTwoJobFamily` paragraph matched the review quote.
+  The patch was rejected atomically; correction reads and patches each exact
+  reference paragraph separately.

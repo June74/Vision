@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T20:01:59.305984Z
-- **Last observed:** 2026-07-31T20:02:05.8106273Z
-- **Phase/task:** Phase B Task 4 read-only review
+- **Last observed:** 2026-07-31T22:21:30.0858749Z
+- **Phase/task:** Phase B Tasks 4 and 5 read-only review
 - **Environment:** Local Phase B worktree, Windows PowerShell
 - **Version/commit:** c23e301 plus unstaged setback records
 
@@ -48,3 +48,7 @@ Verified exact directory membership and completed the review without relying on 
 ## Recurrence history
 
 - 2026-07-31T20:01:59.305984Z: First observed.
+- 2026-07-31T22:21:30.0858749Z: Recurred when the Task 5 scheduled-package
+  reviewer assumed the integration report existed before lane integration.
+  The missing-file read changed nothing; review resumes from the brief and
+  exact nine-path package.

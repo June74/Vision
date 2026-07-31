@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-07-31T20:14:00.4865884Z
-- **Phase/task:** Phase B Task 4 diagnostics RED verification
+- **Last observed:** 2026-07-31T22:41:29.9852547Z
+- **Phase/task:** Phase B Tasks 4 and 5 Worker verification
 - **Environment:** Local managed sandbox
 - **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`; `6ebabd1`
 - **Latest recurrence:** 2026-07-30T03:32:34.1083650Z — the segmented Gate 0
@@ -210,3 +210,11 @@ security validation passed.
   rerun used the approved worktree-local diagnostic path and passed all 33
   tests without the optional debug-log permission warning. The separate known
   static export-analysis sandbox warning remained warning-only.
+- 2026-07-31T22:28:15.2681194Z: Recurred during the frozen Task 5 Worker
+  focused command; Wrangler could not write its optional user-level log, while
+  the command exited zero with all 11 route-contract tests passing.
+- 2026-07-31T22:29:31.1562918Z: Recurred during the Task 5 production build;
+  both Worker and client builds completed successfully despite the optional
+  user-level log warning.
+- 2026-07-31T22:41:29.9852547Z: Recurred during the final complete Task 5 gate;
+  the full command still exited zero and both production builds passed.
