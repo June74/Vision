@@ -1,11 +1,11 @@
-# SB-20260731-145201-task3-final-package-review-blockers: Final package review found three lifecycle blockers
+# SB-20260731-145201-task3-final-package-review-blockers: Final package review found lifecycle blockers
 
 - **Status:** contained
 - **First observed:** 2026-07-31T14:52:01.4047691Z
-- **Last observed:** 2026-07-31T14:56:48.2972062Z
+- **Last observed:** 2026-07-31T15:52:55.5251629Z
 - **Phase/task:** Phase B Task 3 final package re-review
 - **Environment:** Independent sanitized package-only lifecycle review
-- **Version/commit:** 73191b7
+- **Version/commit:** 2a2b5f9
 
 ## Symptom
 
@@ -82,3 +82,20 @@ Pending.
 - 2026-07-31T14:56:48.2972062Z: Security review added rollback-dispatch
   reconciliation and bounded restore object/body/page requirements. The full
   three-reviewer finding set is now available for one coordinated TDD repair.
+- 2026-07-31T15:52:04.9197522Z: The second fresh package-review wave found one
+  Critical and three Important blockers so far. A fresh observer can be
+  rejected while its listener job is still starting; configured observer
+  lifetime cannot cover the valid candidate window; a legitimate later
+  provider completion can advance the cached uniqueness close while the
+  controller wrongly requires equality; and contradictory R2 pagination
+  metadata can be treated as a complete catalog. The package remains
+  unaccepted and Task 4 source work remains barred pending the third review
+  and one coordinated test-first repair.
+- 2026-07-31T15:52:55.5251629Z: The lifecycle review completed and added one
+  Critical rollback blocker: candidate-state verification incorrectly expects
+  the permanent schedule profile for five candidate operations that require
+  the temporary one-minute schedule, so rollback can stop before restoring the
+  normal preview. Its R2 pagination finding duplicates the security review.
+  The deduplicated second-wave set is two Critical and three Important
+  blockers across workflow startup/lifetime/uniqueness, candidate rollback
+  validation, and R2 pagination-envelope validation.
