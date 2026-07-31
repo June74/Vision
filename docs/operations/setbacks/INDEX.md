@@ -2,6 +2,8 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
+| [SB-20260731-174919-git-worktree-index-permission](incidents/2026-07-31T174919Z-git-worktree-index-permission.md) | closed | 2026-07-31T17:49:19.1079389Z | Phase B Task 3 setback-ledger commit | Sandbox blocked the worktree Git index |
+| [SB-20260731-174826-timing-lane-read-path-mismatch](incidents/2026-07-31T174826Z-timing-lane-read-path-mismatch.md) | closed | 2026-07-31T17:48:26.8998201Z | Phase B Task 3 fourth-wave timing repair | Timing lane searched a nonexistent root README |
 | [SB-20260731-173033-fourth-wave-inventory-mismatch](incidents/2026-07-31T173033Z-fourth-wave-inventory-mismatch.md) | closed | 2026-07-31T17:31:21.3811353Z | Phase B Task 3 fourth-wave repair integration | Fourth-wave repair includes one path outside the Task 3 report inventory |
 | [SB-20260731-172519-orphan-process-inspection-denied](incidents/2026-07-31T172519Z-orphan-process-inspection-denied.md) | closed | 2026-07-31T17:25:19.4888984Z | Phase B Task 3 fourth-wave repair integration | Windows denied command-line process inspection |
 | [SB-20260731-172436-full-check-runner-pipe-closed](incidents/2026-07-31T172436Z-full-check-runner-pipe-closed.md) | closed | 2026-07-31T17:29:48.7208898Z | Phase B Task 3 fourth-wave repair integration | Windows sandbox closed the complete-check command pipe |
