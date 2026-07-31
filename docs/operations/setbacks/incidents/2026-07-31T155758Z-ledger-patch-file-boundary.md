@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T15:57:58.8592092Z
-- **Last observed:** 2026-07-31T16:20:19.4771780Z
+- **Last observed:** 2026-07-31T16:52:38.9496404Z
 - **Phase/task:** Phase B Task 3 second-wave blocker repair
 - **Environment:** Local setback-ledger edit
 - **Version/commit:** 6dfdd38
@@ -44,3 +44,12 @@ protected value was involved.
   separate index patch.
 - 2026-07-31T16:20:19.4771780Z: Closed after five exact incident patches and
   one separate index patch applied and matched the intended closure state.
+- 2026-07-31T16:50:58.3668193Z: Reopened after a combined third-review ledger
+  update used an imprecise tail sentence and failed verification atomically.
+  No source, provider, network, secret, or external state changed. The retry
+  uses separate exact incident patches followed by a separate index patch.
+- 2026-07-31T16:51:54.7341358Z: The two-row index patch also failed
+  verification even though bounded inspection showed both expected rows. No
+  partial change occurred. All remaining index updates use one row per patch.
+- 2026-07-31T16:52:38.9496404Z: Closed after all three one-row index updates
+  applied and matched their incident files exactly.

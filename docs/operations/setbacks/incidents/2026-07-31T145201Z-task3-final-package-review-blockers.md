@@ -2,10 +2,10 @@
 
 - **Status:** contained
 - **First observed:** 2026-07-31T14:52:01.4047691Z
-- **Last observed:** 2026-07-31T15:52:55.5251629Z
+- **Last observed:** 2026-07-31T16:50:22.2835097Z
 - **Phase/task:** Phase B Task 3 final package re-review
 - **Environment:** Independent sanitized package-only lifecycle review
-- **Version/commit:** 2a2b5f9
+- **Version/commit:** 6f7c7be
 
 ## Symptom
 
@@ -99,3 +99,18 @@ Pending.
   The deduplicated second-wave set is two Critical and three Important
   blockers across workflow startup/lifetime/uniqueness, candidate rollback
   validation, and R2 pagination-envelope validation.
+- 2026-07-31T16:49:21.2452535Z: The third package-review wave reported two
+  Important candidate-lifecycle blockers so far. An intent may be opened before
+  fallible pre-deploy work, but a deployment that never becomes live has no
+  normal-state abort transition and cannot satisfy candidate-profile rollback.
+  Separately, the normal deployment operation can bypass rollback proof while
+  an intent is open, removing the candidate profile without closing the intent.
+  Task 3 remains unaccepted pending the final reviewer and a coordinated
+  test-first repair.
+- 2026-07-31T16:50:22.2835097Z: The final observer reviewer added three
+  Important findings. The valid restore path can exceed the 42-minute listener
+  lifetime; the resolver masks backward raw provider uniqueness evidence with
+  a maximum; and a queued run with fully active jobs/listeners can be accepted
+  despite contradictory topology. The R2/restore security reviewer reported
+  no blockers. The third-wave set is five Important findings requiring one
+  coordinated test-first repair and another package review.

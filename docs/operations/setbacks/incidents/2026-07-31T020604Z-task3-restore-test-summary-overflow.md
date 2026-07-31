@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T02:06:04.595659Z
-- **Last observed:** 2026-07-31T16:17:56.4875463Z
+- **Last observed:** 2026-07-31T16:50:22.2835097Z
 - **Phase/task:** Phase B Task 3 isolated integration diagnosis
 - **Environment:** Isolated restore/controller worktrees; bounded diagnostic output
 - **Version/commit:** 2bfbc23f13c44e60b01bbffcecc9748d322765b5 plus restore repair
@@ -144,3 +144,10 @@ completed without another output overflow.
 - 2026-07-31T16:17:56.4875463Z: Closed after the lane completed bounded,
   URL-redacted inspection, strict TDD, and final verification without another
   output overflow.
+- 2026-07-31T16:49:44.3146096Z: Reopened after the third-wave observer reviewer
+  requested an oversized excerpt from the sanitized package and compacted its
+  context. No repository or provider state changed, and no unsanitized source,
+  secret, URL, or protected identifier was involved. The reviewer completed
+  from retained package-only evidence and must return only its bounded verdict.
+- 2026-07-31T16:50:22.2835097Z: Closed after the reviewer returned a bounded
+  three-finding verdict without another oversized excerpt.
