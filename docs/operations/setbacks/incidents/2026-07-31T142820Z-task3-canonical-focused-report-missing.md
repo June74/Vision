@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T14:28:20.4759300Z
-- **Last observed:** 2026-07-31T14:31:18.1189588Z
+- **Last observed:** 2026-07-31T15:30:50.5669463Z
 - **Phase/task:** Phase B Task 3 canonical combined verification
 - **Environment:** Main Phase B worktree; captured Vitest invocation
 - **Version/commit:** c5de12d plus unstaged controller and resolver repairs
@@ -73,3 +73,21 @@ group. Captured output remained private and was deleted after each run.
   without rendering; no state changed.
 - 2026-07-31T14:31:18.1189588Z: Closed after the validated direct binary passed
   both the one-file routing check and the complete three-file focused group.
+- 2026-07-31T15:02:49.9284349Z: Reopened as contained after the final resolver
+  repair repeated the nonworking `pnpm exec` entry point for its first RED run.
+  The command failed before test collection or production edits and emitted no
+  test, provider, credential, URI, identifier, or environment payload. Resume
+  with the already validated direct local Vitest binary.
+- 2026-07-31T15:07:24.7276380Z: The controller repair repeated the same invalid
+  package entry point through a private process runner. Vitest did not launch;
+  zero standard-output bytes and only a bounded unrendered error stream were
+  captured. Test-only edits remain on disk, production is untouched, and the
+  lane must resume with the direct local Vitest binary.
+- 2026-07-31T15:09:00.7011578Z: The restore-bounds lane repeated the same
+  invalid package entry point after adding only its reader RED tests. No tests
+  collected, no production/reference file changed, and no sensitive output
+  occurred. All active Task 3 lanes are now explicitly standardized on the
+  direct local Vitest binary.
+- 2026-07-31T15:30:50.5669463Z: Closed after resolver, controller, restore,
+  combined focused, and complete repository runs all used validated entry
+  points and exited successfully.

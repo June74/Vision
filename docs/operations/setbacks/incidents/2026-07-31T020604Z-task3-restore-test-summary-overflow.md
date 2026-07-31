@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T02:06:04.595659Z
-- **Last observed:** 2026-07-31T14:11:03.5905501Z
+- **Last observed:** 2026-07-31T15:30:50.5669463Z
 - **Phase/task:** Phase B Task 3 isolated integration diagnosis
 - **Environment:** Isolated restore/controller worktrees; bounded diagnostic output
 - **Version/commit:** 2bfbc23f13c44e60b01bbffcecc9748d322765b5 plus restore repair
@@ -103,3 +103,24 @@ completed without another output overflow.
 - 2026-07-31T14:11:03.5905501Z: Closed after bounded exact-file reads proved
   the earlier documentation-incident closure had applied and no unsafe output
   or state change occurred.
+- 2026-07-31T14:58:22.4964062Z: Reopened as contained after the final resolver
+  repair used an overly broad initial source/test inspection and the tool
+  response was truncated. Only repository text and filenames were involved;
+  no secret, URI, provider data, protected identifier, mutation, or external
+  action occurred. The lane stopped before edits and must resume with bounded
+  searches and exact ranges.
+- 2026-07-31T15:01:15.7489852Z: The restore-bounds lane combined two source,
+  test, and reference reads and again exceeded the output budget. Repository
+  code/documentation was the only visible material; no secret, provider data,
+  protected identifier, mutation, or external action occurred. The lane
+  stopped before analysis or edits and must use one exact section per read.
+- 2026-07-31T15:25:17.6300421Z: The root combined diff audit disabled Windows
+  conversion settings, causing CRLF-normalized lines to be classified as
+  trailing whitespace. Git emitted thousands of repository lines and the tool
+  response was truncated. No secret, provider data, protected identifier,
+  mutation, or external action occurred. That result is invalid; the retry
+  must use the ordinary diff semantics with both output streams suppressed and
+  emit only the exit category.
+- 2026-07-31T15:30:50.5669463Z: Closed after the ordinary output-suppressed
+  diff check, combined focused group, and complete repository pipeline all
+  exited successfully without another output overflow.
