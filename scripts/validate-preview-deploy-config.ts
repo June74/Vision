@@ -167,6 +167,34 @@ export function validatePreviewProviderStateForCandidateIntent(input: {
   }
 }
 
+/** Selects exact normal recovery or strict candidate rollback from durable state. */
+export function validatePreviewProviderStateForRollback(input: {
+  readonly candidateIntent: unknown;
+  readonly expectedCommit: unknown;
+  readonly mutationState: unknown;
+  readonly healthResponse: unknown;
+  readonly schedulesResponse: unknown;
+  readonly settingsResponse: unknown;
+}): void {
+  try {
+    readPreviewCandidateBindingProfile({
+      candidateIntent: input.candidateIntent,
+      expectedCommit: input.expectedCommit,
+    });
+    if (input.mutationState === "not_started") {
+      validateNormalPreviewProviderState(input);
+      return;
+    }
+    if (input.mutationState === "may_have_started") {
+      validatePreviewProviderStateForCandidateIntent(input);
+      return;
+    }
+  } catch {
+    throw new Error(INVALID_PROVIDER_STATE);
+  }
+  throw new Error(INVALID_PROVIDER_STATE);
+}
+
 /** Reuses the normal runtime health and exact permanent schedule contract. */
 function matchesNormalProviderHealthAndSchedules(
   input: NormalPreviewProviderState,
@@ -554,13 +582,28 @@ async function main(): Promise<void> {
     arguments_[0] === "--verify-restore-pair-provider-state";
   const candidateProviderMode =
     arguments_[0] === "--verify-candidate-provider-state";
+  const rollbackProviderMode =
+    arguments_[0] === "--verify-rollback-provider-state";
   try {
-    if (providerMode || restoreProviderMode || candidateProviderMode) {
-      const expectedLength = candidateProviderMode ? 6 : 4;
+    if (
+      providerMode ||
+      restoreProviderMode ||
+      candidateProviderMode ||
+      rollbackProviderMode
+    ) {
+      const expectedLength = rollbackProviderMode
+        ? 7
+        : candidateProviderMode
+          ? 6
+          : 4;
       if (arguments_.length !== expectedLength) {
         throw new Error(INVALID_PROVIDER_STATE);
       }
-      const offset = candidateProviderMode ? 3 : 1;
+      const offset = rollbackProviderMode
+        ? 4
+        : candidateProviderMode
+          ? 3
+          : 1;
       const [healthResponse, schedulesResponse, settingsResponse] =
         await Promise.all(
           arguments_.slice(offset).map(async (path) =>
@@ -572,7 +615,16 @@ async function main(): Promise<void> {
         schedulesResponse,
         settingsResponse,
       };
-      if (candidateProviderMode) {
+      if (rollbackProviderMode) {
+        validatePreviewProviderStateForRollback({
+          candidateIntent: JSON.parse(
+            await readFile(resolve(arguments_[1]!), "utf8"),
+          ) as unknown,
+          expectedCommit: arguments_[2],
+          mutationState: arguments_[3],
+          ...input,
+        });
+      } else if (candidateProviderMode) {
         validatePreviewProviderStateForCandidateIntent({
           candidateIntent: JSON.parse(
             await readFile(resolve(arguments_[1]!), "utf8"),
@@ -596,7 +648,7 @@ async function main(): Promise<void> {
     validatePreviewDeployConfig(JSON.parse(serialized));
   } catch {
     process.stderr.write(
-      `${restoreProviderMode ? INVALID_RESTORE_PROVIDER_STATE : providerMode || candidateProviderMode ? INVALID_PROVIDER_STATE : INVALID_NORMAL}\n`,
+      `${restoreProviderMode ? INVALID_RESTORE_PROVIDER_STATE : providerMode || candidateProviderMode || rollbackProviderMode ? INVALID_PROVIDER_STATE : INVALID_NORMAL}\n`,
     );
     process.exitCode = 1;
   }

@@ -73,7 +73,11 @@ interface PreviewAcceptanceCandidateContext
 }
 
 export type PreviewAcceptanceContext =
-  | (PreviewAcceptanceContextBase & { readonly kind: "none" })
+  | (PreviewAcceptanceContextBase & {
+      readonly kind: "none";
+      readonly candidateRunRef: string;
+      readonly rollbackClosureRunRef: string;
+    })
   | (PreviewAcceptanceContextBase & {
       readonly kind: "observe";
       readonly evidenceFamily:
@@ -220,8 +224,31 @@ function canonicalPreviewAcceptanceContext(
   const base = { version } as const;
   switch (admittedKind) {
     case "none": {
-      exactKeys(record, ["version", "kind", "reviewedCommit"]);
-      return Object.freeze({ ...base, kind: admittedKind, reviewedCommit });
+      exactKeys(record, [
+        "version",
+        "kind",
+        "reviewedCommit",
+        "candidateRunRef",
+        "rollbackClosureRunRef",
+      ]);
+      const candidateRunRef = dataValue(record, "candidateRunRef");
+      const rollbackClosureRunRef = dataValue(
+        record,
+        "rollbackClosureRunRef",
+      );
+      const baselinePair =
+        candidateRunRef === "baseline" &&
+        rollbackClosureRunRef === "baseline";
+      const closedPair =
+        isRunRef(candidateRunRef) && isRunRef(rollbackClosureRunRef);
+      if (!baselinePair && !closedPair) throw new Error(INVALID_SELECTION);
+      return Object.freeze({
+        ...base,
+        kind: admittedKind,
+        reviewedCommit,
+        candidateRunRef,
+        rollbackClosureRunRef,
+      });
     }
     case "observe": {
       const evidenceFamily = dataValue(record, "evidenceFamily");

@@ -105,4 +105,26 @@ describe("workflow YAML contract", () => {
       "wrangler deploy --config dist/vision/wrangler.json",
     );
   });
+
+  it("keeps preview predeploy checks before the durable mutation boundary and deploy", async () => {
+    const workflows = await parseWorkflows();
+    const steps = readSteps(
+      readJob(workflows.get("preview.yml"), "deploy_acceptance_candidate"),
+    );
+    const names = steps.map(({ name }) => name);
+    const writeIndex = names.indexOf("Write candidate mutation boundary");
+    const uploadIndex = names.indexOf("Upload candidate mutation boundary");
+    const deployIndex = names.indexOf("Deploy generated acceptance candidate");
+
+    for (const stage of [
+      "Reverify active matching observer immediately before deploy",
+      "Recheck daily recovery overlap immediately before deploy",
+      "Re-admit same-commit role-probe closure immediately before restore",
+    ]) {
+      expect(names.indexOf(stage), stage).toBeLessThan(writeIndex);
+    }
+    expect(writeIndex).toBeGreaterThan(-1);
+    expect(uploadIndex).toBe(writeIndex + 1);
+    expect(deployIndex).toBe(uploadIndex + 1);
+  });
 });

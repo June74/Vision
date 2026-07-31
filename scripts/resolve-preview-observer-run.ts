@@ -23,6 +23,10 @@ const uniquenessClosesByDependencies = new WeakMap<
   PreviewObserverResolutionDependencies,
   Map<string, number>
 >();
+const providerUniquenessClosesByDependencies = new WeakMap<
+  PreviewObserverResolutionDependencies,
+  Map<string, number>
+>();
 const execFileAsync = promisify(execFile);
 
 export type PreviewObserverRunHandle = string & {
@@ -179,12 +183,14 @@ export async function resolvePreviewObserverRun(
       }
       const jobs = await jobsFor(handle, deps, pollDeadline, outerContext);
       const topology = expectedJobTopology(jobs, input.family);
-      if (
-        topology === "active" &&
-        validMonotonic(deps.monotonicNow()) - started >=
-          RESOLUTION_MILLISECONDS
-      ) {
-        return handle;
+      if (topology === "active") {
+        if (detailed.status !== "in_progress") fail();
+        if (
+          validMonotonic(deps.monotonicNow()) - started >=
+            RESOLUTION_MILLISECONDS
+        ) {
+          return handle;
+        }
       }
       candidate = handle;
     } else if (candidate !== null) {
@@ -665,6 +671,20 @@ function conservativeUniquenessClose(
     const completedSecondEndsAt =
       uniquenessCompletedAt.getTime() +
       PROVIDER_TIMESTAMP_UNCERTAINTY_MILLISECONDS;
+    let providerClosesByObserver =
+      providerUniquenessClosesByDependencies.get(deps);
+    if (providerClosesByObserver === undefined) {
+      providerClosesByObserver = new Map<string, number>();
+      providerUniquenessClosesByDependencies.set(deps, providerClosesByObserver);
+    }
+    const previousProviderClose = providerClosesByObserver.get(observerKey);
+    if (
+      previousProviderClose !== undefined &&
+      completedSecondEndsAt < previousProviderClose
+    ) {
+      fail();
+    }
+    providerClosesByObserver.set(observerKey, completedSecondEndsAt);
     closesAt =
       closesAt === null
         ? completedSecondEndsAt

@@ -309,6 +309,133 @@ describe("preview acceptance controller", () => {
     },
   );
 
+  it.each([
+    ["exact listener boundary", 44 * 60_000, true],
+    ["one millisecond beyond the listener", 44 * 60_000 + 1, false],
+  ] as const)(
+    "admits maintenance only when its semantic close fits the %s",
+    async (_label, closeOffset, accepted) => {
+      const fixture = harness({
+        readObserverState: vi.fn(async () => ({
+          signal: "listening" as const,
+          uniqueness:
+            fixture.currentWall().getTime() >=
+            START.getTime() + closeOffset
+              ? "succeeded" as const
+              : "listening" as const,
+          signalObservedAt: null,
+        })),
+      });
+      const run = runPreviewAcceptanceController({
+        family: "calendar_maintenance",
+        reviewedCommit: SHA,
+        expiresAt: new Date(START.getTime() + 2 * 60 * 60_000).toISOString(),
+        expectation: {
+          kind: "maintenance_succeeded",
+          maintenanceScheduledAt: new Date(
+            START.getTime() + closeOffset - 120_000,
+          ).toISOString(),
+        },
+      }, fixture.dependencies);
+
+      if (accepted) {
+        await expect(run).resolves.toBeUndefined();
+        expect(fixture.dispatches.map(({ operation }) => operation)).toEqual([
+          "observe",
+        ]);
+      } else {
+        await expect(run).rejects.toThrow(
+          "Preview acceptance controller failed closed.",
+        );
+        expect(fixture.dispatches).toEqual([]);
+      }
+    },
+  );
+
+  it("settles a valid 2,590-second restore critical path inside the listener envelope", async () => {
+    let signalObservedAt: Date | null = null;
+    let uniquenessClosesAt: Date | null = null;
+    const fixture = harness({
+      resolveObserver: vi.fn(async () => {
+        fixture.advanceTime(125_000);
+        return "41" as never;
+      }),
+      admitRestore: vi.fn(async () => {
+        fixture.advanceTime(120_000);
+        return "verified" as const;
+      }),
+      dispatch: vi.fn(async (operation) => {
+        if (operation === "deploy_restore") fixture.advanceTime(120_000);
+        return {
+          runRef:
+            operation === "observe"
+              ? "41"
+              : operation === "deploy_restore"
+                ? "42"
+                : operation === "rollback"
+                  ? "43"
+                  : "44",
+        };
+      }),
+      verifyCandidateAttribution: vi.fn(async (input) => {
+        if (input.operation === "deploy_restore") fixture.advanceTime(120_000);
+      }),
+      performAction: vi.fn(async () => {
+        fixture.advanceTime(31 * 60_000);
+        return fixture.currentWall();
+      }),
+      readObserverState: vi.fn(async () => {
+        if (signalObservedAt === null) {
+          fixture.advanceTime(120_000);
+          signalObservedAt = fixture.currentWall();
+          uniquenessClosesAt = new Date(
+            signalObservedAt.getTime() + 120_000,
+          );
+        }
+        if (fixture.currentMonotonic() === 2_589_999) {
+          fixture.advanceTime(1);
+        }
+        return {
+          signal: "succeeded" as const,
+          uniqueness:
+            fixture.currentMonotonic() >= 2_590_000
+              ? "succeeded" as const
+              : "listening" as const,
+          signalObservedAt,
+          uniquenessClosesAt,
+        };
+      }),
+    });
+    vi.mocked(fixture.dependencies.sleep).mockImplementation(
+      async (milliseconds) => {
+        fixture.advanceTime(
+          fixture.currentMonotonic() === 2_585_000 && milliseconds === 5_000
+            ? 4_999
+            : milliseconds,
+        );
+      },
+    );
+
+    await expect(runPreviewAcceptanceController({
+      family: "restore",
+      reviewedCommit: SHA,
+      expiresAt: new Date(START.getTime() + 2 * 60 * 60_000).toISOString(),
+      expectation: { kind: "restore_succeeded" },
+      priorCandidateRunRef: "41",
+      rollbackClosureRunRef: "42",
+    }, fixture.dependencies)).resolves.toBeUndefined();
+    expect(fixture.currentMonotonic()).toBe(2_590_000);
+    expect(fixture.statuses).toEqual([
+      "observer_ready",
+      "candidate_dispatched",
+      "candidate_signal_seen",
+      "rollback_dispatched",
+      "closure_verified",
+    ]);
+    expect(fixture.currentMonotonic()).toBeGreaterThan(42 * 60_000);
+    expect(fixture.currentMonotonic()).toBeLessThanOrEqual(44 * 60_000);
+  });
+
   it("does not accept maintenance success one millisecond before local close and accepts it at close", async () => {
     const close = START.getTime() + 120_000;
     const fixture = harness();

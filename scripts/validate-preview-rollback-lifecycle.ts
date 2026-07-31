@@ -6,6 +6,8 @@ import { pathToFileURL } from "node:url";
 
 const INVALID = "Preview rollback lifecycle proof is invalid.";
 const CANDIDATE_ARTIFACT_NAME = "vision-preview-candidate-intent";
+const MUTATION_BOUNDARY_ARTIFACT_NAME =
+  "vision-preview-candidate-mutation-boundary";
 const PREVIEW_WORKFLOW_PATH = ".github/workflows/preview.yml";
 const SHA_PATTERN = /^[a-f0-9]{40}$/u;
 const RUN_REF_PATTERN = /^(?:baseline|[1-9]\d{0,19})$/u;
@@ -22,12 +24,21 @@ const CANDIDATE_OPERATIONS = [
 ] as const;
 type PreviewCandidateOperation = (typeof CANDIDATE_OPERATIONS)[number];
 export type PreviewBindingProfile = "normal" | "restore_pair";
+export type PreviewCandidateMutationState =
+  | "not_started"
+  | "may_have_started";
 
 export interface PreviewCandidateIntent {
   readonly evidenceType: "vision.preview-candidate-intent/v1";
   readonly candidateCommit: string;
   readonly candidateOperation: PreviewCandidateOperation;
   readonly bindingProfile: PreviewBindingProfile;
+}
+
+export interface PreviewCandidateMutationBoundary {
+  readonly evidenceType: "vision.preview-candidate-mutation-boundary/v1";
+  readonly candidateIntentHash: string;
+  readonly candidateRunRefHash: string;
 }
 
 /** Derives the provider binding profile from an admitted operation. */
@@ -89,6 +100,78 @@ export function createPreviewCandidateIntent(
     candidateOperation: operation,
     bindingProfile: derivePreviewBindingProfile(operation),
   });
+}
+
+/** Arms the point after which a candidate deployment may have started. */
+export function createPreviewCandidateMutationBoundary(input: {
+  readonly candidateIntent: unknown;
+  readonly candidateRunRef: unknown;
+}): PreviewCandidateMutationBoundary {
+  const intent = parseCandidateIntent(input.candidateIntent);
+  if (intent === undefined || !validNumericRunRef(input.candidateRunRef)) {
+    throw new Error(INVALID);
+  }
+  return Object.freeze({
+    evidenceType: "vision.preview-candidate-mutation-boundary/v1",
+    candidateIntentHash: digestCandidateIntent(intent),
+    candidateRunRefHash: hashCandidateRunRef(input.candidateRunRef),
+  });
+}
+
+/** Rebinds a downloaded mutation boundary to its exact intent and run. */
+export function assertPreviewCandidateMutationBoundary(input: {
+  readonly candidateIntent: unknown;
+  readonly mutationBoundary: unknown;
+  readonly candidateRunRef: unknown;
+  readonly expectedCommit: unknown;
+}): void {
+  const intent = parseCandidateIntent(input.candidateIntent);
+  const boundary = parseCandidateMutationBoundary(input.mutationBoundary);
+  if (
+    intent === undefined ||
+    boundary === undefined ||
+    !validNumericRunRef(input.candidateRunRef) ||
+    !validCommit(input.expectedCommit) ||
+    intent.candidateCommit !== input.expectedCommit ||
+    boundary.candidateIntentHash !== digestCandidateIntent(intent) ||
+    boundary.candidateRunRefHash !==
+      hashCandidateRunRef(input.candidateRunRef)
+  ) {
+    throw new Error(INVALID);
+  }
+}
+
+/** Distinguishes a proven pre-mutation failure from any uncertain deployment. */
+export function readPreviewCandidateMutationState(input: {
+  readonly artifactsResponse: unknown;
+  readonly candidateRunRef: unknown;
+}): PreviewCandidateMutationState {
+  const response = plainObject(input.artifactsResponse);
+  const total = ownDataValue(response, "total_count");
+  const artifacts = ownDataValue(response, "artifacts");
+  if (
+    response === undefined ||
+    !validNumericRunRef(input.candidateRunRef) ||
+    !Number.isSafeInteger(total) ||
+    (total as number) < 0 ||
+    !Array.isArray(artifacts) ||
+    total !== artifacts.length ||
+    artifacts.length > 1
+  ) {
+    throw new Error(INVALID);
+  }
+  if (artifacts.length === 0) return "not_started";
+
+  const artifact = plainObject(artifacts[0]);
+  const workflowRun = plainObject(ownDataValue(artifact, "workflow_run"));
+  if (
+    ownDataValue(artifact, "name") !== MUTATION_BOUNDARY_ARTIFACT_NAME ||
+    ownDataValue(artifact, "expired") !== false ||
+    ownDataValue(workflowRun, "id") !== Number(input.candidateRunRef)
+  ) {
+    throw new Error(INVALID);
+  }
+  return "may_have_started";
 }
 
 /** Binds a downloaded candidate marker to the reviewed workflow commit. */
@@ -218,7 +301,8 @@ export function assertPreviewRollbackClosure(input: {
     input.closureProof === null &&
     input.latestCandidateRunRef === "baseline" &&
     validCommit(input.expectedCommit) &&
-    isNonRestoreCandidateOperation(input.operation)
+    (isNonRestoreCandidateOperation(input.operation) ||
+      input.operation === "none")
   ) {
     return;
   }
@@ -227,7 +311,8 @@ export function assertPreviewRollbackClosure(input: {
     closure === undefined ||
     !validRunRef(input.latestCandidateRunRef) ||
     !validCommit(input.expectedCommit) ||
-    !allowedCandidateTransition(closure.candidateOperation, input.operation) ||
+    !(input.operation === "none" ||
+      allowedCandidateTransition(closure.candidateOperation, input.operation)) ||
     closure.candidateRunRefHash !==
       hashCandidateRunRef(input.latestCandidateRunRef) ||
     closure.restoredCommit !== input.expectedCommit ||
@@ -399,6 +484,27 @@ function parseCandidateIntent(
   return record as unknown as PreviewCandidateIntent;
 }
 
+/** Parses one exact immutable marker for the may-mutate boundary. */
+function parseCandidateMutationBoundary(
+  input: unknown,
+): PreviewCandidateMutationBoundary | undefined {
+  const record = plainObject(input);
+  if (
+    !exactKeys(record, [
+      "candidateIntentHash",
+      "candidateRunRefHash",
+      "evidenceType",
+    ]) ||
+    ownDataValue(record, "evidenceType") !==
+      "vision.preview-candidate-mutation-boundary/v1" ||
+    !validDigest(ownDataValue(record, "candidateIntentHash")) ||
+    !validDigest(ownDataValue(record, "candidateRunRefHash"))
+  ) {
+    return undefined;
+  }
+  return record as unknown as PreviewCandidateMutationBoundary;
+}
+
 /** Enforces the only same-commit follow-on transitions. */
 function allowedCandidateTransition(
   candidateOperation: PreviewCandidateOperation,
@@ -533,6 +639,11 @@ function validRunRef(value: unknown): value is string {
   return typeof value === "string" && RUN_REF_PATTERN.test(value);
 }
 
+/** Accepts only a non-baseline workflow-run reference. */
+function validNumericRunRef(value: unknown): value is string {
+  return validRunRef(value) && value !== "baseline";
+}
+
 /** Accepts only a complete lowercase SHA-256 digest. */
 function validDigest(value: unknown): value is string {
   return typeof value === "string" && DIGEST_PATTERN.test(value);
@@ -555,6 +666,19 @@ function hashCandidateRunRef(candidateRunRef: string): string {
   return createHash("sha256")
     .update("vision-preview-candidate-run/v1\0", "utf8")
     .update(candidateRunRef, "utf8")
+    .digest("hex");
+}
+
+/** Hashes the canonical immutable candidate intent. */
+function digestCandidateIntent(intent: PreviewCandidateIntent): string {
+  const canonical = {
+    evidenceType: "vision.preview-candidate-intent/v1" as const,
+    candidateCommit: intent.candidateCommit,
+    candidateOperation: intent.candidateOperation,
+    bindingProfile: derivePreviewBindingProfile(intent.candidateOperation),
+  };
+  return createHash("sha256")
+    .update(JSON.stringify(canonical), "utf8")
     .digest("hex");
 }
 
@@ -608,6 +732,7 @@ async function main(): Promise<void> {
   try {
     const [mode, ...rest] = process.argv.slice(2);
     const parsed = readPairs(rest);
+    let successOutput = "Preview rollback lifecycle proof is valid.\n";
     if (mode === "--write-candidate-intent" && parsed.size === 3) {
       await writeJson(
         parsed.get("--output"),
@@ -626,6 +751,35 @@ async function main(): Promise<void> {
         ...(parsed.has("--next-operation")
           ? { nextOperation: parsed.get("--next-operation") }
           : {}),
+      });
+    } else if (
+      mode === "--write-mutation-boundary" &&
+      parsed.size === 3
+    ) {
+      await writeJson(
+        parsed.get("--output"),
+        createPreviewCandidateMutationBoundary({
+          candidateIntent: await readJson(parsed.get("--candidate-intent")),
+          candidateRunRef: parsed.get("--candidate-run-ref"),
+        }),
+      );
+    } else if (
+      mode === "--classify-mutation-artifacts" &&
+      parsed.size === 2
+    ) {
+      successOutput = `${readPreviewCandidateMutationState({
+        artifactsResponse: await readJson(parsed.get("--artifacts-file")),
+        candidateRunRef: parsed.get("--candidate-run-ref"),
+      })}\n`;
+    } else if (
+      mode === "--verify-mutation-boundary" &&
+      parsed.size === 4
+    ) {
+      assertPreviewCandidateMutationBoundary({
+        candidateIntent: await readJson(parsed.get("--candidate-intent")),
+        mutationBoundary: await readJson(parsed.get("--mutation-boundary")),
+        candidateRunRef: parsed.get("--candidate-run-ref"),
+        expectedCommit: parsed.get("--commit"),
       });
     } else if (mode === "--write-restore-proof" && parsed.size === 7) {
       await writeJson(
@@ -675,7 +829,7 @@ async function main(): Promise<void> {
     } else {
       throw new Error(INVALID);
     }
-    process.stdout.write("Preview rollback lifecycle proof is valid.\n");
+    process.stdout.write(successOutput);
   } catch {
     process.stderr.write(`${INVALID}\n`);
     process.exitCode = 1;

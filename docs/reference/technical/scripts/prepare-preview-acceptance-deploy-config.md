@@ -27,6 +27,9 @@ fault-scenario presence before constructing a new ordered plain object. Every
 calendar-maintenance observe context requires only one canonical
 `maintenanceScheduledAt`; the removed `observerClosesAt` key is rejected.
 Candidate bounds may be equal but may not be reversed.
+The normal-deploy variant requires either the exact baseline pair or a
+candidate-run and closure-run pair; mixed or missing lifecycle references are
+rejected.
 
 ## `isBoundedAscii`
 

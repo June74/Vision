@@ -451,6 +451,47 @@ describe("conservative uniqueness close timestamps", () => {
     expect(first.uniquenessClosesAt).toEqual(expected);
     expect(second.uniquenessClosesAt).toEqual(expected);
   });
+
+  it("rejects backward raw uniqueness completion evidence as provider time advances", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-07-30T18:03:00.000Z"));
+      const signal = job("Capture restore signal", "completed", "success");
+      const firstUniqueness = job(
+        "Capture restore uniqueness",
+        "completed",
+        "success",
+      );
+      firstUniqueness.steps[0]!.completed_at = "2026-07-30T18:02:11Z";
+      const backwardUniqueness = job(
+        "Capture restore uniqueness",
+        "completed",
+        "success",
+      );
+      backwardUniqueness.steps[0]!.completed_at = "2026-07-30T18:02:10Z";
+      let reads = 0;
+      const deps = dependencies([], []);
+      deps.listJobs = vi.fn(async () => ({
+        jobs: [signal, reads++ === 0 ? firstUniqueness : backwardUniqueness],
+      }));
+      const handle = "41" as Parameters<
+        typeof readPreviewTwoJobObserverState
+      >[0];
+
+      await expect(
+        readPreviewTwoJobObserverState(handle, "restore", deps),
+      ).resolves.toMatchObject({
+        uniquenessClosesAt: new Date("2026-07-30T18:02:11.999Z"),
+      });
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      await expect(
+        readPreviewTwoJobObserverState(handle, "restore", deps),
+      ).rejects.toThrow("Preview observer metadata is invalid.");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -1273,6 +1314,40 @@ describe("preview observer run resolution", () => {
     expect(jobReads).toBe(25);
     expect(deps.sleep).toHaveBeenCalledTimes(24);
     expect(deps.readRun).toHaveBeenCalledTimes(25);
+  });
+
+  it("rejects a queued run as soon as its exact listener topology becomes active", async () => {
+    let monotonic = 0;
+    let jobReads = 0;
+    const queuedRun = { ...run(), status: "queued" };
+    const activeSignal = job("Capture restore signal");
+    const activeUniqueness = job("Capture restore uniqueness");
+    const deps: PreviewObserverResolutionDependencies = {
+      monotonicNow: () => monotonic,
+      sleep: vi.fn(async (milliseconds) => {
+        monotonic += milliseconds;
+      }),
+      listRuns: vi.fn(async () => ({ workflow_runs: [queuedRun] })),
+      readRun: vi.fn(async () => queuedRun),
+      listJobs: vi.fn(async () => ({
+        jobs:
+          jobReads++ === 0
+            ? [job("Capture restore signal", "queued")]
+            : [activeSignal, activeUniqueness],
+      })),
+    };
+
+    await expect(resolvePreviewObserverRun({
+      expectedWorkflow: ".github/workflows/preview.yml",
+      expectedCommit: SHA,
+      dispatchStartedAt: START,
+      dispatchCompletedAt: END,
+      family: "restore",
+    }, deps)).rejects.toThrow("Preview observer metadata is invalid.");
+
+    expect(monotonic).toBe(5_000);
+    expect(deps.sleep).toHaveBeenCalledOnce();
+    expect(deps.listJobs).toHaveBeenCalledTimes(2);
   });
 
   it("fails immediately when the uniquely attributed observer run is terminal", async () => {

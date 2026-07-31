@@ -86,7 +86,8 @@ back without action. An uncertain rollback is never retried. A later successful
 provider completion may move a two-job uniqueness close forward, never
 backward. The controller rejects implausibly future advancement, extends its
 deadline only to the new semantic close, and keeps one fixed workflow-aware
-verification ceiling.
+verification ceiling. Maintenance is rejected before observer dispatch when
+its tick-plus-two-minute semantic close would outlive the 44-minute listener.
 
 ## `rollbackAndClose`
 
@@ -196,6 +197,12 @@ Rebuilds the only expectation allowed for the selected family.
 ## `maintenanceObserverClosesAt`
 
 Derives the maintenance close as its scheduled tick plus two minutes.
+
+## `assertMaintenanceObserverFitsListenerEnvelope`
+
+Requires the maintenance close to fall between observer startup and the exact
+inclusive 44-minute listener boundary. Invalid evidence is rejected before
+the observer is dispatched or awaited.
 
 ## `serializePreviewApprovalInput`
 
@@ -312,11 +319,14 @@ margin, without crossing the buffered candidate expiry.
 ## `nextCandidateWorkflowDeadline`
 
 Allows candidate deployment confirmation to use its workflow-aware duration,
-bounded by the candidate's buffered expiry. The surrounding observer uses one
-42-minute inner ceiling inside a 44-minute job: 125 seconds of resolver startup,
-31 minutes of candidate workflow time, two minutes each for approval, action,
-and signal, plus 125 seconds for uniqueness, rounded up without changing any
-individual controller deadline.
+bounded by the candidate's buffered expiry. The longest successful family is
+restore: 125 seconds to resolve the observer, 120 seconds each for restore
+admission, candidate dispatch, and attribution, 1,860 seconds for candidate
+confirmation, 120 seconds for signal detection, and 125 seconds for
+uniqueness. That is 2,590 seconds (43 minutes 10 seconds), leaving 50 seconds
+inside the 44-minute listener without changing any stage deadline. This total
+counts successful stage settlement only; timeout-abort cleanup belongs to a
+failed attempt and does not extend the valid success lifetime.
 
 ## `nextWorkflowDeadline`
 

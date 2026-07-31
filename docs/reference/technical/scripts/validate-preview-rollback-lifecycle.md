@@ -11,6 +11,23 @@ transition is bound to the reviewed commit and latest candidate run.
 
 Returns the frozen v1 intent after validating the complete commit digest.
 
+## `createPreviewCandidateMutationBoundary`
+
+Creates the frozen v1 marker that arms the may-mutate boundary after every
+predeploy check. Domain-separated hashes bind it to the canonical intent and
+numeric candidate run.
+
+## `assertPreviewCandidateMutationBoundary`
+
+Reparses the intent and exact boundary, re-derives both hashes, and requires
+the reviewed commit and candidate run to match.
+
+## `readPreviewCandidateMutationState`
+
+Requires an exact zero-or-one artifact response for the candidate run. Zero
+proves `not_started`; one current correctly owned boundary yields
+`may_have_started`; duplicates and stale or foreign artifacts fail closed.
+
 ## `assertPreviewCandidateIntent`
 
 Parses the exact intent and requires equality with the workflow's verified
@@ -37,7 +54,8 @@ instant.
 Admits only candidate or cleanup operations bound to the latest candidate,
 normal commit, two ordered provider checks, and completed closure. A null proof
 is admitted only for the first candidate when the artifact query proves the
-baseline.
+baseline. Normal deployment is separately admitted only at that baseline or
+from the exact latest same-commit closure.
 
 ## `readLatestPreviewCandidateRunRef`
 
@@ -57,6 +75,11 @@ instants.
 ## `parseCandidateIntent`
 
 Validates the exact v1 intent keys and complete commit.
+
+## `parseCandidateMutationBoundary`
+
+Validates the exact mutation-boundary evidence type and its two complete
+SHA-256 digests.
 
 ## `allowedCandidateTransition`
 
@@ -102,6 +125,10 @@ Requires a complete lowercase commit digest.
 
 Requires `baseline` or a positive bounded decimal workflow run.
 
+## `validNumericRunRef`
+
+Requires the positive decimal workflow-run branch and excludes `baseline`.
+
 ## `validDigest`
 
 Requires a complete lowercase SHA-256 digest.
@@ -114,6 +141,11 @@ Requires a parseable canonical millisecond UTC instant.
 
 Uses a domain-separated SHA-256 digest so raw run references do not enter proof
 artifacts.
+
+## `digestCandidateIntent`
+
+Canonicalizes the parsed intent field order and hashes it for immutable
+mutation-boundary binding.
 
 ## `digestRecord`
 
@@ -135,4 +167,6 @@ Writes canonical formatted JSON with exclusive creation.
 ## `main`
 
 Routes only the approved intent, restore, closure, latest-candidate, and
-completed-run modes; all errors become one value-free failure.
+completed-run modes plus mutation-boundary write, classify, and verify modes;
+all errors become one value-free failure. Classification emits only a fixed
+state label.

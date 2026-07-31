@@ -10,6 +10,13 @@ candidate operations require those schedules plus the temporary one-minute
 schedule. Binding validation remains normal or restore-pair as encoded by the
 same intent.
 
+## `validatePreviewProviderStateForRollback`
+
+Revalidates the exact commit-bound intent, then dispatches only
+`not_started` to the strict normal provider validator and
+`may_have_started` to the strict candidate-profile validator. Any alias,
+stale intent, or provider mismatch maps to the generic provider-state failure.
+
 ## `matchesNormalProviderHealthAndSchedules`
 Requires `status=ok`, a successful schedules envelope, and exactly the two
 permanent cron expressions.
@@ -141,3 +148,5 @@ normal mode. Provider-state mode parses three sanitized response files. Every
 read, JSON, or contract failure maps to one non-sensitive error and a nonzero
 exit status. Candidate-provider mode also parses the candidate intent and
 reviewed commit, preserving the workflow's existing six-argument call shape.
+Rollback-provider mode adds the validated mutation-state argument and uses the
+corresponding exact provider contract.

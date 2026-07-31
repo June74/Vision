@@ -27,6 +27,7 @@ const POLL_MILLISECONDS = 5_000;
 const UNIQUENESS_MILLISECONDS = 120_000;
 const OBSERVER_RESOLUTION_MILLISECONDS =
   UNIQUENESS_MILLISECONDS + POLL_MILLISECONDS;
+const OBSERVER_LISTENER_MILLISECONDS = 44 * 60_000;
 const WORKFLOW_SETTLEMENT_MARGIN_MILLISECONDS = 60_000;
 const CANDIDATE_WORKFLOW_MILLISECONDS =
   30 * 60_000 + WORKFLOW_SETTLEMENT_MARGIN_MILLISECONDS;
@@ -680,6 +681,12 @@ export async function runPreviewAcceptanceController(
       input.family === "calendar_maintenance"
         ? maintenanceObserverClosesAt(input.expectation)
         : undefined;
+    if (observerClosesAt !== undefined) {
+      assertMaintenanceObserverFitsListenerEnvelope(
+        observerStartedAt,
+        observerClosesAt,
+      );
+    }
     const observeContext = createObserveContext(
       input,
       reviewedCommit,
@@ -1750,6 +1757,22 @@ function maintenanceObserverClosesAt(
     canonicalDate(expectation.maintenanceScheduledAt).getTime() +
       UNIQUENESS_MILLISECONDS,
   );
+}
+
+/** Requires the maintenance semantic close to fit the listener lifetime. */
+function assertMaintenanceObserverFitsListenerEnvelope(
+  observerStartedAt: Date,
+  observerClosesAt: Date,
+): void {
+  const closeOffset =
+    safeNow(observerClosesAt).getTime() -
+    safeNow(observerStartedAt).getTime();
+  if (
+    closeOffset < 0 ||
+    closeOffset > OBSERVER_LISTENER_MILLISECONDS
+  ) {
+    fail();
+  }
 }
 
 /** Serializes one exact approval command input. */

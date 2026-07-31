@@ -18,6 +18,11 @@ absolute monotonic deadline and abort signal. A poll that begins at the exact
 120-second close receives one fixed five-second settlement cap; this does not
 renew or move the observation close.
 
+Run state and topology must also agree: `queued` is admitted only while the
+expected topology is `pending`. An `active` topology requires the detailed run
+to be `in_progress`; an active topology paired with a queued run fails in that
+poll as contradictory provider metadata.
+
 ## `listRelevantRuns`
 
 Requests pages 1 through at most 10, validates non-increasing creation time,
@@ -37,7 +42,11 @@ exact canonical whole-second UTC provider form.
 Reads one provider job snapshot and keeps suppression or restore signal and
 uniqueness states independent. It samples wall time after that metadata read,
 rejects a successful uniqueness timestamp later than the paired sample, and
-returns no close when neither successful job supplies a provider anchor.
+returns no close when neither successful job supplies a provider anchor. Raw
+provider-derived uniqueness closes are retained separately per dependency,
+handle, and family. Each new raw close is compared with that prior raw close
+and rejected if it moves backward before the signal-derived and provider-derived
+anchors are merged into the monotonic conservative close.
 
 ## `readPreviewMaintenanceObserverState`
 

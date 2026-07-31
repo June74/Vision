@@ -102,7 +102,9 @@ families, a successful provider completion may advance the cached uniqueness
 close monotonically. The controller rejects backward movement or advancement
 beyond provider timestamp uncertainty, recomputes the semantic deadline, and
 caps all such extensions at one candidate-workflow verification ceiling. It
-still cannot accept uniqueness before the current close.
+still cannot accept uniqueness before the current close. Maintenance evidence
+whose semantic close exceeds the 44-minute listener envelope is rejected
+before observer dispatch and resolution.
 
 ## `rollbackAndClose`
 
@@ -224,6 +226,13 @@ or maintenance tick, from untrusted input.
 
 Derives a fresh close instant exactly 120 seconds after the canonical
 maintenance scheduled tick.
+
+## `assertMaintenanceObserverFitsListenerEnvelope`
+
+Computes the maintenance semantic-close offset from the observer-start wall
+sample and accepts the exact inclusive 44-minute boundary. A negative offset
+or one millisecond beyond the listener fails before any observer dispatch or
+resolution call.
 
 ## `serializePreviewApprovalInput`
 
@@ -360,11 +369,15 @@ Derives an expiry-bounded 125-second outer deadline so the resolver can use its
 
 Derives a candidate-confirmation deadline from the 30-minute workflow duration
 plus settlement margin, capped by the buffered candidate expiry. The workflow
-observer lifetime is derived separately as 125 seconds of resolver startup,
-31 minutes of candidate workflow time, 120 seconds each for approval, action,
-and signal, and 125 seconds for uniqueness. Rounding the 2,470-second total up
-produces a 42-minute inner ceiling inside a 44-minute job while every existing
-per-stage controller upper bound remains unchanged.
+observer lifetime is derived separately from the longest successful family,
+restore: 125 seconds of resolver startup, 120 seconds of restore admission,
+120 seconds of candidate dispatch, 120 seconds of candidate attribution,
+1,860 seconds of candidate confirmation, 120 seconds of signal detection, and
+125 seconds of uniqueness settlement. The 2,590-second total is 43 minutes 10
+seconds and fits the 44-minute listener with 50 seconds of slack. These are
+sequential successful-settlement ceilings; an aborted stage and its mandatory
+cleanup describe a failed attempt and are not added to the listener's valid
+success lifetime. Every existing per-stage controller bound remains unchanged.
 
 ## `nextWorkflowDeadline`
 

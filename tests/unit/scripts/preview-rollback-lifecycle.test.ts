@@ -1,19 +1,29 @@
 import { describe, expect, it } from "vitest";
 import {
+  assertPreviewCandidateMutationBoundary,
   assertPreviewCandidateIntent,
   assertPreviewRollbackClosure,
   closePreviewRollback,
+  createPreviewCandidateMutationBoundary,
   createPreviewCandidateIntent,
   createPreviewRollbackRestoreProof,
   derivePreviewBindingProfile,
   readLatestPreviewCandidateRunRef,
   readPreviewCandidateBindingProfile,
+  readPreviewCandidateMutationState,
   validateCompletedPreviewLifecycleRun,
 } from "../../../scripts/validate-preview-rollback-lifecycle";
 
 const COMMIT = "a".repeat(40);
 const OTHER_COMMIT = "b".repeat(40);
 const CANDIDATE_RUN_REF = "1201";
+
+function candidateIntent(operation = "deploy_foundation") {
+  return createPreviewCandidateIntent({
+    candidateCommit: COMMIT,
+    operation,
+  });
+}
 
 function restoreProof(operation = "deploy_foundation") {
   return createPreviewRollbackRestoreProof({
@@ -41,6 +51,119 @@ function closureProof(operation = "deploy_foundation") {
 }
 
 describe("preview rollback lifecycle", () => {
+  it("binds the mutation boundary to the exact intent and candidate run", () => {
+    const intent = candidateIntent();
+    const boundary = createPreviewCandidateMutationBoundary({
+      candidateIntent: intent,
+      candidateRunRef: CANDIDATE_RUN_REF,
+    });
+
+    expect(boundary).toEqual({
+      evidenceType: "vision.preview-candidate-mutation-boundary/v1",
+      candidateIntentHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      candidateRunRefHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+    });
+    expect(() =>
+      assertPreviewCandidateMutationBoundary({
+        candidateIntent: intent,
+        mutationBoundary: boundary,
+        candidateRunRef: CANDIDATE_RUN_REF,
+        expectedCommit: COMMIT,
+      }),
+    ).not.toThrow();
+
+    for (const invalid of [
+      { candidateIntent: candidateIntent("deploy_ai") },
+      { candidateRunRef: "1202" },
+      { expectedCommit: OTHER_COMMIT },
+      { mutationBoundary: { ...boundary, extra: true } },
+    ]) {
+      expect(() =>
+        assertPreviewCandidateMutationBoundary({
+          candidateIntent: intent,
+          mutationBoundary: boundary,
+          candidateRunRef: CANDIDATE_RUN_REF,
+          expectedCommit: COMMIT,
+          ...invalid,
+        }),
+      ).toThrow("Preview rollback lifecycle proof is invalid.");
+    }
+  });
+
+  it("classifies only zero or one exact mutation-boundary artifact for the candidate run", () => {
+    expect(
+      readPreviewCandidateMutationState({
+        artifactsResponse: { total_count: 0, artifacts: [] },
+        candidateRunRef: CANDIDATE_RUN_REF,
+      }),
+    ).toBe("not_started");
+
+    const artifact = {
+      name: "vision-preview-candidate-mutation-boundary",
+      expired: false,
+      workflow_run: { id: Number(CANDIDATE_RUN_REF) },
+    };
+    expect(
+      readPreviewCandidateMutationState({
+        artifactsResponse: { total_count: 1, artifacts: [artifact] },
+        candidateRunRef: CANDIDATE_RUN_REF,
+      }),
+    ).toBe("may_have_started");
+
+    for (const artifactsResponse of [
+      { total_count: 1, artifacts: [] },
+      { total_count: 2, artifacts: [artifact, artifact] },
+      { total_count: 1, artifacts: [{ ...artifact, expired: true }] },
+      { total_count: 1, artifacts: [{ ...artifact, name: "wrong" }] },
+      {
+        total_count: 1,
+        artifacts: [{ ...artifact, workflow_run: { id: 1202 } }],
+      },
+    ]) {
+      expect(() =>
+        readPreviewCandidateMutationState({
+          artifactsResponse,
+          candidateRunRef: CANDIDATE_RUN_REF,
+        }),
+      ).toThrow("Preview rollback lifecycle proof is invalid.");
+    }
+  });
+
+  it("admits normal deployment only at baseline or after the exact latest closure", () => {
+    expect(() =>
+      assertPreviewRollbackClosure({
+        closureProof: null,
+        latestCandidateRunRef: "baseline",
+        expectedCommit: COMMIT,
+        operation: "none",
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertPreviewRollbackClosure({
+        closureProof: closureProof(),
+        latestCandidateRunRef: CANDIDATE_RUN_REF,
+        expectedCommit: COMMIT,
+        operation: "none",
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertPreviewRollbackClosure({
+        closureProof: null,
+        latestCandidateRunRef: CANDIDATE_RUN_REF,
+        expectedCommit: COMMIT,
+        operation: "none",
+      }),
+    ).toThrow("Preview rollback lifecycle proof is invalid.");
+    expect(() =>
+      assertPreviewRollbackClosure({
+        closureProof: closureProof(),
+        latestCandidateRunRef: "1202",
+        expectedCommit: COMMIT,
+        operation: "none",
+      }),
+    ).toThrow("Preview rollback lifecycle proof is invalid.");
+  });
+
   it.each([
     ["deploy_role_probe", "restore_pair"],
     ["deploy_restore", "restore_pair"],

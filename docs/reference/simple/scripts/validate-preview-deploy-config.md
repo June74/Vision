@@ -8,6 +8,12 @@ intent. Synchronization suppression requires only the two permanent schedules;
 each other candidate requires those schedules plus the temporary one-minute
 schedule.
 
+## `validatePreviewProviderStateForRollback`
+
+Requires exact normal provider state when the durable mutation boundary is
+absent. Once that boundary exists, it requires the exact operation-derived
+candidate schedule and binding profile; unknown states fail closed.
+
 ## `matchesNormalProviderHealthAndSchedules`
 Checks healthy runtime and exactly the two permanent schedules.
 
@@ -114,5 +120,6 @@ Reads `dist/vision/wrangler.json` in normal mode. In
 `--verify-provider-state` mode it reads the three sanitized provider response
 files. `--verify-candidate-provider-state` additionally reads the candidate
 intent and reviewed commit so the live schedule and binding profile match that
-exact operation. Every mode exits with one safe error when input is missing or
-unsafe.
+exact operation. `--verify-rollback-provider-state` also receives the
+validated mutation state and selects normal recovery or strict candidate
+rollback. Every mode exits with one safe error when input is missing or unsafe.

@@ -7,6 +7,58 @@ import {
 const SHA = "a".repeat(40);
 
 describe("preview acceptance context", () => {
+  it.each([
+    ["baseline", "baseline"],
+    ["1201", "1202"],
+  ] as const)(
+    "binds normal deployment admission to the %s lifecycle pair",
+    (candidateRunRef, rollbackClosureRunRef) => {
+      const context = {
+        version: "vision.preview-acceptance-context/v1" as const,
+        kind: "none" as const,
+        reviewedCommit: SHA,
+        candidateRunRef,
+        rollbackClosureRunRef,
+      };
+
+      expect(
+        parsePreviewAcceptanceContext(
+          "none",
+          serializePreviewAcceptanceContext(context),
+        ).context,
+      ).toEqual(context);
+    },
+  );
+
+  it.each([
+    ["missing lifecycle pair", {}],
+    ["mixed baseline pair", {
+      candidateRunRef: "baseline",
+      rollbackClosureRunRef: "1202",
+    }],
+    ["leading-zero candidate", {
+      candidateRunRef: "01201",
+      rollbackClosureRunRef: "1202",
+    }],
+    ["extra field", {
+      candidateRunRef: "1201",
+      rollbackClosureRunRef: "1202",
+      extra: true,
+    }],
+  ])("rejects normal deployment context with %s", (_label, lifecycle) => {
+    expect(() =>
+      parsePreviewAcceptanceContext(
+        "none",
+        JSON.stringify({
+          version: "vision.preview-acceptance-context/v1",
+          kind: "none",
+          reviewedCommit: SHA,
+          ...lifecycle,
+        }),
+      ),
+    ).toThrow("Preview acceptance workflow selection is invalid.");
+  });
+
   it("admits maintenance observe context with only the canonical scheduled tick", () => {
     const context = {
       version: "vision.preview-acceptance-context/v1" as const,

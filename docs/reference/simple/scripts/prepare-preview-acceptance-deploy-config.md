@@ -7,8 +7,9 @@ The command accepts one approved operation plus one canonical, versioned
 context string. Synchronization suppression keeps the two normal schedules;
 every other acceptance candidate adds the temporary one-minute schedule. The
 command adds the admitted temporary bindings without editing the normal
-artifact. Observe contexts carry their own canonical close instant. Calendar
-artifact. Calendar-maintenance observe contexts carry only the canonical
+artifact. A normal-deploy context must identify either the empty baseline or
+the latest candidate and its exact rollback closure. Calendar-maintenance
+observe contexts carry only the canonical
 scheduled tick; the observer derives its two-minute close internally.
 
 ## `serializePreviewAcceptanceContext`
@@ -27,6 +28,8 @@ Validates one context variant and rebuilds a new plain object in authoritative
 key order. Candidate dispatch timestamps must be ordered; a zero-width
 interval is valid. Evidence families must match their expected outcomes, and a
 maintenance context must carry exactly one canonical scheduled tick.
+Normal deployment requires a matched baseline pair or two positive lifecycle
+references so the workflow can prove there is no open candidate.
 
 ## `isBoundedAscii`
 

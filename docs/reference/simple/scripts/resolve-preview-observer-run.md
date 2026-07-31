@@ -15,6 +15,10 @@ walks all relevant pages, and every metadata read shares one absolute,
 interruptible monotonic deadline. The terminal poll gets one fixed five-second
 settlement cap without moving the two-minute observation close.
 
+A queued run is valid only while its required jobs or listeners are still
+starting. If all exact listeners are active while the run remains queued, the
+provider snapshot contradicts itself and fails immediately.
+
 ## `listRelevantRuns`
 
 Walks newest-first pages until a whole provider-second bucket is entirely
@@ -32,6 +36,8 @@ with whole-second UTC precision.
 Checks signal and uniqueness separately. It returns no uniqueness close until
 a successful provider timestamp supplies an anchor, and rejects uniqueness
 completion reported later than the wall time sampled after that provider read.
+Each raw provider-derived uniqueness close must stay stable or move forward;
+backward evidence fails before the conservative close is cached.
 
 ## `readPreviewMaintenanceObserverState`
 

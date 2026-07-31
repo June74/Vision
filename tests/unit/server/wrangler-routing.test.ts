@@ -12,6 +12,7 @@ import {
 import {
   validateNormalPreviewProviderState,
   validatePreviewProviderStateForCandidateIntent,
+  validatePreviewProviderStateForRollback,
   validateTemporaryRestorePairProviderState,
   validatePreviewAcceptanceDeployConfig,
   validatePreviewDeployConfig,
@@ -533,6 +534,8 @@ describe("preview acceptance workflow input admission", () => {
       version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
       kind: "none",
       reviewedCommit: REVIEWED_COMMIT,
+      candidateRunRef: "baseline",
+      rollbackClosureRunRef: "baseline",
     }),
     context({
       version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
@@ -929,6 +932,62 @@ describe("normal preview artifact validation", () => {
 });
 
 describe("normal preview live provider-state validation", () => {
+  it.each(CANDIDATE_OPERATIONS)(
+    "admits exact normal state for a never-started %s recovery",
+    (operation) => {
+      expect(() =>
+        validatePreviewProviderStateForRollback({
+          candidateIntent: candidateIntent(operation),
+          expectedCommit: REVIEWED_COMMIT,
+          mutationState: "not_started",
+          ...normalProviderState(),
+        }),
+      ).not.toThrow();
+    },
+  );
+
+  it.each(CANDIDATE_OPERATIONS)(
+    "requires the exact candidate profile once %s may have started",
+    (operation) => {
+      expect(() =>
+        validatePreviewProviderStateForRollback({
+          candidateIntent: candidateIntent(operation),
+          expectedCommit: REVIEWED_COMMIT,
+          mutationState: "may_have_started",
+          ...candidateProviderState(operation),
+        }),
+      ).not.toThrow();
+
+      if (operation !== "deploy_sync_suppression") {
+        expect(() =>
+          validatePreviewProviderStateForRollback({
+            candidateIntent: candidateIntent(operation),
+            expectedCommit: REVIEWED_COMMIT,
+            mutationState: "may_have_started",
+            ...normalProviderState(),
+          }),
+        ).toThrow("Normal preview provider state is invalid.");
+      }
+    },
+  );
+
+  it("fails closed for unknown recovery state and stale intent", () => {
+    for (const override of [
+      { mutationState: "unknown" },
+      { expectedCommit: "b".repeat(40) },
+    ]) {
+      expect(() =>
+        validatePreviewProviderStateForRollback({
+          candidateIntent: candidateIntent("deploy_foundation"),
+          expectedCommit: REVIEWED_COMMIT,
+          mutationState: "not_started",
+          ...normalProviderState(),
+          ...override,
+        }),
+      ).toThrow("Normal preview provider state is invalid.");
+    }
+  });
+
   it.each(CANDIDATE_OPERATIONS)(
     "derives the exact candidate schedule profile for %s",
     (operation) => {

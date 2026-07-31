@@ -1372,8 +1372,8 @@ describe("post-acceptance temporary surface cleanup", () => {
     expect(usage).toContain("calculateUsageWarnings");
     expect(previewWorkflow).toContain("vision-preview-observer");
     expect(previewWorkflow).toContain("vision-preview-mutation");
-    expect(previewWorkflow).toContain("timeout-minutes: 44");
-    expect(previewWorkflow).toContain("timeout 42m");
+    expect(previewWorkflow).toContain("timeout-minutes: 46");
+    expect(previewWorkflow).toContain("timeout 44m");
     expect(releaseScanner).toContain("scanRelease");
     expect(secretBundleTest).toContain("client secret-bundle boundary");
     expect(protectedSentinelTest).toContain("protected sentinel");
