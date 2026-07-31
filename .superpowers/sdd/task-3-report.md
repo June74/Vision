@@ -1,6 +1,7 @@
 # Task 3 report
 
-Status: final contract-gap repair locally verified; package re-review pending.
+Status: second package-review repair locally verified; third package re-review
+pending.
 
 Commit sequence:
 
@@ -213,8 +214,8 @@ from this implementation commit.
 ## Final canonical integration
 
 - Review base: `24e959f5`
-- Integrated implementation tip: `328b748`
-- Integrated implementation shape: 11 implementation commits and 77 changed
+- Integrated implementation tip: `d6a6432`
+- Integrated implementation shape: 12 implementation commits and 77 changed
   paths
 - Decisive repair commits:
   - `00cd3c7` restores the production restore facade and acceptance contract.
@@ -229,12 +230,26 @@ from this implementation commit.
     abort and settle; provider closes require bounded provider evidence;
     rollback dispatch is reconciled; workflow stages receive separate bounded
     deadlines; and restore bodies/pages/candidates are fixed-size bounded.
+  - `d6a6432` closes the second package-review findings: observer startup is
+    polled without identity drift; observer lifetime covers the complete
+    candidate window; uniqueness close may move only within bounded later
+    provider evidence; candidate rollback verifies the exact schedule profile;
+    and malformed R2 pagination envelopes fail closed.
 - The first fresh package-review wave reported 2 Critical and 6 Important
   findings. Each finding has a dedicated RED case and an implemented repair;
-  a new package-review wave remains required.
+  the second wave reported a deduplicated 2 Critical and 3 Important findings.
+  Every second-wave finding also has a dedicated RED case and an implemented
+  repair. A third package-review wave remains required.
 - Resolver verification: 71 passed tests, zero failures.
 - Controller verification: 53 passed tests, zero failures.
 - Restore reader/selection verification: 38 passed tests, zero failures.
+- Second-wave R2 reader verification: 25 passed tests, zero failures.
+- Second-wave candidate provider-state verification: 84 passed tests, zero
+  failures.
+- Second-wave observer/controller/workflow verification: 154 passed tests,
+  zero failures.
+- Integrated second-wave focused verification: 6 files and 263 passed tests,
+  zero failures.
 - The combined controller, resolver, and workflow focused group passed from
   the main worktree with zero failures.
 - Focused schema and restore verification: 8 passed tests, zero failures.
@@ -243,7 +258,9 @@ from this implementation commit.
 - Focused safe-tail verification: 28 passed tests, zero failures.
 - TypeScript, documentation coverage, production build, repository security
   scan, security evidence, and the complete repository `check` pipeline all
-  passed at the integrated implementation tip.
+  passed at the integrated implementation tip. Contract and Worker projects
+  also passed independently while the one full-unit integration mismatch was
+  diagnosed and corrected; the complete repository gate then passed.
 - The backup key remains version 1 and was not rotated.
 
 This final integration section and 77-path inventory supersede the earlier
