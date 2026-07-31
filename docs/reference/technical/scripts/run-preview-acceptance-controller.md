@@ -36,7 +36,10 @@ reference and requires its sole returned SHA to equal the reviewed commit.
 
 Rechecks the remote tip in the immediate pre-dispatch hook, serializes one
 canonical acceptance context, and admits only an exact positive-decimal
-`runRef` driver response.
+`runRef` driver response. Candidate uncertainty is reconciled under a new
+bounded deadline with a frozen exact operation/context/commit tuple. An
+accepted candidate whose dispatch call timed out is marked for mandatory
+rollback and cannot be redispatched or acted on.
 
 ## `resolveObserver`
 
@@ -51,6 +54,12 @@ uniqueness, and optional canonical listener timestamp fields.
 ## `verifyCandidateAttribution`
 
 Sends the candidate run/commit pair and requires the exact acknowledgement.
+
+## `awaitRollbackSettlement`
+
+Invokes the closed `await-rollback-settlement` driver operation with the exact
+candidate, rollback, operation, family, and commit binding. Closure dispatch is
+not admitted until the driver returns the exact acknowledgement.
 
 ## `admitRestore`
 
@@ -86,15 +95,17 @@ pre-action idle, any required approval/action, signal timing, a single latched
 rollback, closure verification, and only then delayed uniqueness. A
 non-positive no-signal window, reversed timestamp, provider/local deadline
 miss, action completion later than the paired wall sample, unexpected observer
-state, or retry after an uncertain rollback fails closed through one constant
-error surface.
+state, retry after an uncertain rollback, or action after a timeout-reconciled
+candidate fails closed through one constant error surface.
 
 ## `rollbackAndClose`
 
 Sets the rollback-attempt latch before the first dispatch, performs the final
-local/provider deadline check, dispatches rollback, dispatches closure, and
-verifies the closure artifact. Once the latch is set, the controller will not
-retry an ambiguous mutation.
+local/provider deadline check, and applies that deadline only through successful
+rollback dispatch. It then starts one fresh bounded cleanup deadline, awaits
+rollback settlement, dispatches closure, and verifies the closure artifact in
+that order. Once the latch is set, the controller will not retry an ambiguous
+mutation.
 
 ## `waitForSignal`
 
@@ -175,7 +186,10 @@ Requires one finite monotonic number without coercion.
 ## `createInProcessObserverPort`
 
 Composes the shared resolver and observer-state readers while retaining the
-branded run handle inside one closure.
+branded run handle inside one closure. It forwards the controller's exact outer
+deadline and abort signal to resolution plus the signal, two-job, and
+maintenance readers. The two-job `uniquenessClosesAt` value is returned through
+the controller snapshot without replacement.
 
 ## `snapshotObserverResolutionInput`
 
@@ -331,13 +345,28 @@ the buffered candidate expiry, rejecting exhausted or invalid time.
 
 ## `nextCleanupDeadline`
 
-Starts a fresh bounded monotonic cleanup window after candidate attribution so
-expiry rejection cannot prevent mandatory rollback and closure.
+Starts a fresh bounded monotonic window for reconciliation or post-dispatch
+cleanup so an exhausted observer, expiry, or rollback-dispatch boundary cannot
+prevent mandatory rollback settlement and closure.
+
+## `nextVerificationDeadline`
+
+Allocates a new post-closure monotonic verification window plus one terminal
+poll margin, independent of the earlier signal cutoff and rollback deadline.
 
 ## `waitForNoSignalUniqueness`
 
-Reads only through the bounded post-closure settlement interval and accepts
-exactly the expected listening-signal plus failed-uniqueness terminal.
+Reads under a newly allocated post-closure monotonic deadline and accepts
+exactly the expected listening-signal plus failed-uniqueness terminal at or
+after the resolver's stable semantic close. Every read must return that same
+close; absence or drift fails closed, and the controller never synthesizes a
+replacement from the exhausted signal cutoff.
+
+## `serializePreviewRollbackSettlementInput`
+
+Validates the action fields and rollback run reference, then serializes only
+the exact reviewed-commit, family, operation, candidate, and rollback binding
+for the settlement driver.
 
 ## `rollbackCallDeadline`
 

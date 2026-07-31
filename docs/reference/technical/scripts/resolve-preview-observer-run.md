@@ -237,3 +237,54 @@ opaque handle, and returns only `0` or `1`.
 
 Runs the concrete resolver and deliberately discards the returned handle at the
 process boundary. It emits neither run identifiers nor provider responses.
+
+
+## Outer `PreviewObserverCallContext`
+
+`resolvePreviewObserverRun`, `readPreviewSignalObserverState`,
+`readPreviewTwoJobObserverState`, and
+`readPreviewMaintenanceObserverState` accept an optional final
+`PreviewObserverCallContext`. Internal deadlines are capped by the outer
+absolute deadline. A fresh operation controller links the outer abort signal to
+provider calls and sleeps. After timeout or cancellation, the resolver awaits
+the bounded operation's settlement before returning the stable failure. An
+omitted context preserves the internal 120-second window and legacy scheduling.
+
+## Exact active-job selection
+
+`exactJob` excludes a same-name entry only when both
+`status === "completed"` and `conclusion === "skipped"`. It then requires
+exactly one remaining entry. A generic skipped job can therefore coexist with
+the dedicated job, while queued, in-progress, successful, failed, or otherwise
+non-skipped duplicates remain ambiguous and fail closed.
+
+## `uniquenessClosesAt`
+
+`readPreviewTwoJobObserverState` always returns
+`uniquenessClosesAt: Date`. Before a provider timestamp exists, a dependency-
+scoped observer cache records the first validated wall-clock observation plus
+120 seconds plus 999 milliseconds. Repeated listening reads reuse that instant.
+A successful signal contributes its provider-second timestamp plus 120 seconds
+plus 999 milliseconds. A successful uniqueness listener contributes the end of
+its reported provider second. The latest validated candidate is cached, so
+later evidence can extend the close but never shorten it.
+
+## `boundedObserverDeadline`
+
+Validates the internal monotonic deadline and an optional outer context,
+rejects an already-aborted or expired outer boundary, and returns the smaller
+absolute deadline. Omitting the outer context does not add a clock read, which
+preserves legacy terminal-poll scheduling.
+
+## `linkOuterAbort`
+
+Registers a one-shot listener that aborts the per-operation controller, handles
+the registration race by rechecking the outer signal, and returns a remover for
+the operation's `finally` path.
+
+## `conservativeUniquenessClose`
+
+Stores close instants in a dependency-scoped observer map. With no provider
+anchor it records wall-clock observation plus 120,999 milliseconds. Signal and
+uniqueness completion anchors use the end of provider-second precision, and the
+cached maximum prevents a later read from shortening the close.

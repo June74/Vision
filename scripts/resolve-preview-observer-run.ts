@@ -14,10 +14,15 @@ const MAX_STEPS = 100;
 const POLL_MILLISECONDS = 5_000;
 const RESOLUTION_MILLISECONDS = 120_000;
 const TERMINAL_POLL_SETTLEMENT_MILLISECONDS = POLL_MILLISECONDS;
+const PROVIDER_TIMESTAMP_UNCERTAINTY_MILLISECONDS = 999;
 const CONTEXT_INSTANT_PATTERN =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const PROVIDER_INSTANT_PATTERN =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/u;
+const uniquenessClosesByDependencies = new WeakMap<
+  PreviewObserverResolutionDependencies,
+  Map<string, number>
+>();
 const execFileAsync = promisify(execFile);
 
 export type PreviewObserverRunHandle = string & {
@@ -125,19 +130,32 @@ export async function resolvePreviewObserverRun(
     readonly maintenanceScheduledAt?: Date;
   },
   deps: PreviewObserverResolutionDependencies,
+  outerContext?: PreviewObserverCallContext,
 ): Promise<PreviewObserverRunHandle> {
   validateResolutionInput(input);
   const started = validMonotonic(deps.monotonicNow());
-  const deadline = started + RESOLUTION_MILLISECONDS;
+  const deadline = boundedObserverDeadline(
+    started + RESOLUTION_MILLISECONDS,
+    deps,
+    outerContext,
+  );
   let candidate: PreviewObserverRunHandle | null = null;
   for (;;) {
     const pollStarted = validMonotonic(deps.monotonicNow());
-    const pollDeadline =
+    const pollDeadline = boundedObserverDeadline(
       pollStarted >= deadline
         ? deadline + TERMINAL_POLL_SETTLEMENT_MILLISECONDS
-        : deadline;
+        : deadline,
+      deps,
+      outerContext,
+    );
     const runs = (
-      await listRelevantRuns(input.dispatchStartedAt, pollDeadline, deps)
+      await listRelevantRuns(
+        input.dispatchStartedAt,
+        pollDeadline,
+        deps,
+        outerContext,
+      )
     ).filter((run) => matchesRun(run, input));
     if (runs.length > 1) fail();
     if (runs.length === 1) {
@@ -148,10 +166,11 @@ export async function resolvePreviewObserverRun(
           pollDeadline,
           deps,
           (context) => deps.readRun(handle, context),
+          outerContext,
         ),
       );
       if (detailed.id !== handle || !matchesRun(detailed, input)) fail();
-      const jobs = await jobsFor(handle, deps, pollDeadline);
+      const jobs = await jobsFor(handle, deps, pollDeadline, outerContext);
       assertExpectedActiveJobs(jobs, input.family);
       if (
         validMonotonic(deps.monotonicNow()) - started >=
@@ -169,7 +188,12 @@ export async function resolvePreviewObserverRun(
     ) {
       fail();
     }
-    await sleepBeforeDeadline(POLL_MILLISECONDS, deadline, deps);
+    await sleepBeforeDeadline(
+      POLL_MILLISECONDS,
+      deadline,
+      deps,
+      outerContext,
+    );
   }
 }
 
@@ -178,6 +202,7 @@ async function listRelevantRuns(
   dispatchStartedAt: Date,
   deadline: number,
   deps: PreviewObserverResolutionDependencies,
+  outerContext?: PreviewObserverCallContext,
 ): Promise<readonly RunSnapshot[]> {
   const runs: RunSnapshot[] = [];
   let previousCreatedAt = Number.POSITIVE_INFINITY;
@@ -187,6 +212,7 @@ async function listRelevantRuns(
         deadline,
         deps,
         (context) => deps.listRuns(page, context),
+        outerContext,
       ),
     );
     let crossedDispatchStart = false;
@@ -215,11 +241,17 @@ export async function readPreviewSignalObserverState(
   handle: PreviewObserverRunHandle,
   family: Exclude<PreviewObserverFamily, "calendar_maintenance">,
   deps: PreviewObserverResolutionDependencies,
+  outerContext?: PreviewObserverCallContext,
 ): Promise<{
   readonly signal: "listening" | "succeeded" | "failed";
   readonly signalObservedAt: Date | null;
 }> {
-  const jobs = await jobsFor(handle, deps, stateReadDeadline(deps));
+  const jobs = await jobsFor(
+    handle,
+    deps,
+    stateReadDeadline(deps, outerContext),
+    outerContext,
+  );
   const job = exactJob(jobs, `Capture ${family} signal`);
   const state = observerJobState(job);
   return Object.freeze({
@@ -236,23 +268,42 @@ export async function readPreviewTwoJobObserverState(
   handle: PreviewObserverRunHandle,
   family: "sync_suppression" | "restore",
   deps: PreviewObserverResolutionDependencies,
+  outerContext?: PreviewObserverCallContext,
 ): Promise<{
   readonly signal: "listening" | "succeeded" | "failed";
   readonly uniqueness: "listening" | "succeeded" | "failed";
   readonly signalObservedAt: Date | null;
+  readonly uniquenessClosesAt: Date;
 }> {
-  const jobs = await jobsFor(handle, deps, stateReadDeadline(deps));
+  const jobs = await jobsFor(
+    handle,
+    deps,
+    stateReadDeadline(deps, outerContext),
+    outerContext,
+  );
   const signal = observerJobState(exactJob(jobs, `Capture ${family} signal`));
   const uniqueness = observerJobState(
     exactJob(jobs, `Capture ${family} uniqueness`),
   );
+  const signalObservedAt =
+    signal.state === "succeeded"
+      ? canonicalDate(signal.listener.completedAt)
+      : null;
+  const uniquenessCompletedAt =
+    uniqueness.state === "succeeded"
+      ? canonicalDate(uniqueness.listener.completedAt)
+      : null;
   return Object.freeze({
     signal: signal.state,
     uniqueness: uniqueness.state,
-    signalObservedAt:
-      signal.state === "succeeded"
-        ? canonicalDate(signal.listener.completedAt)
-        : null,
+    signalObservedAt,
+    uniquenessClosesAt: conservativeUniquenessClose(
+      handle,
+      family,
+      deps,
+      signalObservedAt,
+      uniquenessCompletedAt,
+    ),
   });
 }
 
@@ -262,13 +313,19 @@ export async function readPreviewMaintenanceObserverState(
   family: "calendar_maintenance",
   tick: Date,
   deps: PreviewObserverResolutionDependencies,
+  outerContext?: PreviewObserverCallContext,
 ): Promise<{
   readonly uniqueness: "listening" | "succeeded" | "failed";
   readonly maintenanceScheduledAt: Date;
   readonly maintenanceCompletedAt: Date | null;
 }> {
   if (!validDate(tick)) fail();
-  const jobs = await jobsFor(handle, deps, stateReadDeadline(deps));
+  const jobs = await jobsFor(
+    handle,
+    deps,
+    stateReadDeadline(deps, outerContext),
+    outerContext,
+  );
   const state = observerJobState(
     exactJob(jobs, `Capture ${family} uniqueness`),
   );
@@ -401,12 +458,14 @@ async function jobsFor(
   handle: PreviewObserverRunHandle,
   deps: PreviewObserverResolutionDependencies,
   deadline: number,
+  outerContext?: PreviewObserverCallContext,
 ): Promise<readonly JobSnapshot[]> {
   return snapshotJobs(
     await callBeforeDeadline(
       deadline,
       deps,
       (context) => deps.listJobs(handle, context),
+      outerContext,
     ),
   );
 }
@@ -416,28 +475,48 @@ async function callBeforeDeadline<T>(
   deadlineMonotonic: number,
   deps: PreviewObserverResolutionDependencies,
   operation: (context: PreviewObserverCallContext) => Promise<T>,
+  outerContext?: PreviewObserverCallContext,
 ): Promise<T> {
-  const deadline = validMonotonic(deadlineMonotonic);
+  const deadline = boundedObserverDeadline(
+    deadlineMonotonic,
+    deps,
+    outerContext,
+  );
   const remaining = deadline - validMonotonic(deps.monotonicNow());
   if (remaining < 0) fail();
   const controller = new AbortController();
+  const removeOuterAbort = linkOuterAbort(controller, outerContext);
   const context = Object.freeze({
     deadlineMonotonic: deadline,
     signal: controller.signal,
   });
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let timedOut = false;
   try {
-    const timeout = new Promise<never>((_resolvePromise, rejectPromise) => {
-      timer = setTimeout(() => {
-        controller.abort();
-        rejectPromise(new Error(FAILURE));
-      }, Math.max(1, remaining));
-    });
-    return await Promise.race([operation(context), timeout]);
+    const operationResult = operation(context).then(
+      (value) => ({ ok: true as const, value }),
+      () => ({ ok: false as const }),
+    );
+    timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, Math.max(1, remaining));
+    const settled = await operationResult;
+    if (
+      !settled.ok ||
+      timedOut ||
+      outerContext?.signal.aborted === true ||
+      (outerContext !== undefined &&
+        validMonotonic(deps.monotonicNow()) > deadline)
+    ) {
+      fail();
+    }
+    return settled.value;
   } catch {
     throw new Error(FAILURE);
   } finally {
     if (timer !== undefined) clearTimeout(timer);
+    removeOuterAbort();
     if (!controller.signal.aborted) controller.abort();
   }
 }
@@ -447,8 +526,13 @@ async function sleepBeforeDeadline(
   milliseconds: number,
   deadlineMonotonic: number,
   deps: PreviewObserverResolutionDependencies,
+  outerContext?: PreviewObserverCallContext,
 ): Promise<void> {
-  const deadline = validMonotonic(deadlineMonotonic);
+  const deadline = boundedObserverDeadline(
+    deadlineMonotonic,
+    deps,
+    outerContext,
+  );
   const remaining = deadline - validMonotonic(deps.monotonicNow());
   if (
     !Number.isFinite(milliseconds) ||
@@ -458,6 +542,7 @@ async function sleepBeforeDeadline(
     fail();
   }
   const controller = new AbortController();
+  const removeOuterAbort = linkOuterAbort(controller, outerContext);
   try {
     await deps.sleep(
       Math.min(milliseconds, remaining),
@@ -466,9 +551,17 @@ async function sleepBeforeDeadline(
         signal: controller.signal,
       }),
     );
+    if (
+      outerContext?.signal.aborted === true ||
+      (outerContext !== undefined &&
+        validMonotonic(deps.monotonicNow()) > deadline)
+    ) {
+      fail();
+    }
   } catch {
     fail();
   } finally {
+    removeOuterAbort();
     controller.abort();
   }
 }
@@ -476,8 +569,98 @@ async function sleepBeforeDeadline(
 /** Gives one standalone observer-state read a bounded absolute deadline. */
 function stateReadDeadline(
   deps: PreviewObserverResolutionDependencies,
+  outerContext?: PreviewObserverCallContext,
 ): number {
-  return validMonotonic(deps.monotonicNow()) + RESOLUTION_MILLISECONDS;
+  return boundedObserverDeadline(
+    validMonotonic(deps.monotonicNow()) + RESOLUTION_MILLISECONDS,
+    deps,
+    outerContext,
+  );
+}
+
+/** Caps an internal deadline at one caller-supplied boundary. */
+function boundedObserverDeadline(
+  internalDeadline: number,
+  deps: PreviewObserverResolutionDependencies,
+  outerContext?: PreviewObserverCallContext,
+): number {
+  const deadline = validMonotonic(internalDeadline);
+  if (outerContext === undefined) return deadline;
+  const outerDeadline = validMonotonic(outerContext.deadlineMonotonic);
+  if (
+    typeof outerContext.signal !== "object" ||
+    outerContext.signal === null ||
+    typeof outerContext.signal.aborted !== "boolean" ||
+    typeof outerContext.signal.addEventListener !== "function" ||
+    typeof outerContext.signal.removeEventListener !== "function" ||
+    outerContext.signal.aborted
+  ) {
+    fail();
+  }
+  const now = validMonotonic(deps.monotonicNow());
+  if (outerDeadline < now) fail();
+  return Math.min(deadline, outerDeadline);
+}
+
+/** Links one optional caller abort to a fresh operation controller. */
+function linkOuterAbort(
+  controller: AbortController,
+  outerContext?: PreviewObserverCallContext,
+): () => void {
+  if (outerContext === undefined) return () => undefined;
+  /** Aborts one linked operation. */
+  const abort = () => controller.abort();
+  outerContext.signal.addEventListener("abort", abort, { once: true });
+  if (outerContext.signal.aborted) abort();
+  return () => outerContext.signal.removeEventListener("abort", abort);
+}
+
+/** Conservatively closes no earlier than either provider-second anchor. */
+function conservativeUniquenessClose(
+  handle: PreviewObserverRunHandle,
+  family: "sync_suppression" | "restore",
+  deps: PreviewObserverResolutionDependencies,
+  signalObservedAt: Date | null,
+  uniquenessCompletedAt: Date | null,
+): Date {
+  let closesByObserver = uniquenessClosesByDependencies.get(deps);
+  if (closesByObserver === undefined) {
+    closesByObserver = new Map<string, number>();
+    uniquenessClosesByDependencies.set(deps, closesByObserver);
+  }
+  const observerKey = `${handle}:${family}`;
+  let closesAt = closesByObserver.get(observerKey) ?? null;
+  if (signalObservedAt !== null) {
+    if (!validDate(signalObservedAt)) fail();
+    const signalWindowClosesAt =
+      signalObservedAt.getTime() +
+      RESOLUTION_MILLISECONDS +
+      PROVIDER_TIMESTAMP_UNCERTAINTY_MILLISECONDS;
+    closesAt =
+      closesAt === null
+        ? signalWindowClosesAt
+        : Math.max(closesAt, signalWindowClosesAt);
+  }
+  if (uniquenessCompletedAt !== null) {
+    if (!validDate(uniquenessCompletedAt)) fail();
+    const completedSecondEndsAt =
+      uniquenessCompletedAt.getTime() +
+      PROVIDER_TIMESTAMP_UNCERTAINTY_MILLISECONDS;
+    closesAt =
+      closesAt === null
+        ? completedSecondEndsAt
+        : Math.max(closesAt, completedSecondEndsAt);
+  }
+  if (closesAt === null) {
+    closesAt =
+      Date.now() +
+      RESOLUTION_MILLISECONDS +
+      PROVIDER_TIMESTAMP_UNCERTAINTY_MILLISECONDS;
+  }
+  const conservativeClose = new Date(closesAt);
+  if (!validDate(conservativeClose)) fail();
+  closesByObserver.set(observerKey, closesAt);
+  return conservativeClose;
 }
 
 /** Captures and bounds one real provider child until it has settled. */
@@ -583,7 +766,11 @@ function exactJob(
   jobs: readonly JobSnapshot[],
   name: string,
 ): JobSnapshot {
-  const matching = jobs.filter((job) => job.name === name);
+  const matching = jobs.filter(
+    (job) =>
+      job.name === name &&
+      !(job.status === "completed" && job.conclusion === "skipped"),
+  );
   if (matching.length !== 1) fail();
   return matching[0]!;
 }

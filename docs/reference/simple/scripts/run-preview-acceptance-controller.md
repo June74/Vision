@@ -31,7 +31,10 @@ before every dispatch.
 ## `dispatch`
 
 Serializes dispatch through the canonical closed context and accepts only one
-positive run reference.
+positive run reference. If a candidate receipt is uncertain, reconciliation
+uses a fresh bounded window and the exact frozen operation/context/commit
+tuple. A candidate reconciled after timeout is never dispatched or acted on
+again; it is attributed and sent directly through rollback.
 
 ## `resolveObserver`
 
@@ -45,6 +48,10 @@ Reads one closed observer state and optional signal timestamp.
 ## `verifyCandidateAttribution`
 
 Requires the candidate run to be attributed before an action can continue.
+
+## `awaitRollbackSettlement`
+
+Waits for the exact rollback run to finish before closure can be dispatched.
 
 ## `admitRestore`
 
@@ -73,12 +80,15 @@ Writes only a member of the fixed status vocabulary.
 
 Keeps the observer handle private, starts observation before mutation, verifies
 attribution and timing, rolls back and closes once, then waits for any required
-uniqueness proof. An uncertain rollback is never retried.
+uniqueness proof. A timed-out accepted candidate is reconciled once and rolled
+back without action. An uncertain rollback is never retried.
 
 ## `rollbackAndClose`
 
 Latches the rollback attempt before dispatch, rechecks both signal deadlines,
-dispatches rollback, and verifies closure.
+dispatches rollback within that deadline, then starts a fresh bounded cleanup
+window. Rollback must settle inside that window before closure dispatch and
+verification.
 
 ## `waitForSignal`
 
@@ -154,7 +164,9 @@ Accepts one finite monotonic timestamp.
 
 ## `createInProcessObserverPort`
 
-Keeps provider run identifiers inside an opaque resolver/state port.
+Keeps provider run identifiers inside an opaque resolver/state port. The
+controller's deadline and abort signal are forwarded to resolution and every
+state reader, and the two-job reader's stable uniqueness close is preserved.
 
 ## `snapshotObserverResolutionInput`
 
@@ -286,11 +298,23 @@ Chooses the tighter observer or candidate deadline before a signal is proven.
 
 ## `nextCleanupDeadline`
 
-Grants one bounded cleanup window after an attributed candidate must fail.
+Grants a fresh bounded window for reconciliation or cleanup after an attributed
+candidate must fail.
+
+## `nextVerificationDeadline`
+
+Starts a fresh post-closure verification window with one final polling margin.
 
 ## `waitForNoSignalUniqueness`
 
-After rollback closure, waits for the expected no-signal uniqueness failure.
+After rollback closure, uses a fresh bounded verification window to wait for
+the expected no-signal uniqueness failure at the observer's stable true close.
+It never substitutes the exhausted signal cutoff for a missing close.
+
+## `serializePreviewRollbackSettlementInput`
+
+Serializes the exact candidate and rollback binding used by the private
+settlement gate.
 
 ## `rollbackCallDeadline`
 

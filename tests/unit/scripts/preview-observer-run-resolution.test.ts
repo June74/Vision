@@ -1,6 +1,390 @@
 import { spawn } from "node:child_process";
+
+describe("outer preview observer call boundaries", () => {
+  it("caps resolver polling at a shorter outer deadline", async () => {
+    const candidate = run();
+    let monotonic = 0;
+    const observedSleeps: Array<{
+      readonly milliseconds: number;
+      readonly deadlineMonotonic: number;
+    }> = [];
+    const deps: PreviewObserverResolutionDependencies = {
+      monotonicNow: () => monotonic,
+      sleep: vi.fn(
+        async (
+          milliseconds: number,
+          context: PreviewObserverCallContext,
+        ) => {
+          observedSleeps.push({
+            milliseconds,
+            deadlineMonotonic: context.deadlineMonotonic,
+          });
+          monotonic = 120_001;
+        },
+      ),
+      listRuns: vi.fn(async () => ({ workflow_runs: [] })),
+      readRun: vi.fn(async () => candidate),
+      listJobs: vi.fn(async () => ({ jobs: [] })),
+    };
+    const controller = new AbortController();
+
+    await expect(
+      resolvePreviewObserverRun(
+        {
+          expectedWorkflow: candidate.path,
+          expectedCommit: candidate.head_sha,
+          dispatchStartedAt: new Date(
+            Date.parse(candidate.created_at) - 1_000,
+          ),
+          dispatchCompletedAt: new Date(
+            Date.parse(candidate.created_at) + 1_000,
+          ),
+          family: "role_probe",
+        },
+        deps,
+        {
+          deadlineMonotonic: 5,
+          signal: controller.signal,
+        },
+      ),
+    ).rejects.toThrow();
+
+    expect(observedSleeps).toEqual([
+      {
+        milliseconds: 5,
+        deadlineMonotonic: 5,
+      },
+    ]);
+  });
+
+  it("caps every standalone state reader at a shorter outer deadline", async () => {
+    const candidate = run();
+    const observedDeadlines: number[] = [];
+    const deps: PreviewObserverResolutionDependencies = {
+      monotonicNow: () => 0,
+      sleep: vi.fn(async () => undefined),
+      listRuns: vi.fn(async () => ({ workflow_runs: [] })),
+      readRun: vi.fn(async () => candidate),
+      listJobs: vi.fn(
+        async (
+          _handle: Parameters<
+            PreviewObserverResolutionDependencies["listJobs"]
+          >[0],
+          context: PreviewObserverCallContext,
+        ) => {
+          observedDeadlines.push(context.deadlineMonotonic);
+          return { jobs: [] };
+        },
+      ),
+    };
+    const controller = new AbortController();
+    const outer = {
+      deadlineMonotonic: 5,
+      signal: controller.signal,
+    };
+    const handle = candidate.id as Parameters<
+      typeof readPreviewSignalObserverState
+    >[0];
+    const tick = new Date(candidate.created_at);
+
+    await expect(
+      readPreviewSignalObserverState(handle, "role_probe", deps, outer),
+    ).rejects.toThrow();
+    await expect(
+      readPreviewTwoJobObserverState(handle, "restore", deps, outer),
+    ).rejects.toThrow();
+    await expect(
+      readPreviewMaintenanceObserverState(
+        handle,
+        "calendar_maintenance",
+        tick,
+        deps,
+        outer,
+      ),
+    ).rejects.toThrow();
+
+    expect(observedDeadlines).toEqual([5, 5, 5]);
+  });
+
+  it("rejects a pre-aborted outer boundary before provider reads", async () => {
+    const candidate = run();
+    const deps: PreviewObserverResolutionDependencies = {
+      monotonicNow: () => 0,
+      sleep: vi.fn(async () => undefined),
+      listRuns: vi.fn(async () => ({ workflow_runs: [] })),
+      readRun: vi.fn(async () => candidate),
+      listJobs: vi.fn(async () => ({ jobs: [] })),
+    };
+    const controller = new AbortController();
+    controller.abort();
+    const outer = {
+      deadlineMonotonic: 5,
+      signal: controller.signal,
+    };
+    const handle = candidate.id as Parameters<
+      typeof readPreviewSignalObserverState
+    >[0];
+
+    await expect(
+      readPreviewSignalObserverState(handle, "role_probe", deps, outer),
+    ).rejects.toThrow();
+    await expect(
+      readPreviewTwoJobObserverState(handle, "sync_suppression", deps, outer),
+    ).rejects.toThrow();
+    await expect(
+      readPreviewMaintenanceObserverState(
+        handle,
+        "calendar_maintenance",
+        new Date(candidate.created_at),
+        deps,
+        outer,
+      ),
+    ).rejects.toThrow();
+
+    expect(deps.listJobs).not.toHaveBeenCalled();
+  });
+
+  it("propagates a live outer abort and waits for the provider call to settle", async () => {
+    const candidate = run();
+    let providerContext: PreviewObserverCallContext | null = null;
+    let releaseProvider: (() => void) | null = null;
+    let providerSettled = false;
+    const deps: PreviewObserverResolutionDependencies = {
+      monotonicNow: () => 0,
+      sleep: vi.fn(async () => undefined),
+      listRuns: vi.fn(async () => ({ workflow_runs: [] })),
+      readRun: vi.fn(async () => candidate),
+      listJobs: vi.fn(
+        async (
+          _handle: Parameters<
+            PreviewObserverResolutionDependencies["listJobs"]
+          >[0],
+          context: PreviewObserverCallContext,
+        ) => {
+          providerContext = context;
+          await new Promise<void>((resolveProvider) => {
+            releaseProvider = () => {
+              providerSettled = true;
+              resolveProvider();
+            };
+          });
+          return { jobs: [] };
+        },
+      ),
+    };
+    const controller = new AbortController();
+    const handle = candidate.id as Parameters<
+      typeof readPreviewSignalObserverState
+    >[0];
+    const readPromise = readPreviewSignalObserverState(
+      handle,
+      "role_probe",
+      deps,
+      {
+        deadlineMonotonic: 5,
+        signal: controller.signal,
+      },
+    );
+    let readSettled = false;
+    const trackedRead = readPromise.then(
+      () => {
+        readSettled = true;
+      },
+      () => {
+        readSettled = true;
+      },
+    );
+
+    await vi.waitFor(() => {
+      expect(providerContext).not.toBeNull();
+    });
+    controller.abort();
+    await Promise.resolve();
+
+    expect((providerContext as PreviewObserverCallContext | null)?.signal.aborted)
+      .toBe(true);
+    expect(readSettled).toBe(false);
+
+    (releaseProvider as (() => void) | null)?.();
+    await expect(readPromise).rejects.toThrow();
+    await trackedRead;
+    expect(providerSettled).toBe(true);
+  });
+});
 import { once } from "node:events";
+
+describe("full provider job-list resolution", () => {
+  it.each([
+    ["sync_suppression", ["signal", "uniqueness"]],
+    ["restore", ["signal", "uniqueness"]],
+    ["role_probe", ["signal"]],
+  ] as const)(
+    "ignores only completed skipped duplicates for %s",
+    async (family, activeKinds) => {
+      const candidate = run();
+      const allNames = [
+        "Capture sync_suppression signal",
+        "Capture sync_suppression uniqueness",
+        "Capture restore signal",
+        "Capture restore uniqueness",
+        "Capture role_probe signal",
+      ];
+      const fullJobs = allNames.map((name) =>
+        job(name, "completed", "skipped"),
+      );
+      fullJobs.push(
+        ...activeKinds.map((kind) => job(`Capture ${family} ${kind}`)),
+      );
+      const deps = dependencies([candidate], fullJobs);
+
+      await expect(
+        resolvePreviewObserverRun(
+          {
+            expectedWorkflow: candidate.path,
+            expectedCommit: candidate.head_sha,
+            dispatchStartedAt: new Date(
+              Date.parse(candidate.created_at) - 1_000,
+            ),
+            dispatchCompletedAt: new Date(
+              Date.parse(candidate.created_at) + 1_000,
+            ),
+            family,
+          },
+          deps,
+        ),
+      ).resolves.toBe(candidate.id);
+    },
+  );
+});
 import { resolve } from "node:path";
+
+describe("conservative uniqueness close timestamps", () => {
+  it("uses the end of the conservative signal window while uniqueness listens", async () => {
+    const candidate = run();
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(candidate.created_at));
+      const listeningDeps = dependencies(
+        [],
+        [
+          job("Capture sync_suppression signal"),
+          job("Capture sync_suppression uniqueness"),
+        ],
+      );
+      const handle = candidate.id as Parameters<
+        typeof readPreviewTwoJobObserverState
+      >[0];
+      const firstListening = await readPreviewTwoJobObserverState(
+        handle,
+        "sync_suppression",
+        listeningDeps,
+      );
+      vi.setSystemTime(new Date(Date.now() + 5_000));
+      const secondListening = await readPreviewTwoJobObserverState(
+        handle,
+        "sync_suppression",
+        listeningDeps,
+      );
+
+      expect(firstListening.uniquenessClosesAt).toBeInstanceOf(Date);
+      expect(secondListening.uniquenessClosesAt).toEqual(
+        firstListening.uniquenessClosesAt,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+    const signal = job(
+      "Capture sync_suppression signal",
+      "completed",
+      "success",
+    );
+    const signalObservedAt = signal.steps[0]!.completed_at!;
+    const deps = dependencies(
+      [],
+      [
+        signal,
+        job("Capture sync_suppression uniqueness"),
+      ],
+    );
+
+    const state = await readPreviewTwoJobObserverState(
+      candidate.id as Parameters<
+        typeof readPreviewTwoJobObserverState
+      >[0],
+      "sync_suppression",
+      deps,
+    );
+
+    expect(state.uniquenessClosesAt).toEqual(
+      new Date(Date.parse(signalObservedAt) + 120_999),
+    );
+  });
+
+  it("keeps the signal-derived close when uniqueness succeeds on schedule", async () => {
+    const candidate = run();
+    const signal = job("Capture restore signal", "completed", "success");
+    const signalObservedAt = signal.steps[0]!.completed_at!;
+    const uniqueness = job(
+      "Capture restore uniqueness",
+      "completed",
+      "success",
+    );
+    uniqueness.steps[0]!.completed_at = new Date(
+      Date.parse(signalObservedAt) + 120_000,
+    )
+      .toISOString()
+      .replace(".000Z", "Z");
+    const deps = dependencies([], [signal, uniqueness]);
+
+    const state = await readPreviewTwoJobObserverState(
+      candidate.id as Parameters<
+        typeof readPreviewTwoJobObserverState
+      >[0],
+      "restore",
+      deps,
+    );
+
+    expect(state.uniquenessClosesAt).toEqual(
+      new Date(Date.parse(signalObservedAt) + 120_999),
+    );
+  });
+
+  it("moves forward for a late uniqueness completion and remains stable", async () => {
+    const candidate = run();
+    const signal = job("Capture restore signal", "completed", "success");
+    const signalObservedAt = signal.steps[0]!.completed_at!;
+    const uniqueness = job(
+      "Capture restore uniqueness",
+      "completed",
+      "success",
+    );
+    const uniquenessCompletedAt = new Date(
+      Date.parse(signalObservedAt) + 121_000,
+    )
+      .toISOString()
+      .replace(".000Z", "Z");
+    uniqueness.steps[0]!.completed_at = uniquenessCompletedAt;
+    const deps = dependencies([], [signal, uniqueness]);
+    const handle = candidate.id as Parameters<
+      typeof readPreviewTwoJobObserverState
+    >[0];
+
+    const first = await readPreviewTwoJobObserverState(
+      handle,
+      "restore",
+      deps,
+    );
+    const second = await readPreviewTwoJobObserverState(
+      handle,
+      "restore",
+      deps,
+    );
+    const expected = new Date(Date.parse(uniquenessCompletedAt) + 999);
+
+    expect(first.uniquenessClosesAt).toEqual(expected);
+    expect(second.uniquenessClosesAt).toEqual(expected);
+  });
+});
 import { describe, expect, it, vi } from "vitest";
 import {
   createGitHubObserverResolutionDependencies,
@@ -1036,6 +1420,7 @@ describe("preview observer run resolution", () => {
     ).resolves.toStrictEqual({
       signal: "succeeded",
       uniqueness: "listening",
+      uniquenessClosesAt: expect.any(Date),
       signalObservedAt: new Date("2026-07-30T18:00:10.000Z"),
     });
   });

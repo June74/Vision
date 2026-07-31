@@ -204,3 +204,41 @@ fixed success or failure code.
 
 Runs the live resolver and keeps the opaque run handle process-local. Success
 and failure both produce no provider metadata.
+
+
+## Controller call boundaries
+
+The resolver and each observer-state reader accept an optional controller call
+boundary. Its earlier deadline and cancellation signal control every provider
+read and poll sleep. A cancelled call waits for the in-flight bounded operation
+to settle before it reports failure. Callers that omit the boundary retain the
+normal two-minute window.
+
+## Full provider job lists
+
+A full provider job list can contain a generic completed-and-skipped job and a
+dedicated active job with the same displayed name. Resolution ignores only the
+completed-and-skipped copy. It still requires exactly one non-skipped expected
+job, so multiple active or otherwise non-skipped copies fail closed.
+
+## Conservative uniqueness close
+
+The two-job state reader always returns `uniquenessClosesAt`. While both jobs
+listen, the first read remembers a conservative two-minute close. Repeated
+reads keep it stable. Provider timestamps can move it later, never earlier, and
+include the provider's one-second timestamp uncertainty.
+
+## `boundedObserverDeadline`
+
+Chooses the earlier valid deadline when a controller boundary is present and
+keeps the existing internal deadline when it is absent.
+
+## `linkOuterAbort`
+
+Carries an optional controller cancellation signal into one fresh provider or
+sleep operation and removes the link after that operation settles.
+
+## `conservativeUniquenessClose`
+
+Creates, validates, remembers, and only moves forward the two-job observer's
+safe uniqueness close.

@@ -103,6 +103,10 @@ export interface PreviewAcceptanceControllerDependencies {
     readonly operation: PreviewAcceptanceOperation;
     readonly reviewedCommit: string;
   }, boundary: PreviewControllerCallBoundary): Promise<void>;
+  awaitRollbackSettlement(
+    input: PreviewAcceptanceRollbackSettlementInput,
+    boundary: PreviewControllerCallBoundary,
+  ): Promise<void>;
   admitRestore(input: {
     readonly priorCandidateRunRef: string;
     readonly rollbackClosureRunRef: string;
@@ -151,6 +155,11 @@ export interface PreviewAcceptanceClosureInput
   extends PreviewAcceptanceActionInput {
   readonly rollbackRunRef: string;
   readonly closureRunRef: string;
+}
+
+export interface PreviewAcceptanceRollbackSettlementInput
+  extends PreviewAcceptanceActionInput {
+  readonly rollbackRunRef: string;
 }
 
 export interface PreviewControllerCommandResult {
@@ -337,6 +346,11 @@ export function createPreviewControllerSubprocessDependencies(input: {
         attribution.operation,
         attribution.reviewedCommit,
       ], boundary),
+    /** Waits for the exact rollback run to settle before closure dispatch. */
+    awaitRollbackSettlement: (settlement, boundary) =>
+      expectOk("await-rollback-settlement", [
+        serializePreviewRollbackSettlementInput(settlement),
+      ], boundary),
     /** Privately re-admits the immediately preceding role-probe closure. */
     admitRestore: async (admission, boundary) => {
       const record = exactRecord(
@@ -439,6 +453,13 @@ export async function runPreviewAcceptanceController(
     const monotonic = safeMonotonic(dependencies.monotonicNow());
     return safeMonotonic(monotonic + UNIQUENESS_MILLISECONDS);
   };
+  /** Grants a fresh post-closure window including one terminal poll margin. */
+  const nextVerificationDeadline = (): number => {
+    const monotonic = safeMonotonic(dependencies.monotonicNow());
+    return safeMonotonic(
+      monotonic + UNIQUENESS_MILLISECONDS + POLL_MILLISECONDS,
+    );
+  };
   let candidateRunRef: string | null = null;
   let rollbackRunRef: string | null = null;
   let rollbackStarted = false;
@@ -448,7 +469,10 @@ export async function runPreviewAcceptanceController(
     context: PreviewAcceptanceContext,
     deadlineMonotonic: number,
     beforeDispatch?: () => void,
-  ): Promise<{ readonly runRef: string }> => {
+  ): Promise<{
+    readonly runRef: string;
+    readonly reconciledAfterTimeout: boolean;
+  }> => {
     if (
       !(await runControllerCall(
         deadlineMonotonic,
@@ -461,12 +485,20 @@ export async function runPreviewAcceptanceController(
     beforeDispatch?.();
     const serializedContext = serializePreviewAcceptanceContext(context);
     let result: { readonly runRef: string };
+    let dispatchSignal: AbortSignal | undefined;
+    let reconciledAfterTimeout = false;
     try {
       result = await runControllerCall(
         deadlineMonotonic,
         dependencies,
-        (boundary) =>
-          dependencies.dispatch(context.kind, serializedContext, boundary),
+        (boundary) => {
+          dispatchSignal = boundary.signal;
+          return dependencies.dispatch(
+            context.kind,
+            serializedContext,
+            boundary,
+          );
+        },
       );
     } catch {
       if (
@@ -476,16 +508,18 @@ export async function runPreviewAcceptanceController(
       ) {
         fail();
       }
+      const reconciliationInput = Object.freeze({
+        operation: context.kind,
+        serializedContext,
+        reviewedCommit,
+      });
+      reconciledAfterTimeout = dispatchSignal?.aborted === true;
       const reconciled = await runControllerCall(
-        deadlineMonotonic,
+        nextCleanupDeadline(),
         dependencies,
         (boundary) =>
           dependencies.reconcileCandidateDispatch(
-            {
-              operation: context.kind,
-              serializedContext,
-              reviewedCommit,
-            },
+            reconciliationInput,
             boundary,
           ),
       );
@@ -493,7 +527,10 @@ export async function runPreviewAcceptanceController(
       result = reconciled;
     }
     if (!validRunRef(result?.runRef)) fail();
-    return Object.freeze({ runRef: result.runRef });
+    return Object.freeze({
+      runRef: result.runRef,
+      reconciledAfterTimeout,
+    });
   };
 
   /** Immediately restores and closes one attributed candidate. */
@@ -523,6 +560,22 @@ export async function runPreviewAcceptanceController(
     rollbackRunRef = rollback.runRef;
     const completedRollbackRunRef = rollback.runRef;
     dependencies.writeStatus("rollback_dispatched");
+    const cleanupDeadline = nextCleanupDeadline();
+    await runControllerCall(
+      cleanupDeadline,
+      dependencies,
+      (boundary) =>
+        dependencies.awaitRollbackSettlement(
+          Object.freeze({
+            family: input.family,
+            operation: rollbackOperation,
+            candidateRunRef: rollbackCandidateRunRef,
+            rollbackRunRef: completedRollbackRunRef,
+            reviewedCommit,
+          }),
+          boundary,
+        ),
+    );
     const closure = await dispatch({
       version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
       kind: "close_rollback",
@@ -530,9 +583,9 @@ export async function runPreviewAcceptanceController(
       candidateRunRef: rollbackCandidateRunRef,
       rollbackRunRef: completedRollbackRunRef,
       authenticatedReadsGate: "verified",
-    }, deadlineMonotonic);
+    }, cleanupDeadline);
     await runControllerCall(
-      deadlineMonotonic,
+      cleanupDeadline,
       dependencies,
       (boundary) =>
         dependencies.verifyClosure(
@@ -611,20 +664,25 @@ export async function runPreviewAcceptanceController(
     const candidateDispatchReturnedAt = safeNow(dependencies.wallNow());
     const attributedCandidateRunRef = candidate.runRef;
     candidateRunRef = attributedCandidateRunRef;
+    const candidateAttribution = Object.freeze({
+      runRef: attributedCandidateRunRef,
+      operation,
+      reviewedCommit,
+    });
     await runControllerCall(
       nextPreSignalDeadline(),
       dependencies,
       (boundary) =>
         dependencies.verifyCandidateAttribution(
-          {
-            runRef: attributedCandidateRunRef,
-            operation,
-            reviewedCommit,
-          },
+          candidateAttribution,
           boundary,
         ),
     );
     dependencies.writeStatus("candidate_dispatched");
+    if (candidate.reconciledAfterTimeout) {
+      await rollbackAndClose(nextCleanupDeadline());
+      fail();
+    }
 
     const actionInput = Object.freeze({
       family: input.family,
@@ -715,11 +773,11 @@ export async function runPreviewAcceptanceController(
       dependencies,
     );
     if (signal.kind === "no_signal") {
-      await rollbackAndClose(noSignalDeadline + POLL_MILLISECONDS);
+      await rollbackAndClose(nextCleanupDeadline());
       if (!isTwoJobFamily(input.family)) fail();
       await waitForNoSignalUniqueness(
         observer,
-        absoluteNoSignalDeadline,
+        nextVerificationDeadline(),
         dependencies,
       );
       fail();
@@ -735,32 +793,55 @@ export async function runPreviewAcceptanceController(
 
     if (isTwoJobFamily(input.family)) {
       let state = signal.state;
-      const uniquenessClosesAt =
-        state.uniquenessClosesAt === undefined
-          ? absoluteNoSignalDeadline
-          : safeNow(state.uniquenessClosesAt);
-      const uniquenessDeadline = monotonicDeadlineForWall(
-        new Date(uniquenessClosesAt.getTime() + POLL_MILLISECONDS),
-        dependencies,
+      if (state.uniquenessClosesAt === undefined) fail();
+      const uniquenessClosesAt = safeNow(state.uniquenessClosesAt);
+      const verificationStartedAtWall = safeNow(dependencies.wallNow());
+      const verificationStartedAtMonotonic = safeMonotonic(
+        dependencies.monotonicNow(),
+      );
+      const semanticCloseRemaining =
+        uniquenessClosesAt.getTime() + POLL_MILLISECONDS -
+        verificationStartedAtWall.getTime();
+      const uniquenessDeadline = safeMonotonic(
+        verificationStartedAtMonotonic + Math.max(
+          UNIQUENESS_MILLISECONDS + POLL_MILLISECONDS,
+          semanticCloseRemaining,
+        ),
       );
       for (;;) {
+        const currentUniquenessClosesAt = state.uniquenessClosesAt;
         if (
           state.signal !== "succeeded" ||
           state.signalObservedAt === null ||
           safeNow(state.signalObservedAt).getTime() !==
-            signal.providerObservedAt.getTime()
+            signal.providerObservedAt.getTime() ||
+          currentUniquenessClosesAt === undefined ||
+          safeNow(currentUniquenessClosesAt).getTime() !==
+            uniquenessClosesAt.getTime()
         ) {
           fail();
         }
-        if (state.uniqueness === "succeeded") break;
+        const detectedAtWall = safeNow(dependencies.wallNow());
+        const detectedAtMonotonic = safeMonotonic(
+          dependencies.monotonicNow(),
+        );
         if (
           state.uniqueness === "failed" ||
-          safeNow(dependencies.wallNow()).getTime() >
-            uniquenessClosesAt.getTime() + POLL_MILLISECONDS
-        ) {
-          fail();
-        }
-        await dependencies.sleep(POLL_MILLISECONDS);
+          detectedAtMonotonic > uniquenessDeadline
+        ) fail();
+        if (
+          state.uniqueness === "succeeded" &&
+          detectedAtWall.getTime() >= uniquenessClosesAt.getTime()
+        ) break;
+        const remaining = Math.min(
+          POLL_MILLISECONDS,
+          uniquenessDeadline - detectedAtMonotonic,
+          state.uniqueness === "succeeded"
+            ? uniquenessClosesAt.getTime() - detectedAtWall.getTime()
+            : POLL_MILLISECONDS,
+        );
+        if (remaining <= 0) fail();
+        await dependencies.sleep(remaining);
         state = await runControllerCall(
           uniquenessDeadline,
           dependencies,
@@ -869,23 +950,29 @@ async function waitForSignal(
 /** Requires the no-signal two-job observer to fail only after rollback close. */
 async function waitForNoSignalUniqueness(
   observer: unknown,
-  closesAt: Date,
+  verificationDeadline: number,
   dependencies: PreviewAcceptanceControllerDependencies,
 ): Promise<void> {
-  const settlementAt = new Date(closesAt.getTime() + POLL_MILLISECONDS);
-  const settlementDeadline = monotonicDeadlineForWall(
-    settlementAt,
-    dependencies,
-  );
+  let stableClosesAt: Date | null = null;
   for (;;) {
     const state = await runControllerCall(
-      settlementDeadline,
+      verificationDeadline,
       dependencies,
       (boundary) => dependencies.readObserverState(observer, boundary),
     );
     const detectedAtWall = safeNow(dependencies.wallNow());
+    const detectedAtMonotonic = safeMonotonic(
+      dependencies.monotonicNow(),
+    );
+    if (state.uniquenessClosesAt === undefined) fail();
+    const currentClosesAt = safeNow(state.uniquenessClosesAt);
     if (
-      detectedAtWall.getTime() > settlementAt.getTime() ||
+      stableClosesAt !== null &&
+      stableClosesAt.getTime() !== currentClosesAt.getTime()
+    ) fail();
+    stableClosesAt ??= currentClosesAt;
+    if (
+      detectedAtMonotonic > verificationDeadline ||
       state.signal !== "listening" ||
       state.signalObservedAt !== null ||
       state.uniqueness === "succeeded"
@@ -893,13 +980,15 @@ async function waitForNoSignalUniqueness(
       fail();
     }
     if (state.uniqueness === "failed") {
-      if (detectedAtWall.getTime() < closesAt.getTime()) fail();
+      if (detectedAtWall.getTime() < stableClosesAt.getTime()) fail();
       return;
     }
     const remaining = Math.min(
       POLL_MILLISECONDS,
-      settlementAt.getTime() - detectedAtWall.getTime(),
-      closesAt.getTime() - detectedAtWall.getTime(),
+      verificationDeadline - detectedAtMonotonic,
+      detectedAtWall.getTime() < stableClosesAt.getTime()
+        ? stableClosesAt.getTime() - detectedAtWall.getTime()
+        : POLL_MILLISECONDS,
     );
     if (remaining <= 0) fail();
     await dependencies.sleep(remaining);
@@ -1255,7 +1344,7 @@ function createInProcessObserverPort(input: {
 
   return Object.freeze({
     /** Resolves one provider observer inside the opaque in-process port. */
-    resolveObserver: async (value) => {
+    resolveObserver: async (value, boundary) => {
       const resolution = snapshotObserverResolutionInput(value);
       const handle = await resolvePreviewObserverRun(
         {
@@ -1272,6 +1361,7 @@ function createInProcessObserverPort(input: {
               }),
         },
         dependencies,
+        boundary,
       );
       const opaque = Object.freeze(Object.create(null)) as object;
       handles.set(
@@ -1285,7 +1375,7 @@ function createInProcessObserverPort(input: {
       return opaque;
     },
     /** Reads one provider observer state without exposing its handle. */
-    readObserverState: async (opaque) => {
+    readObserverState: async (opaque, boundary) => {
       if (typeof opaque !== "object" || opaque === null) fail();
       const state = handles.get(opaque);
       if (state === undefined) fail();
@@ -1297,6 +1387,7 @@ function createInProcessObserverPort(input: {
           state.handle,
           state.family,
           dependencies,
+          boundary,
         );
       }
       if (state.family === "calendar_maintenance") {
@@ -1306,6 +1397,7 @@ function createInProcessObserverPort(input: {
           state.family,
           state.maintenanceScheduledAt,
           dependencies,
+          boundary,
         );
         return Object.freeze({
           signal: "listening" as const,
@@ -1317,6 +1409,7 @@ function createInProcessObserverPort(input: {
         state.handle,
         state.family,
         dependencies,
+        boundary,
       );
       return Object.freeze({
         ...signal,
@@ -1566,6 +1659,21 @@ function serializePreviewActionInput(
     operation: input.operation,
     candidateRunRef: input.candidateRunRef,
     reviewedCommit: input.reviewedCommit,
+  });
+}
+
+/** Serializes one exact rollback-settlement input. */
+function serializePreviewRollbackSettlementInput(
+  input: PreviewAcceptanceRollbackSettlementInput,
+): string {
+  validateActionInput(input);
+  if (!validRunRef(input.rollbackRunRef)) fail();
+  return serializeDriverInput({
+    reviewedCommit: input.reviewedCommit,
+    family: input.family,
+    operation: input.operation,
+    candidateRunRef: input.candidateRunRef,
+    rollbackRunRef: input.rollbackRunRef,
   });
 }
 

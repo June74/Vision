@@ -74,6 +74,7 @@ function harness(
       return { runRef: String(nextRunRef) };
     }),
     reconcileCandidateDispatch: vi.fn(async () => null),
+    awaitRollbackSettlement: vi.fn(async () => undefined),
     resolveObserver: vi.fn(async () => "41" as never),
     readObserverState: vi
       .fn()
@@ -81,11 +82,13 @@ function harness(
         signal: "listening",
         uniqueness: "listening",
         signalObservedAt: null,
+        uniquenessClosesAt: START,
       })
       .mockResolvedValue({
         signal: "succeeded",
         uniqueness: "succeeded",
         signalObservedAt: new Date("2026-07-30T18:00:06.000Z"),
+        uniquenessClosesAt: START,
       }),
     verifyCandidateAttribution: vi.fn(async () => undefined),
     admitRestore: vi.fn(async () => "verified" as const),
@@ -137,6 +140,7 @@ describe("preview acceptance controller", () => {
         signal: "succeeded" as const,
         uniqueness: "succeeded" as const,
         signalObservedAt: START,
+        uniquenessClosesAt: START,
       })),
       requestApproval: vi.fn(async () => { order.push("approval"); return START; }),
       performAction: vi.fn(async () => { order.push("action"); return START; }),
@@ -604,6 +608,7 @@ describe("preview acceptance controller", () => {
           signal: "succeeded",
           uniqueness: stateReads < 3 ? "listening" : "succeeded",
           signalObservedAt,
+          uniquenessClosesAt: signalObservedAt,
         };
       },
     );
@@ -660,6 +665,7 @@ describe("preview acceptance controller", () => {
         signal: "succeeded",
         uniqueness: "succeeded",
         signalObservedAt: fixture.currentWall(),
+        uniquenessClosesAt: fixture.currentWall(),
       }),
     );
 
@@ -903,6 +909,7 @@ describe("preview acceptance controller", () => {
       { stdout: '{"at":"2026-07-30T18:00:06.000Z"}\n', stderr: "" },
       { stdout: '{"at":"2026-07-30T18:00:07.000Z"}\n', stderr: "" },
       { stdout: '{"ok":true}\n', stderr: "" },
+      { stdout: '{"ok":true}\n', stderr: "" },
     ];
     const statuses: string[] = [];
     const observerIdentifierCanary = "987654321987654321";
@@ -982,6 +989,13 @@ describe("preview acceptance controller", () => {
     ).resolves.toEqual(
       new Date("2026-07-30T18:00:07.000Z"),
     );
+    await dependencies.awaitRollbackSettlement(
+      {
+        ...action,
+        rollbackRunRef: "102",
+      },
+      testCallBoundary(),
+    );
     await dependencies.verifyClosure(
       {
         ...action,
@@ -1007,6 +1021,20 @@ describe("preview acceptance controller", () => {
         "dispatch",
         "deploy_foundation",
         '{"safe":true}',
+      ],
+    });
+    expect(calls).toContainEqual({
+      executable: "driver-bin",
+      arguments_: [
+        "--fixed-mode",
+        "await-rollback-settlement",
+        JSON.stringify({
+          reviewedCommit: SHA,
+          family: "foundation_probe",
+          operation: "deploy_foundation",
+          candidateRunRef: "101",
+          rollbackRunRef: "102",
+        }),
       ],
     });
     expect(observerPort.resolveObserver).toHaveBeenCalledOnce();
@@ -1188,9 +1216,580 @@ describe("preview acceptance controller decisive hardening", () => {
     expect(rejection).toBeNull();
   });
 
+  it.each([
+    '{"ok":false}\n',
+    '{"ok":"true"}\n',
+    '{"ok":true,"extra":false}\n',
+  ])("rejects a non-exact rollback-settlement acknowledgement", async (stdout) => {
+    const opaqueObserver = Object.freeze(Object.create(null)) as object;
+    const dependencies = createPreviewControllerSubprocessDependencies({
+      driverExecutable: "driver-bin",
+      observerPort: {
+        resolveObserver: async () => opaqueObserver,
+        readObserverState: async () => ({
+          signal: "listening",
+          uniqueness: "listening",
+          signalObservedAt: null,
+        }),
+      },
+      runCommand: vi.fn(async () => ({ stdout, stderr: "" })),
+    });
+
+    await expect(
+      dependencies.awaitRollbackSettlement(
+        {
+          family: "foundation_probe",
+          operation: "deploy_foundation",
+          candidateRunRef: "101",
+          rollbackRunRef: "102",
+          reviewedCommit: SHA,
+        },
+        testCallBoundary(),
+      ),
+    ).rejects.toThrow("Preview acceptance controller failed closed.");
+  });
+
+  it("propagates a shorter outer abort through the concrete resolver and waits for metadata settlement", async () => {
+    let observedDeadline: number | null = null;
+    let metadataSettled = false;
+    let fallbackUsed = false;
+    const outerController = new AbortController();
+    const dependencies = createPreviewControllerSubprocessDependencies({
+      driverExecutable: "driver-bin",
+      observerDependencies: {
+        monotonicNow: () => 0,
+        sleep: vi.fn(async () => undefined),
+        listRuns: vi.fn(async (_page, context) => {
+          observedDeadline = context.deadlineMonotonic;
+          await new Promise<void>((_resolveMetadata, rejectMetadata) => {
+            const fallback = setTimeout(() => {
+              fallbackUsed = true;
+              metadataSettled = true;
+              rejectMetadata(new Error("metadata fallback"));
+            }, 100);
+            context.signal.addEventListener(
+              "abort",
+              () => {
+                clearTimeout(fallback);
+                metadataSettled = true;
+                rejectMetadata(new Error("metadata aborted"));
+              },
+              { once: true },
+            );
+          });
+          return { workflow_runs: [] };
+        }),
+        readRun: vi.fn(async () => ({})),
+        listJobs: vi.fn(async () => ({ jobs: [] })),
+      },
+      runCommand: vi.fn(async () => ({ stdout: "", stderr: "" })),
+    });
+    const outerBoundary = {
+      deadlineMonotonic: 25,
+      signal: outerController.signal,
+    };
+    const resolution = dependencies.resolveObserver(
+      {
+        family: "foundation_probe",
+        expectedCommit: SHA,
+        dispatchStartedAt: START,
+        dispatchCompletedAt: START,
+        expectation: { kind: "foundation_succeeded" },
+      },
+      outerBoundary,
+    );
+    setTimeout(() => outerController.abort(), 0);
+
+    await expect(resolution).rejects.toThrow(
+      "Preview acceptance controller failed closed.",
+    );
+    expect(observedDeadline).toBe(25);
+    expect(metadataSettled).toBe(true);
+    expect(fallbackUsed).toBe(false);
+  });
+
+  it.each([
+    ["foundation_probe", { kind: "foundation_succeeded" }],
+    ["sync_suppression", { kind: "sync_suppressed" }],
+    [
+      "calendar_maintenance",
+      {
+        kind: "maintenance_succeeded",
+        maintenanceScheduledAt: START.toISOString(),
+      },
+    ],
+  ] as const)(
+    "passes the shorter outer boundary through the concrete %s state reader",
+    async (family, expectation) => {
+      let monotonic = 0;
+      let resolving = true;
+      let readDeadline: number | null = null;
+      const providerRun = {
+        id: "41",
+        event: "workflow_dispatch",
+        head_sha: SHA,
+        created_at: "2026-07-30T18:00:01Z",
+        path: ".github/workflows/preview.yml",
+        status: "in_progress",
+        conclusion: null,
+      };
+      const jobNames =
+        family === "sync_suppression"
+          ? [
+              "Capture sync_suppression signal",
+              "Capture sync_suppression uniqueness",
+            ]
+          : family === "calendar_maintenance"
+            ? ["Capture calendar_maintenance uniqueness"]
+            : ["Capture foundation_probe signal"];
+      const dependencies = createPreviewControllerSubprocessDependencies({
+        driverExecutable: "driver-bin",
+        observerDependencies: {
+          monotonicNow: () => monotonic,
+          sleep: vi.fn(async () => {
+            monotonic = 120_000;
+          }),
+          listRuns: vi.fn(async () => ({ workflow_runs: [providerRun] })),
+          readRun: vi.fn(async () => providerRun),
+          listJobs: vi.fn(async (_handle, context) => {
+            if (!resolving) {
+              readDeadline = context.deadlineMonotonic;
+              return { jobs: [] };
+            }
+            return {
+              jobs: jobNames.map((name) => ({
+                name,
+                status: "in_progress",
+                conclusion: null,
+                steps: [
+                  {
+                    name: "Print only allowlisted acceptance evidence",
+                    status: "in_progress",
+                    conclusion: null,
+                    completed_at: null,
+                  },
+                ],
+              })),
+            };
+          }),
+        },
+        runCommand: vi.fn(async () => ({ stdout: "", stderr: "" })),
+      });
+      const controller = new AbortController();
+      const handle = await dependencies.resolveObserver(
+        {
+          family,
+          expectedCommit: SHA,
+          dispatchStartedAt: START,
+          dispatchCompletedAt: new Date(START.getTime() + 2_000),
+          expectation,
+        },
+        {
+          deadlineMonotonic: 240_000,
+          signal: controller.signal,
+        },
+      );
+      resolving = false;
+
+      await expect(
+        dependencies.readObserverState(handle, {
+          deadlineMonotonic: 120_005,
+          signal: controller.signal,
+        }),
+      ).rejects.toThrow("Preview acceptance controller failed closed.");
+      expect(readDeadline).toBe(120_005);
+    },
+  );
+
+  it("preserves the concrete true close through a late signal and slow rollback closure", async () => {
+    let wall = START.getTime();
+    let monotonic = 0;
+    let actionPerformed = false;
+    let signalObservedAt: Date | null = null;
+    let postActionJobReads = 0;
+    let nextRunRef = 100;
+    const driverCommands: string[] = [];
+    const statuses: string[] = [];
+    const providerRun = {
+      id: "41",
+      event: "workflow_dispatch",
+      head_sha: SHA,
+      created_at: "2026-07-30T18:00:01Z",
+      path: ".github/workflows/preview.yml",
+      status: "in_progress",
+      conclusion: null,
+    };
+    const providerJob = (
+      name: string,
+      status: "in_progress" | "completed",
+      completedAt: Date | null,
+    ) => ({
+      name,
+      status,
+      conclusion: status === "completed" ? "success" : null,
+      steps: [
+        {
+          name: "Print only allowlisted acceptance evidence",
+          status,
+          conclusion: status === "completed" ? "success" : null,
+          completed_at:
+            completedAt?.toISOString().replace(".000Z", "Z") ?? null,
+        },
+      ],
+    });
+    const advance = (milliseconds: number) => {
+      monotonic += milliseconds;
+      wall += milliseconds;
+    };
+    const observerDependencies = {
+      monotonicNow: () => monotonic,
+      sleep: vi.fn(async (milliseconds: number) => advance(milliseconds)),
+      listRuns: vi.fn(async () => ({ workflow_runs: [providerRun] })),
+      readRun: vi.fn(async () => providerRun),
+      listJobs: vi.fn(async () => {
+        if (!actionPerformed) {
+          return {
+            jobs: [
+              providerJob(
+                "Capture sync_suppression signal",
+                "in_progress",
+                null,
+              ),
+              providerJob(
+                "Capture sync_suppression uniqueness",
+                "in_progress",
+                null,
+              ),
+            ],
+          };
+        }
+        postActionJobReads += 1;
+        if (signalObservedAt === null) {
+          advance(119_000);
+          signalObservedAt = new Date(wall);
+        }
+        const uniquenessCompletedAt = new Date(
+          signalObservedAt.getTime() + 120_000,
+        );
+        const uniquenessCompleted = wall >= uniquenessCompletedAt.getTime();
+        return {
+          jobs: [
+            providerJob(
+              "Capture sync_suppression signal",
+              "completed",
+              signalObservedAt,
+            ),
+            providerJob(
+              "Capture sync_suppression uniqueness",
+              uniquenessCompleted ? "completed" : "in_progress",
+              uniquenessCompleted ? uniquenessCompletedAt : null,
+            ),
+          ],
+        };
+      }),
+    };
+    const runCommand = vi.fn(async (
+      executable: string,
+      arguments_: readonly string[],
+    ) => {
+      if (executable === "git-bin") {
+        return {
+          stdout: `${SHA}\trefs/heads/codex/phase-b-foundation\n`,
+          stderr: "",
+        };
+      }
+      const command = arguments_[0] ?? "";
+      driverCommands.push(command);
+      if (command === "dispatch") {
+        if (arguments_[1] === "observe") advance(2_000);
+        if (arguments_[1] === "rollback") advance(20_000);
+        nextRunRef += 1;
+        return {
+          stdout: `${JSON.stringify({ runRef: String(nextRunRef) })}\n`,
+          stderr: "",
+        };
+      }
+      if (
+        command === "verify-candidate-attribution" ||
+        command === "verify-closure"
+      ) {
+        return { stdout: '{"ok":true}\n', stderr: "" };
+      }
+      if (command === "request-approval") {
+        return {
+          stdout: `${JSON.stringify({ at: new Date(wall).toISOString() })}\n`,
+          stderr: "",
+        };
+      }
+      if (command === "perform-action") {
+        actionPerformed = true;
+        return {
+          stdout: `${JSON.stringify({ at: new Date(wall).toISOString() })}\n`,
+          stderr: "",
+        };
+      }
+      if (command === "await-rollback-settlement") {
+        advance(110_000);
+        return { stdout: '{"ok":true}\n', stderr: "" };
+      }
+      throw new Error("unexpected closed driver command");
+    });
+    const concreteDependencies = createPreviewControllerSubprocessDependencies({
+      driverExecutable: "driver-bin",
+      gitExecutable: "git-bin",
+      observerDependencies,
+      runCommand,
+      wallNow: () => new Date(wall),
+      monotonicNow: () => monotonic,
+      sleep: async (milliseconds) => advance(milliseconds),
+      writeStatus: (status) => statuses.push(status),
+    });
+    const observedStates: Array<{
+      readonly signal: string;
+      readonly uniqueness: string;
+      readonly signalObservedAt: Date | null;
+      readonly uniquenessClosesAt?: Date;
+    }> = [];
+    const dependencies = {
+      ...concreteDependencies,
+      readObserverState: async (
+        handle: unknown,
+        boundary: ReturnType<typeof testCallBoundary>,
+      ) => {
+        const state = await concreteDependencies.readObserverState(
+          handle,
+          boundary,
+        );
+        observedStates.push(state);
+        return state;
+      },
+    };
+
+    await expect(
+      runPreviewAcceptanceController(
+        {
+          family: "sync_suppression",
+          reviewedCommit: SHA,
+          expiresAt: new Date(START.getTime() + 10 * 60_000).toISOString(),
+          expectation: { kind: "sync_suppressed" },
+        },
+        dependencies,
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(postActionJobReads).toBeGreaterThanOrEqual(2);
+    expect(observedStates[0]).toEqual(expect.objectContaining({
+      signal: "succeeded",
+      uniqueness: "listening",
+      signalObservedAt: expect.any(Date),
+      uniquenessClosesAt: expect.any(Date),
+    }));
+    expect(statuses).toEqual([
+      "observer_ready",
+      "candidate_dispatched",
+      "candidate_signal_seen",
+      "rollback_dispatched",
+      "closure_verified",
+    ]);
+    expect(signalObservedAt).not.toBeNull();
+    expect(driverCommands.indexOf("await-rollback-settlement")).toBeLessThan(
+      driverCommands.lastIndexOf("dispatch"),
+    );
+  });
+
+  it("uses a fresh reconciliation window and rolls back an accepted candidate dispatch that times out", async () => {
+    vi.useFakeTimers();
+    try {
+      const fixture = harness();
+      const originalDispatch = vi
+        .mocked(fixture.dependencies.dispatch)
+        .getMockImplementation();
+      if (originalDispatch === undefined) {
+        throw new Error("missing harness dispatch implementation");
+      }
+      let candidateDispatchCount = 0;
+      let candidateDeadline: number | null = null;
+      let candidateContext: string | null = null;
+      let reconciliationDeadline: number | null = null;
+      let reconciliationInput: Readonly<Record<string, unknown>> | null = null;
+      let attributionInput: Readonly<Record<string, unknown>> | null = null;
+      const reconcileCandidateDispatch = vi.fn(
+        async (
+          input: Readonly<Record<string, unknown>>,
+          boundary: { readonly deadlineMonotonic: number },
+        ) => {
+          reconciliationInput = input;
+          reconciliationDeadline = boundary.deadlineMonotonic;
+          return { runRef: "202" };
+        },
+      );
+      vi.mocked(fixture.dependencies.dispatch).mockImplementation(
+        async (operation, context, boundary) => {
+          if (!operation.startsWith("deploy_")) {
+            return originalDispatch(operation, context, boundary);
+          }
+          candidateDispatchCount += 1;
+          candidateContext = context;
+          candidateDeadline = boundary.deadlineMonotonic;
+          return new Promise<{ readonly runRef: string }>(
+            (_resolvePromise, rejectPromise) => {
+              boundary.signal.addEventListener(
+                "abort",
+                () => {
+                  fixture.advanceTime(
+                    boundary.deadlineMonotonic -
+                      fixture.currentMonotonic(),
+                  );
+                  rejectPromise(new Error("private candidate timeout"));
+                },
+                { once: true },
+              );
+            },
+          );
+        },
+      );
+      const verifyCandidateAttribution = vi.fn(
+        async (input: Readonly<Record<string, unknown>>) => {
+          attributionInput = input;
+        },
+      );
+      Object.assign(fixture.dependencies, {
+        reconcileCandidateDispatch,
+        verifyCandidateAttribution,
+      });
+
+      const run = runPreviewAcceptanceController(
+        {
+          family: "foundation_probe",
+          reviewedCommit: SHA,
+          expiresAt: new Date(START.getTime() + 10 * 60_000).toISOString(),
+          expectation: { kind: "foundation_succeeded" },
+        },
+        fixture.dependencies,
+      );
+      const rejection = expect(run).rejects.toThrow(
+        "Preview acceptance controller failed closed.",
+      );
+      for (
+        let pendingTurns = 0;
+        candidateDeadline === null && pendingTurns < 32;
+        pendingTurns += 1
+      ) {
+        await Promise.resolve();
+      }
+      expect(candidateDeadline).not.toBeNull();
+      await vi.advanceTimersByTimeAsync(120_000);
+
+      await rejection;
+      expect(candidateDispatchCount).toBe(1);
+      expect(reconcileCandidateDispatch).toHaveBeenCalledOnce();
+      expect(reconciliationDeadline).not.toBeNull();
+      expect(reconciliationDeadline as unknown as number).toBeGreaterThan(
+        candidateDeadline as unknown as number,
+      );
+      expect(reconciliationInput).toEqual({
+        operation: "deploy_foundation",
+        serializedContext: candidateContext,
+        reviewedCommit: SHA,
+      });
+      expect(Object.isFrozen(reconciliationInput)).toBe(true);
+      expect(attributionInput).toEqual({
+        runRef: "202",
+        operation: "deploy_foundation",
+        reviewedCommit: SHA,
+      });
+      expect(Object.isFrozen(attributionInput)).toBe(true);
+      expect(fixture.dependencies.performAction).not.toHaveBeenCalled();
+      expect(
+        fixture.dispatches.map(({ operation }) => operation).slice(-2),
+      ).toEqual(["rollback", "close_rollback"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("uses fresh cleanup time after timely rollback dispatch settles", async () => {
+    const fixture = harness();
+    const originalDispatch = vi
+      .mocked(fixture.dependencies.dispatch)
+      .getMockImplementation();
+    if (originalDispatch === undefined) {
+      throw new Error("missing harness dispatch implementation");
+    }
+    let rollbackDeadline: number | null = null;
+    let settlementDeadline: number | null = null;
+    let closureDeadline: number | null = null;
+    let rollbackSettled = false;
+    vi.mocked(fixture.dependencies.dispatch).mockImplementation(
+      async (operation, context, boundary) => {
+        if (operation === "rollback") {
+          rollbackDeadline = boundary.deadlineMonotonic;
+          fixture.dispatches.push({ operation, context });
+          fixture.advanceTime(
+            boundary.deadlineMonotonic - fixture.currentMonotonic(),
+          );
+          return { runRef: "202" };
+        }
+        if (operation === "close_rollback") {
+          if (!rollbackSettled) {
+            throw new Error("closure raced rollback settlement");
+          }
+          closureDeadline = boundary.deadlineMonotonic;
+        }
+        return originalDispatch(operation, context, boundary);
+      },
+    );
+    const awaitRollbackSettlement = vi.fn(
+      async (
+        _input: Readonly<Record<string, unknown>>,
+        boundary: { readonly deadlineMonotonic: number },
+      ) => {
+        settlementDeadline = boundary.deadlineMonotonic;
+        fixture.advanceTime(30_000);
+        rollbackSettled = true;
+      },
+    );
+    Object.assign(fixture.dependencies, { awaitRollbackSettlement });
+    vi.mocked(fixture.dependencies.readObserverState).mockImplementation(
+      async () => ({
+        signal: "succeeded" as const,
+        uniqueness: "succeeded" as const,
+        signalObservedAt: fixture.currentWall(),
+      }),
+    );
+
+    await expect(
+      runPreviewAcceptanceController(
+        {
+          family: "foundation_probe",
+          reviewedCommit: SHA,
+          expiresAt: new Date(START.getTime() + 10 * 60_000).toISOString(),
+          expectation: { kind: "foundation_succeeded" },
+        },
+        fixture.dependencies,
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(awaitRollbackSettlement).toHaveBeenCalledOnce();
+    expect(settlementDeadline).not.toBeNull();
+    expect(settlementDeadline as unknown as number).toBeGreaterThan(
+      rollbackDeadline as unknown as number,
+    );
+    expect(closureDeadline).toBe(settlementDeadline);
+  });
+
   it("settles the no-signal path through rollback before accepting expected uniqueness failure", async () => {
     const fixture = harness();
     let postClosureTerminalReads = 0;
+    const awaitRollbackSettlement = vi.fn(async () => {
+      expect(
+        fixture.dispatches.some(
+          ({ operation }) => operation === "close_rollback",
+        ),
+      ).toBe(false);
+      fixture.advanceTime(10_000);
+    });
+    Object.assign(fixture.dependencies, { awaitRollbackSettlement });
     vi.mocked(fixture.dependencies.readObserverState).mockImplementation(
       async () => {
         const rollbackClosed = fixture.dispatches.some(
@@ -1225,6 +1824,7 @@ describe("preview acceptance controller decisive hardening", () => {
     ).rejects.toThrow("Preview acceptance controller failed closed.");
 
     expect(postClosureTerminalReads).toBe(1);
+    expect(awaitRollbackSettlement).toHaveBeenCalledOnce();
     expect(
       fixture.dispatches
         .map(({ operation }) => operation)
@@ -1284,6 +1884,7 @@ describe("preview acceptance controller decisive hardening", () => {
             reads === 1
               ? signalObservedAt
               : new Date(signalObservedAt.getTime() + 1),
+          uniquenessClosesAt: signalObservedAt,
         };
       },
     );
@@ -1349,6 +1950,7 @@ describe("preview acceptance controller decisive hardening", () => {
           uniqueness:
             reads === 1 ? ("listening" as const) : ("succeeded" as const),
           signalObservedAt,
+          uniquenessClosesAt: signalObservedAt,
         };
       },
     );
