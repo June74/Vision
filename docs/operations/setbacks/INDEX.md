@@ -2,7 +2,8 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
-| [SB-20260731-185253-concurrent-lifecycle-typecheck-state](incidents/2026-07-31T185253Z-concurrent-lifecycle-typecheck-state.md) | open | 2026-07-31T18:52:53.8643852Z | Phase B Task 3 fifth-review parallel repair | Expiry-lane typecheck saw incomplete lifecycle test edits |
+| [SB-20260731-185558-windows-cmd-wrapper-teardown-hang](incidents/2026-07-31T185558Z-windows-cmd-wrapper-teardown-hang.md) | open | 2026-07-31T18:55:58.7433742Z | Phase B Task 3 fifth-review Windows supervisor repair | Windows command wrapper did not settle its child during teardown |
+| [SB-20260731-185253-concurrent-lifecycle-typecheck-state](incidents/2026-07-31T185253Z-concurrent-lifecycle-typecheck-state.md) | closed | 2026-07-31T18:54:15.6332149Z | Phase B Task 3 fifth-review parallel repair | Expiry-lane typecheck saw incomplete lifecycle test edits |
 | [SB-20260731-184917-task3-fifth-review-blockers](incidents/2026-07-31T184917Z-task3-fifth-review-blockers.md) | open | 2026-07-31T18:49:17.5535045Z | Phase B Task 3 fifth sanitized package review | Fifth Task 3 review found four Important blockers |
 | [SB-20260731-183821-task3-review-package-privacy-scan](incidents/2026-07-31T183821Z-task3-review-package-privacy-scan.md) | closed | 2026-07-31T18:40:54.3304219Z | Phase B Task 3 fifth review-package preparation | Raw Task 3 review artifact failed strict content privacy checks |
 | [SB-20260731-182610-cleanup-cross-lane-residue-inventory](incidents/2026-07-31T182610Z-cleanup-cross-lane-residue-inventory.md) | closed | 2026-07-31T18:27:33.1690763Z | Phase B Task 3 full-check regression repair | Cleanup test missed a test file changed by the parallel restore lane |
