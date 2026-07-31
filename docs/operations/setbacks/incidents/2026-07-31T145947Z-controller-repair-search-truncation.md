@@ -2,7 +2,7 @@
 
 - **Status:** contained
 - **First observed:** 2026-07-31T14:59:47.6410820Z
-- **Last observed:** 2026-07-31T21:42:10.5048070Z
+- **Last observed:** 2026-07-31T22:00:55.3182028Z
 - **Phase/task:** Phase B Tasks 3 and 4 controller review
 - **Environment:** Delegated read-only plan and specification inspection
 - **Version/commit:** c23e301 plus unstaged setback records
@@ -119,3 +119,11 @@ another truncation.
   28-line incident tail with an index lookup and the output exceeded the model
   context. The incomplete repository-only output was discarded; subsequent
   incident reads are limited to ten lines and one exact index match.
+- 2026-07-31T21:59:18.2982530Z: Recurred when the Task 5 scheduled-evidence
+  lane combined required instruction files in one read and exceeded its output
+  limit. It stopped before tests or edits and resumes with one bounded file per
+  read.
+- 2026-07-31T22:00:55.3182028Z: Recurred when the Task 5 browser-helper lane
+  combined three large source/test files and truncated roughly 1,183 lines.
+  The incomplete repository-only output was discarded; the lane resumes with
+  one bounded exact range per command.

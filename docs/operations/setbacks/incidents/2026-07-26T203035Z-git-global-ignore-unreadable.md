@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:30:35.2961897Z
-- **Last observed:** 2026-07-31T21:55:11.3910509Z
+- **Last observed:** 2026-07-31T22:03:47.5242582Z
 - **Phase/task:** Phase B live-acceptance specification finalization
 - **Environment:** Local Phase B worktree under the managed sandbox
 - **Version/commit:** Written-spec candidate based on `38c35eb`
@@ -177,3 +177,6 @@ commit `4420f6d`.
   untracked-file query inherited the optional unreadable global ignore and the
   compound command exited nonzero. The scope claim is rechecked with bounded
   repository-metadata read authority before commit.
+- 2026-07-31T22:03:47.5242582Z: Recurred during a Task 5 browser-lane scoped
+  status check. Git exited zero and reported no assigned-path changes; the
+  optional user-level ignore warning remains a known sandbox advisory.

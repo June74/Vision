@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T19:56:39.6673787Z
-- **Last observed:** 2026-07-31T21:24:11.7436114Z
-- **Phase/task:** Phase B Task 4 full-check diagnosis
+- **Last observed:** 2026-07-31T22:03:21.6722225Z
+- **Phase/task:** Phase B Tasks 4 and 5 local path discovery
 - **Environment:** Shared local worktree; read-only source discovery
 - **Version/commit:** 2cf0ff1 with concurrent Task 4 work
 
@@ -98,3 +98,11 @@ files, and the bounded lifecycle search completed successfully.
   The command returned the needed exact describe locations before failing and
   changed no project or external state. The corrected search uses explicit
   discovered config paths only.
+- 2026-07-31T22:02:04.0732670Z: Recurred when a Task 5 progress probe treated
+  the not-yet-created browser-helper path as an ordinary file read. The status
+  portion was valid and no state changed; optional in-progress artifacts are
+  now probed with `Test-Path`.
+- 2026-07-31T22:03:21.6722225Z: Recurred when the Task 5 scheduled-evidence
+  trace included a guessed root `worker.ts`. The path does not exist and the
+  read-only command exited before a usable trace; the lane now enumerates
+  actual source files before tracing.

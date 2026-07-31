@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T19:55:17.465337Z
-- **Last observed:** 2026-07-31T19:55:35.3173724Z
-- **Phase/task:** Phase B Task 4 read-only review
+- **Last observed:** 2026-07-31T22:00:55.3182028Z
+- **Phase/task:** Phase B Tasks 4 and 5 read-only instruction review
 - **Environment:** Local Phase B worktree, Windows PowerShell
 - **Version/commit:** c23e301
 
@@ -49,3 +49,9 @@ Verified that the main skill entrypoint is readable and contains the required li
 ## Recurrence history
 
 - 2026-07-31T19:55:17.465337Z: First observed.
+- 2026-07-31T21:59:41.1446861Z: Recurred when the Task 5 observer lane assumed
+  the `trace-live-call-path` skill used root `r0`; the catalog assigns it to
+  `r1`. The lane stopped before edits and resumes from the exact catalog path.
+- 2026-07-31T22:00:55.3182028Z: Recurred when the Task 5 scheduled-evidence
+  lane assumed `domain-logic-contract` used root `r0`; its catalog entry uses
+  `r1`. It stopped before edits and resumes only after literal alias expansion.
