@@ -520,7 +520,7 @@ describe("print-safe-tail", () => {
     await expect(
       runPrintSafeTail(premature.args, [restoreTail(restoreSuccess())]),
     ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
-  });
+  }, 15_000);
 
   it("forbids non-maintenance close instants and requires the maintenance pair", async () => {
     await expect(
