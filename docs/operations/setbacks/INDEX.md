@@ -2,8 +2,9 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
+| [SB-20260731-190706-wrangler-entrypoint-not-exported](incidents/2026-07-31T190706Z-wrangler-entrypoint-not-exported.md) | closed | 2026-07-31T19:07:06.7862317Z | Phase B Task 3 Windows supervisor alternative diagnosis | Wrangler's guessed JavaScript bin subpath is not exported |
 | [SB-20260731-190331-windows-incident-duplicate-cause](incidents/2026-07-31T190331Z-windows-incident-duplicate-cause.md) | closed | 2026-07-31T19:03:31.7402839Z | Phase B Task 3 setback-ledger maintenance | Windows incident update duplicated its cause label |
-| [SB-20260731-185558-windows-cmd-wrapper-teardown-hang](incidents/2026-07-31T185558Z-windows-cmd-wrapper-teardown-hang.md) | open | 2026-07-31T19:02:56.0011548Z | Phase B Task 3 fifth-review Windows supervisor repair | Windows command wrapper did not settle its child during teardown |
+| [SB-20260731-185558-windows-cmd-wrapper-teardown-hang](incidents/2026-07-31T185558Z-windows-cmd-wrapper-teardown-hang.md) | open | 2026-07-31T19:06:09.8782456Z | Phase B Task 3 fifth-review Windows supervisor repair | Windows command wrapper did not settle its child during teardown |
 | [SB-20260731-185253-concurrent-lifecycle-typecheck-state](incidents/2026-07-31T185253Z-concurrent-lifecycle-typecheck-state.md) | closed | 2026-07-31T18:54:15.6332149Z | Phase B Task 3 fifth-review parallel repair | Expiry-lane typecheck saw incomplete lifecycle test edits |
 | [SB-20260731-184917-task3-fifth-review-blockers](incidents/2026-07-31T184917Z-task3-fifth-review-blockers.md) | open | 2026-07-31T18:49:17.5535045Z | Phase B Task 3 fifth sanitized package review | Fifth Task 3 review found four Important blockers |
 | [SB-20260731-183821-task3-review-package-privacy-scan](incidents/2026-07-31T183821Z-task3-review-package-privacy-scan.md) | closed | 2026-07-31T18:40:54.3304219Z | Phase B Task 3 fifth review-package preparation | Raw Task 3 review artifact failed strict content privacy checks |
