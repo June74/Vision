@@ -125,7 +125,7 @@ five-commit package.
 - `tests/unit/scripts/preview-observer-run-resolution.test.ts`
 - `tests/unit/scripts/preview-restore-readmission.test.ts`
 
-## Complete five-commit package inventory (74)
+## Complete final package inventory (75)
 
 - `.github/workflows/preview.yml`
 - `.superpowers/sdd/task-3-report.md`
@@ -188,6 +188,7 @@ five-commit package.
 - `tests/unit/ci/workflows.test.ts`
 - `tests/unit/domain/temporary-preview-fault.test.ts`
 - `tests/unit/jobs/calendar-maintenance-evidence.test.ts`
+- `tests/unit/jobs/temporary-preview-restore-production.test.ts`
 - `tests/unit/scripts/preview-acceptance-context.test.ts`
 - `tests/unit/scripts/preview-acceptance-controller.test.ts`
 - `tests/unit/scripts/preview-observer-run-resolution.test.ts`
@@ -204,3 +205,27 @@ five-commit package.
 
 All `docs/operations/setbacks/**` paths remain controller-owned and excluded
 from this implementation commit.
+
+## Final canonical integration
+
+- Review base: `24e959f5`
+- Integrated tip: `0e283a3`
+- Integrated implementation shape: 9 commits and 75 changed paths
+- Decisive repair commits:
+  - `00cd3c7` restores the production restore facade and acceptance contract.
+  - `5f11f52` hardens controller lifecycle deadlines and reconciliation.
+  - `0e283a3` gives the one three-process safe-tail test a bounded
+    suite-load allowance.
+- Focused controller, resolver, and workflow verification: 119 passed tests,
+  zero failures.
+- Focused schema and restore verification: 8 passed tests, zero failures.
+- Focused temporary-surface security verification: 8 passed tests, zero
+  failures.
+- Focused safe-tail verification: 28 passed tests, zero failures.
+- TypeScript, documentation coverage, production build, repository security
+  scan, and the complete repository `check` pipeline all passed at the
+  integrated tip.
+- The backup key remains version 1 and was not rotated.
+
+This final integration section and 75-path inventory supersede the earlier
+five-commit wording. Setback evidence remains separately controller-owned.
