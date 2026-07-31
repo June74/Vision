@@ -2,6 +2,9 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
+| [SB-20260731-195503-task4-agent-skill-root-mismatch](incidents/2026-07-31T195503Z-task4-agent-skill-root-mismatch.md) | closed | 2026-07-31T19:55:03.9806283Z | Phase B Task 4 diagnostics contract review | Task 4 diagnostics review used the wrong skill root |
+| [SB-20260731-195219-task4-setback-path-mismatch](incidents/2026-07-31T195219Z-task4-setback-path-mismatch.md) | closed | 2026-07-31T19:52:19.8441691Z | Phase B Task 4 setback-ledger maintenance | Task 4 setback inspection omitted the incidents directory |
+| [SB-20260731-195219-task4-plan-read-overflow](incidents/2026-07-31T195219Z-task4-plan-read-overflow.md) | closed | 2026-07-31T19:52:19.8441691Z | Phase B Task 4 contract discovery | Task 4 plan read exceeded the usable context window |
 | [SB-20260731-194935-task3-final-report-context](incidents/2026-07-31T194935Z-task3-final-report-context.md) | closed | 2026-07-31T19:49:35.1550763Z | Phase B Task 3 final acceptance report | Task 3 acceptance report patch missed current wrapping |
 | [SB-20260731-194822-task3-closure-index-context](incidents/2026-07-31T194822Z-task3-closure-index-context.md) | closed | 2026-07-31T19:48:22.4653742Z | Phase B Task 3 review-incident closure | Task 3 closure patch assumed nonadjacent index rows were contiguous |
 | [SB-20260731-192554-sixth-review-log-delay](incidents/2026-07-31T192554Z-sixth-review-log-delay.md) | closed | 2026-07-31T19:25:54.6019364Z | Phase B Task 3 sixth sanitized package review | Known sixth-review blocker was not logged before waiting for deduplication |
@@ -382,11 +385,12 @@
 | [SB-20260731-151021-task3-controller-helper-doc-headings](incidents/2026-07-31T151021Z-task3-controller-helper-doc-headings.md) | closed | 2026-07-31T15:30:50.5669463Z | Phase B Task 3 final resolver/controller review repair | Shared docs gate awaits three controller helper headings |
 | [SB-20260731-151219-task3-controller-two-red](incidents/2026-07-31T151219Z-task3-controller-two-red.md) | closed | 2026-07-31T15:30:50.5669463Z | Phase B Task 3 final controller review repair | Controller repair remained red in two intended scenarios |
 | [SB-20260731-151505-task3-restore-bounds-docs-check](incidents/2026-07-31T151505Z-task3-restore-bounds-docs-check.md) | closed | 2026-07-31T15:30:50.5669463Z | Phase B Task 3 restore-input bounds repair | Restore bounds repair failed documentation coverage |
-| [SB-20260731-151837-task3-controller-heading-empty-pipe](incidents/2026-07-31T151837Z-task3-controller-heading-empty-pipe.md) | closed | 2026-07-31T15:30:50.5669463Z | Phase B Task 3 final controller review repair | Controller heading summary had an empty pipe element |
+| [SB-20260731-151837-task3-controller-heading-empty-pipe](incidents/2026-07-31T151837Z-task3-controller-heading-empty-pipe.md) | closed | 2026-07-31T19:55:17.8592731Z | Phase B Task 3 final controller review repair | Controller heading summary had an empty pipe element |
 | [SB-20260731-151908-task3-restore-diff-line-ending-warnings](incidents/2026-07-31T151908Z-task3-restore-diff-line-ending-warnings.md) | closed | 2026-07-31T15:19:08.6191275Z | Phase B Task 3 restore-input bounds repair | Restore diff check emitted Windows normalization advisories |
 | [SB-20260731-152211-task3-controller-diff-line-ending-warnings](incidents/2026-07-31T152211Z-task3-controller-diff-line-ending-warnings.md) | closed | 2026-07-31T17:16:12.2795090Z | Phase B Task 3 final controller review repair | Controller diff counter treated normalization advisories as issues |
 | [SB-20260731-152340-task3-resolver-diff-line-ending-warnings](incidents/2026-07-31T152340Z-task3-resolver-diff-line-ending-warnings.md) | closed | 2026-07-31T17:00:37.6209419Z | Phase B Task 3 final resolver review repair | Resolver diff suppression left normalization advisories |
 | [SB-20260731-153609-task3-review-package-path-count](incidents/2026-07-31T153609Z-task3-review-package-path-count.md) | closed | 2026-07-31T15:38:08.1408943Z | Phase B Task 3 second final package re-review | Final review package exceeded the frozen path inventory by two |
+| [SB-20260731-195517-task4-skill-reference-absent](incidents/2026-07-31T195517Z-task4-skill-reference-absent.md) | open | 2026-07-31T19:55:17.465337Z | Phase B Task 4 read-only review | Optional Codex trace reference absent |
 
 ## Legacy history
 
