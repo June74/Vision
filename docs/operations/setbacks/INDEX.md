@@ -2,6 +2,8 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
+| [SB-20260731-181132-setback-patch-path-typo](incidents/2026-07-31T181132Z-setback-patch-path-typo.md) | closed | 2026-07-31T18:11:32.0116919Z | Phase B Task 3 setback-ledger update | Setback patch mistyped the Windows user directory |
+| [SB-20260731-181107-owned-diff-command-composition](incidents/2026-07-31T181107Z-owned-diff-command-composition.md) | closed | 2026-07-31T18:11:07.6040547Z | Phase B Task 3 fourth-wave lifecycle verification | Owned diff checks were joined with a command separator |
 | [SB-20260731-180803-lifecycle-doc-patch-context](incidents/2026-07-31T180803Z-lifecycle-doc-patch-context.md) | closed | 2026-07-31T18:08:03.5364814Z | Phase B Task 3 fourth-wave lifecycle repair | Lifecycle reference patch missed technical prose wrapping |
 | [SB-20260731-180351-provider-validator-type-narrowing](incidents/2026-07-31T180351Z-provider-validator-type-narrowing.md) | closed | 2026-07-31T18:03:51.7991178Z | Phase B Task 3 fourth-wave lifecycle repair | Provider validator lost TypeScript narrowing across repeated searches |
 | [SB-20260731-180006-lifecycle-test-fixture-shadowing](incidents/2026-07-31T180006Z-lifecycle-test-fixture-shadowing.md) | closed | 2026-07-31T18:00:06.9471204Z | Phase B Task 3 fourth-wave lifecycle repair | Lifecycle test loop shadowed its fixture helper |
