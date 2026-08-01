@@ -182,3 +182,8 @@ A replacement exact-tip review was also invalidated before package inspection
 when its read-only Git probe used an unsupported Windows excludes override. The
 recurrence is logged, no state changed during that review, and this evidence is
 refrozen for another fresh review using only the proven Git read arguments.
+
+The next review also stopped without verdict before package inspection because
+an intentionally ignored local SDD constraint file was queried through the
+commit instead of read from the worktree. That access-method recurrence is
+logged; this evidence is refrozen again and proves no review or live result.
