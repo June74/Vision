@@ -21,3 +21,9 @@ Do not fill this record or contact any external service until the user explicitl
 | Revocation and cleanup | Grant revoked, calendar cleanup result, timestamp |
 
 Never record token values, claims, full calendar IDs, private event content, email addresses, provider error bodies, or secret values.
+
+## Historical retention
+
+This redacted evidence template remains historical through Task 9 cleanup. It
+does not authorize provider deletion, replay-marker deletion, or backup-key
+rotation. Backup key version 1 remains unchanged.

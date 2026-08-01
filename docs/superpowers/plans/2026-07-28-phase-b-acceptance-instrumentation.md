@@ -959,3 +959,13 @@ git commit -m "chore: remove Phase B acceptance surfaces"
 - [ ] Final cleanup is surgical and retains permanent recovery/evidence work.
 - [ ] Backup key version 1 and `backups/v1/` are protected.
 - [ ] Every implementation choice is concrete and fully specified.
+
+## Superseded post-acceptance cleanup order
+
+Post-acceptance provider cleanup is governed by Task 10 of the approved
+2026-07-29 live-acceptance closure plan. Do not execute this document's older
+marker-first sequence. The controlling order is reviewed Task 9 cleanup
+deployment, normal-state proof, disposable-branch deletion and absence proof,
+then replay-marker deletion last. If branch deletion or absence is uncertain,
+retain the marker and stop. Provider deletion remains manual; no workflow
+receives a deletion operation. Backup key version 1 remains unchanged.

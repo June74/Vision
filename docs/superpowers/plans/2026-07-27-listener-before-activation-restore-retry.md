@@ -1190,3 +1190,13 @@ near-real-time synchronization and missed-notification repair, live aggregate
 privacy/provenance checks, failure-state exercises, and the live AI cost path.
 Do not declare Phase B complete until each row has current automated and live
 evidence and the final reviewed preview deployment is attributable.
+
+## Superseded post-acceptance cleanup order
+
+Post-acceptance provider cleanup is governed by Task 10 of the approved
+2026-07-29 live-acceptance closure plan. Do not execute this document's older
+marker-first sequence. The controlling order is reviewed Task 9 cleanup
+deployment, normal-state proof, disposable-branch deletion and absence proof,
+then replay-marker deletion last. If branch deletion or absence is uncertain,
+retain the marker and stop. Provider deletion remains manual; no workflow
+receives a deletion operation. Backup key version 1 remains unchanged.

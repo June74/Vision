@@ -3,11 +3,49 @@
  * while retaining recovery, maintenance, usage, schedule, and backup safety.
  */
 import { access, readFile, readdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import {
+  DELETE_DEDICATED_PATHS as TEMPORARY_PATHS,
+  PHASE_B_ACCEPTANCE_PATH_CLASSIFICATION,
+  RETAIN_HISTORICAL_PATHS,
+  RETAIN_PERMANENT_PATHS,
+  UNWIND_SHARED_PATHS as EXPECTED_SHARED_RESIDUE_PATHS,
+  runCleanupInventoryCli,
+  task9ChangedPathManifest,
+  validateReviewedPhaseBAcceptanceClassification,
+} from "../../scripts/preview-acceptance-cleanup-inventory";
 
 const STRICT_CLEANUP =
   process.env.PREVIEW_ACCEPTANCE_CLEANUP_ASSERT === "true";
+
+const REVIEWED_CLASSIFICATION_CONTRACT = {
+  all: {
+    count: 184,
+    sha256: "1424f988b5c3676af9ed0eef60e11aa549a2165d2d435ad5d83ca783cc67a3ba",
+  },
+  delete_dedicated: {
+    count: 98,
+    sha256: "a699f57b9f82c99145478b5330791e1f9b0462d5763c37fdff2f38d1c2a04a06",
+  },
+  unwind_shared: {
+    count: 51,
+    sha256: "7e3a80971a2f8aff85a758ff8f48e43b694f89238ff77f76d3c4792b3f72b229",
+  },
+  retain_permanent: {
+    count: 23,
+    sha256: "d0b0177caaa6561ef51ab83e5ffb524e3502da5fc7511f7731b8f571fb72f20e",
+  },
+  retain_historical: {
+    count: 12,
+    sha256: "443e30443fa2c463964b3a47f93964a84fc11cc09e8b91d5e877f34c43c2d757",
+  },
+} as const;
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
 
 const TEMPORARY_ACTIVE_SURFACE_PATTERNS = [
   /vision\.(?:phase-b-foundation-probe|ai-usage|preview-fault)\/v1/u,
@@ -27,7 +65,8 @@ const TEMPORARY_ACTIVE_SURFACE_PATTERNS = [
   /temporary restore database\s+binding/u,
 ] as const;
 
-const TEMPORARY_PATHS = [
+// Regression snapshots only: the imported four-disposition map is authoritative.
+const LEGACY_TEMPORARY_PATHS = [
   "src/data/backup/r2-restore-attempt-store.ts",
   "src/data/backup/temporary-preview-clear-adapter.ts",
   "src/data/backup/temporary-preview-role-probe-adapter.ts",
@@ -485,6 +524,7 @@ const PERMANENT_OPERATIONS_REFERENCE_PATHS = [
   "docs/operations/backup-and-restore.md",
   "docs/operations/github-action-pins.md",
   "docs/operations/google-oauth-setup.md",
+  "docs/operations/phase-c-handoff.md",
 ] as const;
 
 const ACTIVE_OPERATIONS_PATHS = [
@@ -716,7 +756,7 @@ const ACTIVE_SURFACE_ROOTS = [
   "docs/reference",
 ] as const;
 
-const EXPECTED_SHARED_RESIDUE_PATHS = [
+const LEGACY_EXPECTED_SHARED_RESIDUE_PATHS = [
   ".github/workflows/preview.yml",
   ...ACTIVE_OPERATIONS_SHARED_PATHS,
   "docs/reference/simple/scripts/run-preview-acceptance-controller.md",
@@ -768,8 +808,66 @@ const EXPECTED_SHARED_RESIDUE_PATHS = [
   "tests/worker/google-webhook.test.ts",
 ] as const;
 
+const REVIEWED_SHARED_RESIDUE_CONTRACTS = [
+  {
+    path: "docs/reference/simple/scripts/print-safe-tail.md",
+    pattern: /restore, suppression, and AI signals remain output-free/u,
+  },
+  {
+    path: "docs/reference/technical/scripts/print-safe-tail.md",
+    pattern:
+      /restore\/suppression signal,[\s\S]{0,120}AI signal\/uniqueness/u,
+  },
+  {
+    path: "docs/reference/simple/src/data/repositories/job-repository.md",
+    pattern: /inspectWebhookReplay/u,
+  },
+  {
+    path: "docs/reference/technical/src/data/repositories/job-repository.md",
+    pattern: /inspectWebhookReplay/u,
+  },
+  {
+    path: "src/data/repositories/job-repository.ts",
+    pattern: /inspectWebhookReplay/u,
+  },
+  {
+    path: "tests/integration/jobs/queue-deduplication.test.ts",
+    pattern: /inspectWebhookReplay/u,
+  },
+  {
+    path: "docs/reference/simple/src/jobs/create-daily-backup.md",
+    pattern: /## `isCausedBy`/u,
+  },
+  {
+    path: "docs/reference/technical/src/jobs/create-daily-backup.md",
+    pattern: /## `isCausedBy`/u,
+  },
+  {
+    path: "src/jobs/create-daily-backup.ts",
+    pattern: /preview acceptance may replace only this boundary/u,
+  },
+  {
+    path: "docs/reference/simple/src/server/webhooks/google-calendar.md",
+    pattern: /temporarily suppressed only after a read-only replay check/u,
+  },
+  {
+    path: "docs/reference/technical/src/server/webhooks/google-calendar.md",
+    pattern: /suppression-only clock/u,
+  },
+  {
+    path: "src/server/webhooks/google-calendar.ts",
+    pattern: /temporary-preview-sync-suppression/u,
+  },
+  {
+    path: "tests/worker/ai-category-proposals.test.ts",
+    sha256: "a54205d105efb7f7b51b4c9f35b42c3875a856cb58b58b26cf7bf8083ec66fb6",
+  },
+] as const;
+
 const APPROVED_ACTIVE_SCAN_EXCLUSIONS = new Set<string>([
   ...TEMPORARY_PATHS,
+  ...RETAIN_PERMANENT_PATHS,
+  ...RETAIN_HISTORICAL_PATHS,
   "tests/security/temporary-surface-cleanup.test.ts",
   // Offline restore remains operator-only after Worker acceptance cleanup.
   "scripts/restore-backup.ts",
@@ -825,6 +923,19 @@ function containsTemporaryActiveSurface(source: string): boolean {
   return TEMPORARY_ACTIVE_SURFACE_PATTERNS.some((pattern) =>
     pattern.test(source),
   );
+}
+
+function detectReviewedSharedResidueContracts(
+  sources: ReadonlyMap<string, string>,
+): string[] {
+  return REVIEWED_SHARED_RESIDUE_CONTRACTS.filter((contract) => {
+    const source = sources.get(contract.path);
+    if (source === undefined) return false;
+    if ("pattern" in contract) return contract.pattern.test(source);
+    return sha256(source.replace(/\r\n/gu, "\n")) === contract.sha256;
+  })
+    .map(({ path }) => path)
+    .sort();
 }
 
 async function listActiveOperationsResidue(): Promise<
@@ -933,16 +1044,16 @@ async function listActiveSurfaceResidue(): Promise<string[]> {
   if (await exists("dist/vision/wrangler.json")) {
     activePaths.push("dist/vision/wrangler.json");
   }
-  const generalResidue = (
+  const activeSources = new Map(
     await Promise.all(
-      activePaths.map(async (path) => ({
-        path,
-        source: await read(path),
-      })),
-    )
-  )
-    .filter(({ source }) => containsTemporaryActiveSurface(source))
-    .map(({ path }) => path);
+      activePaths.map(async (path) => [path, await read(path)] as const),
+    ),
+  );
+  const generalResidue = [...activeSources]
+    .filter(([, source]) => containsTemporaryActiveSurface(source))
+    .map(([path]) => path);
+  const reviewedContractResidue =
+    detectReviewedSharedResidueContracts(activeSources);
   const operationsResidue = (await listActiveOperationsResidue()).map(
     ({ path }) => path,
   );
@@ -951,17 +1062,158 @@ async function listActiveSurfaceResidue(): Promise<string[]> {
   const unexpectedRestoreVariableResidue = (
     await listUnexpectedActiveOperationsRestoreVariables()
   ).map(({ path }) => path);
-  return [
+  const detected = [
     ...new Set([
       ...generalResidue,
+      ...reviewedContractResidue,
       ...operationsResidue,
       ...portableOperationsResidue,
       ...unexpectedRestoreVariableResidue,
     ]),
   ].sort();
+  return detected;
 }
 
 describe("post-acceptance temporary surface cleanup", () => {
+  it("derives one exhaustive four-disposition inventory and the exact Task 9 manifest", () => {
+    const paths = PHASE_B_ACCEPTANCE_PATH_CLASSIFICATION.map(({ path }) => path);
+    const dispositions = new Set(
+      PHASE_B_ACCEPTANCE_PATH_CLASSIFICATION.map(({ disposition }) => disposition),
+    );
+    const expectedManifest = [...TEMPORARY_PATHS, ...EXPECTED_SHARED_RESIDUE_PATHS]
+      .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
+    const retainedPaths = new Set<string>([
+      ...RETAIN_PERMANENT_PATHS,
+      ...RETAIN_HISTORICAL_PATHS,
+    ]);
+
+    expect(dispositions).toEqual(
+      new Set([
+        "delete_dedicated",
+        "unwind_shared",
+        "retain_permanent",
+        "retain_historical",
+      ]),
+    );
+    expect(new Set(paths)).toHaveLength(paths.length);
+    expect(TEMPORARY_PATHS).toEqual(
+      expect.arrayContaining([...LEGACY_TEMPORARY_PATHS]),
+    );
+    expect(
+      LEGACY_EXPECTED_SHARED_RESIDUE_PATHS.every((path) =>
+        expectedManifest.includes(path),
+      ),
+    ).toBe(true);
+    expect(task9ChangedPathManifest()).toEqual(expectedManifest);
+    expect(new Set(task9ChangedPathManifest())).toHaveLength(expectedManifest.length);
+    expect(
+      task9ChangedPathManifest().filter((path) =>
+        retainedPaths.has(path),
+      ),
+    ).toEqual([]);
+  });
+
+  it("rejects omission or reclassification anywhere in the reviewed Task 1-8 universe", () => {
+    const sorted = [...PHASE_B_ACCEPTANCE_PATH_CLASSIFICATION].sort(
+      (left, right) =>
+        left.path < right.path ? -1 : left.path > right.path ? 1 : 0,
+    );
+    const exactProjectionContract = Object.fromEntries(
+      [
+        "delete_dedicated",
+        "unwind_shared",
+        "retain_permanent",
+        "retain_historical",
+      ].map((disposition) => {
+        const paths = sorted
+          .filter((entry) => entry.disposition === disposition)
+          .map((entry) => entry.path);
+        return [disposition, { count: paths.length, sha256: sha256(paths.join("\n")) }];
+      }),
+    );
+
+    expect(
+      validateReviewedPhaseBAcceptanceClassification(
+        PHASE_B_ACCEPTANCE_PATH_CLASSIFICATION,
+      ),
+    ).toBe(true);
+    expect({
+      all: {
+        count: sorted.length,
+        sha256: sha256(
+          sorted
+            .map(({ path, disposition }) => `${path}\0${disposition}`)
+            .join("\n"),
+        ),
+      },
+      ...exactProjectionContract,
+    }).toEqual(REVIEWED_CLASSIFICATION_CONTRACT);
+    expect({
+      delete_dedicated: TEMPORARY_PATHS.length,
+      unwind_shared: EXPECTED_SHARED_RESIDUE_PATHS.length,
+      retain_permanent: RETAIN_PERMANENT_PATHS.length,
+      retain_historical: RETAIN_HISTORICAL_PATHS.length,
+    }).toEqual({
+      delete_dedicated: 98,
+      unwind_shared: 51,
+      retain_permanent: 23,
+      retain_historical: 12,
+    });
+
+    for (const [index, reviewedEntry] of
+      PHASE_B_ACCEPTANCE_PATH_CLASSIFICATION.entries()) {
+      const omitted = PHASE_B_ACCEPTANCE_PATH_CLASSIFICATION.filter(
+        (_, candidateIndex) => candidateIndex !== index,
+      );
+      const reclassified = PHASE_B_ACCEPTANCE_PATH_CLASSIFICATION.map(
+        (entry, candidateIndex) =>
+          candidateIndex === index
+            ? {
+                ...entry,
+                disposition:
+                  reviewedEntry.disposition === "retain_permanent"
+                    ? ("retain_historical" as const)
+                    : ("retain_permanent" as const),
+              }
+            : entry,
+      );
+
+      expect(validateReviewedPhaseBAcceptanceClassification(omitted)).toBe(
+        false,
+      );
+      expect(validateReviewedPhaseBAcceptanceClassification(reclassified)).toBe(
+        false,
+      );
+    }
+  });
+
+  it("prints only the exact Task 9 manifest for the sole CLI mode", () => {
+    const writes: string[] = [];
+
+    expect(
+      runCleanupInventoryCli(["--print-task-9-paths"], (value) =>
+        writes.push(value),
+      ),
+    ).toBe(true);
+    expect(writes).toEqual([`${task9ChangedPathManifest().join("\n")}\n`]);
+  });
+
+  it.each([
+    { args: [] },
+    { args: ["--unknown"] },
+    { args: ["--print-task-9-paths", "extra"] },
+  ])(
+    "rejects noncanonical CLI arguments without diagnostics: $args",
+    ({ args }) => {
+      const writes: string[] = [];
+
+      expect(runCleanupInventoryCli(args, (value) => writes.push(value))).toBe(
+        false,
+      );
+      expect(writes).toEqual([]);
+    },
+  );
+
   it("detects representative shared route, workflow, validator, observer, reference, and test residue", () => {
     const representatives = [
       'parseTemporaryPreviewAcceptanceSelector(context.env)',
@@ -1159,8 +1411,8 @@ describe("post-acceptance temporary surface cleanup", () => {
     );
     expect(ACTIVE_OPERATIONS_SHARED_PATHS).toHaveLength(4);
     expect(RETAINED_HISTORICAL_OPERATIONS_PATHS).toHaveLength(8);
-    expect(PERMANENT_OPERATIONS_REFERENCE_PATHS).toHaveLength(3);
-    expect(ACTIVE_OPERATIONS_PATHS).toHaveLength(7);
+    expect(PERMANENT_OPERATIONS_REFERENCE_PATHS).toHaveLength(4);
+    expect(ACTIVE_OPERATIONS_PATHS).toHaveLength(8);
     expect(ACTIVE_OPERATIONS_PORTABLE_RESIDUE_PATTERNS).toHaveLength(16);
     expect(
       new Set(
@@ -1249,9 +1501,57 @@ describe("post-acceptance temporary surface cleanup", () => {
   });
 
   it("accounts for shared residue or enforces its post-cleanup absence", async () => {
-    await expect(listActiveSurfaceResidue()).resolves.toEqual(
-      STRICT_CLEANUP ? [] : EXPECTED_SHARED_RESIDUE_PATHS,
+    const residue = await listActiveSurfaceResidue();
+    if (STRICT_CLEANUP) {
+      expect(residue).toEqual([]);
+    } else {
+      expect(residue).toEqual(EXPECTED_SHARED_RESIDUE_PATHS);
+    }
+  });
+
+  it("drops every reviewed shared path when its real marker or path is removed", async () => {
+    const sources = new Map(
+      await Promise.all(
+        REVIEWED_SHARED_RESIDUE_CONTRACTS.map(async ({ path }) => [
+          path,
+          await read(path),
+        ] as const),
+      ),
     );
+    const expectedPaths = REVIEWED_SHARED_RESIDUE_CONTRACTS.map(
+      ({ path }) => path,
+    ).sort();
+
+    expect(detectReviewedSharedResidueContracts(sources)).toEqual(
+      expectedPaths,
+    );
+    for (const contract of REVIEWED_SHARED_RESIDUE_CONTRACTS) {
+      const withoutPath = new Map(sources);
+      withoutPath.delete(contract.path);
+      expect(
+        detectReviewedSharedResidueContracts(withoutPath),
+      ).not.toContain(contract.path);
+
+      if ("pattern" in contract) {
+        const source = sources.get(contract.path) ?? "";
+        const globalPattern = new RegExp(
+          contract.pattern.source,
+          `${contract.pattern.flags}g`,
+        );
+        const withoutMarker = source.replace(globalPattern, "");
+        expect(withoutMarker).not.toBe(source);
+        const mutated = new Map(sources).set(contract.path, withoutMarker);
+        expect(
+          detectReviewedSharedResidueContracts(mutated),
+        ).not.toContain(contract.path);
+      } else {
+        const source = sources.get(contract.path) ?? "";
+        const mutated = new Map(sources).set(contract.path, `${source}\n`);
+        expect(
+          detectReviewedSharedResidueContracts(mutated),
+        ).not.toContain(contract.path);
+      }
+    }
   });
 
   it("keeps all dedicated and shared inventories unique with symmetric references", () => {
@@ -1266,10 +1566,10 @@ describe("post-acceptance temporary surface cleanup", () => {
     expect(TEMPORARY_PATHS).toEqual(
       expect.arrayContaining([...REQUIRED_ROLLBACK_LIFECYCLE_PATHS]),
     );
-    expect(TEMPORARY_PATHS).toHaveLength(60);
-    expect(new Set(TEMPORARY_PATHS)).toHaveLength(60);
-    expect(EXPECTED_SHARED_RESIDUE_PATHS).toHaveLength(52);
-    expect(new Set(EXPECTED_SHARED_RESIDUE_PATHS)).toHaveLength(52);
+    expect(TEMPORARY_PATHS).toHaveLength(98);
+    expect(new Set(TEMPORARY_PATHS)).toHaveLength(98);
+    expect(EXPECTED_SHARED_RESIDUE_PATHS).toHaveLength(51);
+    expect(new Set(EXPECTED_SHARED_RESIDUE_PATHS)).toHaveLength(51);
     expect(new Set(PERMANENT_PATHS)).toHaveLength(PERMANENT_PATHS.length);
     expect(referenceInventory(TEMPORARY_PATHS, "simple")).toEqual(
       referenceInventory(TEMPORARY_PATHS, "technical"),

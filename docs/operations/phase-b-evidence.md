@@ -130,3 +130,10 @@ Later candidates and cleanup remain blocked until that exact closure passes.
 synchronization timing and repair, live failure states,
 wrong-account/revocation privacy checks, and OpenAI cost-path acceptance still
 need fresh evidence.
+
+## Closure-policy status
+
+The permanent four-disposition Task 1-8 inventory and Task 9 changed-path
+manifest are locally enforced. This is implementation evidence only, not a
+claim that Task 9 cleanup, provider cleanup, or live acceptance has run.
+Backup key version 1 remains unchanged.

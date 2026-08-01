@@ -23,7 +23,8 @@ export interface ReleaseViolation {
     | "event-write-route"
     | "google-event-write"
     | "missing-evidence"
-    | "protected-value";
+    | "protected-value"
+    | "r2-deletion-capability";
   readonly file: string;
   readonly reason: string;
 }
@@ -33,6 +34,1468 @@ export interface ReleaseScanResult {
 }
 
 type SourceKind = "google" | "routes";
+
+/** One path proven to own or expose R2 object-deletion capability. */
+export interface R2DeletionCapabilityFinding {
+  readonly path: string;
+  readonly capability:
+    | "adapter"
+    | "failed_verification_cleanup"
+    | "validated_retention"
+    | "unexpected";
+}
+
+const R2_DELETION_PATH_CAPABILITIES = new Map<
+  string,
+  Exclude<R2DeletionCapabilityFinding["capability"], "unexpected">
+>([
+  ["src/data/backup/r2-object-store.ts", "adapter"],
+  ["src/jobs/create-daily-backup.ts", "failed_verification_cleanup"],
+  ["src/jobs/purge-expired-backups.ts", "validated_retention"],
+]);
+
+const R2_PERMANENT_ORCHESTRATOR = "src/jobs/scheduled.ts";
+
+interface R2SourceAnalysis {
+  readonly checker: ts.TypeChecker;
+  readonly directDeleteCalls: readonly ts.CallExpression[];
+  readonly exportedCapabilityNames: ReadonlySet<string>;
+  readonly ownsCapability: boolean;
+  readonly imports: readonly {
+    readonly modulePath: string;
+    readonly importedNames: ReadonlySet<string> | undefined;
+    readonly reExports: readonly {
+      readonly importedName: string;
+      readonly exportedName: string;
+    }[];
+  }[];
+  readonly sourceFile: ts.SourceFile;
+}
+
+/** Normalizes only repository-relative source-map keys. */
+function normalizeRepositoryPath(path: string): string {
+  const segments: string[] = [];
+  for (const segment of path.replaceAll("\\", "/").split("/")) {
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") segments.pop();
+    else segments.push(segment);
+  }
+  return segments.join("/");
+}
+
+/** Resolves one static relative module specifier without consulting the host filesystem. */
+function resolveSourceMapModule(importer: string, specifier: string): string {
+  if (!specifier.startsWith(".")) return specifier;
+  const directory = normalizeRepositoryPath(importer)
+    .split("/")
+    .slice(0, -1)
+    .join("/");
+  const resolved = normalizeRepositoryPath(`${directory}/${specifier}`);
+  if (/\.[cm]?jsx$/u.test(resolved)) return resolved.replace(/\.[cm]?jsx$/u, ".tsx");
+  if (/\.[cm]?js$/u.test(resolved)) return resolved.replace(/\.[cm]?js$/u, ".ts");
+  return /\.[cm]?tsx?$/u.test(resolved) ? resolved : `${resolved}.ts`;
+}
+
+/** Returns true only for a statically named member. */
+function r2MemberName(expression: ts.Expression): string | undefined {
+  if (ts.isPropertyAccessExpression(expression)) return expression.name.text;
+  if (
+    ts.isElementAccessExpression(expression) &&
+    expression.argumentExpression &&
+    (ts.isStringLiteral(expression.argumentExpression) ||
+      ts.isNoSubstitutionTemplateLiteral(expression.argumentExpression))
+  ) {
+    return expression.argumentExpression.text;
+  }
+  return undefined;
+}
+
+/** Finds the nearest exported declaration name that owns a capability use. */
+function exportedOwnerName(node: ts.Node): string | undefined {
+  for (let current: ts.Node | undefined = node; current; current = current.parent) {
+    if (
+      (ts.isFunctionDeclaration(current) ||
+        ts.isClassDeclaration(current) ||
+        ts.isVariableStatement(current)) &&
+      current.modifiers?.some(
+        (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+      )
+    ) {
+      if (
+        current.modifiers?.some(
+          (modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword,
+        )
+      ) {
+        return "default";
+      }
+      if (ts.isVariableStatement(current)) {
+        const declaration = current.declarationList.declarations[0];
+        return declaration && ts.isIdentifier(declaration.name)
+          ? declaration.name.text
+          : undefined;
+      }
+      return current.name?.text;
+    }
+  }
+  return undefined;
+}
+
+interface R2TypeScriptProgram {
+  readonly checker: ts.TypeChecker;
+  readonly sourceFiles: ReadonlyMap<string, ts.SourceFile>;
+}
+
+/** Creates one in-memory program so every identifier can be compared by lexical symbol. */
+function createR2TypeScriptProgram(
+  sources: ReadonlyMap<string, string>,
+): R2TypeScriptProgram {
+  const sourceFiles = new Map<string, ts.SourceFile>();
+  for (const [rawPath, text] of sources) {
+    const path = normalizeRepositoryPath(rawPath);
+    if (!/\.[cm]?[jt]sx?$/u.test(path)) continue;
+    sourceFiles.set(
+      path,
+      ts.createSourceFile(
+        path,
+        text,
+        ts.ScriptTarget.Latest,
+        true,
+        path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+      ),
+    );
+  }
+  const options: ts.CompilerOptions = {
+    allowJs: false,
+    noLib: true,
+    noResolve: true,
+    target: ts.ScriptTarget.Latest,
+  };
+  const host = ts.createCompilerHost(options, true);
+  host.fileExists = (fileName) =>
+    sourceFiles.has(normalizeRepositoryPath(fileName));
+  host.getCanonicalFileName = (fileName) => normalizeRepositoryPath(fileName);
+  host.getCurrentDirectory = () => "";
+  host.getSourceFile = (fileName) =>
+    sourceFiles.get(normalizeRepositoryPath(fileName));
+  host.readFile = (fileName) =>
+    sourceFiles.get(normalizeRepositoryPath(fileName))?.text;
+  host.writeFile = () => undefined;
+  const program = ts.createProgram({
+    rootNames: [...sourceFiles.keys()],
+    options,
+    host,
+  });
+  return { checker: program.getTypeChecker(), sourceFiles };
+}
+
+/** Returns the declaration identity selected by TypeScript's lexical binder. */
+function bindingOf(
+  checker: ts.TypeChecker,
+  identifier: ts.Identifier,
+): ts.Symbol | undefined {
+  return checker.getSymbolAtLocation(identifier);
+}
+
+/** Unwraps syntax that cannot change a value's declaration identity. */
+function unwrapR2Expression(expression: ts.Expression): ts.Expression {
+  let current = expression;
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isTypeAssertionExpression(current) ||
+    ts.isNonNullExpression(current) ||
+    ts.isSatisfiesExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
+}
+
+/** Compares one identifier expression to one exact declaration symbol. */
+function expressionBindsTo(
+  expression: ts.Expression,
+  symbol: ts.Symbol,
+  checker: ts.TypeChecker,
+): boolean {
+  const unwrapped = unwrapR2Expression(expression);
+  return (
+    ts.isIdentifier(unwrapped) && bindingOf(checker, unwrapped) === symbol
+  );
+}
+
+/** Parses TypeScript syntax and follows bounded aliases by declaration identity. */
+function analyzeR2TypeScript(
+  path: string,
+  sourceFile: ts.SourceFile,
+  checker: ts.TypeChecker,
+): R2SourceAnalysis {
+  const capabilityTypeSymbols = new Set<ts.Symbol>();
+  const taintedObjectSymbols = new Set<ts.Symbol>();
+  const deleteCallbackSymbols = new Set<ts.Symbol>();
+  const imports: {
+    modulePath: string;
+    importedNames: ReadonlySet<string> | undefined;
+    reExports: readonly {
+      importedName: string;
+      exportedName: string;
+    }[];
+  }[] = [];
+  const capabilityTypeDeclarations: (ts.InterfaceDeclaration | ts.TypeAliasDeclaration)[] = [];
+
+  sourceFile.forEachChild(function collectCapabilityTypes(node): void {
+    if (
+      (ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) &&
+      node.name &&
+      node.getText(sourceFile).includes("delete")
+    ) {
+      capabilityTypeDeclarations.push(node);
+      let declaresDelete = false;
+      node.forEachChild(function findDeleteMember(child): void {
+        if (
+          (ts.isMethodSignature(child) || ts.isPropertySignature(child)) &&
+          child.name &&
+          (ts.isIdentifier(child.name) || ts.isStringLiteral(child.name)) &&
+          child.name.text === "delete"
+        ) {
+          declaresDelete = true;
+        }
+        child.forEachChild(findDeleteMember);
+      });
+      const symbol = bindingOf(checker, node.name);
+      if (declaresDelete && symbol) capabilityTypeSymbols.add(symbol);
+    } else if (ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) {
+      capabilityTypeDeclarations.push(node);
+    }
+    if (
+      ts.isImportDeclaration(node) &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      const clause = node.importClause;
+      const modulePath = resolveSourceMapModule(path, node.moduleSpecifier.text);
+      let importedNames: Set<string> | undefined;
+      if (clause) {
+        importedNames = new Set<string>();
+        if (clause.name) importedNames.add("default");
+        if (clause.namedBindings) {
+          if (ts.isNamespaceImport(clause.namedBindings)) {
+            importedNames = undefined;
+          } else {
+            for (const element of clause.namedBindings.elements) {
+              const importedName = element.propertyName?.text ?? element.name.text;
+              importedNames.add(importedName);
+              if (
+                modulePath === "src/jobs/create-daily-backup.ts" &&
+                importedName === "BackupObjectStore"
+              ) {
+                const symbol = bindingOf(checker, element.name);
+                if (symbol) capabilityTypeSymbols.add(symbol);
+              }
+            }
+          }
+        }
+      }
+      imports.push({
+        modulePath,
+        importedNames,
+        reExports: [],
+      });
+    }
+    if (
+      ts.isExportDeclaration(node) &&
+      node.moduleSpecifier &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      const importedNames = node.exportClause && ts.isNamedExports(node.exportClause)
+        ? new Set(
+            node.exportClause.elements.map(
+              (element) => element.propertyName?.text ?? element.name.text,
+            ),
+          )
+        : undefined;
+      const reExports = node.exportClause && ts.isNamedExports(node.exportClause)
+        ? node.exportClause.elements.map((element) => ({
+            importedName: element.propertyName?.text ?? element.name.text,
+            exportedName: element.name.text,
+          }))
+        : [];
+      imports.push({
+        modulePath: resolveSourceMapModule(path, node.moduleSpecifier.text),
+        importedNames,
+        reExports,
+      });
+    }
+    node.forEachChild(collectCapabilityTypes);
+  });
+
+  let typeChanged = true;
+  while (typeChanged) {
+    typeChanged = false;
+    for (const declaration of capabilityTypeDeclarations) {
+      const declarationSymbol = bindingOf(checker, declaration.name);
+      if (!declarationSymbol || capabilityTypeSymbols.has(declarationSymbol)) {
+        continue;
+      }
+      let carriesCapability = false;
+      declaration.forEachChild(function inspectReferencedType(node): void {
+        if (ts.isIdentifier(node)) {
+          const referenced = bindingOf(checker, node);
+          if (
+            node.text === "R2Bucket" ||
+            (referenced !== undefined && capabilityTypeSymbols.has(referenced))
+          ) {
+            carriesCapability = true;
+          }
+        }
+        node.forEachChild(inspectReferencedType);
+      });
+      if (carriesCapability) {
+        capabilityTypeSymbols.add(declarationSymbol);
+        typeChanged = true;
+      }
+    }
+  }
+
+  /** Proves that a declared type transitively carries the deletion-capable port. */
+  const typeHasCapability = (type: ts.TypeNode | undefined): boolean => {
+    if (!type) return false;
+    let carriesCapability = false;
+    type.forEachChild(function inspectType(node): void {
+      if (ts.isIdentifier(node)) {
+        const symbol = bindingOf(checker, node);
+        if (
+          node.text === "R2Bucket" ||
+          (symbol !== undefined && capabilityTypeSymbols.has(symbol))
+        ) {
+          carriesCapability = true;
+        }
+      }
+      node.forEachChild(inspectType);
+    });
+    return carriesCapability;
+  };
+
+  sourceFile.forEachChild(function collectTypedObjects(node): void {
+    if (
+      (ts.isParameter(node) ||
+        ts.isVariableDeclaration(node) ||
+        ts.isPropertyDeclaration(node)) &&
+      ts.isIdentifier(node.name) &&
+      typeHasCapability(node.type)
+    ) {
+      const symbol = bindingOf(checker, node.name);
+      if (symbol) taintedObjectSymbols.add(symbol);
+    }
+    node.forEachChild(collectTypedObjects);
+  });
+
+  /** Follows only bounded expressions already proven to hold the deletion-capable port. */
+  const expressionIsTaintedObject = (expression: ts.Expression): boolean => {
+    const unwrapped = unwrapR2Expression(expression);
+    if (ts.isIdentifier(unwrapped)) {
+      const symbol = bindingOf(checker, unwrapped);
+      return symbol !== undefined && taintedObjectSymbols.has(symbol);
+    }
+    if (ts.isPropertyAccessExpression(unwrapped)) {
+      return expressionIsTaintedObject(unwrapped.expression);
+    }
+    return false;
+  };
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    sourceFile.forEachChild(function collectAliases(node): void {
+      if (ts.isVariableDeclaration(node) && node.initializer) {
+        if (
+          ts.isIdentifier(node.name) &&
+          expressionIsTaintedObject(node.initializer) &&
+          bindingOf(checker, node.name) !== undefined
+        ) {
+          const symbol = bindingOf(checker, node.name);
+          if (symbol && !taintedObjectSymbols.has(symbol)) {
+            taintedObjectSymbols.add(symbol);
+            changed = true;
+          }
+        }
+        if (
+          ts.isObjectBindingPattern(node.name) &&
+          expressionIsTaintedObject(node.initializer)
+        ) {
+          for (const element of node.name.elements) {
+            if (
+              (element.propertyName?.getText(sourceFile) ??
+                element.name.getText(sourceFile)) === "delete" &&
+              ts.isIdentifier(element.name)
+            ) {
+              const symbol = bindingOf(checker, element.name);
+              if (symbol && !deleteCallbackSymbols.has(symbol)) {
+                deleteCallbackSymbols.add(symbol);
+                changed = true;
+              }
+            }
+          }
+        }
+        if (ts.isIdentifier(node.name)) {
+          const initializer = node.initializer;
+          const isDeleteMember =
+            (ts.isPropertyAccessExpression(initializer) ||
+              ts.isElementAccessExpression(initializer)) &&
+            r2MemberName(initializer) === "delete" &&
+            expressionIsTaintedObject(initializer.expression);
+          const isBoundDelete =
+            ts.isCallExpression(initializer) &&
+            (ts.isPropertyAccessExpression(initializer.expression) ||
+              ts.isElementAccessExpression(initializer.expression)) &&
+            r2MemberName(initializer.expression) === "bind" &&
+            (ts.isPropertyAccessExpression(initializer.expression.expression) ||
+              ts.isElementAccessExpression(initializer.expression.expression)) &&
+            r2MemberName(initializer.expression.expression) === "delete" &&
+            expressionIsTaintedObject(
+              initializer.expression.expression.expression,
+            );
+          const isCallbackAlias =
+            ts.isIdentifier(initializer) &&
+            (() => {
+              const symbol = bindingOf(checker, initializer);
+              return symbol !== undefined && deleteCallbackSymbols.has(symbol);
+            })();
+          if (isDeleteMember || isBoundDelete || isCallbackAlias) {
+            const symbol = bindingOf(checker, node.name);
+            if (symbol && !deleteCallbackSymbols.has(symbol)) {
+              deleteCallbackSymbols.add(symbol);
+              changed = true;
+            }
+          }
+        }
+      }
+      node.forEachChild(collectAliases);
+    });
+  }
+
+  const directDeleteCalls: ts.CallExpression[] = [];
+  const exportedCapabilityNames = new Set<string>();
+  let ownsCapability = deleteCallbackSymbols.size > 0;
+  if (ownsCapability) {
+    sourceFile.forEachChild(function collectCallbackOwners(node): void {
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        (() => {
+          const symbol = bindingOf(checker, node.name);
+          return symbol !== undefined && deleteCallbackSymbols.has(symbol);
+        })()
+      ) {
+        const owner = exportedOwnerName(node);
+        if (owner) exportedCapabilityNames.add(owner);
+      }
+      node.forEachChild(collectCallbackOwners);
+    });
+  }
+  sourceFile.forEachChild(function inspectCapabilityUses(node): void {
+    if (
+      (ts.isPropertyAccessExpression(node) ||
+        ts.isElementAccessExpression(node)) &&
+      r2MemberName(node) === "delete" &&
+      expressionIsTaintedObject(node.expression)
+    ) {
+      ownsCapability = true;
+      const owner = exportedOwnerName(node);
+      if (owner) exportedCapabilityNames.add(owner);
+    }
+    if (ts.isCallExpression(node)) {
+      const directMemberCall =
+        (ts.isPropertyAccessExpression(node.expression) ||
+          ts.isElementAccessExpression(node.expression)) &&
+        r2MemberName(node.expression) === "delete" &&
+        expressionIsTaintedObject(node.expression.expression);
+      const callbackCall =
+        ts.isIdentifier(node.expression) &&
+        (() => {
+          const symbol = bindingOf(checker, node.expression);
+          return symbol !== undefined && deleteCallbackSymbols.has(symbol);
+        })();
+      if (directMemberCall || callbackCall) {
+        ownsCapability = true;
+        directDeleteCalls.push(node);
+        const owner = exportedOwnerName(node);
+        if (owner) exportedCapabilityNames.add(owner);
+      }
+    }
+    node.forEachChild(inspectCapabilityUses);
+  });
+
+  return {
+    checker,
+    directDeleteCalls,
+    exportedCapabilityNames,
+    ownsCapability,
+    imports,
+    sourceFile,
+  };
+}
+
+/** Explicitly inspects workflow/config command entries for R2 object deletion. */
+function workflowOrConfigHasR2Deletion(path: string, text: string): boolean {
+  if (
+    !/^(?:\.github\/workflows\/|wrangler[^/]*\.jsonc?$|package\.json$)/u.test(
+      path,
+    )
+  ) {
+    return false;
+  }
+  const entries: {
+    readonly text: string;
+    readonly workflowRun: boolean;
+  }[] = [];
+  if (path.startsWith(".github/workflows/")) {
+    const lines = text.split(/\r?\n/u);
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index] ?? "";
+      const run = /^(\s*)(?:-\s*)?(?:run|"run"|'run')\s*:\s*(.*)$/u.exec(
+        line,
+      );
+      if (!run) continue;
+      const value = run[2] ?? "";
+      const parts: string[] = [];
+      if (/^[|>][+-]?$/u.test(value)) {
+        const itemPrefix = /^(\s*)-\s*/u.exec(line);
+        const keyIndent = itemPrefix
+          ? itemPrefix[0].length
+          : run[1]?.length ?? 0;
+        let contentIndent: number | undefined;
+        let next = index + 1;
+        for (; next < lines.length; next += 1) {
+          const candidate = lines[next] ?? "";
+          const candidateIndent = /^\s*/u.exec(candidate)?.[0].length ?? 0;
+          if (candidate.trim().length === 0) {
+            if (contentIndent !== undefined) parts.push(candidate);
+            continue;
+          }
+          if (contentIndent === undefined) {
+            if (candidateIndent <= keyIndent) break;
+            contentIndent = candidateIndent;
+          } else if (candidateIndent < contentIndent) {
+            break;
+          }
+          parts.push(candidate);
+        }
+        index = next - 1;
+      } else {
+        parts.push(value);
+      }
+      entries.push({ text: parts.join(" "), workflowRun: true });
+    }
+  } else {
+    entries.push({ text, workflowRun: false });
+  }
+  return entries.some((entry) => {
+    const words = new Set(
+      entry.text
+        .toLowerCase()
+        .split(/[^a-z0-9]+/u)
+        .filter((word) => word.length > 0),
+    );
+    const mentionsR2 =
+      words.has("r2") ||
+      words.has("r2bucket") ||
+      words.has("backup") ||
+      words.has("backups");
+    const requestsDeletion =
+      words.has("delete") ||
+      words.has("deletion") ||
+      words.has("remove") ||
+      words.has("cleanup") ||
+      words.has("purge") ||
+      words.has("destroy");
+    const isOperational = entry.workflowRun ||
+      words.has("run") ||
+      words.has("command") ||
+      words.has("operation") ||
+      words.has("script") ||
+      words.has("module") ||
+      words.has("wrangler");
+    return mentionsR2 && requestsDeletion && isOperational;
+  });
+}
+
+const ASSIGNMENT_OPERATOR_KINDS = new Set<ts.SyntaxKind>([
+  ts.SyntaxKind.EqualsToken,
+  ts.SyntaxKind.PlusEqualsToken,
+  ts.SyntaxKind.MinusEqualsToken,
+  ts.SyntaxKind.AsteriskEqualsToken,
+  ts.SyntaxKind.AsteriskAsteriskEqualsToken,
+  ts.SyntaxKind.SlashEqualsToken,
+  ts.SyntaxKind.PercentEqualsToken,
+  ts.SyntaxKind.AmpersandEqualsToken,
+  ts.SyntaxKind.BarEqualsToken,
+  ts.SyntaxKind.CaretEqualsToken,
+  ts.SyntaxKind.LessThanLessThanEqualsToken,
+  ts.SyntaxKind.GreaterThanGreaterThanEqualsToken,
+  ts.SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken,
+  ts.SyntaxKind.AmpersandAmpersandEqualsToken,
+  ts.SyntaxKind.BarBarEqualsToken,
+  ts.SyntaxKind.QuestionQuestionEqualsToken,
+]);
+
+/** Checks one declaration for an exact TypeScript modifier. */
+function hasModifier(node: ts.Node, kind: ts.SyntaxKind): boolean {
+  return ts.canHaveModifiers(node) &&
+    ts.getModifiers(node)?.some((modifier) => modifier.kind === kind) === true;
+}
+
+/** Returns one uniquely named top-level function declaration. */
+function singleTopLevelFunction(
+  sourceFile: ts.SourceFile,
+  name: string,
+): ts.FunctionDeclaration | undefined {
+  const matches = sourceFile.statements.filter(
+    (statement): statement is ts.FunctionDeclaration =>
+      ts.isFunctionDeclaration(statement) && statement.name?.text === name,
+  );
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+/** Returns one uniquely named top-level variable declaration. */
+function singleTopLevelVariable(
+  sourceFile: ts.SourceFile,
+  name: string,
+): ts.VariableDeclaration | undefined {
+  const matches: ts.VariableDeclaration[] = [];
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (ts.isIdentifier(declaration.name) && declaration.name.text === name) {
+        matches.push(declaration);
+      }
+    }
+  }
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+/** Returns one uniquely named variable declared directly in a block. */
+function directVariable(
+  block: ts.Block,
+  name: string,
+): ts.VariableDeclaration | undefined {
+  const matches: ts.VariableDeclaration[] = [];
+  for (const statement of block.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (ts.isIdentifier(declaration.name) && declaration.name.text === name) {
+        matches.push(declaration);
+      }
+    }
+  }
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+/** Proves a variable belongs to a const declaration list. */
+function declarationIsConst(declaration: ts.VariableDeclaration): boolean {
+  return ts.isVariableDeclarationList(declaration.parent) &&
+    (declaration.parent.flags & ts.NodeFlags.Const) !== 0;
+}
+
+/** Checks one syntax node's source interval is inside another. */
+function nodeIsWithin(node: ts.Node, container: ts.Node): boolean {
+  return node.pos >= container.pos && node.end <= container.end;
+}
+
+/** Finds the nearest ancestor matching a bounded syntax predicate. */
+function nearestAncestor<T extends ts.Node>(
+  node: ts.Node,
+  predicate: (candidate: ts.Node) => candidate is T,
+): T | undefined {
+  for (let current: ts.Node | undefined = node.parent; current; current = current.parent) {
+    if (predicate(current)) return current;
+  }
+  return undefined;
+}
+
+/** Proves a property or nullish chain is rooted at one declaration. */
+function expressionIsRootedAt(
+  expression: ts.Expression,
+  symbol: ts.Symbol,
+  checker: ts.TypeChecker,
+): boolean {
+  const unwrapped = unwrapR2Expression(expression);
+  if (expressionBindsTo(unwrapped, symbol, checker)) return true;
+  if (
+    ts.isPropertyAccessExpression(unwrapped) ||
+    ts.isElementAccessExpression(unwrapped)
+  ) {
+    return expressionIsRootedAt(unwrapped.expression, symbol, checker);
+  }
+  if (
+    ts.isBinaryExpression(unwrapped) &&
+    unwrapped.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken
+  ) {
+    return expressionIsRootedAt(unwrapped.left, symbol, checker) &&
+      expressionIsRootedAt(unwrapped.right, symbol, checker);
+  }
+  return false;
+}
+
+/** Returns a direct statically named member call or rejects indirection. */
+function directMemberCall(
+  call: ts.CallExpression,
+  memberName: string,
+): (ts.PropertyAccessExpression | ts.ElementAccessExpression) | undefined {
+  const expression = unwrapR2Expression(call.expression);
+  return (
+    (ts.isPropertyAccessExpression(expression) ||
+      ts.isElementAccessExpression(expression)) &&
+      r2MemberName(expression) === memberName
+      ? expression
+      : undefined
+  );
+}
+
+/** Collects direct writes to one exact binding before a source position. */
+function bindingWritesBefore(
+  root: ts.Node,
+  symbol: ts.Symbol,
+  checker: ts.TypeChecker,
+  before: number,
+): readonly ts.Node[] {
+  const writes: ts.Node[] = [];
+  root.forEachChild(function inspect(node): void {
+    if (node.pos >= before) return;
+    if (
+      ts.isBinaryExpression(node) &&
+      ASSIGNMENT_OPERATOR_KINDS.has(node.operatorToken.kind) &&
+      expressionBindsTo(node.left, symbol, checker)
+    ) {
+      writes.push(node);
+    } else if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      expressionBindsTo(node.operand, symbol, checker)
+    ) {
+      writes.push(node);
+    }
+    node.forEachChild(inspect);
+  });
+  return writes;
+}
+
+/** Proves the exact created-versus-existing status conditional. */
+function conditionalUsesCreationBinding(
+  expression: ts.Expression,
+  created: ts.Symbol,
+  checker: ts.TypeChecker,
+): boolean {
+  const unwrapped = unwrapR2Expression(expression);
+  return ts.isConditionalExpression(unwrapped) &&
+    expressionBindsTo(unwrapped.condition, created, checker) &&
+    ts.isStringLiteral(unwrapped.whenTrue) &&
+    unwrapped.whenTrue.text === "created" &&
+    ts.isStringLiteral(unwrapped.whenFalse) &&
+    unwrapped.whenFalse.text === "existing";
+}
+
+/** Validates the shared adapter's exact bucket/key deletion binding. */
+function validateR2Adapter(analysis: R2SourceAnalysis): boolean {
+  const { checker, directDeleteCalls: calls, sourceFile } = analysis;
+  if (calls.length !== 1) return false;
+  const owner = singleTopLevelFunction(sourceFile, "createR2BackupObjectStore");
+  if (
+    !owner?.body ||
+    !hasModifier(owner, ts.SyntaxKind.ExportKeyword) ||
+    owner.parameters.length !== 1 ||
+    !ts.isIdentifier(owner.parameters[0]?.name)
+  ) {
+    return false;
+  }
+  const bucket = bindingOf(checker, owner.parameters[0].name);
+  const call = calls[0];
+  const member = directMemberCall(call, "delete");
+  const method = nearestAncestor(call, ts.isMethodDeclaration);
+  if (
+    !bucket ||
+    !member ||
+    !expressionBindsTo(member.expression, bucket, checker) ||
+    !method ||
+    !method.name ||
+    !(
+      (ts.isIdentifier(method.name) || ts.isStringLiteral(method.name)) &&
+      method.name.text === "delete"
+    ) ||
+    method.parameters.length !== 1 ||
+    !ts.isIdentifier(method.parameters[0]?.name) ||
+    !nodeIsWithin(method, owner.body)
+  ) {
+    return false;
+  }
+  const key = bindingOf(checker, method.parameters[0].name);
+  return key !== undefined &&
+    call.arguments.length === 1 &&
+    expressionBindsTo(call.arguments[0], key, checker) &&
+    bindingWritesBefore(method, key, checker, call.pos).length === 0 &&
+    bindingWritesBefore(owner, bucket, checker, call.pos).length === 0;
+}
+
+/** Validates the exact daily creation, verification, catch, and cleanup chain. */
+function validateSameInvocationCleanup(analysis: R2SourceAnalysis): boolean {
+  const { checker, directDeleteCalls: calls, sourceFile } = analysis;
+  if (calls.length !== 1) return false;
+  const owner = singleTopLevelFunction(sourceFile, "createDailyBackup");
+  const utcDate = singleTopLevelFunction(sourceFile, "utcDate");
+  const dailyObjectKey = singleTopLevelFunction(sourceFile, "dailyObjectKey");
+  const verifyStoredBackup = singleTopLevelFunction(
+    sourceFile,
+    "verifyStoredBackup",
+  );
+  if (
+    !owner?.body ||
+    !utcDate?.name ||
+    !dailyObjectKey?.name ||
+    !verifyStoredBackup?.name ||
+    !hasModifier(owner, ts.SyntaxKind.ExportKeyword) ||
+    !ts.isIdentifier(owner.parameters[0]?.name) ||
+    !ts.isIdentifier(owner.parameters[1]?.name)
+  ) {
+    return false;
+  }
+  const now = bindingOf(checker, owner.parameters[0].name);
+  const dependencies = bindingOf(checker, owner.parameters[1].name);
+  const utcDateSymbol = bindingOf(checker, utcDate.name);
+  const dailyObjectKeySymbol = bindingOf(checker, dailyObjectKey.name);
+  const verifyStoredBackupSymbol = bindingOf(checker, verifyStoredBackup.name);
+  const createdDateDeclaration = directVariable(owner.body, "createdDate");
+  const objectKeyDeclaration = directVariable(owner.body, "objectKey");
+  const createdDeclaration = directVariable(owner.body, "created");
+  if (
+    !now ||
+    !dependencies ||
+    !utcDateSymbol ||
+    !dailyObjectKeySymbol ||
+    !verifyStoredBackupSymbol ||
+    !createdDateDeclaration ||
+    !objectKeyDeclaration ||
+    !createdDeclaration ||
+    !declarationIsConst(createdDateDeclaration) ||
+    !declarationIsConst(objectKeyDeclaration) ||
+    declarationIsConst(createdDeclaration) ||
+    createdDeclaration.initializer !== undefined ||
+    !ts.isIdentifier(createdDateDeclaration.name) ||
+    !ts.isIdentifier(objectKeyDeclaration.name) ||
+    !ts.isIdentifier(createdDeclaration.name)
+  ) {
+    return false;
+  }
+  const createdDate = bindingOf(checker, createdDateDeclaration.name);
+  const objectKey = bindingOf(checker, objectKeyDeclaration.name);
+  const created = bindingOf(checker, createdDeclaration.name);
+  const createdDateCall = createdDateDeclaration.initializer;
+  const objectKeyAwait = objectKeyDeclaration.initializer;
+  if (
+    !createdDate ||
+    !objectKey ||
+    !created ||
+    !createdDateCall ||
+    !ts.isCallExpression(createdDateCall) ||
+    !expressionBindsTo(createdDateCall.expression, utcDateSymbol, checker) ||
+    createdDateCall.arguments.length !== 1 ||
+    !expressionBindsTo(createdDateCall.arguments[0], now, checker) ||
+    !objectKeyAwait ||
+    !ts.isAwaitExpression(objectKeyAwait) ||
+    !ts.isCallExpression(objectKeyAwait.expression) ||
+    !expressionBindsTo(
+      objectKeyAwait.expression.expression,
+      dailyObjectKeySymbol,
+      checker,
+    ) ||
+    objectKeyAwait.expression.arguments.length !== 1 ||
+    !expressionBindsTo(
+      objectKeyAwait.expression.arguments[0],
+      createdDate,
+      checker,
+    )
+  ) {
+    return false;
+  }
+
+  const createdWrites = bindingWritesBefore(
+    owner.body,
+    created,
+    checker,
+    calls[0].pos,
+  );
+  if (createdWrites.length !== 1 || !ts.isBinaryExpression(createdWrites[0])) {
+    return false;
+  }
+  const createdAssignment = createdWrites[0];
+  const createdSource = unwrapR2Expression(createdAssignment.right);
+  if (!ts.isAwaitExpression(createdSource)) return false;
+  const putCall = unwrapR2Expression(createdSource.expression);
+  if (!ts.isCallExpression(putCall)) return false;
+  const putMember = directMemberCall(putCall, "putIfAbsent");
+  if (
+    !putMember ||
+    !expressionIsRootedAt(putMember.expression, dependencies, checker) ||
+    putCall.arguments.length === 0 ||
+    !expressionBindsTo(putCall.arguments[0], objectKey, checker)
+  ) {
+    return false;
+  }
+
+  const call = calls[0];
+  const deleteMember = directMemberCall(call, "delete");
+  const catchClause = nearestAncestor(call, ts.isCatchClause);
+  const guard = nearestAncestor(call, ts.isIfStatement);
+  if (
+    !deleteMember ||
+    !expressionIsRootedAt(deleteMember.expression, dependencies, checker) ||
+    call.arguments.length !== 1 ||
+    !expressionBindsTo(call.arguments[0], objectKey, checker) ||
+    !catchClause ||
+    !guard ||
+    !nodeIsWithin(call, guard.thenStatement) ||
+    !expressionBindsTo(guard.expression, created, checker)
+  ) {
+    return false;
+  }
+  const verificationTry = catchClause.parent;
+  if (
+    !ts.isTryStatement(verificationTry) ||
+    verificationTry.catchClause !== catchClause ||
+    createdAssignment.end >= verificationTry.pos ||
+    bindingWritesBefore(owner.body, objectKey, checker, call.pos).length !== 0 ||
+    bindingWritesBefore(owner.body, createdDate, checker, call.pos).length !== 0
+  ) {
+    return false;
+  }
+
+  const verificationStatements = verificationTry.tryBlock.statements;
+  const verificationReturn = verificationStatements.length === 1 &&
+      ts.isReturnStatement(verificationStatements[0])
+    ? verificationStatements[0]
+    : undefined;
+  const verificationAwait = verificationReturn?.expression;
+  if (
+    !verificationAwait ||
+    !ts.isAwaitExpression(verificationAwait) ||
+    !ts.isCallExpression(verificationAwait.expression)
+  ) {
+    return false;
+  }
+  const verificationCall = verificationAwait.expression;
+  const storeArgument = verificationCall.arguments[0] &&
+    unwrapR2Expression(verificationCall.arguments[0]);
+  const backupKeyArgument = verificationCall.arguments[3] &&
+    unwrapR2Expression(verificationCall.arguments[3]);
+  const statusArgument = verificationCall.arguments[4];
+  if (
+    !expressionBindsTo(
+      verificationCall.expression,
+      verifyStoredBackupSymbol,
+      checker,
+    ) ||
+    verificationCall.questionDotToken !== undefined ||
+    verificationCall.arguments.length !== 5 ||
+    !storeArgument ||
+    !ts.isPropertyAccessExpression(storeArgument) ||
+    storeArgument.questionDotToken !== undefined ||
+    storeArgument.name.text !== "store" ||
+    !expressionBindsTo(storeArgument.expression, dependencies, checker) ||
+    !expressionBindsTo(verificationCall.arguments[1], objectKey, checker) ||
+    !expressionBindsTo(verificationCall.arguments[2], createdDate, checker) ||
+    !backupKeyArgument ||
+    !ts.isPropertyAccessExpression(backupKeyArgument) ||
+    backupKeyArgument.questionDotToken !== undefined ||
+    backupKeyArgument.name.text !== "backupKey" ||
+    !expressionBindsTo(backupKeyArgument.expression, dependencies, checker) ||
+    !statusArgument ||
+    !conditionalUsesCreationBinding(statusArgument, created, checker)
+  ) {
+    return false;
+  }
+  return (
+    createdDateDeclaration.end < objectKeyDeclaration.pos &&
+    objectKeyDeclaration.end < createdAssignment.pos &&
+    createdAssignment.end < verificationCall.pos &&
+    verificationCall.end < call.pos
+  );
+}
+
+/** Proves an undefined-date branch directly continues the current loop. */
+function undefinedGuardContinuesCurrentLoop(
+  statement: ts.Statement,
+): boolean {
+  if (ts.isContinueStatement(statement)) return statement.label === undefined;
+  if (!ts.isBlock(statement) || statement.statements.length === 0) return false;
+  const last = statement.statements[statement.statements.length - 1];
+  return ts.isContinueStatement(last) && last.label === undefined;
+}
+
+/** Computes direct aliases of the validated object before deletion. */
+function collectObjectAliasesBefore(
+  root: ts.Node,
+  initial: ts.Symbol,
+  checker: ts.TypeChecker,
+  before: number,
+): ReadonlySet<ts.Symbol> {
+  const aliases = new Set<ts.Symbol>([initial]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    root.forEachChild(function inspect(node): void {
+      if (node.pos >= before) return;
+      let target: ts.Identifier | undefined;
+      let value: ts.Expression | undefined;
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.initializer
+      ) {
+        target = node.name;
+        value = node.initializer;
+      } else if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        ts.isIdentifier(node.left)
+      ) {
+        target = node.left;
+        value = node.right;
+      }
+      if (target && value) {
+        const unwrapped = unwrapR2Expression(value);
+        if (ts.isIdentifier(unwrapped)) {
+          const source = bindingOf(checker, unwrapped);
+          const destination = bindingOf(checker, target);
+          if (
+            source &&
+            destination &&
+            aliases.has(source) &&
+            !aliases.has(destination)
+          ) {
+            aliases.add(destination);
+            changed = true;
+          }
+        }
+      }
+      node.forEachChild(inspect);
+    });
+  }
+  return aliases;
+}
+
+/** Checks an expression against a closed set of declaration symbols. */
+function expressionBindsToAny(
+  expression: ts.Expression,
+  symbols: ReadonlySet<ts.Symbol>,
+  checker: ts.TypeChecker,
+): boolean {
+  const unwrapped = unwrapR2Expression(expression);
+  if (ts.isIdentifier(unwrapped)) {
+    const symbol = bindingOf(checker, unwrapped);
+    return symbol !== undefined && symbols.has(symbol);
+  }
+  return false;
+}
+
+/** Detects direct, property, callback, or call-based alias mutation before deletion. */
+function objectAliasCanBeMutatedBefore(
+  root: ts.Node,
+  aliases: ReadonlySet<ts.Symbol>,
+  checker: ts.TypeChecker,
+  before: number,
+  allowedCalls: ReadonlySet<ts.CallExpression>,
+): boolean {
+  let unsafe = false;
+  root.forEachChild(function inspect(node): void {
+    if (unsafe || node.pos >= before) return;
+    if (
+      ts.isBinaryExpression(node) &&
+      ASSIGNMENT_OPERATOR_KINDS.has(node.operatorToken.kind)
+    ) {
+      if (expressionBindsToAny(node.left, aliases, checker)) unsafe = true;
+      if (
+        (ts.isPropertyAccessExpression(node.left) ||
+          ts.isElementAccessExpression(node.left)) &&
+        expressionBindsToAny(node.left.expression, aliases, checker)
+      ) {
+        unsafe = true;
+      }
+    } else if (
+      ts.isPrefixUnaryExpression(node) ||
+      ts.isPostfixUnaryExpression(node)
+    ) {
+      const operand = unwrapR2Expression(node.operand);
+      if (
+        expressionBindsToAny(operand, aliases, checker) ||
+        ((ts.isPropertyAccessExpression(operand) ||
+          ts.isElementAccessExpression(operand)) &&
+          expressionBindsToAny(operand.expression, aliases, checker))
+      ) {
+        unsafe = true;
+      }
+    } else if (ts.isDeleteExpression(node)) {
+      const target = unwrapR2Expression(node.expression);
+      if (
+        (ts.isPropertyAccessExpression(target) ||
+          ts.isElementAccessExpression(target)) &&
+        expressionBindsToAny(target.expression, aliases, checker)
+      ) {
+        unsafe = true;
+      }
+    } else if (ts.isCallExpression(node) && !allowedCalls.has(node)) {
+      const callee = unwrapR2Expression(node.expression);
+      if (
+        ((ts.isPropertyAccessExpression(callee) ||
+          ts.isElementAccessExpression(callee)) &&
+          expressionBindsToAny(callee.expression, aliases, checker)) ||
+        node.arguments.some((argument) =>
+          expressionBindsToAny(argument, aliases, checker),
+        )
+      ) {
+        unsafe = true;
+      }
+    }
+    node.forEachChild(inspect);
+  });
+  return unsafe;
+}
+
+/** Validates the exact immutable 30-day retention derivation and delete call. */
+function validateRetentionCleanup(analysis: R2SourceAnalysis): boolean {
+  const { checker, directDeleteCalls: calls, sourceFile } = analysis;
+  if (calls.length !== 1) return false;
+  const owner = singleTopLevelFunction(sourceFile, "purgeExpiredBackups");
+  const validateDate = singleTopLevelFunction(
+    sourceFile,
+    "validatedBackupObjectDate",
+  );
+  const utcDateMilliseconds = singleTopLevelFunction(
+    sourceFile,
+    "utcDateMilliseconds",
+  );
+  const retentionDeclaration = singleTopLevelVariable(
+    sourceFile,
+    "BACKUP_RETENTION_DAYS",
+  );
+  const dayMillisecondsDeclaration = singleTopLevelVariable(
+    sourceFile,
+    "DAY_MILLISECONDS",
+  );
+  if (
+    !owner?.body ||
+    !validateDate?.name ||
+    !utcDateMilliseconds?.name ||
+    !retentionDeclaration ||
+    !dayMillisecondsDeclaration ||
+    !hasModifier(owner, ts.SyntaxKind.ExportKeyword) ||
+    !ts.isVariableStatement(retentionDeclaration.parent.parent) ||
+    !hasModifier(
+      retentionDeclaration.parent.parent,
+      ts.SyntaxKind.ExportKeyword,
+    ) ||
+    !declarationIsConst(retentionDeclaration) ||
+    !declarationIsConst(dayMillisecondsDeclaration) ||
+    !retentionDeclaration.initializer ||
+    !ts.isNumericLiteral(retentionDeclaration.initializer) ||
+    Number(retentionDeclaration.initializer.text) !== 30 ||
+    !dayMillisecondsDeclaration.initializer ||
+    !ts.isNumericLiteral(dayMillisecondsDeclaration.initializer) ||
+    Number(dayMillisecondsDeclaration.initializer.text) !== 86_400_000 ||
+    !ts.isIdentifier(retentionDeclaration.name) ||
+    !ts.isIdentifier(dayMillisecondsDeclaration.name) ||
+    !ts.isIdentifier(owner.parameters[0]?.name) ||
+    !ts.isIdentifier(owner.parameters[1]?.name)
+  ) {
+    return false;
+  }
+  const retentionDays = bindingOf(checker, retentionDeclaration.name);
+  const dayMilliseconds = bindingOf(checker, dayMillisecondsDeclaration.name);
+  const now = bindingOf(checker, owner.parameters[0].name);
+  const dependencies = bindingOf(checker, owner.parameters[1].name);
+  const validateDateSymbol = bindingOf(checker, validateDate.name);
+  const utcDateMillisecondsSymbol = bindingOf(checker, utcDateMilliseconds.name);
+  const todayDeclaration = directVariable(owner.body, "today");
+  if (
+    !retentionDays ||
+    !dayMilliseconds ||
+    !now ||
+    !dependencies ||
+    !validateDateSymbol ||
+    !utcDateMillisecondsSymbol ||
+    !todayDeclaration ||
+    !declarationIsConst(todayDeclaration) ||
+    !ts.isIdentifier(todayDeclaration.name) ||
+    !todayDeclaration.initializer ||
+    !ts.isCallExpression(todayDeclaration.initializer) ||
+    !expressionBindsTo(
+      todayDeclaration.initializer.expression,
+      utcDateMillisecondsSymbol,
+      checker,
+    ) ||
+    todayDeclaration.initializer.arguments.length !== 1 ||
+    !expressionBindsTo(todayDeclaration.initializer.arguments[0], now, checker)
+  ) {
+    return false;
+  }
+  const today = bindingOf(checker, todayDeclaration.name);
+  const call = calls[0];
+  const deleteMember = directMemberCall(call, "delete");
+  const loop = nearestAncestor(call, ts.isForOfStatement);
+  const guard = nearestAncestor(call, ts.isIfStatement);
+  if (
+    !today ||
+    !deleteMember ||
+    !expressionIsRootedAt(deleteMember.expression, dependencies, checker) ||
+    !loop ||
+    !guard ||
+    !nodeIsWithin(call, guard.thenStatement) ||
+    !ts.isVariableDeclarationList(loop.initializer) ||
+    (loop.initializer.flags & ts.NodeFlags.Const) === 0 ||
+    loop.initializer.declarations.length !== 1 ||
+    !ts.isIdentifier(loop.initializer.declarations[0]?.name) ||
+    !ts.isBlock(loop.statement)
+  ) {
+    return false;
+  }
+  const object = bindingOf(checker, loop.initializer.declarations[0].name);
+  const argument = call.arguments[0] && unwrapR2Expression(call.arguments[0]);
+  if (
+    !object ||
+    !argument ||
+    !ts.isPropertyAccessExpression(argument) ||
+    argument.name.text !== "key" ||
+    !expressionBindsTo(argument.expression, object, checker)
+  ) {
+    return false;
+  }
+
+  const statements = loop.statement.statements;
+  const validationDeclaration = directVariable(loop.statement, "createdDate");
+  const ageDeclaration = directVariable(loop.statement, "ageDays");
+  if (
+    !validationDeclaration ||
+    !ageDeclaration ||
+    !declarationIsConst(validationDeclaration) ||
+    !declarationIsConst(ageDeclaration) ||
+    !ts.isIdentifier(validationDeclaration.name) ||
+    !ts.isIdentifier(ageDeclaration.name) ||
+    !validationDeclaration.initializer ||
+    !ts.isCallExpression(validationDeclaration.initializer) ||
+    !expressionBindsTo(
+      validationDeclaration.initializer.expression,
+      validateDateSymbol,
+      checker,
+    ) ||
+    validationDeclaration.initializer.arguments.length !== 1 ||
+    !expressionBindsTo(
+      validationDeclaration.initializer.arguments[0],
+      object,
+      checker,
+    )
+  ) {
+    return false;
+  }
+  const createdDate = bindingOf(checker, validationDeclaration.name);
+  const ageDays = bindingOf(checker, ageDeclaration.name);
+  if (!createdDate || !ageDays) return false;
+  const admission = statements.find(
+    (statement): statement is ts.IfStatement => {
+      if (!ts.isIfStatement(statement)) return false;
+      const condition = unwrapR2Expression(statement.expression);
+      return ts.isBinaryExpression(condition) &&
+        condition.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken &&
+        expressionBindsTo(condition.left, createdDate, checker) &&
+        ts.isIdentifier(unwrapR2Expression(condition.right)) &&
+        (unwrapR2Expression(condition.right) as ts.Identifier).text ===
+          "undefined" &&
+        undefinedGuardContinuesCurrentLoop(statement.thenStatement);
+    },
+  );
+  const ageExpression = ageDeclaration.initializer &&
+    unwrapR2Expression(ageDeclaration.initializer);
+  if (
+    !admission ||
+    !ageExpression ||
+    !ts.isBinaryExpression(ageExpression) ||
+    ageExpression.operatorToken.kind !== ts.SyntaxKind.SlashToken ||
+    !expressionBindsTo(ageExpression.right, dayMilliseconds, checker)
+  ) {
+    return false;
+  }
+  const ageDifference = unwrapR2Expression(ageExpression.left);
+  const guardCondition = unwrapR2Expression(guard.expression);
+  if (
+    !ts.isBinaryExpression(ageDifference) ||
+    ageDifference.operatorToken.kind !== ts.SyntaxKind.MinusToken ||
+    !expressionBindsTo(ageDifference.left, today, checker) ||
+    !expressionBindsTo(ageDifference.right, createdDate, checker) ||
+    !ts.isBinaryExpression(guardCondition) ||
+    guardCondition.operatorToken.kind !== ts.SyntaxKind.GreaterThanEqualsToken ||
+    !expressionBindsTo(guardCondition.left, ageDays, checker) ||
+    !expressionBindsTo(guardCondition.right, retentionDays, checker)
+  ) {
+    return false;
+  }
+  const validationStatement = validationDeclaration.parent.parent;
+  const ageStatement = ageDeclaration.parent.parent;
+  const validationIndex = statements.indexOf(validationStatement);
+  const admissionIndex = statements.indexOf(admission);
+  const ageIndex = statements.indexOf(ageStatement);
+  const guardIndex = statements.indexOf(guard);
+  if (
+    validationIndex < 0 ||
+    validationIndex >= admissionIndex ||
+    admissionIndex >= ageIndex ||
+    ageIndex >= guardIndex ||
+    guardIndex < 0 ||
+    todayDeclaration.end >= loop.pos
+  ) {
+    return false;
+  }
+
+  const immutableBindings = [
+    retentionDays,
+    dayMilliseconds,
+    today,
+    createdDate,
+    ageDays,
+  ];
+  if (
+    immutableBindings.some(
+      (symbol) =>
+        bindingWritesBefore(owner.body!, symbol, checker, call.pos).length > 0,
+    )
+  ) {
+    return false;
+  }
+  const aliases = collectObjectAliasesBefore(
+    loop.statement,
+    object,
+    checker,
+    call.pos,
+  );
+  const validationCall = validationDeclaration.initializer;
+  if (!ts.isCallExpression(validationCall)) return false;
+  return !objectAliasCanBeMutatedBefore(
+    loop.statement,
+    aliases,
+    checker,
+    call.pos,
+    new Set([validationCall, call]),
+  );
+}
+
+/** Proves approved deletion with exact lexical declarations and fail-closed flow. */
+function approvedR2CapabilityIsStructurallyValid(
+  path: string,
+  analysis: R2SourceAnalysis,
+): boolean {
+  if (path === "src/data/backup/r2-object-store.ts") {
+    return validateR2Adapter(analysis);
+  }
+  if (path === "src/jobs/create-daily-backup.ts") {
+    return validateSameInvocationCleanup(analysis);
+  }
+  if (path === "src/jobs/purge-expired-backups.ts") {
+    return validateRetentionCleanup(analysis);
+  }
+  return false;
+}
+
+/** Returns path-only, closed-category R2 deletion capability findings. */
+export function scanR2DeletionCapabilities(
+  sources: ReadonlyMap<string, string>,
+): readonly R2DeletionCapabilityFinding[] {
+  const analyses = new Map<string, R2SourceAnalysis>();
+  const capablePaths = new Set<string>();
+  const capabilityExports = new Map<string, Set<string>>();
+  const typeScriptProgram = createR2TypeScriptProgram(sources);
+  for (const [rawPath, text] of sources) {
+    const path = normalizeRepositoryPath(rawPath);
+    if (/\.[cm]?[jt]sx?$/u.test(path)) {
+      const sourceFile = typeScriptProgram.sourceFiles.get(path);
+      if (!sourceFile) continue;
+      const analysis = analyzeR2TypeScript(
+        path,
+        sourceFile,
+        typeScriptProgram.checker,
+      );
+      analyses.set(path, analysis);
+      capabilityExports.set(path, new Set(analysis.exportedCapabilityNames));
+      if (analysis.ownsCapability) capablePaths.add(path);
+    } else if (workflowOrConfigHasR2Deletion(path, text)) {
+      capablePaths.add(path);
+    }
+  }
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const [path, analysis] of analyses) {
+      for (const imported of analysis.imports) {
+        const provider = analyses.get(imported.modulePath);
+        const knownCapabilityExports = new Set(
+          imported.modulePath === "src/data/backup/r2-object-store.ts"
+            ? ["createR2BackupObjectStore"]
+            : imported.modulePath === "src/jobs/create-daily-backup.ts"
+              ? ["BackupObjectStore", "createDailyBackup"]
+              : imported.modulePath === "src/jobs/purge-expired-backups.ts"
+                ? ["purgeExpiredBackups"]
+                : [],
+        );
+        if (
+          (!provider || !capablePaths.has(imported.modulePath)) &&
+          knownCapabilityExports.size === 0
+        ) {
+          continue;
+        }
+        const importsCapability =
+          imported.importedNames === undefined ||
+          [...imported.importedNames].some((name) =>
+            (capabilityExports.get(imported.modulePath)?.has(name) ?? false) ||
+            knownCapabilityExports.has(name),
+          );
+        const isReviewedOrchestration =
+          path === R2_PERMANENT_ORCHESTRATOR &&
+          R2_DELETION_PATH_CAPABILITIES.has(imported.modulePath);
+        if (importsCapability && !isReviewedOrchestration) {
+          if (!capablePaths.has(path)) {
+            capablePaths.add(path);
+            changed = true;
+          }
+        }
+        if (importsCapability && imported.reExports.length > 0) {
+          const exports = capabilityExports.get(path) ?? new Set<string>();
+          for (const binding of imported.reExports) {
+            if (
+              binding.importedName === "*" ||
+              capabilityExports
+                .get(imported.modulePath)
+                ?.has(binding.importedName) ||
+              knownCapabilityExports.has(binding.importedName)
+            ) {
+              if (!exports.has(binding.exportedName)) {
+                exports.add(binding.exportedName);
+                changed = true;
+              }
+            }
+          }
+          capabilityExports.set(path, exports);
+        }
+      }
+    }
+  }
+
+  return [...capablePaths]
+    .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+    .map((path) => {
+      const expected = R2_DELETION_PATH_CAPABILITIES.get(path);
+      const analysis = analyses.get(path);
+      return {
+        path,
+        capability:
+          expected && analysis && approvedR2CapabilityIsStructurallyValid(path, analysis)
+            ? expected
+            : "unexpected",
+      };
+    });
+}
 
 const APPROVED_GOOGLE_OPERATIONS = new Map<
   string,
@@ -1121,6 +2584,7 @@ export async function scanRelease(
       readonly fileIdentifier: string;
     }
   >();
+  const r2CapabilitySources = new Map<string, string>();
 
   for (const target of scanTargets) {
     const absoluteRoot = resolve(projectRoot, target.relativePath);
@@ -1275,6 +2739,9 @@ export async function scanRelease(
         });
       }
       if (target.sourceKind && /\.tsx?$/u.test(relativePath)) {
+        if (target.relativePath === "src") {
+          r2CapabilitySources.set(relativePath, text);
+        }
         sourceFiles.set(`${target.sourceKind}:${relativePath}`, {
           relativePath,
           sourceKind: target.sourceKind,
@@ -1282,6 +2749,63 @@ export async function scanRelease(
           fileIdentifier,
         });
       }
+    }
+  }
+
+  for (const relativeDirectory of ["scripts", ".github/workflows"]) {
+    const pending = [resolve(projectRoot, relativeDirectory)];
+    while (pending.length > 0) {
+      const directory = pending.pop();
+      if (!directory) break;
+      let entries;
+      try {
+        const stat = await lstat(directory);
+        if (stat.isSymbolicLink() || !stat.isDirectory()) break;
+        entries = await readdir(directory, { withFileTypes: true });
+      } catch {
+        break;
+      }
+      for (const entry of entries) {
+        const absolutePath = resolve(directory, entry.name);
+        if (entry.isDirectory()) {
+          pending.push(absolutePath);
+        } else if (
+          entry.isFile() &&
+          (/\.[cm]?[jt]sx?$/u.test(entry.name) || /\.ya?ml$/u.test(entry.name))
+        ) {
+          const relativePath = relative(projectRoot, absolutePath).replaceAll(
+            "\\",
+            "/",
+          );
+          try {
+            r2CapabilitySources.set(
+              relativePath,
+              await readFile(absolutePath, "utf8"),
+            );
+          } catch {
+            violations.push({
+              category: "missing-evidence",
+              file: safeFileIdentifier(
+                projectRoot,
+                absolutePath,
+                forbiddenFileFragments,
+              ),
+              reason: "R2 capability source is unreadable",
+            });
+          }
+        }
+      }
+    }
+  }
+  for (const relativePath of ["package.json", "wrangler.jsonc"]) {
+    const absolutePath = resolve(projectRoot, relativePath);
+    try {
+      const stat = await lstat(absolutePath);
+      if (!stat.isSymbolicLink() && stat.isFile()) {
+        r2CapabilitySources.set(relativePath, await readFile(absolutePath, "utf8"));
+      }
+    } catch {
+      // Optional in minimal scanner fixtures; required release inputs are checked elsewhere.
     }
   }
 
@@ -1299,6 +2823,16 @@ export async function scanRelease(
             source.fileIdentifier,
           )),
     );
+  }
+
+  for (const finding of scanR2DeletionCapabilities(r2CapabilitySources)) {
+    if (finding.capability === "unexpected") {
+      violations.push({
+        category: "r2-deletion-capability",
+        file: finding.path,
+        reason: "R2 deletion capability is outside the exact release allowlist",
+      });
+    }
   }
 
   const uniqueViolations = [

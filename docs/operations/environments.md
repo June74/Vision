@@ -133,3 +133,14 @@ This repository commit does **not** configure GitHub environment protection. Bef
    `/api/health`, two normal schedules, and no temporary bindings before
    requesting a release.
 3. Before a production release, confirm that required reviewers, no-bypass behavior, and the deployment-branch policy have been configured externally. Manually dispatch the workflow with the reviewed ref and type `DEPLOY VISION PRODUCTION` exactly. Do not bypass the external environment approval.
+
+## Permanent post-acceptance closure order
+
+1. reviewed Task 9 cleanup is deployed;
+2. normal health, signed-in reads, exactly two schedules, and temporary absence are proved;
+3. disposable branch deletion and absence are proved;
+4. replay marker is deleted last.
+
+Provider deletion is manual. No workflow receives a deletion operation. If
+branch deletion or its absence proof is uncertain, retain the replay marker and
+stop. Backup key version 1 is retained and is not rotated.

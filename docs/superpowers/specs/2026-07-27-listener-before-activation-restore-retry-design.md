@@ -272,3 +272,13 @@ This retry is complete only when all of the following are true:
 - Temporary restore code is removed, all Phase B gates pass, the reviewed normal
   build is deployed, and the operational evidence and handoff documentation are
   current.
+
+## Superseded post-acceptance cleanup order
+
+Post-acceptance provider cleanup is governed by Task 10 of the approved
+2026-07-29 live-acceptance closure plan. Do not execute this document's older
+marker-first sequence. The controlling order is reviewed Task 9 cleanup
+deployment, normal-state proof, disposable-branch deletion and absence proof,
+then replay-marker deletion last. If branch deletion or absence is uncertain,
+retain the marker and stop. Provider deletion remains manual; no workflow
+receives a deletion operation. Backup key version 1 remains unchanged.
