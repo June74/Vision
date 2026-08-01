@@ -70,7 +70,7 @@ describe("privacy-safe Git remote adapter", () => {
     ]);
   });
 
-  it("binds push_exact to the parent, HEAD-only push, and post-push tip", async () => {
+  it("pushes only the reviewed commit with an exact-parent lease", async () => {
     const deps = dependencies([
       result(tip(PARENT), { stderr: "discarded pre-query warning" }),
       result("discarded push output", { stderr: "discarded push warning" }),
@@ -91,9 +91,16 @@ describe("privacy-safe Git remote adapter", () => {
 
     expect(deps.calls.map((call) => call.arguments_)).toEqual([
       ["ls-remote", "--heads", "origin", REF],
-      ["push", "--porcelain", "origin", `HEAD:${REF}`],
+      [
+        "push",
+        "--porcelain",
+        `--force-with-lease=${REF}:${PARENT}`,
+        "origin",
+        `${COMMIT}:${REF}`,
+      ],
       ["ls-remote", "--heads", "origin", REF],
     ]);
+    expect(deps.calls[1]?.arguments_).not.toContain(`HEAD:${REF}`);
   });
 
   it.each([

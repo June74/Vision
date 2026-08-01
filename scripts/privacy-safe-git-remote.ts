@@ -60,8 +60,9 @@ export async function runPrivacySafeGitRemote(
       await runCaptured(dependencies, [
         "push",
         "--porcelain",
+        `--force-with-lease=${REVIEWED_REF}:${operation.expectedParent}`,
         "origin",
-        `HEAD:${REVIEWED_REF}`,
+        `${operation.expectedCommit}:${REVIEWED_REF}`,
       ]);
       const tip = await readRemoteTip(dependencies);
       if (tip !== operation.expectedCommit) fail();

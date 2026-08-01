@@ -7,7 +7,9 @@ commit details, command arguments, or connection information.
 
 Runs `assert_tip` or `push_exact` against the fixed `origin` branch. Success is
 only `{ succeeded: true, exactTipMatch: true }`; every failure uses one safe
-message.
+message. An exact push names the reviewed commit object directly and permits
+the fixed branch update only while its remote tip still equals the reviewed
+parent.
 
 ## `runPrivacySafeGitRemoteCli`
 

@@ -8,8 +8,11 @@ captures both streams, and collapses every failure to a constant error.
 
 Snapshots an exact variant before child work. `assert_tip` compares the single
 parsed tip with `expectedCommit`. `push_exact` first proves `expectedParent`,
-pushes only `HEAD` to the fixed ref, re-resolves, and proves `expectedCommit`.
-The frozen success object contains only two positive booleans.
+pushes the canonical `expectedCommit` object to the fixed ref under an exact
+`expectedParent` force-with-lease, re-resolves, and proves `expectedCommit`.
+The lease makes the remote update a compare-and-swap operation, so a moved
+local `HEAD` or remote branch cannot substitute another object. The frozen
+success object contains only two positive booleans.
 
 ## `runPrivacySafeGitRemoteCli`
 
