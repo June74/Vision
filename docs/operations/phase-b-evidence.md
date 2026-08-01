@@ -151,3 +151,9 @@ symbolic `HEAD` instead of the canonical reviewed commit object. The repaired
 candidate now uses that object directly under an exact expected-parent lease,
 but remains unapproved until a fresh exact-tip review and Boolean-only safe
 push succeed.
+
+The fresh whole-range review package is an ignored local artifact containing
+the exact commit list, stat, and full-context diff. A Windows-only Bash-helper
+incompatibility was logged and resolved with the documented native fallback;
+it changed no implementation, live, provider, deployment, credential, or key
+state.
