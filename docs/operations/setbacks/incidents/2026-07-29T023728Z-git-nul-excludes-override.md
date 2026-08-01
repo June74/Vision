@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T02:37:28.278093Z
-- **Last observed:** 2026-07-29T23:06:32.2236081Z
-- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 2
+- **Last observed:** 2026-08-01T02:37:16.7357368Z
+- **Phase/task:** Phase B Task 7 exact-tip review
 - **Environment:** Windows PowerShell, isolated phase-b-foundation worktree
 - **Version/commit:** ecd74074fe223d4e9d185e8c92dd033eb26678a4
 
@@ -59,3 +59,8 @@ removed.
 - 2026-07-29T23:06:32.2236081Z: Recurred when a consolidated status-and-source
   inspection reused the rejected override. The read stopped before any state
   change; subsequent Git reads omit the override.
+- 2026-08-01T02:37:16.7357368Z: Recurred when a fresh exact-tip reviewer used
+  `NUL` for a read-only cleanliness probe. Git rejected the override; direct
+  diff checks still proved clean state and no mutation occurred. The review was
+  invalidated before package inspection. Its replacement must use the proven
+  `core.excludesFile=/dev/null` form for every Git read.
