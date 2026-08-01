@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T17:34:49Z
-- **Last observed:** 2026-07-29T18:16:52Z
-- **Phase/task:** Phase B acceptance instrumentation Task 6 review fixes
+- **Last observed:** 2026-07-31T23:22:58.9808554Z
+- **Phase/task:** Phase B acceptance instrumentation and live-closure Task 6
 - **Environment:** Local Phase B linked worktree
 - **Version/commit:** `fa650ad`
 
@@ -53,3 +53,17 @@ Documentation checks will run after the smaller patches are applied.
   an older offset layout. The multi-hunk patch applied nothing. The correction
   is to patch the exact numbered source block; no detector behavior or test
   result was affected.
+- 2026-07-31T22:53:24.8736227Z: A live-closure Task 6 multi-file documentation
+  patch joined two file contexts incorrectly and was rejected atomically. No
+  documentation changed; the correction is one exact file-specific patch at a
+  time.
+- 2026-07-31T22:55:16.3646473Z: The first supersession-note patch generated a
+  malformed footer and was rejected before applying. No file changed; the
+  correction is a handwritten patch block with an exact footer.
+- 2026-07-31T23:04:17.1985061Z: The inventory documentation patch expected an
+  unwrapped helper signature and was rejected atomically after formatting had
+  changed the context. No file changed; the retry uses exact symbol lines.
+- 2026-07-31T23:22:58.9808554Z: The R2 causal-state repair combined a later
+  hunk with context changed by its preceding edit. The patch was rejected
+  atomically with no partial mutation or sensitive output. The repair resumes
+  with one current symbol-bounded hunk at a time.

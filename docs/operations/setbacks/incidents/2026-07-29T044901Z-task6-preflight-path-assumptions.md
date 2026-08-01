@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T04:46:00Z
-- **Last observed:** 2026-07-30T00:34:21.6346321Z
+- **Last observed:** 2026-07-31T23:18:47.1299665Z
 - **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 3
 - **Environment:** Local Phase B linked worktree
 - **Version/commit:** `1c7f89b`
@@ -73,3 +73,16 @@ path.
   nonexistent `.github/workflows/deploy-preview.yml` filename. The read-only
   lookup failed before any candidate generation or deployment action. No
   project, provider, or private state changed.
+- 2026-07-31T22:44:50Z: The Task 6 safe-runner preflight included a
+  nonexistent `docs/plans` glob beside the exact brief directory. The bounded
+  read failed after listing filenames, before implementation or external
+  action. The authoritative path remains discoverable from the Task 6 brief.
+- 2026-07-31T23:05:19.9065756Z: Recurred when the safe-runner repair assumed
+  the newly created review-incident filename instead of resolving it from the
+  current index. No source repair or external action occurred; future reads use
+  the exact indexed path supplied by the controller.
+- 2026-07-31T23:18:47.1299665Z: Recurred when the R2 re-review prompt used
+  `docs/references` instead of the repository's actual `docs/reference` paths.
+  The reviewer therefore reported two absent references; bounded controller
+  checks confirmed both required singular-path files exist. No implementation
+  or external state changed, and the corrected paths are supplied for re-review.

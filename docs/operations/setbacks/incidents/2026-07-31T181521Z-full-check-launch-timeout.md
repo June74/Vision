@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T18:15:21.9412916Z
-- **Last observed:** 2026-07-31T18:34:34.1475347Z
-- **Phase/task:** Phase B Task 3 complete repository verification
+- **Last observed:** 2026-08-01T00:27:49.9551896Z
+- **Phase/task:** Phase B Tasks 3 and 6 complete repository verification
 - **Environment:** Local test runner
 - **Version/commit:** 0c3ea58 plus verified lifecycle and ledger edits
 
@@ -49,3 +49,11 @@ No provider, network, environment, secret, staging, or commit was touched.
   bound. The mistake was caught before treating the result as evidence.
 - 2026-07-31T18:34:34.1475347Z: Closed after the complete check ran within the
   verified 600000-millisecond bound and returned the authoritative exit code 0.
+- 2026-08-01T00:05:18.0286128Z: Recurred when the Task 6 controller reused the
+  insufficient 120-second bound. The check timed out during the unit suite and
+  reported no assertion failure. It will be rerun after the open R2 review
+  repair with the documented 600000-millisecond bound.
+- 2026-08-01T00:27:49.9551896Z: Closed after the final Task 6 snapshot completed
+  `pnpm.cmd check` within the documented 600000-millisecond bound and exited
+  zero. The run passed 1,693 unit, 179 contract, and 110 Worker tests plus both
+  builds, documentation coverage, and release security.

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-30T02:02:33.1614903Z
-- **Last observed:** 2026-07-30T02:02:33.1614903Z
+- **Last observed:** 2026-07-31T22:44:50Z
 - **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 5
 - **Environment:** Local Phase B linked worktree under Windows PowerShell
 - **Version/commit:** Uncommitted documentation work based on `3b735be`
@@ -50,3 +50,10 @@ reports that no parameter named `AsUTC` exists.
 ## Verification and related work
 
 The compatible expression returned `2026-07-30T02:02:33.1614903Z`.
+
+## Recurrence history
+
+- 2026-07-31T22:44:50Z: A Task 6 safe-runner setback follow-up reused
+  `Get-Date -AsUTC`. Parameter binding failed before any file or external state
+  changed. `[DateTime]::UtcNow.ToString(...)` returned the required safe UTC
+  timestamp, confirming the existing correction.

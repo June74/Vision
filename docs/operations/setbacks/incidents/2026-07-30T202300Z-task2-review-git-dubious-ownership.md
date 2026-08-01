@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-30T20:23:00.536370Z
-- **Last observed:** 2026-07-30T20:29:52.9441977Z
-- **Phase/task:** Phase B live-acceptance closure Task 2 independent review
+- **Last observed:** 2026-07-31T23:11:44.2606709Z
+- **Phase/task:** Phase B live-acceptance closure Tasks 2 and 6 status review
 - **Environment:** Read-only reviewer sandbox against the local linked worktree
 - **Version/commit:** `6f03ad0090ba0b596acff00da2cd9ee920b3881b`
 
@@ -59,3 +59,7 @@ persistent configuration changes and returned a bounded verdict.
 ## Recurrence history
 
 - 2026-07-30T20:23:00.536370Z: First observed.
+- 2026-07-31T23:11:44.2606709Z: Recurred when the controller requested a
+  read-only Task 6 status without the established command-scoped safe-directory
+  override. Git failed closed before returning repository state; the controller
+  switched back to the non-persistent command-scoped override.

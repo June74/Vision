@@ -2,8 +2,8 @@
 
 - **Status:** contained
 - **First observed:** 2026-07-31T14:59:47.6410820Z
-- **Last observed:** 2026-07-31T22:00:55.3182028Z
-- **Phase/task:** Phase B Tasks 3 and 4 controller review
+- **Last observed:** 2026-07-31T23:11:44.2606709Z
+- **Phase/task:** Phase B Tasks 3 through 6 controller review
 - **Environment:** Delegated read-only plan and specification inspection
 - **Version/commit:** c23e301 plus unstaged setback records
 
@@ -127,3 +127,19 @@ another truncation.
   combined three large source/test files and truncated roughly 1,183 lines.
   The incomplete repository-only output was discarded; the lane resumes with
   one bounded exact range per command.
+- 2026-07-31T22:45:24.9468046Z: Recurred when the Task 6 R2 lane combined the
+  complete release scanner with references and truncated roughly 1,182 lines.
+  It stopped before tests or edits and resumes with symbol- and line-bounded
+  reads only.
+- 2026-07-31T22:46:44.4194128Z: Recurred when the Task 6 cleanup lane combined
+  the full cleanup security test with two audit reports and exceeded the output
+  bound. The incomplete repository-only output was discarded; the lane resumes
+  with one symbol- or range-bounded read per command.
+- 2026-07-31T23:02:03.6993294Z: Recurred when the Task 6 R2 reviewer bundled
+  four exact package files and still exceeded its output limit. The incomplete
+  repository-only output was discarded; re-review uses one file and one range
+  at a time after repair.
+- 2026-07-31T23:11:44.2606709Z: Recurred when a controller wait result exceeded
+  the remaining model-context boundary and was truncated. The incomplete
+  coordination output was discarded; the controller resumed from bounded
+  individual agent messages and compact status checks.

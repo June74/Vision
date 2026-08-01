@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T19:56:05.9881048Z
-- **Last observed:** 2026-07-31T22:21:30.0858749Z
+- **Last observed:** 2026-07-31T22:59:20.5223522Z
 - **Phase/task:** Phase B Tasks 4 and 5 agent orchestration
 - **Environment:** Read-only subagent tool orchestration
 - **Version/commit:** 2cf0ff1
@@ -47,3 +47,7 @@ changed. The read-only review paused until the error was recorded.
 - 2026-07-31T22:21:30.0858749Z: Recurred when the scheduled reviewer supplied
   `timeout` instead of the required `timeout_ms` field to the agent wait tool.
   Schema validation rejected the call before execution or state change.
+- 2026-07-31T22:59:20.5223522Z: Recurred when the Task 6 safe-runner reviewer
+  was dispatched just before the implementation lane's final completion freed
+  a team slot. The dispatch was rejected before review or mutation and is
+  retried only after formal lane completion.

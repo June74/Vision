@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T18:52:53.8643852Z
-- **Last observed:** 2026-07-31T18:54:15.6332149Z
-- **Phase/task:** Phase B Task 3 fifth-review parallel repair
+- **Last observed:** 2026-07-31T23:35:08.5575886Z
+- **Phase/task:** Phase B Tasks 3 and 6 parallel repair integration
 - **Environment:** Local repository-wide TypeScript check
 - **Version/commit:** 7dc954b plus three in-progress isolated repair lanes
 
@@ -46,3 +46,11 @@ environment, secret, staging, or commit was touched.
 - 2026-07-31T18:54:15.6332149Z: Closed after the lifecycle lane completed the
   intended input signature and workflow wiring; 149 focused tests, TypeScript,
   and documentation coverage passed.
+- 2026-07-31T23:25:05.6121724Z: Recurred when the R2 lane ran repository-wide
+  TypeScript while the cleanup lane had added a validator import before its
+  export was present. The R2-owned 28 tests and release security scan were
+  green; the out-of-lane error was contained by deferring integration checks
+  until the cleanup lane reaches a stable checkpoint.
+- 2026-07-31T23:35:08.5575886Z: Closed after both lanes reached stable
+  checkpoints and the controller reran both TypeScript projects successfully,
+  alongside 95 focused tests, documentation coverage, and release security.

@@ -1,8 +1,8 @@
 # SB-20260731-201518-task4-diagnostics-docs-check: Task 4 diagnostics documentation gate saw incomplete concurrent lanes
 
-- **Status:** closed
+- **Status:** open
 - **First observed:** 2026-07-31T20:15:18.1495782Z
-- **Last observed:** 2026-07-31T22:36:42.2172910Z
+- **Last observed:** 2026-07-31T22:55:51.7731417Z
 - **Phase/task:** Phase B Tasks 4 and 5 documentation verification
 - **Environment:** Shared local worktree
 - **Version/commit:** 2cf0ff1 plus concurrent Task 4 edits
@@ -57,3 +57,7 @@ network, secret, staging state, or commit changed.
   and the AI observer-state reader omitted from resolver outer context.
 - 2026-07-31T22:36:42.2172910Z: Closed after all three semantic reference
   statements were corrected and documentation coverage passed again.
+- 2026-07-31T22:55:51.7731417Z: Reopened when the Task 6 R2 lane's docs gate
+  found seven named scanner helpers and two local arrow helpers missing owned
+  coverage, plus expected omissions in concurrent incomplete lanes. The R2
+  behavior suite remains 8 of 8 green.

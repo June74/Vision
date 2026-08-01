@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:16:44.091309Z
-- **Last observed:** 2026-07-31T21:48:44.0535215Z
-- **Phase/task:** Phase B live-acceptance closure Tasks 1 and 4
+- **Last observed:** 2026-07-31T22:59:55.8433974Z
+- **Phase/task:** Phase B live-acceptance closure Tasks 1, 4, and 6
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** `7d2f9f6`; reviewed candidate `0f08fc1`
 
@@ -132,6 +132,9 @@ files with 59 passing tests.
   repository-local Windows wrapper.
 - 2026-07-31T21:48:44.0535215Z: Closed after the explicit local Windows
   wrapper ran the repaired focused suite with all 28 tests passing.
+- 2026-07-31T22:59:55.8433974Z: Recurred when the Task 6 R2 lane invoked
+  `pnpm exec tsc` directly. The compiler was not resolved, so no typecheck
+  evidence was produced; the lane uses the project script or local wrapper.
 
 The repository-local wrapper reached the candidate script, confirming the
 package-runner resolution boundary. The workflow-equivalent local Node loader

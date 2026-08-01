@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T20:24:46.884785Z
-- **Last observed:** 2026-07-31T22:22:02.6141163Z
+- **Last observed:** 2026-07-31T23:05:19.9065756Z
 - **Phase/task:** Phase B Task 4 deterministic references
 - **Environment:** Local Phase B worktree reference pages
 - **Version/commit:** c23e301 plus Task 4 working changes
@@ -73,3 +73,11 @@ Fresh `docs:check` exited zero after all eight matching reference pages were upd
   ledger patch used an index-row context that failed verification. The patch
   was rejected atomically; correction splits incident and index edits against
   freshly read exact rows.
+- 2026-07-31T23:02:40.6283546Z: Recurred when a Task 6 R2 review ledger patch
+  assumed the cleanup lane's truncation timestamp before reading its concurrent
+  update. The patch was rejected atomically; correction uses the exact current
+  header and separate incident creation.
+- 2026-07-31T23:05:19.9065756Z: Recurred when the safe-runner repair attempted
+  to patch a Task 6 path-assumption index row that concurrent ledger edits had
+  changed. The patch was rejected without source impact; that lane no longer
+  edits shared setback records during repair.

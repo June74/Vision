@@ -2,8 +2,8 @@
 
 - **Status:** contained
 - **First observed:** 2026-07-31T21:56:53.3451279Z
-- **Last observed:** 2026-07-31T22:14:54.1781132Z
-- **Phase/task:** Phase B Task 5 discovery
+- **Last observed:** 2026-07-31T22:45:09.5273933Z
+- **Phase/task:** Phase B Tasks 5 and 6 discovery
 - **Environment:** Local Phase B worktree
 - **Version/commit:** 84f3a0a
 
@@ -38,3 +38,6 @@ provider, network, database, deployment, or external state changed.
   guessed `.superpowers/plans` and `.superpowers/specs`; this worktree keeps
   those authoring documents under `docs/superpowers`. The read-only listing
   changed nothing and review resumes from confirmed paths.
+- 2026-07-31T22:45:09.5273933Z: Recurred at Task 6 discovery when a bounded
+  `Select-String` command included the absent `docs/plans` path. No write or
+  external action occurred; discovery resumes from tracked Markdown paths.

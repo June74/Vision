@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:47:00Z
-- **Last observed:** 2026-07-30T03:38:37.0257010Z
-- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 3
+- **Last observed:** 2026-08-01T00:30:10.6447725Z
+- **Phase/task:** Phase B acceptance instrumentation through live-closure Task 6
 - **Environment:** Local worktree
 - **Version/commit:** `50569e6`; `d24e24d`
 - **Latest recurrence:** A Gate 0 config diagnostic read `.Count` directly from
@@ -190,3 +190,23 @@ path, policy-pattern, and diff-check counts. This closes the recurrence.
   stopped with a missing-script category and changed no file or external state.
   Reading only the declared script names supplied `docs:check`; that command
   and the repository-configured diff check then exited zero.
+- 2026-07-31T22:48:48.7245926Z: A Task 6 read-only discovery command chained
+  two exact `git grep` lookups and treated the optional second lookup's no-match
+  exit as a command failure. The first lookup returned the required paths, no
+  state changed, and later optional searches are run independently or allowed
+  to return no matches.
+- 2026-08-01T00:01:23.1319467Z: An extra Task 6 R2 policy grep scanned the
+  complete release-scanner file and falsely rejected its legitimate existing
+  closed CLI error writer outside the changed security region. The required
+  scoped diff check and untracked-file whitespace check had passed. The extra
+  probe is narrowed to the changed R2 region; no code, external state, or
+  protected value was affected.
+- 2026-08-01T00:12:13.1660486Z: A combined Task 6 final-check wrapper failed at
+  JavaScript parse time because embedded PowerShell quoting was malformed. No
+  shell command executed and no file changed. The agent reran the required
+  status, diff, whitespace, and newline checks as separate commands; all passed.
+- 2026-08-01T00:30:10.6447725Z: The Task 6 scope-audit wrapper passed `NUL` as
+  Git's exclude file, which this Git build rejected. The wrapper then failed to
+  propagate Git's nonzero exit before printing zero status paths. The result
+  was discarded before staging; the rerun uses Git's ordinary configuration
+  with an immediate exit-code check.

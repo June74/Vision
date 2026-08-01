@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-07-31T22:41:29.9852547Z
-- **Phase/task:** Phase B Tasks 4 and 5 Worker verification
+- **Last observed:** 2026-08-01T00:27:49.9551896Z
+- **Phase/task:** Phase B Tasks 4 through 6 Worker and full verification
 - **Environment:** Local managed sandbox
 - **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`; `6ebabd1`
 - **Latest recurrence:** 2026-07-30T03:32:34.1083650Z — the segmented Gate 0
@@ -218,3 +218,7 @@ security validation passed.
   user-level log warning.
 - 2026-07-31T22:41:29.9852547Z: Recurred during the final complete Task 5 gate;
   the full command still exited zero and both production builds passed.
+- 2026-08-01T00:27:49.9551896Z: Recurred during the final Task 6 complete gate.
+  Wrangler could not write two optional user-level debug logs, while the full
+  command exited zero with 1,693 unit, 179 contract, and 110 Worker tests plus
+  both builds, documentation, and release security passing.

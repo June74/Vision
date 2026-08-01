@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T04:50:09.1847792Z
-- **Last observed:** 2026-07-29T04:51:19.8413126Z
-- **Phase/task:** Phase B acceptance instrumentation Task 6 baseline
+- **Last observed:** 2026-07-31T22:50:18.6961654Z
+- **Phase/task:** Phase B acceptance instrumentation and live-closure Task 6
 - **Environment:** Local Phase B linked worktree
 - **Version/commit:** `1c7f89b`
 
@@ -53,3 +53,10 @@ local binary directory.
 
 With the worktree-local binary directory prefixed, the exact baseline suite
 started normally and passed 2 files and 7 tests with zero failures.
+
+## Recurrence history
+
+- 2026-07-31T22:50:18.6961654Z: The live-closure Task 6 RED command repeated
+  the documented `pnpm.cmd exec vitest` resolution failure before test loading.
+  No test or external action ran; the retry uses the repository-local
+  `node_modules/.bin/vitest.cmd` wrapper required by the Task 6 brief.

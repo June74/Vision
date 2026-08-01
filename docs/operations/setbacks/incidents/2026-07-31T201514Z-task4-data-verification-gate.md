@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T20:15:14.8462626Z
-- **Last observed:** 2026-07-31T22:14:54.1781132Z
-- **Phase/task:** Phase B Tasks 4 and 5 concurrent GREEN verification
+- **Last observed:** 2026-07-31T22:56:16.3082835Z
+- **Phase/task:** Phase B Tasks 4 through 6 concurrent GREEN verification
 - **Environment:** Local captured TypeScript and documentation checks
 - **Version/commit:** 2cf0ff1 plus uncommitted Task 4 data lane
 
@@ -70,3 +70,11 @@ remaining missing headings, zero of them in the owned data source.
   lane's 66-green-test verification reached the shared typecheck while the
   controller lane still had one logged test-only Date narrowing error. No
   assigned scheduled path error was reported; integrated typecheck owns close.
+- 2026-07-31T22:54:20.8788229Z: Recurred after the Task 6 R2 scanner reached
+  8-of-8 GREEN and the shared typecheck found only incomplete cleanup and
+  safe-runner lane errors. No R2-owned TypeScript error was reported; the final
+  integrated gate owns resolution.
+- 2026-07-31T22:56:16.3082835Z: Recurred after the Task 6 safe-runner lane
+  reached 41 focused GREEN tests and shared typecheck found only the already
+  isolated cleanup-test readonly-tuple mismatch. The safe-runner lane will not
+  edit that unowned path.

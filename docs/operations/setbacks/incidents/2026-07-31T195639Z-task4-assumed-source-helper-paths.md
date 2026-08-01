@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T19:56:39.6673787Z
-- **Last observed:** 2026-07-31T22:03:21.6722225Z
-- **Phase/task:** Phase B Tasks 4 and 5 local path discovery
+- **Last observed:** 2026-07-31T23:00:26.6440980Z
+- **Phase/task:** Phase B Tasks 4 through 6 local path discovery
 - **Environment:** Shared local worktree; read-only source discovery
 - **Version/commit:** 2cf0ff1 with concurrent Task 4 work
 
@@ -106,3 +106,7 @@ files, and the bounded lifecycle search completed successfully.
   trace included a guessed root `worker.ts`. The path does not exist and the
   read-only command exited before a usable trace; the lane now enumerates
   actual source files before tracing.
+- 2026-07-31T23:00:26.6440980Z: Recurred when the Task 6 cleanup lane assumed
+  the setback skill's optional `scripts/new_setback.py` helper existed in this
+  repository. The read-only command changed nothing; the incident is created
+  manually under the required ledger path instead.

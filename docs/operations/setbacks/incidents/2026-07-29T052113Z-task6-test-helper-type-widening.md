@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T05:20:55Z
-- **Last observed:** 2026-07-29T16:49:50Z
+- **Last observed:** 2026-08-01T00:31:28.6602348Z
 - **Phase/task:** Phase B acceptance instrumentation Task 6 typecheck
 - **Environment:** Local Phase B linked worktree
 - **Version/commit:** `1c7f89b`
@@ -47,8 +47,20 @@ readonly tuple result.
 - **Prevention:** Type JSON fixtures at the boundary and annotate mapped
   `it.each` rows when Vitest requires positional tuple inference.
 - **Owner:** Codex and project owner.
-- **Next diagnostic step:** Rerun `pnpm typecheck`.
+- **Next diagnostic step:** None while closed.
 
 ## Verification and related work
 
 `pnpm typecheck` passed after the test-only type corrections.
+
+## Recurrence history
+
+- 2026-07-31T22:55:58Z: Task 6 integration typechecking rejected two
+  cleanup-inventory test assertions because readonly path tuples were passed
+  to a mutable-array matcher signature. The safe-runner focused suite remained
+  green. The failure is contained to the concurrently owned cleanup-inventory
+  test; no provider, network, database, workflow, or deployment action ran.
+  Rerun typecheck after that lane narrows the helper signature.
+- 2026-08-01T00:31:28.6602348Z: Closed after the cleanup helper accepted the
+  readonly contract and the final controller TypeScript checks and complete
+  repository gate both exited zero.

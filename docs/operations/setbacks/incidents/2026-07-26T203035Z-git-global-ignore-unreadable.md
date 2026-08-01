@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:30:35.2961897Z
-- **Last observed:** 2026-07-31T22:03:47.5242582Z
+- **Last observed:** 2026-08-01T00:32:30.8793280Z
 - **Phase/task:** Phase B live-acceptance specification finalization
 - **Environment:** Local Phase B worktree under the managed sandbox
 - **Version/commit:** Written-spec candidate based on `38c35eb`
@@ -180,3 +180,21 @@ commit `4420f6d`.
 - 2026-07-31T22:03:47.5242582Z: Recurred during a Task 5 browser-lane scoped
   status check. Git exited zero and reported no assigned-path changes; the
   optional user-level ignore warning remains a known sandbox advisory.
+- 2026-07-31T22:44:53.4169222Z: Recurred during Task 6's read-only authoring
+  document identity check. Git exited zero and confirmed both frozen documents
+  unchanged from `44d8e93`; the optional global-ignore warning was advisory.
+- 2026-07-31T22:46:12.5273914Z: Recurred during the Task 6 cleanup-lane scoped
+  status check. Git exited zero and reported no assigned-path changes; the
+  optional global-ignore warning remained advisory and no state changed.
+- 2026-07-31T23:13:04.2605523Z: Recurred during the controller's read-only
+  Task 6 branch-status check. Git returned the requested repository status and
+  history successfully; only the optional user-level ignore read was denied,
+  with no repository, provider, credential, or external-state impact.
+- 2026-08-01T00:30:55.8019521Z: Recurred during the corrected Task 6 exact-scope
+  audit. All three Git commands exited zero and proved 54 status paths, all
+  confined to the 29-path Task 6 allowlist or setback ledger, with zero staged
+  or unexpected path. The optional global-ignore reads remained advisory.
+- 2026-08-01T00:32:30.8793280Z: Recurred during the staged setback-ledger audit.
+  Git still exited zero and proved 27 cached ledger paths, zero unexpected
+  cached path, and a clean cached diff. Only this recurrence and its index row
+  require restaging before the separate ledger commit.
