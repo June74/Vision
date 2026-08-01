@@ -36,3 +36,8 @@ changed.
 ## Verification and related work
 
 The replacement returned a UTC timestamp without exposing private data.
+
+- 2026-08-01T00:43:15.6288058Z: Recurred during Gate 0 setback-ledger
+  maintenance because a read-only timestamp command reused `Get-Date -AsUTC`.
+  The command's file reads still completed, no state changed, and the
+  controller immediately returned to `[DateTime]::UtcNow.ToString('o')`.

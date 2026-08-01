@@ -64,3 +64,12 @@ counts before the candidate is staged.
   the same direct `foreach` pipe shape. PowerShell rejected it before reading
   commit content or changing state. The retry assigns the loop results before
   JSON conversion.
+- 2026-08-01T00:56:00.0000000Z: Recurred when a Gate 0 read-only probe placed
+  a Git command and `$LASTEXITCODE` inside one parenthesized Boolean
+  expression. PowerShell rejected the script before any check ran or state
+  changed. The retry runs the command first, stores its exit code, then emits
+  the Boolean.
+- 2026-08-01T00:58:00.0000000Z: Recurred when the Gate 0 preview-artifact
+  probe omitted one closing parenthesis in its final inline Boolean output.
+  PowerShell rejected the script before the build started. The retry assigns
+  every Boolean to a named variable before emitting it.

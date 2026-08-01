@@ -143,3 +143,9 @@ another truncation.
   the remaining model-context boundary and was truncated. The incomplete
   coordination output was discarded; the controller resumed from bounded
   individual agent messages and compact status checks.
+- 2026-08-01T00:43:15.6288058Z: Recurred while Gate 0's sequential full-gate
+  runner emitted the unit-test stream. The tool response exceeded the model
+  context even though the yielded process cell remained recoverable. The
+  incomplete display is not accepted as evidence; the controller resumes cell
+  `761` with a bounded output budget and records only its final per-command
+  exit results.

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-08-01T00:27:49.9551896Z
+- **Last observed:** 2026-08-01T00:39:33.3812929Z
 - **Phase/task:** Phase B Tasks 4 through 6 Worker and full verification
 - **Environment:** Local managed sandbox
 - **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`; `6ebabd1`
@@ -222,3 +222,18 @@ security validation passed.
   Wrangler could not write two optional user-level debug logs, while the full
   command exited zero with 1,693 unit, 179 contract, and 110 Worker tests plus
   both builds, documentation, and release security passing.
+- 2026-08-01T00:39:33.3812929Z: Recurred during three Gate 0 focused Worker
+  slices. The commands exited zero with 34 webhook, 33 diagnostics, and 11 AI
+  route tests passing. Only Wrangler's optional user-level diagnostic location
+  was reported; no provider, credential, deployment, or candidate state changed.
+- 2026-08-01T00:49:13.6609802Z: Recurred during the Gate 0 exact Worker and
+  aggregate checks. Both commands exited zero; the Worker gate passed 110 tests
+  and the aggregate check completed its full test, build, documentation, and
+  security sequence. No provider, credential, deployment, or candidate state
+  changed.
+- 2026-08-01T00:50:03.2308020Z: Recurred during the Gate 0 preview build. The
+  build exited zero; only Wrangler's optional user-level log location was
+  reported, and no deployment occurred.
+- 2026-08-01T00:50:50.6070000Z: Recurred during the Gate 0 production build.
+  The build exited zero; only Wrangler's optional user-level log location was
+  reported, and no deployment occurred.

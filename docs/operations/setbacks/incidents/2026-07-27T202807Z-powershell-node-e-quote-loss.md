@@ -43,3 +43,9 @@ required.
   execution. No source, environment, provider data, or file changed. The
   reviewer will decide from existing tests/package evidence instead of
   retrying an eval command.
+- 2026-08-01T00:59:00.0000000Z: Recurred when a Gate 0 read-only R2 count
+  probe passed an in-memory TypeScript module through `tsx.cmd -e`.
+  PowerShell stripped import quotes and esbuild rejected the probe before the
+  project scanner executed. No file or external state changed. Gate 0 uses
+  the already-green focused structural test, which asserts one adapter and
+  exactly two approved permanent callers.
