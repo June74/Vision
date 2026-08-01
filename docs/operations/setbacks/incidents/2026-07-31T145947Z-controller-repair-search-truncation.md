@@ -149,3 +149,7 @@ another truncation.
   incomplete display is not accepted as evidence; the controller resumes cell
   `761` with a bounded output budget and records only its final per-command
   exit results.
+- 2026-08-01T01:27:25.3898759Z: Recurred when five complete skill files were
+  combined into one loader response and the subagent-development instructions
+  were truncated. The incomplete copy is not relied on; the controller rereads
+  that skill in bounded consecutive ranges through EOF.

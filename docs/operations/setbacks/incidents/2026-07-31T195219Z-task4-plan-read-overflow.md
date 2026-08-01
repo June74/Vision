@@ -37,4 +37,3 @@ discovery was delayed and its plan excerpt must be reread.
 ## Recurrence history
 
 - 2026-07-31T19:52:19.8441691Z: Observed on resume, contained, and closed.
-

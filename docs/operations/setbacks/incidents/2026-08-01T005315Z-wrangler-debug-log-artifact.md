@@ -32,3 +32,10 @@ tracked, staged, or shared, and no external state changed.
 - **Owner:** Codex.
 - **Verification:** The exact path is absent after deletion and remains absent
   before candidate staging.
+
+## Recurrence history
+
+- 2026-08-01T01:30:00.6866222Z: Recurred after the post-repair explicit
+  preview/production build matrix. Safe metadata showed one 792-byte untracked
+  file created during that verification window. Its contents were not read;
+  the exact generated path was deleted and absence rechecked.

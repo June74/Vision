@@ -40,4 +40,3 @@ against printing raw arguments or environment values.
 
 - 2026-07-31T21:21:20.8759029Z: Observed, classified, and closed before the
   next test run.
-

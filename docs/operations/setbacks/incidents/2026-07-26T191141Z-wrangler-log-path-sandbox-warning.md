@@ -237,3 +237,11 @@ security validation passed.
 - 2026-08-01T00:50:50.6070000Z: Recurred during the Gate 0 production build.
   The build exited zero; only Wrangler's optional user-level log location was
   reported, and no deployment occurred.
+- 2026-08-01T01:21:28.6021019Z: Recurred during the post-review safe-push
+  repair aggregate check. The command exited zero and completed its full test,
+  build, documentation, and release-security sequence. No worktree debug log,
+  deployment, provider mutation, or key change resulted.
+- 2026-08-01T01:30:00.6866222Z: Recurred during both post-repair explicit
+  candidate builds. Browser, preview build/check, and production build/check
+  all exited zero. A separate generated-debug-artifact recurrence was safely
+  removed without reading it.

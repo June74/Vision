@@ -37,4 +37,3 @@ No file changed. Logging was delayed by one diagnostic command.
 ## Recurrence history
 
 - 2026-07-31T19:52:19.8441691Z: Observed, corrected, and closed before any write.
-

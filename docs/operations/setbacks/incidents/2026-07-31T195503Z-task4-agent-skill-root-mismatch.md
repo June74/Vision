@@ -39,4 +39,7 @@ changed. The read-only review paused until the setback was recorded.
 
 - 2026-07-31T19:55:03.9806283Z: Observed, corrected, and closed without project
   mutation.
-
+- 2026-08-01T01:27:25.3898759Z: Recurred when the Phase B continuation loader
+  looked for the `scope-gate` skill beneath `.codex` instead of its declared
+  `.agents` root. No project command ran. The loader resumed from the catalog's
+  exact root mapping.

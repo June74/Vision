@@ -37,4 +37,3 @@ commit changed in the failed attempt. Documentation completion was delayed.
 
 - 2026-07-31T20:11:37.6525266Z: Observed, contained, and closed before any
   partial write.
-

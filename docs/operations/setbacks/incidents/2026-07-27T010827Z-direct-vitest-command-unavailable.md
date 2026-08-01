@@ -67,3 +67,8 @@ declared unit-test script.
   `pnpm.cmd exec vitest` command. No test ran and no project or provider state
   changed. The corrected command uses `pnpm.cmd test:unit` with the same
   focused unit-project file argument.
+- 2026-08-01T01:12:00.0000000Z: Recurred while starting the Task 7 safe-push
+  regression RED through `pnpm.cmd exec vitest`. The executable was not
+  resolved, so no test or production code ran and no external state changed.
+  The retry uses the repository-declared `pnpm.cmd test:unit` script with the
+  same exact file filter.
