@@ -172,3 +172,8 @@ bounded Gate 0 command set was rerun successfully and this evidence is refrozen
 again. The result remains local implementation evidence only: no live action,
 provider action, deployment, push, cleanup, credential-value read, key change,
 or Phase B completion occurred.
+
+One exact-tip review attempt was invalidated before verdict because a combined
+read exceeded its review boundary. The recurrence is logged, this evidence is
+refrozen, and a fresh bounded-file review remains required before any push or
+live action. The invalid review proves no acceptance result.
