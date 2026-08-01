@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T13:18:23Z
-- **Last observed:** 2026-07-29T02:55:00Z
-- **Phase/task:** Phase B restore Task 4 tail correction
+- **Last observed:** 2026-08-01T02:41:06.2990937Z
+- **Phase/task:** Phase B Task 7 exact-tip review
 - **Environment:** Local repository staging
 - **Version/commit:** Task report bookkeeping commit `3257771`
 
@@ -65,3 +65,9 @@ Stage the task-report path without an explicit force option.
   category, but `git status --short` confirmed the report and every other named
   file were staged. No force-add was needed; only this recurrence update
   remained to be staged.
+- 2026-08-01T02:41:06.2990937Z: Recurred when an exact-tip reviewer tried to
+  read the intentionally ignored SDD global-constraints file through `git
+  show`. Git correctly reported that it is absent from the commit although it
+  exists in the worktree. The reviewer stopped without verdict or mutation.
+  Replacement reviews must read ignored SDD briefs, reports, constraints, and
+  packages directly from disk; commit equality applies only to tracked state.
