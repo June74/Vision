@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T02:32:27Z
-- **Last observed:** 2026-07-31T21:02:25.7615346-05:00
-- **Phase/task:** Phase B Task 7 continuation
+- **Last observed:** 2026-08-01T02:26:27.5590215Z
+- **Phase/task:** Phase B Task 7 continuation and exact-candidate report refresh
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `36f9df2`
 
@@ -143,3 +143,7 @@ The retry must modify only the intended plan paragraph and pass
   continuation ledger patch expected the index timestamp in the incident
   header. The patch was rejected atomically and changed no file. The exact
   current incident lines were reread before the retry.
+- 2026-08-01T02:26:27.5590215Z: Recurred when the final ignored-report update
+  used a shortened version of the current candidate paragraph. The combined
+  patch was rejected atomically and changed no file. The exact report tail was
+  reread before separate minimal updates.
