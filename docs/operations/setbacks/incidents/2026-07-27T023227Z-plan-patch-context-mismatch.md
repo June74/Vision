@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T02:32:27Z
-- **Last observed:** 2026-07-30T18:45:10.2706640Z
-- **Phase/task:** Phase B live-acceptance implementation-plan self-review
+- **Last observed:** 2026-08-01T01:47:18.3849506Z
+- **Phase/task:** Phase B live-acceptance planning and Claude Code handoff
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `36f9df2`
 
@@ -135,3 +135,7 @@ The retry must modify only the intended plan paragraph and pass
   consistency patch assumed one paragraph wrapped differently. The patch was
   rejected atomically and changed no file. All remaining spec corrections use
   one exact hunk per patch.
+- 2026-08-01T01:47:18.3849506Z: Recurred when a combined handoff-ledger patch
+  assumed the truncation incident header matched its newer index timestamp.
+  The patch was rejected atomically and changed no file. The exact incident
+  headers were reread and the ledger update was split into small exact hunks.

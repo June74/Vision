@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T19:55:03.9806283Z
-- **Last observed:** 2026-07-31T19:55:03.9806283Z
+- **Last observed:** 2026-08-01T01:47:18.3849506Z
 - **Phase/task:** Phase B Task 4 diagnostics contract review
 - **Environment:** Read-only subagent skill discovery
 - **Version/commit:** c23e301
@@ -43,3 +43,7 @@ changed. The read-only review paused until the setback was recorded.
   looked for the `scope-gate` skill beneath `.codex` instead of its declared
   `.agents` root. No project command ran. The loader resumed from the catalog's
   exact root mapping.
+- 2026-08-01T01:47:18.3849506Z: Recurred during Claude Code handoff preparation
+  when the controller again reconstructed the `scope-gate` path beneath
+  `.codex`. No project or provider action ran. The controller read the skill
+  from the catalog-declared `.agents` root before resuming.

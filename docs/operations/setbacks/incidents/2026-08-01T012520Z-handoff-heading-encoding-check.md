@@ -30,3 +30,12 @@ state changed.
 - **Owner:** Codex.
 - **Verification:** Every required heading matches under explicit UTF-8 and
   default Windows text reads.
+
+## Recurrence history
+
+- 2026-08-01T01:54:43.2461392Z: The final handoff scan again used PowerShell's
+  default decoder and reported eight suspect characters. Explicit UTF-8
+  decoding proved there was no replacement or mojibake sequence; the eight
+  characters were four pairs of curly quotation marks in completion-language
+  examples. They were replaced with ASCII quotes, and final validation uses an
+  explicit UTF-8 read plus an ASCII-only assertion.

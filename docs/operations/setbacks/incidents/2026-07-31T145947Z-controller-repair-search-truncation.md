@@ -2,8 +2,8 @@
 
 - **Status:** contained
 - **First observed:** 2026-07-31T14:59:47.6410820Z
-- **Last observed:** 2026-07-31T23:11:44.2606709Z
-- **Phase/task:** Phase B Tasks 3 through 6 controller review
+- **Last observed:** 2026-08-01T01:47:18.3849506Z
+- **Phase/task:** Phase B Tasks 3 through 7, Gate 0, and exact-tip review
 - **Environment:** Delegated read-only plan and specification inspection
 - **Version/commit:** c23e301 plus unstaged setback records
 
@@ -153,3 +153,7 @@ another truncation.
   combined into one loader response and the subagent-development instructions
   were truncated. The incomplete copy is not relied on; the controller rereads
   that skill in bounded consecutive ranges through EOF.
+- 2026-08-01T01:47:18.3849506Z: Recurred when the final exact-tip review wait
+  result exceeded the remaining model-context boundary. The incomplete mailbox
+  output is not accepted as a verdict; the controller must obtain a concise
+  reviewer status or final result before relying on the review.
