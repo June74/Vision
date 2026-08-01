@@ -2,6 +2,7 @@
 
 - **Status:** closed
 - **Detected:** 2026-08-01T01:39:15.9331440Z
+- **Last observed:** 2026-07-31T21:16:54.0288676-05:00
 - **Scope:** Phase B Task 7 final exact-tip review package
 
 ## What happened
@@ -34,3 +35,11 @@ deployment, or key state changed before this incident record.
 - **Verification:** The replacement package was generated from `git rev-parse`
   results in the same command, spans 55,123 lines, is ignored, and names the
   exact resolved candidate range.
+
+## Recurrence history
+
+- 2026-07-31T21:16:54.0288676-05:00: The Task 7 report-reconciliation update
+  expanded `bdc02d4` into an incorrect full candidate ID. The ignored-report
+  verification compared it to `git rev-parse HEAD` before review or push, so
+  no external state changed. The report will be updated only with the exact
+  Git-resolved SHA from the final refreeze tip.
