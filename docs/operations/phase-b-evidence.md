@@ -100,11 +100,9 @@ delayed delivery cannot extend the lifetime. Normal non-candidate dispatch,
 purge, permanent recovery, and cleanup behavior remain unchanged. After the
 acceptance matrix, source cleanup must be reviewed, deployed, and verified
 before any provider cleanup. The
-permanent cleanup contract names the exact 98 dedicated deletion paths plus 51
-shared active-residue paths spanning runtime bindings, observer modes, routes,
-selectors, scheduler branches, references, and tests. Its Task 9 changed-path
-manifest contains exactly 149 paths, and the classifier covers exactly 184
-total paths. The dedicated inventory
+permanent cleanup contract names the exact 60 dedicated deletions plus 39 shared
+active-residue files spanning runtime bindings, observer modes, routes,
+selectors, scheduler branches, references, and tests. The dedicated inventory
 now includes the observer validator and test, acceptance-window script and
 test, rollback-lifecycle validator and test, and both simple/technical
 references for every validator. The shared inventory separately maps the active
