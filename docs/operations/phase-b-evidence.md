@@ -166,3 +166,9 @@ After the ledger-recorded exact-tip report reconciliation, this evidence is
 refrozen for the current local candidate. This records documentation alignment
 only; no live action, provider action, deployment, push, or completion claim
 occurred.
+
+After the separately logged report-refresh context recurrence, the complete
+bounded Gate 0 command set was rerun successfully and this evidence is refrozen
+again. The result remains local implementation evidence only: no live action,
+provider action, deployment, push, cleanup, credential-value read, key change,
+or Phase B completion occurred.
