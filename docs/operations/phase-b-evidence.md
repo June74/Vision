@@ -161,3 +161,8 @@ it changed no implementation, live, provider, deployment, credential, or key
 state. Final package generation resolves the full candidate object directly
 from Git in the same command; no abbreviated identifier is expanded by
 assumption.
+
+After a ledger-recorded ignored Task 7 report reconciliation, this evidence is
+refrozen for the current local candidate. This records documentation alignment
+only; no live action, provider action, deployment, push, or completion claim
+occurred.
