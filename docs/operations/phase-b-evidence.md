@@ -177,3 +177,8 @@ One exact-tip review attempt was invalidated before verdict because a combined
 read exceeded its review boundary. The recurrence is logged, this evidence is
 refrozen, and a fresh bounded-file review remains required before any push or
 live action. The invalid review proves no acceptance result.
+
+A replacement exact-tip review was also invalidated before package inspection
+when its read-only Git probe used an unsupported Windows excludes override. The
+recurrence is logged, no state changed during that review, and this evidence is
+refrozen for another fresh review using only the proven Git read arguments.
