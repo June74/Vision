@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:08:27Z
-- **Last observed:** 2026-07-29T03:24:33Z
-- **Phase/task:** Phase B acceptance instrumentation Task 5 RED
+- **Last observed:** 2026-07-31T21:02:25.7615346-05:00
+- **Phase/task:** Phase B Task 7 continuation
 - **Environment:** Local Windows worktree
 - **Version/commit:** `22c5dc0`
 
@@ -24,9 +24,12 @@ No test ran and no project or provider state changed.
 
 ## Correction and prevention
 
-- **Correction:** Run the target through `pnpm.cmd test:unit <path>`.
-- **Prevention:** Inspect `package.json` and use its declared scripts before
-  invoking a project tool directly on Windows.
+- **Correction:** Run focused unit files through
+  `.\node_modules\.bin\vitest.cmd run --project unit <path>`.
+- **Prevention:** Inspect `package.json` and the local command shims before
+  invoking a project tool directly on Windows. Do not append a focused file to
+  `pnpm.cmd test:unit` with `--`: this script passes the literal separator to
+  Vitest and starts the full unit project instead of a focused run.
 
 ## Verification and related work
 
@@ -72,3 +75,9 @@ declared unit-test script.
   resolved, so no test or production code ran and no external state changed.
   The retry uses the repository-declared `pnpm.cmd test:unit` script with the
   same exact file filter.
+- 2026-07-31T21:02:25.7615346-05:00: Recurred while starting the Task 7
+  continuation cleanup-inventory check through `pnpm.cmd exec vitest`; the
+  executable was not resolved, so no test or external state changed. The
+  attempted package-script fallback started the full unit project because the
+  literal `--` reached Vitest and timed out under the bounded local runner.
+  Focused retries use the verified local `vitest.cmd` shim directly.

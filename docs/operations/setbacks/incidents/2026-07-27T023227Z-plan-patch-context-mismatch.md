@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T02:32:27Z
-- **Last observed:** 2026-08-01T01:47:18.3849506Z
-- **Phase/task:** Phase B live-acceptance planning and Claude Code handoff
+- **Last observed:** 2026-07-31T21:02:25.7615346-05:00
+- **Phase/task:** Phase B Task 7 continuation
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `36f9df2`
 
@@ -139,3 +139,7 @@ The retry must modify only the intended plan paragraph and pass
   assumed the truncation incident header matched its newer index timestamp.
   The patch was rejected atomically and changed no file. The exact incident
   headers were reread and the ledger update was split into small exact hunks.
+- 2026-07-31T21:02:25.7615346-05:00: Recurred when the first Task 7
+  continuation ledger patch expected the index timestamp in the incident
+  header. The patch was rejected atomically and changed no file. The exact
+  current incident lines were reread before the retry.

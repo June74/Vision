@@ -2,6 +2,7 @@
 
 - **Status:** closed
 - **Detected:** 2026-08-01T00:50:03.2308020Z
+- **Last observed:** 2026-07-31T21:05:30.8216889-05:00
 - **Scope:** Phase B Gate 0 preview candidate checks
 
 ## What happened
@@ -30,3 +31,11 @@ preview build succeeded. No deployment or provider state changed.
 - **Prevention:** Do not branch on undocumented nested-result properties.
 - **Owner:** Codex.
 - **Verification:** The direct `deploy:check:preview` retry exited zero.
+
+## Recurrence history
+
+- 2026-07-31T21:05:30.8216889-05:00: The Task 7 continuation status report
+  incorrectly counted six staged ledger paths instead of the five reported by
+  `git status --short`. No repository or external state changed because the
+  count was corrected before committing. The final cached-set check will count
+  paths from Git rather than from a manual summary.

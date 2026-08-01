@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T17:49:19.1079389Z
-- **Last observed:** 2026-07-31T21:54:05.3420661Z
-- **Phase/task:** Phase B Tasks 3 and 4 setback-ledger commit
+- **Last observed:** 2026-07-31T21:04:30.3155673-05:00
+- **Phase/task:** Phase B Task 7 continuation setback-ledger commit
 - **Environment:** Local Git worktree
 - **Version/commit:** ee8f260 plus two setback-ledger paths
 
@@ -45,3 +45,7 @@ environment values, and secrets were unaffected.
 - 2026-07-31T21:54:05.3420661Z: Closed after the approved bounded retry staged
   only the setback index and incident directory and the cached diff audit
   completed without an error.
+- 2026-07-31T21:04:30.3155673-05:00: Recurred while staging the Task 7
+  continuation ledger paths. The sandbox again denied linked-worktree
+  `index.lock` creation before any path staged; the retry uses the established
+  bounded metadata-write approval for the exact ledger path set.

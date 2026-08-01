@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T19:38:32Z
-- **Last observed:** 2026-07-30T18:36:59.5276737Z
-- **Phase/task:** Phase B restore Task 4 diagnosis
+- **Last observed:** 2026-07-31T21:02:25.7615346-05:00
+- **Phase/task:** Phase B Task 7 continuation
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `9bbc4be`
 
@@ -60,3 +60,9 @@ intentionally skipped. This closes the recurrence.
   180.3 seconds: 86 test files and 1,181 tests passed, with one file and one
   test intentionally skipped. This verifies the timeout workaround and closes
   the baseline recurrence.
+- 2026-07-31T21:02:25.7615346-05:00: The Task 7 continuation attempted a
+  package-script fallback after the direct focused command was unavailable.
+  The literal separator reached Vitest, started the full unit project, and
+  exceeded the 120-second bounded runner without a final result. No assertion
+  result or external mutation was observed. Focused retries use the local
+  `vitest.cmd` shim directly rather than the package-script fallback.
