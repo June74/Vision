@@ -1929,7 +1929,7 @@ Use the exact Task 2 approved command. Expected: five passed and zero skipped, w
 - [ ] **Step 3: Run the full local release gate**
 
 ```powershell
-pnpm.cmd ci
+pnpm.cmd run ci
 pnpm.cmd deploy:check:preview
 git -c "safe.directory=C:/Users/2006i/OneDrive/Documents/AI calendar (secretary) project/.worktrees/phase-b-foundation" diff --check
 ```
@@ -1963,7 +1963,7 @@ Expected: only the ten implementation paths are in the repair diff and the relea
 
 Dispatch one subagent at a time. First ask for specification compliance against `docs/superpowers/specs/2026-08-02-oauth-reconnect-authorization-recovery-design.md`; then, after resolving any proven gap, ask a fresh reviewer for code quality, SQL atomicity, concurrency, privacy, and test-quality findings. Require both reviewers to inspect the exact commit, not a moving worktree.
 
-Expected: zero Critical and zero Important findings. For any proven finding, add a focused failing regression test, implement the smallest correction, re-run the affected focused tests plus `pnpm.cmd ci`, commit the correction, and repeat both reviews on the new exact commit.
+Expected: zero Critical and zero Important findings. For any proven finding, add a focused failing regression test, implement the smallest correction, re-run the affected focused tests plus `pnpm.cmd run ci`, commit the correction, and repeat both reviews on the new exact commit.
 
 - [ ] **Step 6: Freeze exact candidate evidence without staging ledgers**
 
@@ -2077,7 +2077,7 @@ try {
   if ($postgresProofExit -ne 0) {
     throw 'Exact candidate real-PostgreSQL proof failed'
   }
-  pnpm.cmd ci
+  pnpm.cmd run ci
   if ($LASTEXITCODE -ne 0) {
     throw 'Exact candidate release gate failed'
   }
