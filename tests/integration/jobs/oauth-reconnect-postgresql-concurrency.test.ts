@@ -137,6 +137,79 @@ interface RaceContext {
   readonly advisoryKey: number;
 }
 
+interface RacePool {
+  connect(): Promise<PoolClient>;
+  end(): Promise<void>;
+}
+
+async function withRaceSchemaUsingPool(
+  pool: RacePool,
+  run: (context: RaceContext) => Promise<void>,
+): Promise<void> {
+  const clients: PoolClient[] = [];
+  try {
+    const admin = await pool.connect();
+    clients.push(admin);
+    const writer = await pool.connect();
+    clients.push(writer);
+    const recovery = await pool.connect();
+    clients.push(recovery);
+    const follower = await pool.connect();
+    clients.push(follower);
+    const observer = await pool.connect();
+    clients.push(observer);
+    const suffix = crypto.randomUUID().replaceAll("-", "");
+    const schema = `vision_auth_reconnect_${suffix}`;
+    const quotedSchema = quoteTestSchema(schema);
+    const recoveryApplication = `vision_auth_recovery_${suffix.slice(0, 12)}`;
+    const followerApplication = `vision_auth_follower_${suffix.slice(0, 12)}`;
+    const advisoryKey = Number.parseInt(suffix.slice(0, 7), 16);
+    try {
+      await admin.query(`create schema ${quotedSchema}`);
+      await admin.query(`set search_path to ${quotedSchema}, public`);
+      for (const migration of migrations) {
+        await admin.query(
+          await readFile(resolve(process.cwd(), "migrations", migration), "utf8"),
+        );
+      }
+      for (const client of [writer, recovery, follower, observer]) {
+        await client.query(`set search_path to ${quotedSchema}, public`);
+        await client.query(`set statement_timeout to '15s'`);
+      }
+      await recovery.query(`select set_config('application_name', $1, false)`, [
+        recoveryApplication,
+      ]);
+      await follower.query(`select set_config('application_name', $1, false)`, [
+        followerApplication,
+      ]);
+      await seedLiveShape(admin);
+      await run({
+        admin,
+        writer,
+        recovery,
+        follower,
+        observer,
+        recoveryApplication,
+        followerApplication,
+        advisoryKey,
+      });
+    } finally {
+      await Promise.allSettled([
+        writer.query("rollback"),
+        recovery.query("rollback"),
+        follower.query("rollback"),
+      ]);
+      await admin.query(`drop schema if exists ${quotedSchema} cascade`);
+    }
+  } finally {
+    try {
+      for (const client of [...clients].reverse()) client.release();
+    } finally {
+      await pool.end();
+    }
+  }
+}
+
 async function withRaceSchema(
   run: (context: RaceContext) => Promise<void>,
 ): Promise<void> {
@@ -144,60 +217,7 @@ async function withRaceSchema(
     throw new Error("Reconnect concurrency database was not approved.");
   }
   const pool = new Pool({ connectionString: approvedDatabaseUrl, max: 5 });
-  const admin = await pool.connect();
-  const writer = await pool.connect();
-  const recovery = await pool.connect();
-  const follower = await pool.connect();
-  const observer = await pool.connect();
-  const suffix = crypto.randomUUID().replaceAll("-", "");
-  const schema = `vision_auth_reconnect_${suffix}`;
-  const quotedSchema = quoteTestSchema(schema);
-  const recoveryApplication = `vision_auth_recovery_${suffix.slice(0, 12)}`;
-  const followerApplication = `vision_auth_follower_${suffix.slice(0, 12)}`;
-  const advisoryKey = Number.parseInt(suffix.slice(0, 7), 16);
-  try {
-    await admin.query(`create schema ${quotedSchema}`);
-    await admin.query(`set search_path to ${quotedSchema}, public`);
-    for (const migration of migrations) {
-      await admin.query(
-        await readFile(resolve(process.cwd(), "migrations", migration), "utf8"),
-      );
-    }
-    for (const client of [writer, recovery, follower, observer]) {
-      await client.query(`set search_path to ${quotedSchema}, public`);
-      await client.query(`set statement_timeout to '15s'`);
-    }
-    await recovery.query(`select set_config('application_name', $1, false)`, [
-      recoveryApplication,
-    ]);
-    await follower.query(`select set_config('application_name', $1, false)`, [
-      followerApplication,
-    ]);
-    await seedLiveShape(admin);
-    await run({
-      admin,
-      writer,
-      recovery,
-      follower,
-      observer,
-      recoveryApplication,
-      followerApplication,
-      advisoryKey,
-    });
-  } finally {
-    await Promise.allSettled([
-      writer.query("rollback"),
-      recovery.query("rollback"),
-      follower.query("rollback"),
-    ]);
-    await admin.query(`drop schema if exists ${quotedSchema} cascade`);
-    observer.release();
-    follower.release();
-    recovery.release();
-    writer.release();
-    admin.release();
-    await pool.end();
-  }
+  await withRaceSchemaUsingPool(pool, run);
 }
 
 async function readClosedState(client: PoolClient): Promise<Record<string, unknown>> {
@@ -227,6 +247,86 @@ async function readClosedState(client: PoolClient): Promise<Record<string, unkno
 }
 
 describe("OAuth reconnect recovery on multi-session PostgreSQL", () => {
+  it("releases race resources after acquisition and schema-drop failures", async () => {
+    interface CleanupOutcome {
+      readonly error: string;
+      readonly released: readonly string[];
+      readonly ended: boolean;
+    }
+
+    function fakeClient(
+      name: string,
+      released: string[],
+      query?: (statement: string) => Promise<void>,
+    ): PoolClient {
+      return {
+        query: async (statement: string) => {
+          await query?.(statement);
+          return { rows: [] };
+        },
+        release: () => released.push(name),
+      } as unknown as PoolClient;
+    }
+
+    async function captureCleanup(
+      clientNames: readonly string[],
+      failConnectAt: number | undefined,
+      failDrop: boolean,
+    ): Promise<CleanupOutcome> {
+      const released: string[] = [];
+      const clients = clientNames.map((name) =>
+        fakeClient(name, released, async (statement) => {
+          if (failDrop && name === "admin" && statement.startsWith("drop schema")) {
+            throw new Error("schema drop failed");
+          }
+        }),
+      );
+      let ended = false;
+      let connectAttempt = 0;
+      const pool: RacePool = {
+        connect: async () => {
+          if (connectAttempt === failConnectAt) {
+            throw new Error("connect failed");
+          }
+          const client = clients[connectAttempt];
+          connectAttempt += 1;
+          if (!client) throw new Error("missing fake client");
+          return client;
+        },
+        end: async () => {
+          ended = true;
+        },
+      };
+      let error = "none";
+      try {
+        await withRaceSchemaUsingPool(pool, async () => undefined);
+      } catch (cause) {
+        error = cause instanceof Error ? cause.message : "non-error failure";
+      }
+      return { error, released: [...released].sort(), ended };
+    }
+
+    const acquisition = await captureCleanup(["admin", "writer"], 2, false);
+    const drop = await captureCleanup(
+      ["admin", "writer", "recovery", "follower", "observer"],
+      undefined,
+      true,
+    );
+
+    expect({ acquisition, drop }).toEqual({
+      acquisition: {
+        error: "connect failed",
+        released: ["admin", "writer"],
+        ended: true,
+      },
+      drop: {
+        error: "schema drop failed",
+        released: ["admin", "follower", "observer", "recovery", "writer"],
+        ended: true,
+      },
+    });
+  });
+
   liveIt(
     "fails an older callback after a newer token write wins",
     async () => {
