@@ -57,7 +57,7 @@ $unexpectedPlanningDelta = @(
 if ($unexpectedPlanningDelta.Count -ne 0) {
   throw 'Planning tip differs from the previous reviewed application artifact'
 }
-pnpm.cmd exec tsx scripts/privacy-safe-git-remote.ts assert_tip --branch codex/phase-b-foundation --expected-commit $remoteParent
+.\node_modules\.bin\tsx.cmd scripts/privacy-safe-git-remote.ts assert_tip --branch codex/phase-b-foundation --expected-commit $remoteParent
 ```
 
 Expected sole adapter stdout: `True`. Retain both values only in ignored local
@@ -2014,7 +2014,7 @@ Expected: one canonical commit is captured only in ignored local evidence; all t
 Use `$remoteParent` captured and remotely verified before Task 1 and `$candidate` from Task 4. Run the permanent privacy-safe adapter:
 
 ```powershell
-pnpm.cmd exec tsx scripts/privacy-safe-git-remote.ts push_exact --branch codex/phase-b-foundation --expected-parent $remoteParent --expected-commit $candidate
+.\node_modules\.bin\tsx.cmd scripts/privacy-safe-git-remote.ts push_exact --branch codex/phase-b-foundation --expected-parent $remoteParent --expected-commit $candidate
 ```
 
 Expected sole stdout: `True`. Any other result stops deployment; do not use a raw remote Git command as fallback.
