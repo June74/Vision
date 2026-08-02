@@ -162,8 +162,10 @@ When eligible, the same statement:
 - changes checkpoint status to `connected`;
 - clears checkpoint error category;
 - clears all three credential-failure marker fields; and
-- advances only the checkpoint and maintenance update times to the persisted
-  token update time.
+- advances the checkpoint update time to the persisted token update time and
+  advances maintenance update time to the greater of its current value and the
+  persisted token update time, so a concurrent maintenance timestamp can never
+  move backward.
 
 It must preserve:
 
@@ -206,6 +208,8 @@ Fail closed when:
   write won;
 - connected setup exists but its canonical connection, checkpoint, or
   maintenance topology is missing or version-inconsistent;
+- an otherwise connected checkpoint still carries any credential-failure
+  marker;
 - the target checkpoint is `disconnected / authorization` but any marker field
   is absent or mismatched;
 - the marker is simultaneous with or newer than the token write; or
@@ -307,8 +311,9 @@ Extend the database-backed channel-maintenance suite to prove:
 
 ### Real PostgreSQL interleaving tests
 
-Add an opt-in multi-session PostgreSQL test using the repository's actual SQL
-and observable database locks. It must prove:
+Add an opt-in multi-session PostgreSQL test using the repository's actual SQL,
+observable database locks, and an explicitly approved disposable test database.
+It must never use preview owner data. The test must prove:
 
 1. an older callback cannot clear state after a newer token write wins;
 2. a scheduler/Queue failure that wins before recovery is preserved;
