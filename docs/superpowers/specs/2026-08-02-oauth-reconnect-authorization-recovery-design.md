@@ -1,6 +1,6 @@
 # OAuth Reconnect Authorization Recovery Design
 
-**Status:** Owner-approved architecture; written-spec review pending
+**Status:** Owner-reviewed written specification
 
 **Phase:** B — authentication and synchronization live-acceptance prerequisite
 
