@@ -142,72 +142,122 @@ interface RacePool {
   end(): Promise<void>;
 }
 
+function attachCleanupFailures(
+  primary: unknown,
+  cleanupFailures: readonly unknown[],
+): void {
+  if (!(primary instanceof Error) || cleanupFailures.length === 0) return;
+  const causes =
+    primary.cause === undefined
+      ? cleanupFailures
+      : [primary.cause, ...cleanupFailures];
+  primary.cause = new AggregateError(causes, "Reconnect race cleanup failed.");
+}
+
+function cleanupFailure(cleanupFailures: readonly unknown[]): unknown {
+  return cleanupFailures.length === 1
+    ? cleanupFailures[0]
+    : new AggregateError(cleanupFailures, "Reconnect race cleanup failed.");
+}
+
 async function withRaceSchemaUsingPool(
   pool: RacePool,
   run: (context: RaceContext) => Promise<void>,
 ): Promise<void> {
   const clients: PoolClient[] = [];
+  let admin: PoolClient | undefined;
+  let writer: PoolClient | undefined;
+  let recovery: PoolClient | undefined;
+  let follower: PoolClient | undefined;
+  let quotedSchema: string | undefined;
+  let primary: unknown;
+  let failed = false;
   try {
-    const admin = await pool.connect();
+    admin = await pool.connect();
     clients.push(admin);
-    const writer = await pool.connect();
+    writer = await pool.connect();
     clients.push(writer);
-    const recovery = await pool.connect();
+    recovery = await pool.connect();
     clients.push(recovery);
-    const follower = await pool.connect();
+    follower = await pool.connect();
     clients.push(follower);
     const observer = await pool.connect();
     clients.push(observer);
     const suffix = crypto.randomUUID().replaceAll("-", "");
     const schema = `vision_auth_reconnect_${suffix}`;
-    const quotedSchema = quoteTestSchema(schema);
+    quotedSchema = quoteTestSchema(schema);
     const recoveryApplication = `vision_auth_recovery_${suffix.slice(0, 12)}`;
     const followerApplication = `vision_auth_follower_${suffix.slice(0, 12)}`;
     const advisoryKey = Number.parseInt(suffix.slice(0, 7), 16);
-    try {
-      await admin.query(`create schema ${quotedSchema}`);
-      await admin.query(`set search_path to ${quotedSchema}, public`);
-      for (const migration of migrations) {
-        await admin.query(
-          await readFile(resolve(process.cwd(), "migrations", migration), "utf8"),
-        );
-      }
-      for (const client of [writer, recovery, follower, observer]) {
-        await client.query(`set search_path to ${quotedSchema}, public`);
-        await client.query(`set statement_timeout to '15s'`);
-      }
-      await recovery.query(`select set_config('application_name', $1, false)`, [
-        recoveryApplication,
-      ]);
-      await follower.query(`select set_config('application_name', $1, false)`, [
-        followerApplication,
-      ]);
-      await seedLiveShape(admin);
-      await run({
-        admin,
-        writer,
-        recovery,
-        follower,
-        observer,
-        recoveryApplication,
-        followerApplication,
-        advisoryKey,
-      });
-    } finally {
-      await Promise.allSettled([
-        writer.query("rollback"),
-        recovery.query("rollback"),
-        follower.query("rollback"),
-      ]);
-      await admin.query(`drop schema if exists ${quotedSchema} cascade`);
+    await admin.query(`create schema ${quotedSchema}`);
+    await admin.query(`set search_path to ${quotedSchema}, public`);
+    for (const migration of migrations) {
+      await admin.query(
+        await readFile(resolve(process.cwd(), "migrations", migration), "utf8"),
+      );
     }
-  } finally {
-    try {
-      for (const client of [...clients].reverse()) client.release();
-    } finally {
-      await pool.end();
+    for (const client of [writer, recovery, follower, observer]) {
+      await client.query(`set search_path to ${quotedSchema}, public`);
+      await client.query(`set statement_timeout to '15s'`);
+    }
+    await recovery.query(`select set_config('application_name', $1, false)`, [
+      recoveryApplication,
+    ]);
+    await follower.query(`select set_config('application_name', $1, false)`, [
+      followerApplication,
+    ]);
+    await seedLiveShape(admin);
+    await run({
+      admin,
+      writer,
+      recovery,
+      follower,
+      observer,
+      recoveryApplication,
+      followerApplication,
+      advisoryKey,
+    });
+  } catch (cause) {
+    failed = true;
+    primary = cause;
+  }
+
+  const cleanupFailures: unknown[] = [];
+  if (quotedSchema && writer && recovery && follower) {
+    const rollbacks = await Promise.allSettled([
+      writer.query("rollback"),
+      recovery.query("rollback"),
+      follower.query("rollback"),
+    ]);
+    for (const rollback of rollbacks) {
+      if (rollback.status === "rejected") cleanupFailures.push(rollback.reason);
     }
   }
+  if (quotedSchema && admin) {
+    try {
+      await admin.query(`drop schema if exists ${quotedSchema} cascade`);
+    } catch (cause) {
+      cleanupFailures.push(cause);
+    }
+  }
+  for (const client of [...clients].reverse()) {
+    try {
+      client.release();
+    } catch (cause) {
+      cleanupFailures.push(cause);
+    }
+  }
+  try {
+    await pool.end();
+  } catch (cause) {
+    cleanupFailures.push(cause);
+  }
+
+  if (failed) {
+    attachCleanupFailures(primary, cleanupFailures);
+    throw primary;
+  }
+  if (cleanupFailures.length > 0) throw cleanupFailure(cleanupFailures);
 }
 
 async function withRaceSchema(
@@ -325,6 +375,93 @@ describe("OAuth reconnect recovery on multi-session PostgreSQL", () => {
         ended: true,
       },
     });
+  });
+
+  it("preserves primary failures and aggregates complete cleanup failures", async () => {
+    async function exerciseCleanup(primary: Error | undefined): Promise<{
+      readonly thrown: unknown;
+      readonly released: readonly string[];
+      readonly ended: boolean;
+      readonly cleanupFailures: readonly Error[];
+    }> {
+      const rollbackFailure = new Error("rollback failed");
+      const dropFailure = new Error("drop failed");
+      const releaseFailure = new Error("release failed");
+      const endFailure = new Error("end failed");
+      const cleanupFailures = [
+        rollbackFailure,
+        dropFailure,
+        releaseFailure,
+        endFailure,
+      ];
+      const released: string[] = [];
+      let ended = false;
+      const clients = ["admin", "writer", "recovery", "follower", "observer"].map(
+        (name) =>
+          ({
+            query: async (statement: string) => {
+              if (name === "writer" && statement === "rollback") {
+                throw rollbackFailure;
+              }
+              if (name === "admin" && statement.startsWith("drop schema")) {
+                throw dropFailure;
+              }
+              return { rows: [] };
+            },
+            release: () => {
+              released.push(name);
+              if (name === "follower") throw releaseFailure;
+            },
+          }) as unknown as PoolClient,
+      );
+      let connectAttempt = 0;
+      const pool: RacePool = {
+        connect: async () => {
+          const client = clients[connectAttempt];
+          connectAttempt += 1;
+          if (!client) throw new Error("missing fake client");
+          return client;
+        },
+        end: async () => {
+          ended = true;
+          throw endFailure;
+        },
+      };
+      let thrown: unknown;
+      try {
+        await withRaceSchemaUsingPool(pool, async () => {
+          if (primary) throw primary;
+        });
+      } catch (cause) {
+        thrown = cause;
+      }
+      return {
+        thrown,
+        released: [...released].sort(),
+        ended,
+        cleanupFailures,
+      };
+    }
+
+    const primary = new Error("primary failed");
+    const primaryOutcome = await exerciseCleanup(primary);
+    const cleanupOnlyOutcome = await exerciseCleanup(undefined);
+    const allClients = ["admin", "follower", "observer", "recovery", "writer"];
+
+    expect(primaryOutcome.thrown).toBe(primary);
+    expect(primary.cause).toBeInstanceOf(AggregateError);
+    expect((primary.cause as AggregateError).errors).toEqual(
+      primaryOutcome.cleanupFailures,
+    );
+    expect(primaryOutcome.released).toEqual(allClients);
+    expect(primaryOutcome.ended).toBe(true);
+
+    expect(cleanupOnlyOutcome.thrown).toBeInstanceOf(AggregateError);
+    expect((cleanupOnlyOutcome.thrown as AggregateError).errors).toEqual(
+      cleanupOnlyOutcome.cleanupFailures,
+    );
+    expect(cleanupOnlyOutcome.released).toEqual(allClients);
+    expect(cleanupOnlyOutcome.ended).toBe(true);
   });
 
   liveIt(
