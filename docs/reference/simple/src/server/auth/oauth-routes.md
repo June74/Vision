@@ -1,6 +1,6 @@
 # OAuth routes
 
-Provides Google sign-in start/callback, current session, and logout routes.
+Provides Google sign-in start/callback with guarded authorization recovery, current session, and logout routes.
 
 ## `registerOAuthRoutes`
 
@@ -9,6 +9,10 @@ Adds all authentication routes before the generic API fallback.
 ## `createProductionAuthDependencies`
 
 Builds database, encryption, Google, session, and token boundaries from validated Worker bindings.
+
+## `recoverAfterReconnect`
+
+Checks whether Vision may safely clear an older scheduler-owned authorization disconnect after encrypted credentials are saved.
 
 ## `now`
 

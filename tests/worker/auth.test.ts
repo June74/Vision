@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { SELF } from "cloudflare:test";
 import type { KeyProvider } from "../../src/crypto/key-provider";
+import { IdentityAuthorizationError } from "../../src/domain/auth/identity";
 import {
   EncryptedSessionRepository,
   type OAuthTransactionRow,
@@ -19,6 +20,7 @@ import {
   type IdTokenVerifier,
 } from "../../src/integrations/google/oauth-client";
 import type { Env } from "../../src/server/env";
+import type { AuthorizationRecoveryPort } from "../../src/server/auth/oauth-routes";
 import { createApp } from "../../src/worker";
 
 const now = new Date("2026-07-23T12:00:00.000Z");
@@ -221,6 +223,7 @@ async function createKeyProvider(): Promise<KeyProvider> {
 }
 
 async function createHarness(options: {
+  authorizationRecovery?: AuthorizationRecoveryPort;
   dynamicProtocolValues?: boolean;
   environment?: "local" | "preview" | "production";
   claims?: unknown;
@@ -235,6 +238,9 @@ async function createHarness(options: {
     keyProvider,
     "usr_private_pilot",
   );
+  const authorizationRecovery = options.authorizationRecovery ?? {
+    recoverAfterReconnect: vi.fn(async () => "not_needed" as const),
+  };
   const idTokenVerifier: IdTokenVerifier = {
     verify: vi.fn().mockResolvedValue(
       options.claims ?? {
@@ -281,6 +287,7 @@ async function createHarness(options: {
     auth: {
       admissionKey: async () =>
         "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      authorizationRecovery,
       environment: options.environment ?? "preview",
       identityAllowlist: {
         email: "allowed@example.test",
@@ -316,6 +323,7 @@ async function createHarness(options: {
   });
   return {
     app,
+    authorizationRecovery,
     fetcher,
     idTokenVerifier,
     logger,
@@ -486,6 +494,125 @@ describe("Vision Worker Google authentication", () => {
     ]) {
       expect(persistedText).not.toContain(secret);
       expect(JSON.stringify(logger.mock.calls)).not.toContain(secret);
+    }
+  });
+
+  it.each(["recovered", "not_needed"] as const)(
+    "continues secure callback after authorization recovery returns %s",
+    async (outcome) => {
+      const authorizationRecovery: AuthorizationRecoveryPort = {
+        recoverAfterReconnect: vi.fn(async () => outcome),
+      };
+      const { app, sessionStore } = await createHarness({ authorizationRecovery });
+      await app.fetch(new Request("https://vision.example.test/api/auth/google/start"), {} as Env);
+      const response = await app.fetch(
+        new Request(
+          `https://vision.example.test/api/auth/google/callback?code=authorization-code&state=${state}`,
+        ),
+        {} as Env,
+      );
+      expect(response.status).toBe(302);
+      expect(sessionStore.sessionRows).toHaveLength(1);
+      expect(authorizationRecovery.recoverAfterReconnect).toHaveBeenCalledWith({
+        googleSubject: "google-subject",
+        tokenVersion: 1,
+        tokenUpdatedAt: now,
+      });
+      expect(
+        Object.keys(
+          vi.mocked(authorizationRecovery.recoverAfterReconnect).mock.calls[0]![0],
+        ).sort(),
+      ).toEqual(["googleSubject", "tokenUpdatedAt", "tokenVersion"]);
+    },
+  );
+
+  it("runs recovery after token persistence and before session rotation or creation", async () => {
+    const recovery = vi.fn(async () => "recovered" as const);
+    const { app, sessions, tokens } = await createHarness({
+      authorizationRecovery: { recoverAfterReconnect: recovery },
+    });
+    const save = vi.spyOn(tokens, "saveGoogleTokens");
+    const revoke = vi.spyOn(sessions, "revokeSession");
+    const create = vi.spyOn(sessions, "createSession");
+    const oldSessionId = "OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO";
+    await sessions.createSession({
+      sessionId: oldSessionId,
+      ownerId: "usr_private_pilot",
+      googleSubject: "google-subject",
+      email: "allowed@example.test",
+      csrfToken: "PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP",
+      createdAt: now,
+      expiresAt: new Date(now.getTime() + 60_000),
+    });
+    create.mockClear();
+    await app.fetch(new Request("https://vision.example.test/api/auth/google/start"), {} as Env);
+    await app.fetch(
+      new Request(
+        `https://vision.example.test/api/auth/google/callback?code=authorization-code&state=${state}`,
+        { headers: { cookie: `vision_session=${oldSessionId}` } },
+      ),
+      {} as Env,
+    );
+    expect(save.mock.invocationCallOrder[0]).toBeLessThan(recovery.mock.invocationCallOrder[0]!);
+    expect(recovery.mock.invocationCallOrder[0]).toBeLessThan(revoke.mock.invocationCallOrder[0]!);
+    expect(revoke.mock.invocationCallOrder[0]).toBeLessThan(create.mock.invocationCallOrder[0]!);
+  });
+
+  it.each([
+    ["conflict", { recoverAfterReconnect: vi.fn(async () => "conflict" as const) }],
+    ["throw", { recoverAfterReconnect: vi.fn(async () => {
+      throw new Error("RECOVERY_DATABASE_DETAIL_SENTINEL");
+    }) }],
+    ["identity-shaped throw", { recoverAfterReconnect: vi.fn(async () => {
+      throw new IdentityAuthorizationError();
+    }) }],
+  ] as const)("fails safely when reconnect recovery returns %s", async (_case, authorizationRecovery) => {
+    const { app, logger, sessionStore, sessions, tokenStore } = await createHarness({
+      authorizationRecovery,
+    });
+    const oldSessionId = "OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO";
+    await sessions.createSession({
+      sessionId: oldSessionId,
+      ownerId: "usr_private_pilot",
+      googleSubject: "google-subject",
+      email: "allowed@example.test",
+      csrfToken: "PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP",
+      createdAt: now,
+      expiresAt: new Date(now.getTime() + 60_000),
+    });
+    await app.fetch(new Request("https://vision.example.test/api/auth/google/start"), {} as Env);
+    const response = await app.fetch(
+      new Request(
+        `https://vision.example.test/api/auth/google/callback?code=authorization-code&state=${state}`,
+        { headers: { cookie: `vision_session=${oldSessionId}` } },
+      ),
+      {} as Env,
+    );
+    expect(response.status).toBe(400);
+    expect(await response.text()).toBe(
+      "<!doctype html><html><body><h1>Authentication failed</h1><p>Please try again.</p></body></html>",
+    );
+    expect(response.headers.get("set-cookie")).toBeNull();
+    expect(tokenStore.rows).toHaveLength(1);
+    expect(sessionStore.sessionRows).toHaveLength(1);
+    expect(sessionStore.sessionRows[0]?.revokedAt).toBeNull();
+    expect(logger).toHaveBeenCalledWith(expect.objectContaining({
+      action: "auth.callback",
+      errorCategory: "authorization_recovery_failed",
+      outcome: "failed",
+    }));
+    const observable = JSON.stringify({
+      body: "Authentication failed. Please try again.",
+      logs: logger.mock.calls,
+    });
+    for (const forbidden of [
+      "RECOVERY_DATABASE_DETAIL_SENTINEL",
+      "REFRESH_TOKEN_SENTINEL",
+      "ACCESS_TOKEN_SENTINEL",
+      "google-subject",
+      "allowed@example.test",
+    ]) {
+      expect(observable).not.toContain(forbidden);
     }
   });
 

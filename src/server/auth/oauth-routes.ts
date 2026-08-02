@@ -3,6 +3,10 @@ import type { Context, Hono } from "hono";
 import { createWrappedKeyProvider } from "../../crypto/key-provider";
 import { createDb } from "../../data/db";
 import {
+  createChannelMaintenanceRepository,
+  type AuthorizationRecoveryOutcome,
+} from "../../data/repositories/channel-maintenance-repository";
+import {
   authorizeIdentity,
   IdentityAuthorizationError,
   type IdentityAllowlist,
@@ -47,9 +51,19 @@ import {
 /** Random protocol values generated only on the server. */
 export type AuthRandomPurpose = "state" | "pkceVerifier" | "nonce" | "sessionId" | "csrfToken";
 
+/** Narrow owner-scoped synchronization repair boundary used only after reconnect. */
+export interface AuthorizationRecoveryPort {
+  recoverAfterReconnect(input: {
+    readonly googleSubject: string;
+    readonly tokenVersion: number;
+    readonly tokenUpdatedAt: Date;
+  }): Promise<AuthorizationRecoveryOutcome>;
+}
+
 /** Complete injected server boundaries used by authentication routes. */
 export interface AuthRouteDependencies {
   readonly admissionKey: AuthAdmissionKeyFactory;
+  readonly authorizationRecovery: AuthorizationRecoveryPort;
   readonly environment: "local" | "preview" | "production";
   readonly identityAllowlist: IdentityAllowlist;
   readonly logger: SafeLogger;
@@ -87,6 +101,7 @@ type AuthCallbackFailureCategory =
   | "id_token_verification_failed"
   | "claims_validation_failed"
   | "token_persistence_failed"
+  | "authorization_recovery_failed"
   | "session_rotation_failed"
   | "session_creation_failed";
 
@@ -204,7 +219,7 @@ export function registerOAuthRoutes(
       );
       failureCategory = "token_persistence_failed";
       const issuedAt = dependencies.now();
-      await dependencies.tokens.saveGoogleTokens({
+      const retainedTokens = await dependencies.tokens.saveGoogleTokens({
         googleSubject: identity.subject,
         ...(tokenSet.refreshToken
           ? { refreshToken: tokenSet.refreshToken }
@@ -216,6 +231,20 @@ export function registerOAuthRoutes(
         grantedScopes: tokenSet.scopes,
         updatedAt: issuedAt,
       });
+
+      failureCategory = "authorization_recovery_failed";
+      const recoveryOutcome =
+        await dependencies.authorizationRecovery.recoverAfterReconnect({
+          googleSubject: identity.subject,
+          tokenVersion: retainedTokens.tokenVersion,
+          tokenUpdatedAt: retainedTokens.updatedAt,
+        });
+      if (
+        recoveryOutcome !== "recovered" &&
+        recoveryOutcome !== "not_needed"
+      ) {
+        throw new Error("Authorization recovery did not admit session creation.");
+      }
 
       failureCategory = "session_rotation_failed";
       const previousSessionId = readSessionCookie(context.req.raw);
@@ -254,6 +283,7 @@ export function registerOAuthRoutes(
     } catch (error) {
       if (
         dependencies !== undefined &&
+        failureCategory === "claims_validation_failed" &&
         error instanceof IdentityAuthorizationError
       ) {
         logAuthEventSafely(
@@ -389,12 +419,22 @@ export async function createProductionAuthDependencies(
     throw new AuthDependencyInitializationError("database_unavailable");
   }
   const ownerId = await deriveOwnerId(authEnvironment.GOOGLE_ALLOWED_SUB);
+  const maintenance = createChannelMaintenanceRepository(
+    database,
+    ownerId,
+  );
+  const authorizationRecovery: AuthorizationRecoveryPort = {
+    /** Delegates the narrow callback port to the owner-scoped repository method. */
+    recoverAfterReconnect: (input) =>
+      maintenance.recoverAuthorizationAfterReconnect(input),
+  };
   const admissionKey = await createAuthAdmissionKeyFactory(
     environment.KEY_ENCRYPTION_KEY,
     authEnvironment.VISION_ENV,
   );
   return {
     admissionKey,
+    authorizationRecovery,
     environment: authEnvironment.VISION_ENV,
     identityAllowlist: {
       email: authEnvironment.GOOGLE_ALLOWED_EMAIL,

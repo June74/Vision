@@ -1,6 +1,6 @@
 # OAuth routes
 
-`GET /api/auth/google/start` creates state, nonce, and a PKCE verifier on the server; only state, nonce, and the derived challenge enter Google's authorization URL. `GET /api/auth/google/callback` atomically consumes state before provider exchange, verifies the Google signature and claims, applies the Task 1 allowlist, encrypts tokens, rotates any prior session, and sends only a new opaque cookie. `GET /api/auth/session` resolves server state. `POST /api/auth/logout` requires the session-bound CSRF header, revokes the row, and clears the cookie.
+`GET /api/auth/google/start` creates state, nonce, and a PKCE verifier on the server; only state, nonce, and the derived challenge enter Google's authorization URL. `GET /api/auth/google/callback` atomically consumes state before provider exchange, verifies the Google signature and claims, applies the Task 1 allowlist, encrypts tokens, performs guarded authorization recovery, rotates any prior session, and sends only a new opaque cookie. `GET /api/auth/session` resolves server state. `POST /api/auth/logout` requires the session-bound CSRF header, revokes the row, and clears the cookie.
 
 Callback pages and audit facts are constant and contain no provider body, claim, token, state, verifier, nonce, or database detail.
 
@@ -24,7 +24,7 @@ Consumes Worker bindings plus request query/cookie/header data through bounded p
 
 ## Side effects
 
-Start derives admission identity from trusted edge/shared context before any session lookup, performs bounded cleanup/admission, persists encrypted state, then redirects to Google. Callback physically consumes state, exchanges/verifies, atomically persists tokens, rotates the session, and redirects `/`. Logout revokes and clears.
+Start derives admission identity from trusted edge/shared context before any session lookup, performs bounded cleanup/admission, persists encrypted state, then redirects to Google. Callback physically consumes state, exchanges/verifies, then performs `token persistence -> guarded recovery -> session rotation -> session creation` before redirecting `/`. Logout revokes and clears.
 
 ## Failure behavior
 
@@ -45,6 +45,10 @@ Accepts static deterministic dependencies for tests or a per-request production 
 ## `createProductionAuthDependencies`
 
 Validates OAuth bindings, creates the least-privileged Neon client, resolves the protected-field key provider through durable wrapped keys, constructs Drizzle stores, and injects fixed Google endpoints plus the JWKS verifier. It performs no provider call during composition.
+
+## `recoverAfterReconnect`
+
+Receives only the verified subject and authoritative token version/update time returned by token persistence. `recovered` and `not_needed` continue; `conflict`, an unknown result, or an exception maps to `authorization_recovery_failed` before any old session is revoked or new session is created.
 
 ## `now`
 
