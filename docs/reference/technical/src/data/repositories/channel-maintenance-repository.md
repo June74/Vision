@@ -18,6 +18,8 @@ Changes only the exact active old row after provider stop.
 Increments the calendar-level durable failure counter for the exact lease and exposes bounded Action required.
 ## `recordCredentialFailure`
 Atomically writes a typed scheduler credential disposition only from connected state or an exact version/category/timestamp scheduler marker, so Task 3 retry state cannot be adopted.
+## `recoverAuthorizationAfterReconnect`
+Locks the exact owner token, setup, canonical connection, checkpoint, and maintenance rows in one SQL statement. It requires exact token metadata plus a complete older `disconnected / authorization` scheduler marker, clears checkpoint and marker together, advances timestamps without moving maintenance time backward, and forces statement rollback if the two guarded updates do not both affect one row.
 ## `clearCredentialRetry`
 Returns only an exact scheduler-marked transient or database retry to connected after credential resolution succeeds.
 ## `markCleanupRequired`

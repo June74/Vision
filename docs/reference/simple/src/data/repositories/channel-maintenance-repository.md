@@ -18,6 +18,8 @@ Retires an old stopped channel.
 Records safe counters and Action required.
 ## `recordCredentialFailure`
 Records a safe scheduler credential state only for a connected checkpoint or Vision's exact existing scheduler marker.
+## `recoverAuthorizationAfterReconnect`
+After a successful reconnect, clears only an older complete scheduler-owned authorization marker. It returns `not_needed` for ordinary first login or unrelated health, and `conflict` for ambiguous or newer state.
 ## `clearCredentialRetry`
 Reconnects only a retry that the scheduler marked after a credential problem.
 ## `markCleanupRequired`

@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { VisionDatabase } from "../../../src/data/db";
+import { createChannelMaintenanceRepository } from "../../../src/data/repositories/channel-maintenance-repository";
 import { DrizzleSessionStore } from "../../../src/data/repositories/session-repository";
 import {
   DrizzleTokenStore,
@@ -444,5 +445,77 @@ describe("Google OAuth adapter", () => {
     expect(migration).not.toMatch(/\b(refresh_token|access_token|code_verifier|nonce|csrf_token)\s+text\b/u);
     expect(migration).toContain("check (expires_at > created_at)");
     expect(migration).toContain("check (token_version > 0)");
+  });
+
+  it("uses one parameterized owner-scoped statement for reconnect recovery", async () => {
+    const statements: SQL[] = [];
+    const database = {
+      execute: async (statement: SQL) => {
+        statements.push(statement);
+        return { rows: [{ outcome: "not_needed" }] };
+      },
+    } as unknown as VisionDatabase;
+    const repository = createChannelMaintenanceRepository(
+      database,
+      "owner_reconnect_contract",
+    );
+
+    await expect(
+      repository.recoverAuthorizationAfterReconnect({
+        googleSubject: "subject_reconnect_contract",
+        tokenVersion: 7,
+        tokenUpdatedAt: new Date("2026-08-02T05:00:00.000Z"),
+      }),
+    ).resolves.toBe("not_needed");
+    expect(statements).toHaveLength(1);
+    const compiled = dialect.sqlToQuery(statements[0]!);
+    const rendered = compiled.sql.replace(/\s+/gu, " ").toLowerCase();
+    for (const fragment of [
+      "with locked_token as materialized",
+      "from locked_token",
+      "locked_setup as materialized",
+      "inner join locked_setup",
+      "locked_connection as materialized",
+      "inner join locked_connection",
+      "locked_checkpoint as materialized",
+      "inner join locked_checkpoint",
+      "locked_maintenance as materialized",
+      "for update of token",
+      "for update of setup",
+      "for update of connection",
+      "for update of checkpoint",
+      "for update of maintenance",
+      "update sync_checkpoints",
+      "update calendar_sync_maintenance",
+      "from topology, recovered_checkpoint",
+      "greatest(maintenance.updated_at",
+      "authorization_recovery_atomicity_violation",
+    ]) {
+      expect(rendered).toContain(fragment);
+    }
+    expect(rendered).not.toContain("owner_reconnect_contract");
+    expect(rendered).not.toContain("subject_reconnect_contract");
+    expect(compiled.params).toContain("owner_reconnect_contract");
+    expect(compiled.params).toContain("subject_reconnect_contract");
+  });
+
+  it.each([
+    [[]],
+    [[{ outcome: "unknown" }]],
+    [[{ outcome: "recovered" }, { outcome: "not_needed" }]],
+  ] as const)("rejects a non-single closed recovery result", async (rows) => {
+    const database = {
+      execute: async () => ({ rows: [...rows] }),
+    } as unknown as VisionDatabase;
+    await expect(
+      createChannelMaintenanceRepository(
+        database,
+        "owner_reconnect_contract",
+      ).recoverAuthorizationAfterReconnect({
+        googleSubject: "subject_reconnect_contract",
+        tokenVersion: 7,
+        tokenUpdatedAt: new Date("2026-08-02T05:00:00.000Z"),
+      }),
+    ).rejects.toThrow("Invalid authorization recovery row.");
   });
 });

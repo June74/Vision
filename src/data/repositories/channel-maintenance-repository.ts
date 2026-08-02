@@ -26,6 +26,19 @@ const PENDING_WINDOW_MS = 10 * 60_000;
 const REPAIR_STALE_MS = 15 * 60_000;
 const ACTION_REQUIRED_FAILURES = 6;
 
+/** Closed result of one owner-scoped authorization reconnect reconciliation. */
+export type AuthorizationRecoveryOutcome =
+  | "recovered"
+  | "not_needed"
+  | "conflict";
+
+/** Authoritative token metadata returned by the encrypted token upsert. */
+export interface AuthorizationReconnectInput {
+  readonly googleSubject: string;
+  readonly tokenVersion: number;
+  readonly tokenUpdatedAt: Date;
+}
+
 /** SQL-backed maintenance repository scoped to one canonical private owner. */
 export class ChannelMaintenanceRepository
   implements ChannelLifecycleRepository, RepairRepository
@@ -621,6 +634,200 @@ export class ChannelMaintenanceRepository
       select owner_id from marked
     `);
     return result.rows.length === 1;
+  }
+
+  /** Recovers only an exact older scheduler authorization marker after reconnect. */
+  async recoverAuthorizationAfterReconnect(
+    input: AuthorizationReconnectInput,
+  ): Promise<AuthorizationRecoveryOutcome> {
+    const googleSubject = readText(input.googleSubject);
+    const tokenVersion = readPositiveInteger(input.tokenVersion);
+    const tokenUpdatedAt = readDate(input.tokenUpdatedAt);
+    const result = await this.database.execute<Record<string, unknown>>(sql`
+      with locked_token as materialized (
+        select token.owner_id, token.google_subject, token.token_version, token.updated_at
+        from google_oauth_tokens as token
+        where token.owner_id = ${this.ownerId}
+        for update of token
+      ),
+      exact_token as materialized (
+        select *
+        from locked_token
+        where google_subject = ${googleSubject}
+          and token_version = ${tokenVersion}
+          and updated_at = ${tokenUpdatedAt}
+      ),
+      locked_setup as materialized (
+        select setup.*
+        from calendar_setup_states as setup
+        where setup.owner_id = ${this.ownerId}
+          and exists (select 1 from exact_token)
+        for update of setup
+      ),
+      locked_connection as materialized (
+        select connection.*
+        from vision_calendar_connections as connection
+        inner join locked_setup as setup
+          on setup.owner_id = connection.owner_id
+         and setup.status = 'connected'
+        where connection.owner_id = ${this.ownerId}
+        for update of connection
+      ),
+      locked_checkpoint as materialized (
+        select checkpoint.*
+        from sync_checkpoints as checkpoint
+        inner join locked_connection as connection
+          on connection.owner_id = checkpoint.owner_id
+         and connection.provider_calendar_id = checkpoint.provider_calendar_id
+        where checkpoint.owner_id = ${this.ownerId}
+          and checkpoint.provider = 'google-calendar'
+        for update of checkpoint
+      ),
+      locked_maintenance as materialized (
+        select maintenance.*
+        from calendar_sync_maintenance as maintenance
+        inner join locked_checkpoint as checkpoint
+          on checkpoint.owner_id = maintenance.owner_id
+         and checkpoint.provider = maintenance.provider
+         and checkpoint.provider_calendar_id = maintenance.provider_calendar_id
+        where maintenance.owner_id = ${this.ownerId}
+          and maintenance.provider = 'google-calendar'
+        for update of maintenance
+      ),
+      topology as materialized (
+        select
+          token.updated_at as token_updated_at,
+          checkpoint.owner_id,
+          checkpoint.provider,
+          checkpoint.provider_calendar_id,
+          checkpoint.version as checkpoint_version,
+          checkpoint.status as checkpoint_status,
+          checkpoint.last_error_category as checkpoint_category,
+          checkpoint.updated_at as checkpoint_updated_at,
+          maintenance.credential_failure_checkpoint_version as marker_version,
+          maintenance.credential_failure_category as marker_category,
+          maintenance.credential_failure_recorded_at as marker_recorded_at
+        from exact_token as token
+        inner join locked_setup as setup
+          on setup.owner_id = token.owner_id
+         and setup.google_subject = token.google_subject
+         and setup.status = 'connected'
+        inner join locked_connection as connection
+          on connection.owner_id = setup.owner_id
+         and connection.google_subject = setup.google_subject
+         and connection.summary = 'Vision'
+         and connection.ownership_access_role = 'owner'
+        inner join locked_checkpoint as checkpoint
+          on checkpoint.owner_id = connection.owner_id
+         and checkpoint.provider = 'google-calendar'
+         and checkpoint.provider_calendar_id = connection.provider_calendar_id
+        inner join locked_maintenance as maintenance
+          on maintenance.owner_id = checkpoint.owner_id
+         and maintenance.provider = checkpoint.provider
+         and maintenance.provider_calendar_id = checkpoint.provider_calendar_id
+         and maintenance.connection_version = setup.setup_version
+         and maintenance.checkpoint_version = checkpoint.version
+      ),
+      decision as materialized (
+        select case
+          when not exists (select 1 from exact_token) then 'conflict'
+          when not exists (select 1 from locked_setup) then 'not_needed'
+          when exists (
+            select 1 from locked_setup where status <> 'connected'
+          ) then 'not_needed'
+          when not exists (select 1 from topology) then 'conflict'
+          when exists (
+            select 1
+            from topology
+            where checkpoint_status = 'connected'
+              and (
+                marker_version is not null
+                or marker_category is not null
+                or marker_recorded_at is not null
+              )
+          ) then 'conflict'
+          when exists (
+            select 1
+            from topology
+            where checkpoint_status = 'disconnected'
+              and checkpoint_category = 'authorization'
+              and marker_version = checkpoint_version
+              and marker_category = 'authorization'
+              and marker_recorded_at = checkpoint_updated_at
+              and marker_recorded_at < token_updated_at
+          ) then 'recovered'
+          when exists (
+            select 1
+            from topology
+            where checkpoint_status = 'disconnected'
+              and checkpoint_category = 'authorization'
+          ) then 'conflict'
+          else 'not_needed'
+        end as outcome
+      ),
+      recovered_checkpoint as (
+        update sync_checkpoints as checkpoint
+        set status = 'connected',
+            last_error_category = null,
+            updated_at = ${tokenUpdatedAt}
+        from topology, decision
+        where decision.outcome = 'recovered'
+          and checkpoint.owner_id = topology.owner_id
+          and checkpoint.provider = topology.provider
+          and checkpoint.provider_calendar_id = topology.provider_calendar_id
+          and checkpoint.version = topology.checkpoint_version
+          and checkpoint.status = 'disconnected'
+          and checkpoint.last_error_category = 'authorization'
+          and checkpoint.updated_at = topology.checkpoint_updated_at
+        returning checkpoint.owner_id, checkpoint.provider,
+          checkpoint.provider_calendar_id, checkpoint.version
+      ),
+      recovered_maintenance as (
+        update calendar_sync_maintenance as maintenance
+        set credential_failure_checkpoint_version = null,
+            credential_failure_category = null,
+            credential_failure_recorded_at = null,
+            updated_at = greatest(maintenance.updated_at, ${tokenUpdatedAt})
+        from topology, recovered_checkpoint
+        where maintenance.owner_id = recovered_checkpoint.owner_id
+          and maintenance.provider = recovered_checkpoint.provider
+          and maintenance.provider_calendar_id = recovered_checkpoint.provider_calendar_id
+          and maintenance.checkpoint_version = recovered_checkpoint.version
+          and maintenance.credential_failure_checkpoint_version = topology.marker_version
+          and maintenance.credential_failure_category = topology.marker_category
+          and maintenance.credential_failure_recorded_at = topology.marker_recorded_at
+        returning maintenance.owner_id
+      ),
+      asserted as materialized (
+        select (
+          case
+            when decision.outcome = 'recovered'
+              and (select count(*) from recovered_checkpoint) = 1
+              and (select count(*) from recovered_maintenance) = 1
+            then '1'
+            when decision.outcome <> 'recovered'
+              and (select count(*) from recovered_checkpoint) = 0
+              and (select count(*) from recovered_maintenance) = 0
+            then '1'
+            else 'authorization_recovery_atomicity_violation'
+          end
+        )::integer as ok
+        from decision
+      )
+      select decision.outcome
+      from decision
+      cross join asserted
+      where asserted.ok = 1
+    `);
+    const outcome = result.rows.length === 1 ? result.rows[0]?.outcome : undefined;
+    if (
+      outcome !== "recovered" &&
+      outcome !== "not_needed" &&
+      outcome !== "conflict"
+    ) {
+      throw new Error("Invalid authorization recovery row.");
+    }
+    return outcome;
   }
 
   /** Clears only the exact scheduler-owned retry marker after credentials work again. */
