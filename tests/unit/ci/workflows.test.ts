@@ -1,7 +1,14 @@
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
+import {
+  createPreviewDispatchCorrelationEvidence,
+  serializePreviewAcceptanceContext,
+} from "../../../scripts/prepare-preview-acceptance-deploy-config";
 
 const CHECKOUT_ACTION =
   "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0";
@@ -11,6 +18,123 @@ const UPLOAD_ARTIFACT_ACTION =
   "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2";
 const PNPM_SETUP_ACTION =
   "pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0";
+const SYNTHETIC_REVIEWED_COMMIT = "a".repeat(40);
+const SYNTHETIC_DISPATCH_CORRELATION = "b".repeat(64);
+const SYNTHETIC_OPERATION = "none";
+
+interface DispatchCorrelationVerifierResult {
+  readonly exitCode: number | null;
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
+interface DispatchCorrelationFixture {
+  readonly directory: string;
+  readonly contextPath: string;
+  readonly evidencePath: string;
+  readonly serializedContext: string;
+  readonly serializedEvidence: string;
+}
+
+function createSyntheticDispatchCorrelationContext(): string {
+  return serializePreviewAcceptanceContext({
+    version: "vision.preview-acceptance-context/v2",
+    kind: SYNTHETIC_OPERATION,
+    reviewedCommit: SYNTHETIC_REVIEWED_COMMIT,
+    dispatchCorrelation: SYNTHETIC_DISPATCH_CORRELATION,
+    candidateRunRef: "baseline",
+    rollbackClosureRunRef: "baseline",
+  });
+}
+
+async function withDispatchCorrelationFixture<T>(
+  run: (fixture: DispatchCorrelationFixture) => Promise<T>,
+): Promise<T> {
+  const directory = await mkdtemp(
+    join(tmpdir(), "preview-dispatch-correlation-verifier-"),
+  );
+  const contextPath = join(directory, "context.json");
+  const evidencePath = join(directory, "evidence.json");
+  const serializedContext = createSyntheticDispatchCorrelationContext();
+  const serializedEvidence = JSON.stringify(
+    createPreviewDispatchCorrelationEvidence(
+      SYNTHETIC_OPERATION,
+      serializedContext,
+    ),
+  );
+  await Promise.all([
+    writeFile(contextPath, serializedContext, "utf8"),
+    writeFile(evidencePath, serializedEvidence, "utf8"),
+  ]);
+  try {
+    return await run({
+      directory,
+      contextPath,
+      evidencePath,
+      serializedContext,
+      serializedEvidence,
+    });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+function verifierArguments(
+  fixture: DispatchCorrelationFixture,
+): readonly string[] {
+  return [
+    "--verify-dispatch-correlation",
+    "--evidence",
+    fixture.evidencePath,
+    "--operation",
+    SYNTHETIC_OPERATION,
+    "--context",
+    fixture.contextPath,
+    "--commit",
+    SYNTHETIC_REVIEWED_COMMIT,
+  ];
+}
+
+async function runDispatchCorrelationVerifier(
+  arguments_: readonly string[],
+): Promise<DispatchCorrelationVerifierResult> {
+  const child = spawn(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      resolve(
+        process.cwd(),
+        "scripts",
+        "prepare-preview-acceptance-deploy-config.ts",
+      ),
+      ...arguments_,
+    ],
+    { cwd: process.cwd(), stdio: ["ignore", "pipe", "pipe"] },
+  );
+  let stdout = "";
+  let stderr = "";
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+  child.stderr.on("data", (chunk: string) => {
+    stderr += chunk;
+  });
+  const [exitCode] = (await once(child, "close")) as [number | null];
+  return { exitCode, stdout, stderr };
+}
+
+function expectRejectedDispatchCorrelationVerifier(
+  result: DispatchCorrelationVerifierResult,
+): void {
+  expect(result.exitCode).not.toBe(0);
+  expect(result.stdout).toBe("");
+  expect(result.stderr).toBe(
+    "Preview dispatch correlation evidence is invalid.\n",
+  );
+}
 
 /** Reads a committed workflow from the repository root. */
 async function readWorkflow(name: string): Promise<string> {
@@ -26,6 +150,29 @@ function readWorkflowStep(workflow: string, name: string): string {
   }
   const nextStep = workflow.indexOf("\n      - ", start + marker.length);
   return workflow.slice(start, nextStep === -1 ? undefined : nextStep);
+}
+
+/** Extracts one named step from a single already-selected workflow job. */
+function readWorkflowJobStep(job: string, name: string): string {
+  const marker = `      - name: ${name}`;
+  const start = job.indexOf(marker);
+  if (start === -1) {
+    throw new Error(`Workflow job step not found: ${name}`);
+  }
+  const nextStep = job.indexOf("\n      - ", start + marker.length);
+  return job.slice(start, nextStep === -1 ? undefined : nextStep);
+}
+
+/** Extracts one named workflow step by its exact pinned action reference. */
+function readWorkflowJobStepByUses(job: string, uses: string): string {
+  const marker = `uses: ${uses}`;
+  const usesIndex = job.indexOf(marker);
+  if (usesIndex === -1) {
+    throw new Error(`Workflow job step not found for action: ${uses}`);
+  }
+  const start = job.lastIndexOf("\n      - ", usesIndex);
+  const nextStep = job.indexOf("\n      - ", usesIndex + marker.length);
+  return job.slice(start === -1 ? 0 : start + 1, nextStep === -1 ? undefined : nextStep);
 }
 
 /** Extracts one top-level workflow job without requiring a YAML runtime dependency. */
@@ -87,7 +234,357 @@ function readWorkflowStepNames(job: string): string[] {
   );
 }
 
+/** Returns every workflow step so evidence claimants are counted globally. */
+function readAllWorkflowSteps(workflow: string): string[] {
+  return workflow.split(/^      - /gmu).slice(1);
+}
+
+function hasFixedDispatchCorrelationArtifactName(step: string): boolean {
+  return /^ {10}name: vision-preview-dispatch-correlation$/mu.test(step);
+}
+
+function hasFixedDispatchCorrelationArtifactPath(step: string): boolean {
+  return /^ {10}path: preview-dispatch-correlation\.json$/mu.test(step);
+}
+
+function hasFailClosedDispatchCorrelationUpload(step: string): boolean {
+  return /^ {10}if-no-files-found: error$/mu.test(step);
+}
+
 describe("delivery workflow policy", () => {
+  it("records one fixed dispatch-correlation artifact before every preview mutation path", async () => {
+    const preview = await readWorkflow("preview.yml");
+    const selection = readWorkflowJob(preview, "selection");
+    const selectionNames = readWorkflowStepNames(selection);
+    const verificationIndex = selectionNames.indexOf(
+      "Verify exact acceptance operation",
+    );
+    const upload = readWorkflowJobStepByUses(selection, UPLOAD_ARTIFACT_ACTION);
+    const uploadIndex = selectionNames.indexOf("Upload dispatch correlation evidence");
+    const mutationJobs = [
+      "verify",
+      "deploy",
+      "tail",
+      "ai_signal",
+      "suppression_signal",
+      "restore_signal",
+      "role_signal",
+      "ai_uniqueness",
+      "suppression_uniqueness",
+      "restore_uniqueness",
+      "maintenance_uniqueness",
+      "deploy_acceptance_candidate",
+      "rollback",
+      "close_rollback",
+      "verify_cleanup",
+      "configure_gateway",
+    ];
+
+    expect(verificationIndex).toBeGreaterThan(-1);
+    expect(uploadIndex).toBe(verificationIndex + 1);
+    expect(selection.split(UPLOAD_ARTIFACT_ACTION)).toHaveLength(2);
+    expect(upload).toContain("name: Upload dispatch correlation evidence");
+    expect(upload).toContain(UPLOAD_ARTIFACT_ACTION);
+    expect(upload).toContain("name: vision-preview-dispatch-correlation");
+    expect(upload).toContain("path: preview-dispatch-correlation.json");
+    expect(upload).toContain("retention-days: 30");
+    expect(upload).toContain("if-no-files-found: error");
+    for (const job of mutationJobs) {
+      expect(readWorkflowJob(preview, job)).toMatch(/needs:[^\n]*selection/u);
+    }
+  });
+
+  it("rejects dispatch-correlation upload mutations that weaken the fixed evidence contract", async () => {
+    const preview = await readWorkflow("preview.yml");
+    const selection = readWorkflowJob(preview, "selection");
+    const upload = readWorkflowJobStepByUses(selection, UPLOAD_ARTIFACT_ACTION);
+    const valid = (workflow: string): boolean => {
+      const job = readWorkflowJob(workflow, "selection");
+      const names = readWorkflowStepNames(job);
+      const claimants = readAllWorkflowSteps(workflow).filter(
+        (step) =>
+          hasFixedDispatchCorrelationArtifactName(step) ||
+          hasFixedDispatchCorrelationArtifactPath(step),
+      );
+      const step = claimants[0];
+      return (
+        claimants.length === 1 &&
+        names.indexOf("Upload dispatch correlation evidence") ===
+          names.indexOf("Verify exact acceptance operation") + 1 &&
+        step !== undefined &&
+        step.includes(UPLOAD_ARTIFACT_ACTION) &&
+        hasFixedDispatchCorrelationArtifactName(step) &&
+        hasFixedDispatchCorrelationArtifactPath(step) &&
+        /^ {10}retention-days: 30$/mu.test(step) &&
+        hasFailClosedDispatchCorrelationUpload(step)
+      );
+    };
+    const afterCandidatePreparation = preview.replace(
+      selection,
+      selection.replace(
+        upload,
+        "",
+      ),
+    ).replace(
+      "      - name: Build generated acceptance candidate",
+      `${upload}\n      - name: Build generated acceptance candidate`,
+    );
+
+    expect(valid(preview)).toBe(true);
+    expect(valid(preview.replace(upload, `${upload}\n${upload}`))).toBe(false);
+    expect(
+      valid(
+        preview.replace(
+          upload,
+          upload.replace(
+            "name: vision-preview-dispatch-correlation",
+            "name: vision-preview-dispatch-correlation-renamed",
+          ),
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      valid(
+        preview.replace(
+          upload,
+          upload.replace("retention-days: 30", "retention-days: 7"),
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      valid(
+        preview.replace(
+          upload,
+          upload.replace(/^ {10}if-no-files-found: error\r?\n/mu, ""),
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      valid(
+        preview.replace(
+          upload,
+          upload.replace("if-no-files-found: error", "if-no-files-found: warn"),
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      valid(
+        preview.replace(
+          selection,
+          selection.replace(
+            upload,
+            `${upload}\n${upload.replace(
+              "Upload dispatch correlation evidence",
+              "Duplicate correlation evidence upload",
+            )}`,
+          ),
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      valid(
+        preview.replace(
+          upload,
+          upload.replace(UPLOAD_ARTIFACT_ACTION, "actions/upload-artifact@v4"),
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      valid(
+        preview.replace(
+          upload,
+          upload.replace("preview-dispatch-correlation.json", "other.json"),
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      valid(
+        `${preview}\n  alternate_correlation_upload:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Alternate evidence label\n${upload}`,
+      ),
+    ).toBe(false);
+    expect(valid(afterCandidatePreparation)).toBe(false);
+  });
+
+  it("keeps the file-based dispatch-correlation verifier closed and non-rendering", async () => {
+    const script = await readFile(
+      resolve(
+        process.cwd(),
+        "scripts",
+        "prepare-preview-acceptance-deploy-config.ts",
+      ),
+      "utf8",
+    );
+
+    expect(script).toContain("--verify-dispatch-correlation");
+    expect(script).toContain("--evidence");
+    expect(script).toContain("--operation");
+    expect(script).toContain("--context");
+    expect(script).toContain("--commit");
+    expect(script).toContain("assertPreviewDispatchCorrelationEvidence");
+    expect(script).toContain("flag: \"wx\"");
+    expect(script).toContain("preview-dispatch-correlation.json");
+  });
+
+  it("accepts only the exact ordered dispatch-correlation verifier arguments", async () => {
+    await withDispatchCorrelationFixture(async (fixture) => {
+      const result = await runDispatchCorrelationVerifier(
+        verifierArguments(fixture),
+      );
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toBe(
+        "Preview dispatch correlation evidence is valid.\n",
+      );
+      expect(result.stderr).toBe("");
+    });
+  });
+
+  it("rejects missing, extra, reordered, and duplicated verifier arguments", async () => {
+    await withDispatchCorrelationFixture(async (fixture) => {
+      const exact = verifierArguments(fixture);
+      const missing = exact.slice(0, -1);
+      const extra = [...exact, "extra"];
+      const reordered = [
+        exact[0]!,
+        exact[3]!,
+        exact[4]!,
+        exact[1]!,
+        exact[2]!,
+        exact[5]!,
+        exact[6]!,
+        exact[7]!,
+        exact[8]!,
+      ];
+      const duplicated = [...exact.slice(0, 5), exact[3]!, exact[4]!, ...exact.slice(5)];
+
+      for (const arguments_ of [missing, extra, reordered, duplicated]) {
+        expectRejectedDispatchCorrelationVerifier(
+          await runDispatchCorrelationVerifier(arguments_),
+        );
+      }
+    });
+  });
+
+  it("rejects malformed and oversized verifier files without disclosing synthetic private markers", async () => {
+    await withDispatchCorrelationFixture(async (fixture) => {
+      const privateMarker = `private-marker-${"c".repeat(64)}`;
+      const malformedContext = `{${privateMarker}`;
+      const oversizedContext = `${privateMarker}${"d".repeat(4_096)}`;
+      const malformedEvidence = `{${privateMarker}`;
+      const oversizedEvidence = `${privateMarker}${"e".repeat(4_096)}`;
+
+      for (const [path, contents] of [
+        [fixture.contextPath, malformedContext],
+        [fixture.contextPath, oversizedContext],
+        [fixture.evidencePath, malformedEvidence],
+        [fixture.evidencePath, oversizedEvidence],
+      ] as const) {
+        await writeFile(path, contents, "utf8");
+        const result = await runDispatchCorrelationVerifier(
+          verifierArguments(fixture),
+        );
+
+        expectRejectedDispatchCorrelationVerifier(result);
+        expect(result.stdout).not.toContain(privateMarker);
+        expect(result.stderr).not.toContain(privateMarker);
+        await writeFile(fixture.contextPath, fixture.serializedContext, "utf8");
+        await writeFile(fixture.evidencePath, fixture.serializedEvidence, "utf8");
+      }
+    });
+  });
+
+  it("rejects malformed UTF-8 at the bounded-reader boundary and keeps reading after a short chunk", async () => {
+    const script = await readFile(
+      resolve(
+        process.cwd(),
+        "scripts",
+        "prepare-preview-acceptance-deploy-config.ts",
+      ),
+      "utf8",
+    );
+
+    await withDispatchCorrelationFixture(async (fixture) => {
+      await writeFile(
+        fixture.contextPath,
+        Buffer.from([0x7b, 0xc3, 0x28, 0x7d]),
+      );
+      expectRejectedDispatchCorrelationVerifier(
+        await runDispatchCorrelationVerifier(verifierArguments(fixture)),
+      );
+    });
+
+    expect(script).toContain('new TextDecoder("utf-8", { fatal: true })');
+    expect(script).toContain("while (totalBytes <= maximumBytes)");
+    expect(script).toContain("maximumBytes + 1 - totalBytes");
+  });
+
+  it("rejects substituted verifier bindings and extra evidence keys", async () => {
+    await withDispatchCorrelationFixture(async (fixture) => {
+      const exact = verifierArguments(fixture);
+      const substitutedOperation = [...exact];
+      substitutedOperation[4] = "rollback";
+      expectRejectedDispatchCorrelationVerifier(
+        await runDispatchCorrelationVerifier(substitutedOperation),
+      );
+
+      const substitutedCommit = [...exact];
+      substitutedCommit[8] = "f".repeat(40);
+      expectRejectedDispatchCorrelationVerifier(
+        await runDispatchCorrelationVerifier(substitutedCommit),
+      );
+
+      const separatelyBoundContext = serializePreviewAcceptanceContext({
+        version: "vision.preview-acceptance-context/v2",
+        kind: SYNTHETIC_OPERATION,
+        reviewedCommit: SYNTHETIC_REVIEWED_COMMIT,
+        dispatchCorrelation: "c".repeat(64),
+        candidateRunRef: "baseline",
+        rollbackClosureRunRef: "baseline",
+      });
+      const separatelyBoundEvidencePath = join(
+        fixture.directory,
+        "separately-bound-evidence.json",
+      );
+      await writeFile(
+        separatelyBoundEvidencePath,
+        JSON.stringify(
+          createPreviewDispatchCorrelationEvidence(
+            SYNTHETIC_OPERATION,
+            separatelyBoundContext,
+          ),
+        ),
+        "utf8",
+      );
+      const crossBoundEvidence = [...exact];
+      crossBoundEvidence[2] = separatelyBoundEvidencePath;
+      expectRejectedDispatchCorrelationVerifier(
+        await runDispatchCorrelationVerifier(crossBoundEvidence),
+      );
+
+      await writeFile(
+        fixture.evidencePath,
+        JSON.stringify({
+          ...(JSON.parse(fixture.serializedEvidence) as Record<string, unknown>),
+          unexpected: "x",
+        }),
+        "utf8",
+      );
+      expectRejectedDispatchCorrelationVerifier(
+        await runDispatchCorrelationVerifier(exact),
+      );
+
+      await writeFile(fixture.evidencePath, fixture.serializedEvidence, "utf8");
+      await writeFile(
+        fixture.contextPath,
+        `${fixture.serializedContext}\n`,
+        "utf8",
+      );
+      expectRejectedDispatchCorrelationVerifier(
+        await runDispatchCorrelationVerifier(exact),
+      );
+    });
+  });
+
   it("keeps checks, previews, and production releases safely separated", async () => {
     const [ci, preview, production, packageMetadata] = await Promise.all([
       readWorkflow("ci.yml"),
@@ -1003,6 +1500,7 @@ describe("preview acceptance candidate workflow", () => {
     const candidateNames = readWorkflowStepNames(candidate);
     const rollbackNames = readWorkflowStepNames(rollback);
     const closeNames = readWorkflowStepNames(closeRollback);
+    const cleanupNames = readWorkflowStepNames(cleanupGate);
 
     const candidateClosure = readWorkflowStep(
       preview,
@@ -1048,12 +1546,13 @@ describe("preview acceptance candidate workflow", () => {
       preview,
       "Close rollback after post-restore authenticated reads",
     );
-    const cleanupClosure = readWorkflowStep(
-      preview,
+    const closeUpload = readWorkflowStep(preview, "Upload rollback closure");
+    const cleanupClosure = readWorkflowJobStep(
+      cleanupGate,
       "Verify rollback closure before provider cleanup",
     );
-    const cleanupProvider = readWorkflowStep(
-      preview,
+    const cleanupProvider = readWorkflowJobStep(
+      cleanupGate,
       "Verify temporary names absent and strict normal provider state",
     );
 
@@ -1215,18 +1714,44 @@ describe("preview acceptance candidate workflow", () => {
       "if: ${{ inputs.acceptance_operation == 'verify_cleanup' && inputs.configure_ai_budget == false }}",
     );
     expect(cleanupClosure).toContain(
-      "scripts/validate-preview-rollback-lifecycle.ts --verify-closure",
+      "scripts/validate-preview-rollback-lifecycle.ts --verify-exact-closure-chain",
     );
-    expect(cleanupClosure).toContain('--operation "verify_cleanup"');
+    expect(cleanupClosure).toContain("--read-candidate-operation");
+    expect(cleanupClosure).toContain(
+      'candidate_operation="$(pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --read-candidate-operation',
+    );
+    expect(cleanupClosure).toContain('--operation "$candidate_operation"');
+    expect(cleanupClosure).not.toContain('--operation "verify_cleanup"');
     expect(cleanupClosure).toContain("--read-candidate-commit");
     expect(cleanupClosure).toContain('--commit "$candidate_commit"');
     expect(cleanupClosure).toContain('--commit "$VERIFIED_SHA"');
     expect(cleanupClosure).toContain('--candidate-intent "$candidate_intent"');
+    expect(cleanupClosure).toContain(
+      '--restore-proof "$closure_dir/preview-rollback-restored.json"',
+    );
+    expect(cleanupClosure).toContain(
+      '--closure-proof "$closure_dir/preview-rollback-closure.json"',
+    );
+    expect(cleanupClosure).not.toContain("ROLLBACK_RUN_ID:");
+    expect(cleanupClosure).not.toContain("restore_dir");
+    expect(cleanupClosure).not.toContain(
+      "scripts/validate-preview-rollback-lifecycle.ts --verify-closure",
+    );
+    expect(closeUpload).toContain("path: |");
+    expect(closeUpload).toContain("preview-rollback-restored.json");
+    expect(closeUpload).toContain("preview-rollback-closure.json");
     expect(cleanupProvider).toContain("--verify-provider-state");
     expect(cleanupProvider).toContain("schedules");
     expect(cleanupProvider).toContain("settings");
     expect(cleanupProvider).not.toContain(
       "--verify-restore-pair-provider-state",
+    );
+    expect(
+      cleanupNames.indexOf("Verify rollback closure before provider cleanup"),
+    ).toBeLessThan(
+      cleanupNames.indexOf(
+        "Verify temporary names absent and strict normal provider state",
+      ),
     );
     expect(preview).toContain(
       "Provider cleanup remains forbidden until the post-restore closure gate succeeds.",

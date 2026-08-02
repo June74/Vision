@@ -215,4 +215,11 @@ Creates one lifecycle artifact without overwriting an existing file.
 
 Dispatches the closed lifecycle validation and transition modes without
 printing identifiers. Mutation-boundary classification and intent-version
-reading print only their fixed safe labels.
+reading print only their fixed safe labels. Candidate-operation reading first
+validates the current intent and prints only its closed operation label.
+
+## `assertPreviewRollbackProofChain`
+
+Requires the candidate intent, candidate run, restored-normal proof, and
+closure proof to describe one exact reviewed operation and commit in the right
+order.

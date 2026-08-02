@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T00:25:50Z
-- **Last observed:** 2026-07-30T19:10:30.8275680Z
-- **Phase/task:** Phase B live-acceptance closure Task 1
+- **Last observed:** 2026-08-02T01:41:14.3143298Z
+- **Phase/task:** Phase B Task 7 correlation repair and Task 8 prepublication readiness
 - **Environment:** Local Phase B worktree
-- **Version/commit:** `ff6a767`
+- **Version/commit:** admitted baseline `10b228b`
 
 ## Symptom
 
@@ -32,6 +32,9 @@ generated dependency links and reported one missing generated directory.
 - `git ls-files` safely confirmed that no tracked helper exists.
 - The incidents and index rows were created with the repository's existing
   Markdown convention.
+- The Task 4 recurrence failed before writing anything; bounded ledger-local
+  inspection reconfirmed the helper is absent and the manual fallback remains
+  required.
 
 ## Cause classification
 
@@ -66,3 +69,10 @@ inspection uses bounded tracked-file queries.
   repository-relative. The direct help probe failed before any write, and a
   bounded ledger-local search confirmed no worktree copy exists. The follow-up
   uses the skill-directory helper or the documented manual fallback.
+- 2026-08-01T20:21:39.2021464Z: Task 4 coverage logging again invoked the
+  generic repository-relative helper path. It failed before writing anything;
+  bounded ledger inspection reconfirmed the documented manual fallback.
+- 2026-08-02T01:41:14.3143298Z: Task 8 prepublication readiness followed the
+  generic repository-relative helper path after a worktree diagnostic setback.
+  The help probe failed before writing anything, so the documented manual
+  `apply_patch` fallback was used without inspecting unrelated paths.

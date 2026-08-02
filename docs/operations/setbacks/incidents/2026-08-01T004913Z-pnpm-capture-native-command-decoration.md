@@ -2,7 +2,8 @@
 
 - **Status:** contained
 - **Detected:** 2026-08-01T00:49:13.6609802Z
-- **Scope:** Phase B Gate 0 bounded command-output capture
+- **Last observed:** 2026-08-02T01:58:30.3564670Z
+- **Scope:** Phase B Gate 0 bounded command-output capture and reviewed-candidate publication
 
 ## What happened
 
@@ -29,7 +30,10 @@ decoration.
 - **Correction:** Treat `$LASTEXITCODE` plus the bounded test summary as the
   gate authority.
 - **Prevention:** Do not classify PowerShell's merged-stream decoration as a
-  process failure without a nonzero native exit code.
+  process failure without a nonzero native exit code. Do not combine
+  `$ErrorActionPreference = 'Stop'` with `2>&1` around a native Git command
+  that can emit a benign warning; leave streams separate and judge the native
+  process by `$LASTEXITCODE`.
 - **Owner:** Codex.
 - **Next diagnostic step:** None while contained.
 
@@ -40,3 +44,9 @@ decoration.
   production validator also printed its explicit valid-configuration result.
 - 2026-08-01T01:00:39.9071460Z: Recurred on the post-ledger documentation
   check. Its native exit was zero, so documentation coverage remained green.
+- 2026-08-02T01:58:30.3564670Z: Recurred during the explicitly approved
+  reviewed-candidate publication command. Git emitted known line-ending
+  warnings while staging; strict PowerShell error handling stopped the wrapper
+  before the exit-code check. Read-only reconciliation then proved all 93
+  reviewed paths were staged, no unstaged or untracked path remained, local
+  `HEAD` still matched its tracking tip, and no commit or push had occurred.

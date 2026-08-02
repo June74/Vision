@@ -95,3 +95,29 @@ overwritten.
 Constructs a private parser input around context-carried scheduled-at and
 expiry scalars, then requires the domain parser to return the canonical frozen
 AI window.
+
+## `createPreviewDispatchCorrelationEvidence`
+
+Parses the byte-canonical context, then returns the exact v1 evidence schema
+with the admitted operation, reviewed commit, and SHA-256 of the serialized
+UTF-8 bytes. The evidence never carries the dispatch correlation or context
+body directly.
+
+## `assertPreviewDispatchCorrelationEvidence`
+
+Requires an exact four-field evidence record, canonical context parsing,
+operation and commit equality, and a recomputed constant-shape context digest.
+Every parse or equality failure collapses to the single invalid-selection
+contract.
+
+## `readBoundedUtf8File`
+
+Opens one path once, reads at most the configured byte ceiling plus one byte,
+rejects empty and oversized input, and performs fatal UTF-8 decoding before the
+handle closes in `finally`.
+
+## `verifyDispatchCorrelation`
+
+Accepts only the fixed nine-argument verifier form, bounds both input files,
+parses evidence as untrusted JSON, and calls the exact correlation assertion.
+It writes only the allowlisted fixed success or rejection marker.

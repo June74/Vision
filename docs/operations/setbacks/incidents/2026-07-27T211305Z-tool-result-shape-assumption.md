@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T21:13:05Z
-- **Last observed:** 2026-07-30T01:32:37.0772417Z
-- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 4
+- **Last observed:** 2026-08-02T02:15:47.9672991Z
+- **Phase/task:** Phase B Task 7 reviewed-candidate publication
 - **Environment:** Local Codex command orchestration
 - **Version/commit:** Not applicable
 
@@ -58,3 +58,10 @@ The immediate retry completed without the wrapper error.
   expected RED made the wrapper fail and suppress the passing outputs. No
   repository or external state changed; final checks run separately so each
   exit is explicit.
+- 2026-08-02T02:15:47.9672991Z: A private candidate-fingerprint equality check
+  compared the entire command-result strings, which include changing execution
+  metadata, instead of extracting the single fingerprint value. It therefore
+  reported a false inequality. No candidate or external state changed. The
+  corrected comparison required exactly one canonical fingerprint in each
+  result, compared only those private values, and proved the reviewed candidate
+  unchanged without displaying either value.

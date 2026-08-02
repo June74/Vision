@@ -2,10 +2,10 @@
 
 - **Status:** contained
 - **First observed:** 2026-07-31T14:59:47.6410820Z
-- **Last observed:** 2026-08-01T02:32:27.0021974Z
-- **Phase/task:** Phase B Tasks 3 through 7, Gate 0, and exact-tip review
-- **Environment:** Delegated read-only plan and specification inspection
-- **Version/commit:** c23e301 plus unstaged setback records
+- **Last observed:** 2026-08-01T17:27:52.4309623Z
+- **Phase/task:** Phase B Tasks 3 through 8, Gate 0, exact-tip review, handoff, and Task 8 live-call-path mapping
+- **Environment:** Local read-only repository inspection
+- **Version/commit:** 10b228bc2c18647f6a8a19c2dd5ad740e7f7491e plus unstaged setback records
 
 ## Symptom
 
@@ -42,6 +42,10 @@ involved.
 - A later Task 4 diagnostics/environment review batched one large source read
   with a multi-file test search and exceeded the output boundary. The review
   discarded the incomplete output and made no source or external change.
+- A Task 8 read-only call-path search traversed all source files for broad
+  diagnostic and calendar terms and exceeded the model-context boundary. The
+  incomplete output was discarded; no source, provider, or external state was
+  changed.
 
 ## Cause classification
 
@@ -162,3 +166,13 @@ another truncation.
   authoritative package. The incomplete read was not used for a verdict and
   the review was interrupted. Its replacement must use bounded consecutive
   ranges for every large file from the start.
+- 2026-08-01T03:09:17.5257190Z: Recurred when Task 8 capability discovery
+  requested a broad GitHub, workflow, action, and artifact tool-metadata set.
+  The truncated output was discarded and no provider action followed. Resume
+  discovery with exact descriptions, names-only output, and a strict result
+  limit before choosing a provider interface.
+- 2026-08-01T17:27:52.4309623Z: Recurred when Task 8 call-path mapping searched
+  all source files for broad diagnostic and calendar terms. The incomplete
+  repository-only output was discarded; no source or provider mutation
+  occurred. Resume with one exact file or symbol and a strict result limit per
+  read.

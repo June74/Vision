@@ -59,9 +59,12 @@ function harness(
     readonly context: string;
   }> = [];
   let nextRunRef = 40;
+  let nextCorrelation = 0;
   const dependencies: PreviewAcceptanceControllerDependencies = {
     wallNow: () => new Date(wall),
     monotonicNow: () => monotonic,
+    createDispatchCorrelation: () =>
+      (nextCorrelation++).toString(16).padStart(64, "0"),
     sleep: vi.fn(async (milliseconds) => {
       monotonic += milliseconds;
       wall += milliseconds;
@@ -1209,7 +1212,8 @@ describe("preview acceptance controller", () => {
       { stdout: '{"ok":true}\n', stderr: "" },
     ];
     const statuses: string[] = [];
-    const observerIdentifierCanary = "987654321987654321";
+    const observerIdentifierCanary =
+      (2n ** 64n - 1n).toString(10);
     const opaqueObserver = Object.freeze(Object.create(null)) as object;
     const observerPort = {
       resolveObserver: vi.fn(async () => {
@@ -2775,5 +2779,317 @@ describe("preview acceptance controller decisive hardening", () => {
       stdoutWrite.mockRestore();
       stderrWrite.mockRestore();
     }
+  });
+
+  it("assigns one fresh correlation to every dispatched canonical context", async () => {
+    const expectedCorrelations = [
+      "1".repeat(64),
+      "2".repeat(64),
+      "3".repeat(64),
+      "4".repeat(64),
+    ];
+    let nextCorrelation = 0;
+    const fixture = harness({
+      createDispatchCorrelation: vi.fn(
+        () => expectedCorrelations[nextCorrelation++]!,
+      ),
+    });
+
+    const result = await runPreviewAcceptanceController(
+      {
+        family: "foundation_probe",
+        reviewedCommit: SHA,
+        expiresAt: "2026-07-30T18:10:00.000Z",
+        expectation: { kind: "foundation_succeeded" },
+      },
+      fixture.dependencies,
+    );
+
+    const dispatchedCorrelations = fixture.dispatches.map(({ context }) =>
+      (JSON.parse(context) as { readonly dispatchCorrelation: string })
+        .dispatchCorrelation,
+    );
+    expect(dispatchedCorrelations).toEqual(expectedCorrelations);
+    expect(new Set(dispatchedCorrelations).size).toBe(
+      fixture.dispatches.length,
+    );
+    expect(fixture.dependencies.createDispatchCorrelation).toHaveBeenCalledTimes(
+      fixture.dispatches.length,
+    );
+    expect(result).toBeUndefined();
+    expect(
+      expectedCorrelations.every(
+        (correlation) => !fixture.statuses.join("\n").includes(correlation),
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    [
+      "duplicate output",
+      () => {
+        const duplicateCorrelation = "b".repeat(64);
+        return duplicateCorrelation;
+      },
+      "b".repeat(64),
+    ],
+    ["uppercase output", () => "A".repeat(64), "A".repeat(64)],
+    ["wrong-length output", () => "a".repeat(63), "a".repeat(63)],
+    [
+      "valid-length nonhex output",
+      () => `${"a".repeat(63)}g`,
+      `${"a".repeat(63)}g`,
+    ],
+    [
+      "thrown generator",
+      () => {
+        throw new Error("synthetic-private-generator-marker");
+      },
+      "synthetic-private-generator-marker",
+    ],
+  ] as const)(
+    "fails closed without emitting the %s private value",
+    async (_label, createDispatchCorrelation, privateValue) => {
+      const fixture = harness({ createDispatchCorrelation });
+      const parentStdout: string[] = [];
+      const parentStderr: string[] = [];
+      const parentConsoleLogs: string[] = [];
+      const parentConsoleErrors: string[] = [];
+      const parentConsoleWarnings: string[] = [];
+      const stdoutWrite = vi
+        .spyOn(process.stdout, "write")
+        .mockImplementation(((chunk: string | Uint8Array) => {
+          parentStdout.push(String(chunk));
+          return true;
+        }) as typeof process.stdout.write);
+      const stderrWrite = vi
+        .spyOn(process.stderr, "write")
+        .mockImplementation(((chunk: string | Uint8Array) => {
+          parentStderr.push(String(chunk));
+          return true;
+        }) as typeof process.stderr.write);
+      const consoleLog = vi
+        .spyOn(console, "log")
+        .mockImplementation((...values: unknown[]) => {
+          parentConsoleLogs.push(values.map(String).join(" "));
+        });
+      const consoleError = vi
+        .spyOn(console, "error")
+        .mockImplementation((...values: unknown[]) => {
+          parentConsoleErrors.push(values.map(String).join(" "));
+        });
+      const consoleWarn = vi
+        .spyOn(console, "warn")
+        .mockImplementation((...values: unknown[]) => {
+          parentConsoleWarnings.push(values.map(String).join(" "));
+        });
+      let returned = false;
+      let returnedState: unknown;
+      let thrown: unknown;
+
+      try {
+        try {
+          returnedState = await runPreviewAcceptanceController(
+          {
+            family: "foundation_probe",
+            reviewedCommit: SHA,
+            expiresAt: "2026-08-06T00:00:00.000Z",
+            expectation: { kind: "foundation_succeeded" },
+        },
+        fixture.dependencies,
+      );
+          returned = true;
+        } catch (error) {
+          thrown = error;
+        }
+
+      expect(returned).toBe(false);
+      expect(thrown).toBeInstanceOf(Error);
+      const thrownMessage = thrown instanceof Error ? thrown.message : "";
+      expect(thrownMessage).toBe(
+        "Preview acceptance controller failed closed.",
+      );
+
+      const publicChannels = JSON.stringify({
+        statusEntries: fixture.statuses,
+        evidenceStatusText: fixture.statuses,
+        returnedState: returned ? returnedState : undefined,
+        thrownMessage,
+        parentStdout,
+        parentStderr,
+        parentConsoleLogs,
+        parentConsoleErrors,
+        parentConsoleWarnings,
+      });
+      expect(publicChannels).not.toContain(privateValue);
+      } finally {
+        stdoutWrite.mockRestore();
+        stderrWrite.mockRestore();
+        consoleLog.mockRestore();
+        consoleError.mockRestore();
+        consoleWarn.mockRestore();
+      }
+    },
+  );
+
+  it("grants candidate attribution the candidate workflow or expiry budget", async () => {
+    const fixture = harness();
+    let attributionStartedAt: number | null = null;
+    let attributionDeadline: number | null = null;
+    let signalAbortedAfterFormerCap = true;
+    let signalCheckedWithinDeadline = false;
+    vi.mocked(fixture.dependencies.verifyCandidateAttribution).mockImplementation(
+      async (input, boundary) => {
+        if (!input.operation.startsWith("deploy_")) return;
+        attributionStartedAt = fixture.currentMonotonic();
+        attributionDeadline = boundary.deadlineMonotonic;
+        fixture.advanceTime(120_001, 0);
+        signalCheckedWithinDeadline =
+          fixture.currentMonotonic() < boundary.deadlineMonotonic;
+        signalAbortedAfterFormerCap = boundary.signal.aborted;
+      },
+    );
+
+    await expect(
+      runPreviewAcceptanceController(
+        {
+          family: "foundation_probe",
+          reviewedCommit: SHA,
+          expiresAt: new Date(START.getTime() + 10 * 60_000).toISOString(),
+          expectation: { kind: "foundation_succeeded" },
+        },
+        fixture.dependencies,
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(attributionStartedAt).not.toBeNull();
+    expect(attributionDeadline).not.toBeNull();
+    expect(
+      (attributionDeadline as unknown as number) -
+        (attributionStartedAt as unknown as number),
+    ).toBeGreaterThan(120_000);
+    expect(
+      (attributionDeadline as unknown as number) -
+        (attributionStartedAt as unknown as number),
+    ).toBeLessThanOrEqual(10 * 60_000);
+    expect(signalCheckedWithinDeadline).toBe(true);
+    expect(signalAbortedAfterFormerCap).toBe(false);
+  });
+
+  it("grants candidate dispatch reconciliation the candidate workflow or expiry budget", async () => {
+    const fixture = harness();
+    const originalDispatch = vi
+      .mocked(fixture.dependencies.dispatch)
+      .getMockImplementation();
+    if (originalDispatch === undefined) {
+      throw new Error("missing harness dispatch implementation");
+    }
+    let reconciliationStartedAt: number | null = null;
+    let reconciliationDeadline: number | null = null;
+    let signalAbortedAfterFormerCap = true;
+    let signalCheckedWithinDeadline = false;
+    vi.mocked(fixture.dependencies.dispatch).mockImplementation(
+      async (operation, context, boundary) => {
+        if (operation.startsWith("deploy_")) {
+          throw new Error("private dispatch uncertainty");
+        }
+        return originalDispatch(operation, context, boundary);
+      },
+    );
+    vi.mocked(fixture.dependencies.reconcileCandidateDispatch).mockImplementation(
+      async (input, boundary) => {
+        if (!input.operation.startsWith("deploy_")) return null;
+        reconciliationStartedAt = fixture.currentMonotonic();
+        reconciliationDeadline = boundary.deadlineMonotonic;
+        fixture.advanceTime(120_001, 0);
+        signalCheckedWithinDeadline =
+          fixture.currentMonotonic() < boundary.deadlineMonotonic;
+        signalAbortedAfterFormerCap = boundary.signal.aborted;
+        return { runRef: "202" };
+      },
+    );
+
+    await expect(
+      runPreviewAcceptanceController(
+        {
+          family: "foundation_probe",
+          reviewedCommit: SHA,
+          expiresAt: new Date(START.getTime() + 10 * 60_000).toISOString(),
+          expectation: { kind: "foundation_succeeded" },
+        },
+        fixture.dependencies,
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(reconciliationStartedAt).not.toBeNull();
+    expect(reconciliationDeadline).not.toBeNull();
+    expect(
+      (reconciliationDeadline as unknown as number) -
+        (reconciliationStartedAt as unknown as number),
+    ).toBeGreaterThan(120_000);
+    expect(
+      (reconciliationDeadline as unknown as number) -
+        (reconciliationStartedAt as unknown as number),
+    ).toBeLessThanOrEqual(10 * 60_000);
+    expect(signalCheckedWithinDeadline).toBe(true);
+    expect(signalAbortedAfterFormerCap).toBe(false);
+  });
+
+  it("grants rollback dispatch reconciliation the rollback workflow budget", async () => {
+    const fixture = harness();
+    const originalDispatch = vi
+      .mocked(fixture.dependencies.dispatch)
+      .getMockImplementation();
+    if (originalDispatch === undefined) {
+      throw new Error("missing harness dispatch implementation");
+    }
+    let reconciliationStartedAt: number | null = null;
+    let reconciliationDeadline: number | null = null;
+    let signalAbortedAfterFormerCap = true;
+    let signalCheckedWithinDeadline = false;
+    vi.mocked(fixture.dependencies.dispatch).mockImplementation(
+      async (operation, context, boundary) => {
+        if (operation === "rollback") {
+          throw new Error("private rollback dispatch uncertainty");
+        }
+        return originalDispatch(operation, context, boundary);
+      },
+    );
+    vi.mocked(fixture.dependencies.reconcileCandidateDispatch).mockImplementation(
+      async (input, boundary) => {
+        if (input.operation !== "rollback") return null;
+        reconciliationStartedAt = fixture.currentMonotonic();
+        reconciliationDeadline = boundary.deadlineMonotonic;
+        fixture.advanceTime(120_001, 0);
+        signalCheckedWithinDeadline =
+          fixture.currentMonotonic() < boundary.deadlineMonotonic;
+        signalAbortedAfterFormerCap = boundary.signal.aborted;
+        return { runRef: "203" };
+      },
+    );
+
+    await expect(
+      runPreviewAcceptanceController(
+        {
+          family: "foundation_probe",
+          reviewedCommit: SHA,
+          expiresAt: new Date(START.getTime() + 10 * 60_000).toISOString(),
+          expectation: { kind: "foundation_succeeded" },
+        },
+        fixture.dependencies,
+      ),
+    ).rejects.toThrow("Preview acceptance controller failed closed.");
+
+    expect(reconciliationStartedAt).not.toBeNull();
+    expect(reconciliationDeadline).not.toBeNull();
+    const rollbackAllowance =
+      (reconciliationDeadline as unknown as number) -
+      (reconciliationStartedAt as unknown as number);
+    const candidateAllowance = 10 * 60_000;
+    expect(rollbackAllowance).toBeGreaterThan(0);
+    expect(rollbackAllowance).toBeLessThanOrEqual(16 * 60_000);
+    expect(rollbackAllowance).not.toBe(candidateAllowance);
+    expect(signalCheckedWithinDeadline).toBe(true);
+    expect(signalAbortedAfterFormerCap).toBe(false);
   });
 });

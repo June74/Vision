@@ -51,6 +51,7 @@ const CANDIDATE_OPERATIONS = [
 ] as const;
 type CandidateOperation = (typeof CANDIDATE_OPERATIONS)[number];
 const REVIEWED_COMMIT = "a".repeat(40);
+const DISPATCH_CORRELATION = "b".repeat(64);
 const ACCEPTANCE_STARTED_AT = new Date("2026-07-30T18:00:00.000Z");
 const NORMAL_PREVIEW_PROVIDER_BINDINGS = [
   ...AI_PRICING_BINDING_CONTRACT.map(({ name, type, value }) => ({
@@ -562,6 +563,7 @@ describe("generated preview acceptance candidate", () => {
 
 describe("preview acceptance workflow input admission", () => {
   const candidateLifecycle = {
+    dispatchCorrelation: DISPATCH_CORRELATION,
     authenticatedReadsGate: "verified",
     candidateRunRef: "baseline",
     rollbackClosureRunRef: "baseline",
@@ -575,6 +577,7 @@ describe("preview acceptance workflow input admission", () => {
       version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
       kind: "none",
       reviewedCommit: REVIEWED_COMMIT,
+      dispatchCorrelation: DISPATCH_CORRELATION,
       candidateRunRef: "baseline",
       rollbackClosureRunRef: "baseline",
     }),
@@ -582,6 +585,7 @@ describe("preview acceptance workflow input admission", () => {
       version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
       kind: "observe",
       reviewedCommit: REVIEWED_COMMIT,
+      dispatchCorrelation: DISPATCH_CORRELATION,
       evidenceFamily: "foundation_probe",
       expectedOutcome: "foundation_succeeded",
     }),
@@ -589,6 +593,7 @@ describe("preview acceptance workflow input admission", () => {
       version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
       kind: "observe",
       reviewedCommit: REVIEWED_COMMIT,
+      dispatchCorrelation: DISPATCH_CORRELATION,
       evidenceFamily: "preview_fault",
       expectedOutcome: "fault_expected",
       faultScenario: "job_failed",
@@ -625,12 +630,14 @@ describe("preview acceptance workflow input admission", () => {
       version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
       kind: "rollback",
       reviewedCommit: REVIEWED_COMMIT,
+      dispatchCorrelation: DISPATCH_CORRELATION,
       candidateRunRef: "101",
     }),
     context({
       version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
       kind: "close_rollback",
       reviewedCommit: REVIEWED_COMMIT,
+      dispatchCorrelation: DISPATCH_CORRELATION,
       candidateRunRef: "101",
       rollbackRunRef: "202",
       authenticatedReadsGate: "verified",
@@ -639,6 +646,7 @@ describe("preview acceptance workflow input admission", () => {
       version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
       kind: "verify_cleanup",
       reviewedCommit: REVIEWED_COMMIT,
+      dispatchCorrelation: DISPATCH_CORRELATION,
       candidateRunRef: "101",
       rollbackClosureRunRef: "303",
     }),
@@ -646,6 +654,7 @@ describe("preview acceptance workflow input admission", () => {
       version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
       kind: "observe",
       reviewedCommit: REVIEWED_COMMIT,
+      dispatchCorrelation: DISPATCH_CORRELATION,
       evidenceFamily: "ai_usage",
       expectedOutcome: "ai_succeeded",
       evidenceScheduledAt: "2026-07-29T04:30:00.000Z",
@@ -677,6 +686,7 @@ describe("preview acceptance workflow input admission", () => {
       version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
       observerDispatchStartedAt: "2026-07-29T04:00:00.000Z",
       reviewedCommit: REVIEWED_COMMIT,
+      dispatchCorrelation: DISPATCH_CORRELATION,
       rollbackClosureRunRef: "baseline",
     });
 
@@ -692,6 +702,7 @@ describe("preview acceptance workflow input admission", () => {
       "version",
       "kind",
       "reviewedCommit",
+      "dispatchCorrelation",
       "authenticatedReadsGate",
       "candidateRunRef",
       "rollbackClosureRunRef",
@@ -929,6 +940,7 @@ describe("preview acceptance workflow input admission", () => {
       version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
       kind: "observe",
       reviewedCommit: REVIEWED_COMMIT,
+      dispatchCorrelation: DISPATCH_CORRELATION,
       evidenceFamily: "calendar_maintenance",
       expectedOutcome: "maintenance_repair_reserved",
       maintenanceScheduledAt: "2026-07-30T18:15:00.000Z",

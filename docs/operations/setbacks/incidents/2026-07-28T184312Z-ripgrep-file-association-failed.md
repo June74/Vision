@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T18:43:12.190089Z
-- **Last observed:** 2026-07-30T04:53:23.7871797Z
-- **Phase/task:** Phase B live-acceptance implementation planning
+- **Last observed:** 2026-08-02T01:47:32.0350764Z
+- **Phase/task:** Phase B live-acceptance planning and status verification
 - **Environment:** Local Windows PowerShell worktree
 - **Version/commit:** `41d3e74`
 
@@ -65,3 +65,7 @@ without retrying `rg.exe`.
   the same Windows association failure. The search did not execute and changed
   no repository or provider state. The subagent resumed with the documented
   PowerShell fallback.
+- 2026-08-02T01:47:32.0350764Z: A parallel read-only Phase B status check
+  encountered the same Windows association failure. The search did not start,
+  no repository or provider state changed, and bounded verification resumed
+  with `Select-String`.

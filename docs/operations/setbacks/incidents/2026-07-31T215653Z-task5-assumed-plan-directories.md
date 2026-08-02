@@ -2,8 +2,8 @@
 
 - **Status:** contained
 - **First observed:** 2026-07-31T21:56:53.3451279Z
-- **Last observed:** 2026-07-31T21:09:02.7992490-05:00
-- **Phase/task:** Phase B Task 7 continuation verification
+- **Last observed:** 2026-08-02T02:07:49.4937561Z
+- **Phase/task:** Phase B Task 7 publication exact-candidate review
 - **Environment:** Local Phase B worktree
 - **Version/commit:** 84f3a0a
 
@@ -46,3 +46,9 @@ provider, network, database, deployment, or external state changed.
   confirming the 2026-07-29 paths from the authoring commit. The false check
   changed no repository or external state. The corrected check uses the exact
   plan and specification paths listed by that commit.
+- 2026-08-02T02:07:49.4937561Z: Recurred when the publication reviewer guessed
+  `docs/plans` while the supplied frozen authorities are under
+  `docs/superpowers/plans` and `docs/superpowers/specs`. The read-only lookup
+  changed no state and the review was stopped before verdict so this recurrence
+  could enter the refrozen candidate. The retry must use the supplied exact
+  paths without directory inference.

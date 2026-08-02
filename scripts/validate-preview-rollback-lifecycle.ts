@@ -490,6 +490,48 @@ export function assertPreviewRollbackClosure(input: {
   }
 }
 
+/** Requires one exact candidate, restore, and closure evidence chain. */
+export function assertPreviewRollbackProofChain(input: {
+  readonly candidateIntent: unknown;
+  readonly candidateRunRef: unknown;
+  readonly expectedCommit: unknown;
+  readonly operation: unknown;
+  readonly restoreProof: unknown;
+  readonly closureProof: unknown;
+}): void {
+  const intent = parseCandidateIntent(input.candidateIntent);
+  const restored = parseRestoreProof(input.restoreProof);
+  const closure = parseClosureProof(input.closureProof);
+  if (
+    intent === undefined ||
+    intent.evidenceType === "vision.preview-candidate-intent/v1" ||
+    restored === undefined ||
+    restored.evidenceType === "vision.preview-rollback-restored/v1" ||
+    closure === undefined ||
+    closure.evidenceType === "vision.preview-rollback-closed/v1" ||
+    !validNumericRunRef(input.candidateRunRef) ||
+    !validCommit(input.expectedCommit) ||
+    !validCandidateOperation(input.operation) ||
+    intent.candidateCommit !== input.expectedCommit ||
+    intent.candidateOperation !== input.operation ||
+    restored.candidateRunRefHash !== hashCandidateRunRef(input.candidateRunRef) ||
+    restored.restoredCommit !== input.expectedCommit ||
+    restored.candidateOperation !== intent.candidateOperation ||
+    restored.bindingProfile !== intent.bindingProfile ||
+    closure.candidateRunRefHash !== restored.candidateRunRefHash ||
+    closure.restoredCommit !== restored.restoredCommit ||
+    closure.candidateOperation !== restored.candidateOperation ||
+    closure.bindingProfile !== restored.bindingProfile ||
+    closure.restoreProofHash !== digestRecord(restored) ||
+    closure.rollbackProviderVerifiedAt !== restored.providerVerifiedAt ||
+    Date.parse(closure.closureProviderVerifiedAt) <=
+      Date.parse(restored.providerVerifiedAt) ||
+    Date.parse(closure.closedAt) <= Date.parse(closure.closureProviderVerifiedAt)
+  ) {
+    throw new Error(INVALID);
+  }
+}
+
 /** Selects only the newest unexpired candidate artifact; zero means baseline. */
 export function readLatestPreviewCandidateRunRef(input: unknown): string {
   const response = plainObject(input);
@@ -1290,12 +1332,35 @@ async function main(): Promise<void> {
             }
           : {}),
       });
+    } else if (
+      mode === "--verify-exact-closure-chain" &&
+      parsed.size === 6
+    ) {
+      assertPreviewRollbackProofChain({
+        candidateIntent: await readJson(parsed.get("--candidate-intent")),
+        candidateRunRef: parsed.get("--candidate-run-ref"),
+        expectedCommit: parsed.get("--commit"),
+        operation: parsed.get("--operation"),
+        restoreProof: await readJson(parsed.get("--restore-proof")),
+        closureProof: await readJson(parsed.get("--closure-proof")),
+      });
     } else if (mode === "--read-candidate-commit" && parsed.size === 1) {
       const intent = parseCandidateIntent(
         await readJson(parsed.get("--candidate-intent")),
       );
       if (intent === undefined) throw new Error(INVALID);
       successOutput = `${intent.candidateCommit}\n`;
+    } else if (mode === "--read-candidate-operation" && parsed.size === 1) {
+      const intent = parseCandidateIntent(
+        await readJson(parsed.get("--candidate-intent")),
+      );
+      if (
+        intent === undefined ||
+        intent.evidenceType === "vision.preview-candidate-intent/v1"
+      ) {
+        throw new Error(INVALID);
+      }
+      successOutput = `${intent.candidateOperation}\n`;
     } else if (mode === "--verify-latest-candidate" && parsed.size === 2) {
       const latest = readLatestPreviewCandidateRunRef(
         await readJson(parsed.get("--artifacts-file")),

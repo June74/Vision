@@ -456,3 +456,10 @@ failure, never with child output or provider-controlled text.
 
 Marks termination requested and signals the child, while leaving settlement to
 the close callback so the process is reaped before control returns.
+
+## `createDispatchCorrelation`
+
+Generates 32 cryptographically random bytes and encodes them as one lowercase
+64-character correlation value. The controller validates its shape, rejects
+reuse within the run, and injects it only when constructing the immutable
+per-dispatch context.

@@ -1,5 +1,6 @@
 /** Coordinates guarded preview acceptance with one process-local observer. */
 import { execFile, type ChildProcess } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -86,6 +87,7 @@ export type PreviewAcceptanceFamily =
 export interface PreviewAcceptanceControllerDependencies {
   wallNow(): Date;
   monotonicNow(): number;
+  createDispatchCorrelation(): string;
   sleep(milliseconds: number): Promise<void>;
   assertRemoteTip(
     commit: string,
@@ -174,6 +176,14 @@ export interface PreviewAcceptanceClosureInput
   readonly rollbackRunRef: string;
   readonly closureRunRef: string;
 }
+
+/** Distributes omission across each canonical context union member. */
+type WithoutDispatchCorrelation<Context> = Context extends unknown
+  ? Omit<Context, "dispatchCorrelation">
+  : never;
+
+type PreviewAcceptanceContextDraft =
+  WithoutDispatchCorrelation<PreviewAcceptanceContext>;
 
 export interface PreviewAcceptanceRollbackSettlementInput
   extends PreviewAcceptanceActionInput {
@@ -289,6 +299,8 @@ export function createPreviewControllerSubprocessDependencies(input: {
   const dependencies: PreviewAcceptanceControllerDependencies = {
     wallNow: input.wallNow ?? (() => new Date()),
     monotonicNow: input.monotonicNow ?? (() => performance.now()),
+    /** Creates one fresh correlation value for exactly one dispatch attempt. */
+    createDispatchCorrelation: () => randomBytes(32).toString("hex"),
     sleep:
       input.sleep ??
       ((milliseconds: number) =>
@@ -522,10 +534,11 @@ export async function runPreviewAcceptanceController(
   let candidateRunRef: string | null = null;
   let rollbackRunRef: string | null = null;
   let rollbackStarted = false;
+  const usedDispatchCorrelations = new Set<string>();
 
   /** Serializes every dispatch through the canonical closed context. */
   const dispatch = async (
-    context: PreviewAcceptanceContext,
+    context: PreviewAcceptanceContextDraft,
     deadlineMonotonic: number,
     beforeDispatch?: () => void,
   ): Promise<{
@@ -543,7 +556,20 @@ export async function runPreviewAcceptanceController(
       fail();
     }
     beforeDispatch?.();
-    const serializedContext = serializePreviewAcceptanceContext(context);
+    const dispatchCorrelation = dependencies.createDispatchCorrelation();
+    if (
+      typeof dispatchCorrelation !== "string" ||
+      !/^[a-f0-9]{64}$/u.test(dispatchCorrelation) ||
+      usedDispatchCorrelations.has(dispatchCorrelation)
+    ) {
+      fail();
+    }
+    usedDispatchCorrelations.add(dispatchCorrelation);
+    const completeContext = Object.freeze({
+      ...context,
+      dispatchCorrelation,
+    }) as PreviewAcceptanceContext;
+    const serializedContext = serializePreviewAcceptanceContext(completeContext);
     let result: { readonly runRef: string };
     let dispatchSignal: AbortSignal | undefined;
     let reconciledAfterFailure = false;
@@ -575,14 +601,23 @@ export async function runPreviewAcceptanceController(
       });
       reconciledAfterFailure = true;
       reconciledAfterTimeout = dispatchSignal?.aborted === true;
+      const reconciliationDuration =
+        context.kind === "rollback"
+          ? ROLLBACK_WORKFLOW_MILLISECONDS
+          : CANDIDATE_WORKFLOW_MILLISECONDS;
+      const reconciliationDeadline =
+        context.kind === "rollback"
+          ? nextWorkflowDeadline(ROLLBACK_WORKFLOW_MILLISECONDS)
+          : nextCandidateWorkflowDeadline();
       const reconciled = await runControllerCall(
-        nextCleanupDeadline(),
+        reconciliationDeadline,
         dependencies,
         (boundary) =>
           dependencies.reconcileCandidateDispatch(
             reconciliationInput,
             boundary,
           ),
+        reconciliationDuration,
       );
       if (reconciled === null) fail();
       result = reconciled;
@@ -788,13 +823,14 @@ export async function runPreviewAcceptanceController(
       reviewedCommit,
     });
     await runControllerCall(
-      nextPreSignalDeadline(),
+      nextCandidateWorkflowDeadline(),
       dependencies,
       (boundary) =>
         dependencies.verifyCandidateAttribution(
           candidateAttribution,
           boundary,
         ),
+      CANDIDATE_WORKFLOW_MILLISECONDS,
     );
     dependencies.writeStatus("candidate_dispatched");
     if (candidate.reconciledAfterTimeout) {
@@ -1378,7 +1414,7 @@ function createObserveContext(
   input: PreviewAcceptanceControllerInput,
   reviewedCommit: string,
   aiWindow: PreviewAiEvidenceWindow | undefined,
-): PreviewAcceptanceContext {
+): PreviewAcceptanceContextDraft {
   const expectedOutcome = input.expectation.kind;
   const base = {
     version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
@@ -1430,7 +1466,38 @@ function createObserveContext(
       expiresAt: aiWindow.expiresAt.toISOString(),
     });
   }
-  return Object.freeze(base) as PreviewAcceptanceContext;
+  switch (input.family) {
+    case "foundation_probe":
+      if (expectedOutcome !== "foundation_succeeded") fail();
+      return Object.freeze({
+        ...base,
+        evidenceFamily: "foundation_probe",
+        expectedOutcome: "foundation_succeeded",
+      });
+    case "sync_suppression":
+      if (expectedOutcome !== "sync_suppressed") fail();
+      return Object.freeze({
+        ...base,
+        evidenceFamily: "sync_suppression",
+        expectedOutcome: "sync_suppressed",
+      });
+    case "role_probe":
+      if (expectedOutcome !== "role_probe_succeeded") fail();
+      return Object.freeze({
+        ...base,
+        evidenceFamily: "role_probe",
+        expectedOutcome: "role_probe_succeeded",
+      });
+    case "restore":
+      if (expectedOutcome !== "restore_succeeded") fail();
+      return Object.freeze({
+        ...base,
+        evidenceFamily: "restore",
+        expectedOutcome: "restore_succeeded",
+      });
+    default:
+      fail();
+  }
 }
 
 /** Creates one exact candidate dispatch context. */
@@ -1445,7 +1512,7 @@ function createCandidateContext(
   observerCompletedAt: Date,
   restoreAdmission: "verified" | undefined,
   aiWindow: PreviewAiEvidenceWindow | undefined,
-): PreviewAcceptanceContext {
+): PreviewAcceptanceContextDraft {
   const base = {
     version: PREVIEW_ACCEPTANCE_CONTEXT_VERSION,
     kind: operation,
@@ -1482,7 +1549,7 @@ function createCandidateContext(
       expiresAt: aiWindow.expiresAt.toISOString(),
     });
   }
-  return Object.freeze(base) as PreviewAcceptanceContext;
+  return Object.freeze({ ...base, kind: operation });
 }
 
 /** Derives restore admission from a fresh private role-probe closure check. */

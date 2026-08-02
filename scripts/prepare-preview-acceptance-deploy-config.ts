@@ -1,5 +1,6 @@
 /** Builds one reviewed preview-only acceptance artifact from the normal build output. */
-import { appendFile, readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { appendFile, open, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -25,6 +26,14 @@ const INVALID_SELECTION = "Preview acceptance workflow selection is invalid.";
 const NORMAL_INPUT = "dist/vision/wrangler.json";
 const ACCEPTANCE_OUTPUT = "dist/vision/wrangler.acceptance.json";
 const ACCEPTANCE_CRON = "* * * * *";
+const DISPATCH_CORRELATION_EVIDENCE_OUTPUT =
+  "preview-dispatch-correlation.json";
+const MAX_DISPATCH_CORRELATION_EVIDENCE_BYTES = 2_048;
+const MAX_DISPATCH_CORRELATION_CONTEXT_BYTES = 2_048;
+const DISPATCH_CORRELATION_VERIFIED =
+  "Preview dispatch correlation evidence is valid.\n";
+const DISPATCH_CORRELATION_REJECTED =
+  "Preview dispatch correlation evidence is invalid.\n";
 
 /** The domain module owns the one exact selector vocabulary. */
 export const PREVIEW_ACCEPTANCE_SELECTORS =
@@ -52,7 +61,7 @@ export type PreviewAcceptanceOperation =
 
 /** Versioned canonical workflow context shared by every acceptance operation. */
 export const PREVIEW_ACCEPTANCE_CONTEXT_VERSION =
-  "vision.preview-acceptance-context/v1" as const;
+  "vision.preview-acceptance-context/v2" as const;
 
 /** The sole closed operator attestation accepted for AI candidate admission. */
 export type PreviewAiZeroActiveGate = "verified";
@@ -61,6 +70,15 @@ interface PreviewAcceptanceContextBase {
   readonly version: typeof PREVIEW_ACCEPTANCE_CONTEXT_VERSION;
   readonly kind: PreviewAcceptanceOperation;
   readonly reviewedCommit: string;
+  readonly dispatchCorrelation: string;
+}
+
+/** Exact review evidence bound to one canonical dispatch context. */
+export interface PreviewDispatchCorrelationEvidence {
+  readonly evidenceType: "vision.preview-dispatch-correlation/v1";
+  readonly operation: PreviewAcceptanceOperation;
+  readonly reviewedCommit: string;
+  readonly contextHash: string;
 }
 
 interface PreviewAcceptanceCandidateContext
@@ -193,6 +211,7 @@ export interface PreviewAcceptanceWorkflowSelection {
 const CANONICAL_INSTANT =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const REVIEWED_COMMIT = /^[0-9a-f]{40}$/u;
+const DISPATCH_CORRELATION = /^[a-f0-9]{64}$/u;
 
 /** Accepts only a positive decimal workflow-run reference. */
 function isRunRef(value: unknown): value is string {
@@ -253,6 +272,59 @@ export function parsePreviewAcceptanceContext(
   }
 }
 
+/** Creates exact evidence from one byte-canonical dispatch context. */
+export function createPreviewDispatchCorrelationEvidence(
+  operation: PreviewAcceptanceOperation,
+  serializedContext: string,
+): PreviewDispatchCorrelationEvidence {
+  const selection = parsePreviewAcceptanceContext(operation, serializedContext);
+  return Object.freeze({
+    evidenceType: "vision.preview-dispatch-correlation/v1",
+    operation: selection.operation,
+    reviewedCommit: selection.context.reviewedCommit,
+    contextHash: createHash("sha256")
+      .update(serializedContext, "utf8")
+      .digest("hex"),
+  });
+}
+
+/** Requires exact evidence bound to one operation, commit, and context byte string. */
+export function assertPreviewDispatchCorrelationEvidence(input: {
+  readonly evidence: unknown;
+  readonly operation: PreviewAcceptanceOperation;
+  readonly serializedContext: string;
+  readonly expectedCommit: string;
+}): void {
+  try {
+    const selection = parsePreviewAcceptanceContext(
+      input.operation,
+      input.serializedContext,
+    );
+    const evidence = exactPlainRecord(input.evidence);
+    exactKeys(evidence, [
+      "evidenceType",
+      "operation",
+      "reviewedCommit",
+      "contextHash",
+    ]);
+    const contextHash = createHash("sha256")
+      .update(input.serializedContext, "utf8")
+      .digest("hex");
+    if (
+      dataValue(evidence, "evidenceType") !==
+        "vision.preview-dispatch-correlation/v1" ||
+      dataValue(evidence, "operation") !== input.operation ||
+      dataValue(evidence, "reviewedCommit") !== input.expectedCommit ||
+      selection.context.reviewedCommit !== input.expectedCommit ||
+      dataValue(evidence, "contextHash") !== contextHash
+    ) {
+      throw new Error(INVALID_SELECTION);
+    }
+  } catch {
+    throw new Error(INVALID_SELECTION);
+  }
+}
+
 /** Rebuilds one validated context without retaining caller-owned object state. */
 function canonicalPreviewAcceptanceContext(
   candidate: unknown,
@@ -261,6 +333,7 @@ function canonicalPreviewAcceptanceContext(
   const version = dataValue(record, "version");
   const kind = dataValue(record, "kind");
   const reviewedCommit = dataValue(record, "reviewedCommit");
+  const dispatchCorrelation = dataValue(record, "dispatchCorrelation");
   if (
     version !== PREVIEW_ACCEPTANCE_CONTEXT_VERSION ||
     typeof kind !== "string" ||
@@ -268,18 +341,26 @@ function canonicalPreviewAcceptanceContext(
       kind as PreviewAcceptanceOperation,
     ) ||
     typeof reviewedCommit !== "string" ||
-    !REVIEWED_COMMIT.test(reviewedCommit)
+    !REVIEWED_COMMIT.test(reviewedCommit) ||
+    typeof dispatchCorrelation !== "string" ||
+    !DISPATCH_CORRELATION.test(dispatchCorrelation)
   ) {
     throw new Error(INVALID_SELECTION);
   }
   const admittedKind = kind as PreviewAcceptanceOperation;
-  const base = { version } as const;
+  const base = {
+    version,
+    kind: admittedKind,
+    reviewedCommit,
+    dispatchCorrelation,
+  } as const;
   switch (admittedKind) {
     case "none": {
       exactKeys(record, [
         "version",
         "kind",
         "reviewedCommit",
+        "dispatchCorrelation",
         "candidateRunRef",
         "rollbackClosureRunRef",
       ]);
@@ -321,6 +402,7 @@ function canonicalPreviewAcceptanceContext(
               "version",
               "kind",
               "reviewedCommit",
+              "dispatchCorrelation",
               "evidenceFamily",
               "expectedOutcome",
               "faultScenario",
@@ -330,6 +412,7 @@ function canonicalPreviewAcceptanceContext(
                 "version",
                 "kind",
                 "reviewedCommit",
+                "dispatchCorrelation",
                 "evidenceFamily",
                 "expectedOutcome",
                 "maintenanceScheduledAt",
@@ -339,6 +422,7 @@ function canonicalPreviewAcceptanceContext(
                   "version",
                   "kind",
                   "reviewedCommit",
+                  "dispatchCorrelation",
                   "evidenceFamily",
                   "expectedOutcome",
                   "evidenceScheduledAt",
@@ -348,6 +432,7 @@ function canonicalPreviewAcceptanceContext(
               "version",
               "kind",
               "reviewedCommit",
+              "dispatchCorrelation",
               "evidenceFamily",
               "expectedOutcome",
             ],
@@ -414,6 +499,7 @@ function canonicalPreviewAcceptanceContext(
         "version",
         "kind",
         "reviewedCommit",
+        "dispatchCorrelation",
         "authenticatedReadsGate",
         "candidateRunRef",
         "rollbackClosureRunRef",
@@ -518,6 +604,7 @@ function canonicalPreviewAcceptanceContext(
         "version",
         "kind",
         "reviewedCommit",
+        "dispatchCorrelation",
         "candidateRunRef",
       ]);
       const candidateRunRef = dataValue(record, "candidateRunRef");
@@ -534,6 +621,7 @@ function canonicalPreviewAcceptanceContext(
         "version",
         "kind",
         "reviewedCommit",
+        "dispatchCorrelation",
         "candidateRunRef",
         "rollbackRunRef",
         "authenticatedReadsGate",
@@ -565,6 +653,7 @@ function canonicalPreviewAcceptanceContext(
         "version",
         "kind",
         "reviewedCommit",
+        "dispatchCorrelation",
         "candidateRunRef",
         "rollbackClosureRunRef",
       ]);
@@ -757,6 +846,89 @@ function readArguments(arguments_: readonly string[]): ReadonlyMap<string, strin
   return parsed;
 }
 
+/** Reads one UTF-8 input without admitting a file larger than the exact contract bound. */
+async function readBoundedUtf8File(
+  path: string,
+  maximumBytes: number,
+): Promise<string> {
+  if (path.length === 0 || path.length > 4_096) {
+    throw new Error(INVALID_SELECTION);
+  }
+  const handle = await open(path, "r");
+  try {
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    while (totalBytes <= maximumBytes) {
+      const buffer = Buffer.alloc(maximumBytes + 1 - totalBytes);
+      const { bytesRead } = await handle.read(
+        buffer,
+        0,
+        buffer.length,
+        totalBytes,
+      );
+      if (bytesRead === 0) break;
+      chunks.push(buffer.subarray(0, bytesRead));
+      totalBytes += bytesRead;
+    }
+    if (totalBytes > maximumBytes) throw new Error(INVALID_SELECTION);
+    return new TextDecoder("utf-8", { fatal: true }).decode(
+      Buffer.concat(chunks, totalBytes),
+    );
+  } finally {
+    await handle.close();
+  }
+}
+
+/** Runs the closed file-based dispatch-correlation verifier without rendering inputs. */
+async function verifyDispatchCorrelation(
+  arguments_: readonly string[],
+): Promise<void> {
+  try {
+    if (
+      arguments_.length !== 9 ||
+      arguments_[0] !== "--verify-dispatch-correlation" ||
+      arguments_[1] !== "--evidence" ||
+      arguments_[3] !== "--operation" ||
+      arguments_[5] !== "--context" ||
+      arguments_[7] !== "--commit"
+    ) {
+      throw new Error(INVALID_SELECTION);
+    }
+    const evidencePath = arguments_[2];
+    const operation = arguments_[4];
+    const contextPath = arguments_[6];
+    const expectedCommit = arguments_[8];
+    if (
+      evidencePath === undefined ||
+      contextPath === undefined ||
+      expectedCommit === undefined ||
+      !PREVIEW_ACCEPTANCE_OPERATIONS.includes(
+        operation as PreviewAcceptanceOperation,
+      ) ||
+      !REVIEWED_COMMIT.test(expectedCommit)
+    ) {
+      throw new Error(INVALID_SELECTION);
+    }
+    const [serializedContext, serializedEvidence] = await Promise.all([
+      readBoundedUtf8File(contextPath, MAX_DISPATCH_CORRELATION_CONTEXT_BYTES),
+      readBoundedUtf8File(
+        evidencePath,
+        MAX_DISPATCH_CORRELATION_EVIDENCE_BYTES,
+      ),
+    ]);
+    assertPreviewDispatchCorrelationEvidence({
+      evidence: JSON.parse(serializedEvidence) as unknown,
+      operation: operation as PreviewAcceptanceOperation,
+      serializedContext,
+      expectedCommit,
+    });
+    process.stdout.write(DISPATCH_CORRELATION_VERIFIED);
+  } catch {
+    process.stderr.write(DISPATCH_CORRELATION_REJECTED);
+    process.exitCode = 1;
+  }
+}
+
 /** Reads canonical context only from the workflow step environment. */
 function readWorkflowSelectionFromEnvironment(): PreviewAcceptanceWorkflowSelection {
   const operation = process.env.ACCEPTANCE_OPERATION;
@@ -786,8 +958,12 @@ function readWorkflowSelectionFromEnvironment(): PreviewAcceptanceWorkflowSelect
 
 /** Executes the workflow verifier or writes the single ephemeral candidate path. */
 async function main(): Promise<void> {
+  const arguments_ = process.argv.slice(2);
+  if (arguments_[0] === "--verify-dispatch-correlation") {
+    await verifyDispatchCorrelation(arguments_);
+    return;
+  }
   try {
-    const arguments_ = process.argv.slice(2);
     const verifyOnly =
       arguments_.length === 1 &&
       arguments_[0] === "--verify-workflow-inputs";
@@ -797,6 +973,19 @@ async function main(): Promise<void> {
       if (typeof outputPath !== "string" || outputPath.length === 0) {
         throw new Error(INVALID_SELECTION);
       }
+      const serializedContext = process.env.ACCEPTANCE_CONTEXT;
+      if (typeof serializedContext !== "string") {
+        throw new Error(INVALID_SELECTION);
+      }
+      const evidence = createPreviewDispatchCorrelationEvidence(
+        selection.operation,
+        serializedContext,
+      );
+      await writeFile(
+        resolve(DISPATCH_CORRELATION_EVIDENCE_OUTPUT),
+        `${JSON.stringify(evidence)}\n`,
+        { encoding: "utf8", flag: "wx" },
+      );
       const context = selection.context;
       const candidateContext =
         context.kind === "deploy_foundation" ||

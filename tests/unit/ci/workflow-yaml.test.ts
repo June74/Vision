@@ -3,13 +3,19 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseDocument } from "yaml";
 
+const UPLOAD_ARTIFACT_ACTION =
+  "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02";
+
 interface ParsedWorkflowStep {
   readonly name?: unknown;
   readonly run?: unknown;
+  readonly uses?: unknown;
+  readonly with?: unknown;
 }
 
 interface ParsedWorkflowJob {
   readonly steps?: unknown;
+  readonly needs?: unknown;
 }
 
 interface ParsedWorkflow {
@@ -56,7 +62,161 @@ function readSteps(job: ParsedWorkflowJob): readonly ParsedWorkflowStep[] {
   return job.steps as readonly ParsedWorkflowStep[];
 }
 
+function readAllWorkflowSteps(
+  workflow: ParsedWorkflow | undefined,
+): readonly ParsedWorkflowStep[] {
+  expect(workflow).toBeDefined();
+  const jobs = workflow?.jobs as Record<string, ParsedWorkflowJob>;
+  return Object.values(jobs).flatMap((job) => readSteps(job));
+}
+
+function isFixedDispatchCorrelationUpload(
+  step: ParsedWorkflowStep | undefined,
+): boolean {
+  const withOptions = step?.with as Record<string, unknown> | undefined;
+  return (
+    step?.uses === UPLOAD_ARTIFACT_ACTION &&
+    withOptions?.name === "vision-preview-dispatch-correlation" &&
+    withOptions.path === "preview-dispatch-correlation.json" &&
+    withOptions["retention-days"] === 30 &&
+    withOptions["if-no-files-found"] === "error"
+  );
+}
+
+function hasExactlyOneFixedDispatchCorrelationUpload(
+  workflow: ParsedWorkflow | undefined,
+): boolean {
+  const claimants = readAllWorkflowSteps(workflow).filter((step) => {
+    const withOptions = step.with as Record<string, unknown> | undefined;
+    return (
+      withOptions?.name === "vision-preview-dispatch-correlation" ||
+      withOptions?.path === "preview-dispatch-correlation.json"
+    );
+  });
+  return (
+    claimants.length === 1 &&
+    isFixedDispatchCorrelationUpload(claimants[0])
+  );
+}
+
+function parseWorkflowSource(source: string): ParsedWorkflow {
+  const document = parseDocument(source, {
+    prettyErrors: false,
+    uniqueKeys: true,
+  });
+  expect(document.errors).toEqual([]);
+  return document.toJS({ maxAliasCount: 0 }) as ParsedWorkflow;
+}
+
 describe("workflow YAML contract", () => {
+  it("parses one pinned dispatch-correlation upload before all mutation-capable jobs", async () => {
+    const workflows = await parseWorkflows();
+    const workflow = workflows.get("preview.yml");
+    const selection = readJob(workflow, "selection");
+    const selectionSteps = readSteps(selection);
+    const upload = selectionSteps.find(
+      ({ uses }) => uses === UPLOAD_ARTIFACT_ACTION,
+    );
+    const jobs = workflow?.jobs as Record<string, ParsedWorkflowJob>;
+    const mutationJobs = [
+      "verify",
+      "deploy",
+      "tail",
+      "ai_signal",
+      "suppression_signal",
+      "restore_signal",
+      "role_signal",
+      "ai_uniqueness",
+      "suppression_uniqueness",
+      "restore_uniqueness",
+      "maintenance_uniqueness",
+      "deploy_acceptance_candidate",
+      "rollback",
+      "close_rollback",
+      "verify_cleanup",
+      "configure_gateway",
+    ];
+
+    expect(hasExactlyOneFixedDispatchCorrelationUpload(workflow)).toBe(true);
+    expect(upload?.name).toBe("Upload dispatch correlation evidence");
+    expect(selectionSteps.indexOf(upload!)).toBe(
+      selectionSteps.findIndex(
+        ({ name }) => name === "Verify exact acceptance operation",
+      ) + 1,
+    );
+    expect(upload?.uses).toBe(UPLOAD_ARTIFACT_ACTION);
+    expect(upload?.with).toEqual({
+      name: "vision-preview-dispatch-correlation",
+      path: "preview-dispatch-correlation.json",
+      "retention-days": 30,
+      "if-no-files-found": "error",
+    });
+    for (const name of mutationJobs) {
+      const needs = jobs[name]?.needs;
+      expect(Array.isArray(needs) ? needs : [needs]).toContain("selection");
+    }
+    const source = await readFile(
+      resolve(process.cwd(), ".github", "workflows", "preview.yml"),
+      "utf8",
+    );
+    const renamedArtifact = source.replace(
+      "name: vision-preview-dispatch-correlation",
+      "name: vision-preview-dispatch-correlation-renamed",
+    );
+    const wrongRetention = source.replace("retention-days: 30", "retention-days: 7");
+    const missingFilePolicy = source.replace(
+      /^ {10}if-no-files-found: error\r?\n/mu,
+      "",
+    );
+    const warningFilePolicy = source.replace(
+      "if-no-files-found: error",
+      "if-no-files-found: warn",
+    );
+    const wrongPath = source.replace(
+      "path: preview-dispatch-correlation.json",
+      "path: other.json",
+    );
+    const unpinnedAction = source.replace(
+      UPLOAD_ARTIFACT_ACTION,
+      "actions/upload-artifact@v4",
+    );
+    const alternateLabelDuplicate = `${source}\n  alternate_correlation_upload:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Alternate evidence label\n        uses: ${UPLOAD_ARTIFACT_ACTION}\n        with:\n          name: vision-preview-dispatch-correlation\n          path: preview-dispatch-correlation.json\n          retention-days: 30\n          if-no-files-found: error\n`;
+
+    expect(
+      hasExactlyOneFixedDispatchCorrelationUpload(
+        parseWorkflowSource(renamedArtifact),
+      ),
+    ).toBe(false);
+    expect(
+      hasExactlyOneFixedDispatchCorrelationUpload(
+        parseWorkflowSource(wrongRetention),
+      ),
+    ).toBe(false);
+    expect(
+      hasExactlyOneFixedDispatchCorrelationUpload(
+        parseWorkflowSource(missingFilePolicy),
+      ),
+    ).toBe(false);
+    expect(
+      hasExactlyOneFixedDispatchCorrelationUpload(
+        parseWorkflowSource(warningFilePolicy),
+      ),
+    ).toBe(false);
+    expect(
+      hasExactlyOneFixedDispatchCorrelationUpload(parseWorkflowSource(wrongPath)),
+    ).toBe(false);
+    expect(
+      hasExactlyOneFixedDispatchCorrelationUpload(
+        parseWorkflowSource(unpinnedAction),
+      ),
+    ).toBe(false);
+    expect(
+      hasExactlyOneFixedDispatchCorrelationUpload(
+        parseWorkflowSource(alternateLabelDuplicate),
+      ),
+    ).toBe(false);
+  });
+
   it("parses every committed workflow with a genuine YAML parser", async () => {
     const workflows = await parseWorkflows();
 

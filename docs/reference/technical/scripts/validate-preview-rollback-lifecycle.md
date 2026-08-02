@@ -245,4 +245,12 @@ Writes canonical formatted JSON with exclusive creation.
 Routes only the approved intent, restore, closure, latest-candidate, and
 completed-run modes plus mutation-boundary write, classify, and verify modes;
 all errors become one value-free failure. Classification and intent-version
-reading emit only fixed safe labels.
+reading emit only fixed safe labels. Candidate-operation reading rejects
+legacy intent and emits only the validated closed operation label.
+
+## `assertPreviewRollbackProofChain`
+
+Parses the current candidate-intent, restored-normal, and closure schemas;
+rejects legacy proof versions; and binds the operation, reviewed commit,
+candidate reference digest, intent digest, restore digest, and chronological
+instants across the complete rollback chain.

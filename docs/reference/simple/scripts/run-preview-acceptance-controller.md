@@ -391,3 +391,8 @@ Rejects a child command with the controller's single public failure.
 ## `terminate`
 
 Requests child termination while waiting for the child to close and be reaped.
+
+## `createDispatchCorrelation`
+
+Creates a fresh private correlation value for one dispatch attempt so no two
+dispatches in the same controller run can share an identity.

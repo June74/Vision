@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T02:32:27Z
-- **Last observed:** 2026-08-01T02:26:27.5590215Z
-- **Phase/task:** Phase B Task 7 continuation and exact-candidate report refresh
+- **Last observed:** 2026-08-01T20:29:18.5732584Z
+- **Phase/task:** Phase B Task 7 correlation repair Task 4
 - **Environment:** Local Phase B worktree
-- **Version/commit:** `36f9df2`
+- **Version/commit:** admitted baseline `10b228b`
 
 ## Symptom
 
@@ -32,6 +32,7 @@ different line break.
 
 - The first patch was rejected without modifying the plan.
 - The exact bounded plan lines were read before the retry.
+- During Task 4 test authoring, one initial test-patch context mismatch was rejected before the required RED run; the exact current test context was then used.
 
 ## Cause classification
 
@@ -52,6 +53,7 @@ different line break.
 
 The retry must modify only the intended plan paragraph and pass
 `git diff --check`.
+The latest Task 4 retry modified only the approved lifecycle test/script paths; the focused suite passed 30 tests and typecheck passed.
 
 ## Recurrence history
 
@@ -147,3 +149,10 @@ The retry must modify only the intended plan paragraph and pass
   used a shortened version of the current candidate paragraph. The combined
   patch was rejected atomically and changed no file. The exact report tail was
   reread before separate minimal updates.
+- 2026-08-01T20:20:08.1853539Z: Recurred during Task 4 test authoring when an
+  initial patch used mismatched test context. It was rejected before the
+  mandated RED; exact current context succeeded, 30 focused tests passed, and
+  typecheck passed.
+- 2026-08-01T20:29:18.5732584Z: Recurred when a combined Task 4 closure patch
+  assumed a wrapped report sentence. The atomic patch was rejected without
+  writing; the exact report tail was read before separate minimal hunks.

@@ -87,3 +87,24 @@ restore-admission gate name.
 
 Reuses the strict domain parser for the scheduled-at and expiry values carried
 inside an AI observe or deploy context.
+
+## `createPreviewDispatchCorrelationEvidence`
+
+Creates a small evidence record that binds one operation and reviewed commit to
+the exact serialized dispatch context without copying that context into the
+evidence.
+
+## `assertPreviewDispatchCorrelationEvidence`
+
+Rejects correlation evidence unless its type, operation, commit, and context
+fingerprint all match the exact dispatch being verified.
+
+## `readBoundedUtf8File`
+
+Reads one required UTF-8 file through a single bounded handle and rejects empty,
+oversized, or invalid text.
+
+## `verifyDispatchCorrelation`
+
+Runs the closed file-based correlation check and emits only the fixed verified
+or rejected result.

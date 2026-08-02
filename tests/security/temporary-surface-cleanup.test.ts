@@ -63,6 +63,7 @@ const TEMPORARY_ACTIVE_SURFACE_PATTERNS = [
   /eleven\s+temporary selectors/u,
   /temporary Gateway attestation/u,
   /temporary restore database\s+binding/u,
+  /^preview-dispatch-correlation\.json$/u,
 ] as const;
 
 // Regression snapshots only: the imported four-disposition map is authoritative.
@@ -1233,11 +1234,25 @@ describe("post-acceptance temporary surface cleanup", () => {
       "The\neleven temporary selectors are preview-only.",
       "temporary Gateway attestation",
       "temporary restore database\nbinding",
+      "preview-dispatch-correlation.json",
     ];
 
     expect(
       representatives.filter(containsTemporaryActiveSurface),
     ).toEqual(representatives);
+  });
+
+  it("classifies only the approved fixed dispatch-correlation transient path", () => {
+    const approvedPath = "preview-dispatch-correlation.json";
+    const rejectedPaths = [
+      "preview-dispatch-correlation-copy.json",
+      "preview-dispatch-correlation.txt",
+      "dispatch-correlation.json",
+      "preview-dispatch-correlation.json.bak",
+    ];
+
+    expect(containsTemporaryActiveSurface(approvedPath)).toBe(true);
+    expect(rejectedPaths.filter(containsTemporaryActiveSurface)).toEqual([]);
   });
 
   it("does not classify permanent health and authentication vocabulary as Task 8 residue", async () => {

@@ -1,18 +1,48 @@
 import { describe, expect, it } from "vitest";
 import {
+  assertPreviewDispatchCorrelationEvidence,
+  createPreviewDispatchCorrelationEvidence,
   parsePreviewAcceptanceContext,
   serializePreviewAcceptanceContext,
   type PreviewAcceptanceContext,
 } from "../../../scripts/prepare-preview-acceptance-deploy-config";
 
-const SHA = "a".repeat(40);
+const COMMIT = "a".repeat(40);
+const CORRELATION = "b".repeat(64);
+
+function noneContext(overrides: Readonly<Record<string, unknown>> = {}) {
+  return {
+    version: "vision.preview-acceptance-context/v2" as const,
+    kind: "none" as const,
+    reviewedCommit: COMMIT,
+    dispatchCorrelation: CORRELATION,
+    candidateRunRef: "baseline",
+    rollbackClosureRunRef: "baseline",
+    ...overrides,
+  };
+}
+
+function deployFoundationContext() {
+  return {
+    version: "vision.preview-acceptance-context/v2" as const,
+    kind: "deploy_foundation" as const,
+    reviewedCommit: COMMIT,
+    dispatchCorrelation: CORRELATION,
+    authenticatedReadsGate: "verified" as const,
+    candidateRunRef: "baseline",
+    rollbackClosureRunRef: "baseline",
+    observerDispatchStartedAt: "2026-07-30T18:15:00.000Z",
+    observerDispatchCompletedAt: "2026-07-30T18:15:00.000Z",
+  };
+}
 
 describe("preview acceptance context", () => {
   it("keeps AI window fields out of the non-AI observe type", () => {
     const nonAiObserveWithWindow = {
-      version: "vision.preview-acceptance-context/v1",
+      version: "vision.preview-acceptance-context/v2",
       kind: "observe",
-      reviewedCommit: SHA,
+      reviewedCommit: COMMIT,
+      dispatchCorrelation: CORRELATION,
       evidenceFamily: "foundation_probe",
       expectedOutcome: "foundation_succeeded",
       evidenceScheduledAt: "2026-07-30T18:28:00.000Z",
@@ -31,9 +61,10 @@ describe("preview acceptance context", () => {
     "binds normal deployment admission to the %s lifecycle pair",
     (candidateRunRef, rollbackClosureRunRef) => {
       const context = {
-        version: "vision.preview-acceptance-context/v1" as const,
+        version: "vision.preview-acceptance-context/v2" as const,
         kind: "none" as const,
-        reviewedCommit: SHA,
+        reviewedCommit: COMMIT,
+        dispatchCorrelation: CORRELATION,
         candidateRunRef,
         rollbackClosureRunRef,
       };
@@ -67,9 +98,10 @@ describe("preview acceptance context", () => {
       parsePreviewAcceptanceContext(
         "none",
         JSON.stringify({
-          version: "vision.preview-acceptance-context/v1",
+          version: "vision.preview-acceptance-context/v2",
           kind: "none",
-          reviewedCommit: SHA,
+          reviewedCommit: COMMIT,
+          dispatchCorrelation: CORRELATION,
           ...lifecycle,
         }),
       ),
@@ -78,9 +110,10 @@ describe("preview acceptance context", () => {
 
   it("admits maintenance observe context with only the canonical scheduled tick", () => {
     const context = {
-      version: "vision.preview-acceptance-context/v1" as const,
+      version: "vision.preview-acceptance-context/v2" as const,
+      dispatchCorrelation: CORRELATION,
       kind: "observe" as const,
-      reviewedCommit: SHA,
+      reviewedCommit: COMMIT,
       evidenceFamily: "calendar_maintenance" as const,
       expectedOutcome: "maintenance_succeeded" as const,
       maintenanceScheduledAt: "2026-07-30T18:15:00.000Z",
@@ -99,9 +132,10 @@ describe("preview acceptance context", () => {
       parsePreviewAcceptanceContext(
         "observe",
         JSON.stringify({
-          version: "vision.preview-acceptance-context/v1",
+          version: "vision.preview-acceptance-context/v2",
           kind: "observe",
-          reviewedCommit: SHA,
+          reviewedCommit: COMMIT,
+          dispatchCorrelation: CORRELATION,
           evidenceFamily: "calendar_maintenance",
           expectedOutcome: "maintenance_succeeded",
           maintenanceScheduledAt: "2026-07-30T18:15:00.000Z",
@@ -141,9 +175,10 @@ describe("preview acceptance context", () => {
         parsePreviewAcceptanceContext(
           "observe",
           JSON.stringify({
-            version: "vision.preview-acceptance-context/v1",
-            kind: "observe",
-            reviewedCommit: SHA,
+          version: "vision.preview-acceptance-context/v2",
+          kind: "observe",
+          reviewedCommit: COMMIT,
+          dispatchCorrelation: CORRELATION,
             evidenceFamily,
             expectedOutcome,
             ...variantFields,
@@ -154,4 +189,142 @@ describe("preview acceptance context", () => {
       ).toThrow("Preview acceptance workflow selection is invalid.");
     },
   );
+
+  it("creates exact dispatch-correlation evidence for a valid context", () => {
+    const context = deployFoundationContext();
+    const serializedContext = serializePreviewAcceptanceContext(context);
+
+    expect(
+      createPreviewDispatchCorrelationEvidence("deploy_foundation", serializedContext),
+    ).toEqual({
+      evidenceType: "vision.preview-dispatch-correlation/v1",
+      operation: "deploy_foundation",
+      reviewedCommit: COMMIT,
+      contextHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+    });
+  });
+
+  it.each([
+    ["missing correlation", { dispatchCorrelation: undefined }],
+    ["short correlation", { dispatchCorrelation: "b".repeat(63) }],
+    ["long correlation", { dispatchCorrelation: "b".repeat(65) }],
+    ["uppercase correlation", { dispatchCorrelation: "B".repeat(64) }],
+    ["nonhex correlation", { dispatchCorrelation: "g".repeat(64) }],
+    ["unknown context key", { unexpected: true }],
+  ])("rejects a context with %s", (_label, overrides) => {
+    const context = noneContext(overrides);
+
+    expect(() =>
+      parsePreviewAcceptanceContext("none", JSON.stringify(context)),
+    ).toThrow("Preview acceptance workflow selection is invalid.");
+  });
+
+  it("rejects substitutions of individual dispatch evidence fields", () => {
+    const serializedContext = serializePreviewAcceptanceContext(
+      deployFoundationContext(),
+    );
+    const evidence = createPreviewDispatchCorrelationEvidence(
+      "deploy_foundation",
+      serializedContext,
+    );
+
+    for (const evidenceSubstitution of [
+      {
+        ...evidence,
+        operation: "deploy_restore" as const,
+      },
+      {
+        ...evidence,
+        reviewedCommit: "c".repeat(40),
+      },
+      {
+        ...evidence,
+        contextHash: "c".repeat(64),
+      },
+      {
+        ...evidence,
+        unexpected: true,
+      },
+    ]) {
+      expect(() =>
+        assertPreviewDispatchCorrelationEvidence({
+          evidence: evidenceSubstitution,
+          operation: "deploy_foundation",
+          serializedContext,
+          expectedCommit: COMMIT,
+        }),
+      ).toThrow("Preview acceptance workflow selection is invalid.");
+    }
+  });
+
+  it("binds dispatch evidence to the exact canonical context bytes", () => {
+    const firstSerializedContext = serializePreviewAcceptanceContext(
+      deployFoundationContext(),
+    );
+    const secondSerializedContext = serializePreviewAcceptanceContext({
+      ...deployFoundationContext(),
+      dispatchCorrelation: "c".repeat(64),
+    });
+    const firstEvidence = createPreviewDispatchCorrelationEvidence(
+      "deploy_foundation",
+      firstSerializedContext,
+    );
+
+    expect(() =>
+      assertPreviewDispatchCorrelationEvidence({
+        evidence: firstEvidence,
+        operation: "deploy_foundation",
+        serializedContext: secondSerializedContext,
+        expectedCommit: COMMIT,
+      }),
+    ).toThrow("Preview acceptance workflow selection is invalid.");
+  });
+
+  it("rejects accessor-bearing dispatch evidence", () => {
+    const serializedContext = serializePreviewAcceptanceContext(
+      deployFoundationContext(),
+    );
+    const evidence = createPreviewDispatchCorrelationEvidence(
+      "deploy_foundation",
+      serializedContext,
+    );
+    const accessorEvidence = { ...evidence } as Record<string, unknown>;
+    Object.defineProperty(accessorEvidence, "contextHash", {
+      enumerable: true,
+      get: () => evidence.contextHash,
+    });
+
+    expect(() =>
+      assertPreviewDispatchCorrelationEvidence({
+        evidence: accessorEvidence,
+        operation: "deploy_foundation",
+        serializedContext,
+        expectedCommit: COMMIT,
+      }),
+    ).toThrow("Preview acceptance workflow selection is invalid.");
+  });
+
+  it("normalizes hostile evidence reflection failures", () => {
+    const serializedContext = serializePreviewAcceptanceContext(
+      deployFoundationContext(),
+    );
+    const sentinel = new Error("hostile evidence reflection sentinel");
+    const hostileEvidence = new Proxy(
+      {},
+      {
+        ownKeys: () => {
+          throw sentinel;
+        },
+      },
+    );
+
+    expect(() =>
+      assertPreviewDispatchCorrelationEvidence({
+        evidence: hostileEvidence,
+        operation: "deploy_foundation",
+        serializedContext,
+        expectedCommit: COMMIT,
+      }),
+    ).toThrow("Preview acceptance workflow selection is invalid.");
+  });
 });

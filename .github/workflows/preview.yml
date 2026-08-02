@@ -86,6 +86,13 @@ jobs:
             exit 1
           fi
           pnpm exec tsx scripts/prepare-preview-acceptance-deploy-config.ts --verify-workflow-inputs
+      - name: Upload dispatch correlation evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vision-preview-dispatch-correlation
+          path: preview-dispatch-correlation.json
+          retention-days: 30
+          if-no-files-found: error
 
   verify:
     name: Verify preview candidate
@@ -1069,7 +1076,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: vision-preview-rollback-closed
-          path: preview-rollback-closure.json
+          path: |
+            preview-rollback-restored.json
+            preview-rollback-closure.json
           if-no-files-found: error
           retention-days: 30
 
@@ -1113,6 +1122,8 @@ jobs:
           candidate_intent="$candidate_dir/preview-candidate-intent.json"
           candidate_commit="$(pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --read-candidate-commit \
             --candidate-intent "$candidate_intent")"
+          candidate_operation="$(pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --read-candidate-operation \
+            --candidate-intent "$candidate_intent")"
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ROLLBACK_CLOSURE_RUN_ID" > "$run_file"
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ROLLBACK_CLOSURE_RUN_ID/jobs" > "$jobs_file"
           pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-run \
@@ -1121,12 +1132,13 @@ jobs:
             --commit "$candidate_commit" \
             --job-name "Close restored normal preview"
           gh run download "$ROLLBACK_CLOSURE_RUN_ID" --name vision-preview-rollback-closed --dir "$closure_dir" > /dev/null
-          pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-closure \
-            --closure-proof "$closure_dir/preview-rollback-closure.json" \
+          pnpm exec tsx scripts/validate-preview-rollback-lifecycle.ts --verify-exact-closure-chain \
+            --candidate-intent "$candidate_intent" \
             --candidate-run-ref "$CANDIDATE_RUN_REF" \
             --commit "$VERIFIED_SHA" \
-            --operation "verify_cleanup" \
-            --candidate-intent "$candidate_intent"
+            --operation "$candidate_operation" \
+            --restore-proof "$closure_dir/preview-rollback-restored.json" \
+            --closure-proof "$closure_dir/preview-rollback-closure.json"
           echo "Provider cleanup remains forbidden until the post-restore closure gate succeeds." >> "$GITHUB_STEP_SUMMARY"
       - name: Verify temporary names absent and strict normal provider state
         shell: bash

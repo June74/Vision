@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T19:55:03.9806283Z
-- **Last observed:** 2026-08-01T01:47:18.3849506Z
-- **Phase/task:** Phase B Task 4 diagnostics contract review
+- **Last observed:** 2026-08-01T18:32:26.9895172Z
+- **Phase/task:** Phase B Task 4 diagnostics review, Task 7 continuation, and Claude Code handoff
 - **Environment:** Read-only subagent skill discovery
 - **Version/commit:** c23e301
 
@@ -47,3 +47,14 @@ changed. The read-only review paused until the setback was recorded.
   when the controller again reconstructed the `scope-gate` path beneath
   `.codex`. No project or provider action ran. The controller read the skill
   from the catalog-declared `.agents` root before resuming.
+- 2026-08-01T03:09:17.5257190Z: Recurred during the final Claude Code handoff
+  preparation when the controller again reconstructed the `scope-gate` path
+  beneath `.codex`. No application, Git, provider, or secret state changed.
+  The controller resumed only after reading the catalog-declared `.agents`
+  path and the setback policy.
+- 2026-08-01T18:32:26.9895172Z: Recurred after correlation-repair Task 2 had
+  already completed its 68-test GREEN and scope check. The implementer
+  reconstructed the completion-check skill path instead of using its declared
+  catalog root, so the optional read failed and the agent stopped. No Task 2
+  source, provider, network, secret, calendar, database, R2, deployment,
+  workflow, backup-key, staging, or commit state changed after the failure.

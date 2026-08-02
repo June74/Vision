@@ -1,9 +1,15 @@
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { validatePreviewProviderStateForCandidateIntent } from "../../../scripts/validate-preview-deploy-config";
 import {
   assertPreviewCandidateMutationBoundary,
   assertPreviewCandidateIntent,
   assertPreviewRollbackClosure,
+  assertPreviewRollbackProofChain,
   closePreviewRollback,
   createPreviewCandidateMutationBoundary,
   createPreviewCandidateIntent,
@@ -169,6 +175,78 @@ function closureProof(operation = "deploy_foundation") {
     closureProviderVerifiedAt: "2026-07-29T07:01:30.000Z",
     closedAt: "2026-07-29T07:02:00.000Z",
   });
+}
+
+/** Runs the file-only lifecycle verifier while capturing its fixed output. */
+async function runLifecycleCli(arguments_: readonly string[]): Promise<{
+  readonly exitCode: number | null;
+  readonly stdout: string;
+  readonly stderr: string;
+}> {
+  const child = spawn(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      resolve(process.cwd(), "scripts", "validate-preview-rollback-lifecycle.ts"),
+      ...arguments_,
+    ],
+    { stdio: ["ignore", "pipe", "pipe"] },
+  );
+  let stdout = "";
+  let stderr = "";
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+  child.stderr.on("data", (chunk: string) => {
+    stderr += chunk;
+  });
+  const [exitCode] = (await once(child, "close")) as [number | null];
+  return { exitCode, stdout, stderr };
+}
+
+function proofChain(
+  operation = "deploy_foundation",
+  {
+    candidateRunRef = CANDIDATE_RUN_REF,
+    commit = COMMIT,
+    restoredAt = "2026-07-29T07:00:00.000Z",
+    providerVerifiedAt = "2026-07-29T07:01:00.000Z",
+    closureProviderVerifiedAt = "2026-07-29T07:01:30.000Z",
+    closedAt = "2026-07-29T07:02:00.000Z",
+  }: {
+    readonly candidateRunRef?: string;
+    readonly commit?: string;
+    readonly restoredAt?: string;
+    readonly providerVerifiedAt?: string;
+    readonly closureProviderVerifiedAt?: string;
+    readonly closedAt?: string;
+  } = {},
+) {
+  const intent = createPreviewCandidateIntent({
+    candidateCommit: commit,
+    operation,
+    candidateConfig: candidateConfig(operation),
+  });
+  const restored = createPreviewRollbackRestoreProof({
+    candidateIntent: intent,
+    candidateRunRef,
+    restoredCommit: commit,
+    restoredAt,
+    providerVerifiedAt,
+    normalProviderState: "verified",
+  });
+  const closed = closePreviewRollback({
+    restoreProof: restored,
+    candidateRunRef,
+    restoredCommit: commit,
+    authenticatedReadsGate: "verified",
+    closureProviderVerifiedAt,
+    closedAt,
+  });
+  return { intent, restored, closed };
 }
 
 describe("preview rollback lifecycle", () => {
@@ -1065,6 +1143,190 @@ describe("preview rollback lifecycle", () => {
           expectedJobName: "Restore immutable normal preview",
         }),
       ).toThrow("Preview rollback lifecycle proof is invalid.");
+    }
+  });
+
+  it("requires one exact candidate, restore, and closure proof chain", () => {
+    const chain = proofChain();
+    const exact = {
+      candidateIntent: chain.intent,
+      candidateRunRef: CANDIDATE_RUN_REF,
+      expectedCommit: COMMIT,
+      operation: "deploy_foundation",
+      restoreProof: chain.restored,
+      closureProof: chain.closed,
+    } as const;
+
+    expect(() => assertPreviewRollbackProofChain(exact)).not.toThrow();
+
+    for (const invalid of [
+      { operation: "deploy_ai" },
+      { expectedCommit: OTHER_COMMIT },
+      {
+        closureProof: {
+          ...chain.closed,
+          closureProviderVerifiedAt: "2026-07-29T07:00:30.000Z",
+        },
+      },
+    ]) {
+      expect(() =>
+        assertPreviewRollbackProofChain({ ...exact, ...invalid }),
+      ).toThrow("Preview rollback lifecycle proof is invalid.");
+    }
+  });
+
+  it("rejects a restore proof substituted from another candidate run", () => {
+    const chain = proofChain();
+    expect(() => assertPreviewRollbackProofChain({
+      candidateIntent: chain.intent,
+      candidateRunRef: CANDIDATE_RUN_REF,
+      expectedCommit: COMMIT,
+      operation: "deploy_foundation",
+      restoreProof: proofChain("deploy_foundation", {
+        candidateRunRef: "1202",
+      }).restored,
+      closureProof: chain.closed,
+    })).toThrow("Preview rollback lifecycle proof is invalid.");
+  });
+
+  it("rejects a restore proof substituted from another operation", () => {
+    const chain = proofChain();
+    expect(() => assertPreviewRollbackProofChain({
+      candidateIntent: chain.intent,
+      candidateRunRef: CANDIDATE_RUN_REF,
+      expectedCommit: COMMIT,
+      operation: "deploy_foundation",
+      restoreProof: proofChain("deploy_ai").restored,
+      closureProof: chain.closed,
+    })).toThrow("Preview rollback lifecycle proof is invalid.");
+  });
+
+  it("rejects a restore proof substituted from another commit", () => {
+    const chain = proofChain();
+    expect(() => assertPreviewRollbackProofChain({
+      candidateIntent: chain.intent,
+      candidateRunRef: CANDIDATE_RUN_REF,
+      expectedCommit: COMMIT,
+      operation: "deploy_foundation",
+      restoreProof: proofChain("deploy_foundation", {
+        commit: OTHER_COMMIT,
+      }).restored,
+      closureProof: chain.closed,
+    })).toThrow("Preview rollback lifecycle proof is invalid.");
+  });
+
+  it("rejects a restore proof substituted from an older valid timestamp window", () => {
+    const chain = proofChain();
+    expect(() => assertPreviewRollbackProofChain({
+      candidateIntent: chain.intent,
+      candidateRunRef: CANDIDATE_RUN_REF,
+      expectedCommit: COMMIT,
+      operation: "deploy_foundation",
+      restoreProof: proofChain("deploy_foundation", {
+        restoredAt: "2026-07-28T07:00:00.000Z",
+        providerVerifiedAt: "2026-07-28T07:01:00.000Z",
+        closureProviderVerifiedAt: "2026-07-28T07:01:30.000Z",
+        closedAt: "2026-07-28T07:02:00.000Z",
+      }).restored,
+      closureProof: chain.closed,
+    })).toThrow("Preview rollback lifecycle proof is invalid.");
+  });
+
+  it("rejects a closure whose restore proof hash does not digest its supplied restore proof", () => {
+    const chain = proofChain();
+    expect(() => assertPreviewRollbackProofChain({
+      candidateIntent: chain.intent,
+      candidateRunRef: CANDIDATE_RUN_REF,
+      expectedCommit: COMMIT,
+      operation: "deploy_foundation",
+      restoreProof: chain.restored,
+      closureProof: {
+        ...chain.closed,
+        restoreProofHash: "c".repeat(64),
+      },
+    })).toThrow("Preview rollback lifecycle proof is invalid.");
+  });
+
+  it("verifies only the exact file-based closure chain with fixed safe output", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "preview-proof-chain-"));
+    try {
+      const chain = proofChain();
+      const candidateIntentPath = join(directory, "candidate-intent.json");
+      const restoreProofPath = join(directory, "restore-proof.json");
+      const closureProofPath = join(directory, "closure-proof.json");
+      const invalidClosureProofPath = join(directory, "invalid-closure-proof.json");
+      await Promise.all([
+        writeFile(candidateIntentPath, JSON.stringify(chain.intent), "utf8"),
+        writeFile(restoreProofPath, JSON.stringify(chain.restored), "utf8"),
+        writeFile(closureProofPath, JSON.stringify(chain.closed), "utf8"),
+        writeFile(
+          invalidClosureProofPath,
+          JSON.stringify({ ...chain.closed, restoreProofHash: "c".repeat(64) }),
+          "utf8",
+        ),
+      ]);
+      const arguments_ = [
+        "--verify-exact-closure-chain",
+        "--candidate-intent",
+        candidateIntentPath,
+        "--candidate-run-ref",
+        CANDIDATE_RUN_REF,
+        "--commit",
+        COMMIT,
+        "--operation",
+        "deploy_foundation",
+        "--restore-proof",
+        restoreProofPath,
+        "--closure-proof",
+        closureProofPath,
+      ] as const;
+
+      await expect(runLifecycleCli(arguments_)).resolves.toEqual({
+        exitCode: 0,
+        stdout: "Preview rollback lifecycle proof is valid.\n",
+        stderr: "",
+      });
+      await expect(
+        runLifecycleCli([
+          "--read-candidate-operation",
+          "--candidate-intent",
+          candidateIntentPath,
+        ]),
+      ).resolves.toEqual({
+        exitCode: 0,
+        stdout: "deploy_foundation\n",
+        stderr: "",
+      });
+      await expect(
+        runLifecycleCli([
+          ...arguments_.slice(0, -1),
+          invalidClosureProofPath,
+        ]),
+      ).resolves.toEqual({
+        exitCode: 1,
+        stdout: "",
+        stderr: "Preview rollback lifecycle proof is invalid.\n",
+      });
+      for (const invalidArguments of [
+        arguments_.slice(0, -2),
+        [...arguments_, "--unexpected", "value"],
+        [...arguments_, "--commit", COMMIT],
+        [
+          "--read-candidate-operation",
+          "--candidate-intent",
+          candidateIntentPath,
+          "--unexpected",
+          "value",
+        ],
+      ]) {
+        await expect(runLifecycleCli(invalidArguments)).resolves.toEqual({
+          exitCode: 1,
+          stdout: "",
+          stderr: "Preview rollback lifecycle proof is invalid.\n",
+        });
+      }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
     }
   });
 });

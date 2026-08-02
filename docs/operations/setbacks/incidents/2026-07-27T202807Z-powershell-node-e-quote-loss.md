@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T20:28:07Z
-- **Last observed:** 2026-07-30T20:04:58.3251770Z
+- **Last observed:** 2026-08-01T03:40:32.1352196Z
 - **Phase/task:** Phase B restore Task 4 diagnosis
 - **Environment:** Approved local shell network path
 - **Version/commit:** normal runtime ref `40872a5`
@@ -49,3 +49,12 @@ required.
   project scanner executed. No file or external state changed. Gate 0 uses
   the already-green focused structural test, which asserts one adapter and
   exactly two approved permanent callers.
+- 2026-08-01T03:40:32.1352196Z: Recurred while proving the local ignored Task 8
+  provider driver. A PowerShell probe passed a serialized JSON driver argument
+  directly to `node`; Windows argument processing stripped the inner double
+  quotes, the driver rejected the malformed input, and the approval-seam probe
+  reported a false negative. No provider call, dispatch, deployment, approval,
+  or tracked file was affected. Correction: exercise the driver only through an
+  `execFile` argument array, exactly as the acceptance controller invokes it.
+  The rewritten self-test passes 5/5, and a mutation of the canonical-instant
+  guard was confirmed to turn precisely one assertion red before restore.

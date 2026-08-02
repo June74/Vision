@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T01:08:27Z
-- **Last observed:** 2026-07-31T21:02:25.7615346-05:00
+- **Last observed:** 2026-08-01T18:06:31.0073769Z
 - **Phase/task:** Phase B Task 7 continuation
 - **Environment:** Local Windows worktree
 - **Version/commit:** `22c5dc0`
@@ -81,3 +81,11 @@ declared unit-test script.
   attempted package-script fallback started the full unit project because the
   literal `--` reached Vitest and timed out under the bounded local runner.
   Focused retries use the verified local `vitest.cmd` shim directly.
+- 2026-08-01T18:06:31.0073769Z: Recurred during correlation-repair Task 1.
+  The expected RED and attempted GREEN used the plan's `pnpm.cmd exec vitest`
+  form, which failed before collection because this shell did not resolve the
+  local executable. A bounded check confirmed the repository-local
+  `node_modules/.bin/vitest.cmd` shim exists and the package manifest still
+  declares the unit script. No test assertion, provider, secret, calendar,
+  database, R2, deployment, workflow, or backup-key state was exercised. The
+  diagnostic retry uses the verified local shim directly.
