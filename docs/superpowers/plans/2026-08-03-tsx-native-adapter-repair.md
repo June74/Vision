@@ -21,6 +21,8 @@
 - Run no more than one subagent at a time on this machine.
 - `.superpowers/` is intentionally ignored; do not force-add its controller, tests, logs, challenges, or evidence files to Git.
 
+**Approved review exception:** On 2026-08-03, the owner approved preserving the `.superpowers/` ignore boundary and using a before/after snapshot diff for Task 1 review instead of force-adding or committing the operational controller files.
+
 ---
 
 ### Task 1: Add and locally prove the explicit TSX adapter
