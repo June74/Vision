@@ -13,7 +13,9 @@ The no-XDG validate_current_rollback run accepted fresh schedule evidence, then 
 
 ## Impact
 
-No deployment or provider mutation occurred; live rollback validation remains incomplete until the exact local executable-resolution failure is identified.
+No deployment or provider mutation occurred. Validation was incomplete until
+the explicit adapter was repaired and the read-only validation reran
+successfully.
 
 ## Reproduction conditions
 
