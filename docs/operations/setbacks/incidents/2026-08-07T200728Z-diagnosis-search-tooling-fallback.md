@@ -68,3 +68,11 @@ Do not use raw formatted JSON lines as semantic equality values.
   access denied before searching while locating the final retry invocation.
   The named-file `Select-String` fallback completed; no repository or provider
   state changed.
+- 2026-08-10T23:39:00Z: A multi-root `rg` invocation was constructed with
+  PowerShell path expressions instead of separate search roots, so the search
+  stopped with an invalid-path error before reading files. No repository or
+  provider state changed; the named-root search form is the required fallback.
+- 2026-08-10T23:42:32Z: A one-line TypeScript probe used top-level `await` in
+  the repository's CommonJS `tsx` evaluation mode, so it failed during
+  transformation before running the read-only guard check. No repository or
+  provider state changed; use an async IIFE for inline probes.
