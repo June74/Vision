@@ -2,6 +2,7 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
+| [SB-20260810-210431-wrangler-failure-classifier-false-not-found](incidents/2026-08-10T210431Z-wrangler-failure-classifier-false-not-found.md) | contained | 2026-08-10T21:04:31Z | Phase B monitored candidate deployment | Deploy failure classifier reported a provider resource lookup that never happened |
 | [SB-20260731-212303-task4-ledger-rounded-time](incidents/2026-07-31T212303Z-task4-ledger-rounded-time.md) | closed | 2026-07-31T21:23:03.5485336Z | Phase B Task 4 setback-ledger maintenance | Task 4 cleanup closure used a rounded timestamp |
 | [SB-20260731-212120-task4-uncaptured-test-output](incidents/2026-07-31T212120Z-task4-uncaptured-test-output.md) | closed | 2026-07-31T21:21:20.8759029Z | Phase B Task 4 full-check cleanup-contract repair | Task 4 cleanup RED printed a nonsecret environment fixture |
 | [SB-20260731-212120-task4-cleanup-inventory-first-fix](incidents/2026-07-31T212120Z-task4-cleanup-inventory-first-fix.md) | closed | 2026-07-31T21:23:03.5485336Z | Phase B Task 4 full-check cleanup-contract repair | Task 4 cleanup inventory repair retained stale representative text and order |
