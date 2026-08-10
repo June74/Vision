@@ -1,9 +1,9 @@
 # SB-20260727-040213-git-line-ending-normalization: Git reported line-ending normalization
 
-- **Status:** closed
+- **Status:** contained
 - **First observed:** 2026-07-27T04:02:13Z
-- **Last observed:** 2026-07-31T02:24:53.1224621Z
-- **Phase/task:** Phase B acceptance instrumentation formal final review
+- **Last observed:** 2026-08-02T20:10:57.7489950Z
+- **Phase/task:** Phase B acceptance instrumentation through OAuth reconnect Task 5 isolated-candidate verification
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `4420f6d`
 
@@ -14,8 +14,10 @@ would be normalized to carriage-return plus line-feed on a later Git touch.
 
 ## Impact
 
-The documentation and whitespace checks exited successfully. No semantic
-content, provider state, or private value changed because of the warning.
+Earlier documentation and whitespace checks exited successfully. In the Task 5
+recurrence, a fresh detached Windows checkout wrote byte-sensitive committed LF
+files as CRLF, causing three isolated-candidate unit assertions to fail. No
+semantic content, provider state, or private value changed.
 
 ## Reproduction conditions
 
@@ -48,13 +50,16 @@ conversion enabled.
 
 ## Correction and prevention
 
-- **Correction:** Preserve the semantic patch and allow Git to store its normal
-  LF index representation.
-- **Prevention:** Treat this exact warning as non-blocking when the whitespace
-  check exits zero; do not override automatic conversion for the check. Use
-  bounded end-of-line inspection if its meaning changes.
+- **Correction:** Preserve normal repository behavior in the primary worktree.
+  Recreate only the generated detached artifacts with command-scoped LF
+  checkout settings, and prove byte-sensitive files equal their committed blobs
+  before running artifact CI.
+- **Prevention:** Treat normalization warnings as non-blocking only when the
+  relevant byte-sensitive checks pass. Immutable release artifacts on Windows
+  must prove committed-blob byte equality before dependency installation.
 - **Owner:** Codex and project owner.
-- **Next diagnostic step:** None while closed.
+- **Next diagnostic step:** Recreate the short candidate and rollback artifacts
+  with command-scoped LF checkout and verify exact blob hashes.
 
 ## Verification and related work
 
@@ -162,3 +167,18 @@ this incident was recorded.
   normalization metadata for four changed text files. No whitespace error,
   content rewrite, path output, or external state change occurred; staged
   blobs will be verified without changing line-ending configuration.
+- 2026-08-02T18:11:20.4149554Z: Recurred during reconnect Task 2 diagnostic
+  verification across already-dirty operational ledgers. The repository-
+  configured `git diff --check` exited zero, and the release security scan also
+  passed. No normalization override, content rewrite, staging, secret, or
+  external action occurred.
+- 2026-08-02T18:46:12.1422911Z: Recurred while inspecting the one-file Task 2
+  cleanup hardening diff. The warning was limited to expected Windows
+  normalization metadata; the cleanup regression, non-approved skip gate,
+  TypeScript check, and whitespace check all passed. No file was normalized or
+  staged by the inspection.
+- 2026-08-02T20:10:57.7489950Z: A fresh short detached candidate converted
+  committed LF workflow and migration bytes to CRLF. Two literal workflow tests
+  and one pinned migration hash failed while 1,753 other unit/integration
+  assertions passed. The generated artifacts remain undeployed and are being
+  recreated with command-scoped LF checkout settings.

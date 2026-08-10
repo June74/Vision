@@ -1,9 +1,9 @@
 # SB-20260801-215600-task7-task5-powershell-utc-flag: PowerShell rejected the UTC timestamp flag
 
-- **Status:** contained
+- **Status:** closed
 - **First observed:** 2026-08-01T21:56:00Z
-- **Last observed:** 2026-08-01T22:05:24.8336071Z
-- **Phase/task:** Phase B Task 7 correlation repair Task 5 setback logging
+- **Last observed:** 2026-08-02T20:29:18.7290948Z
+- **Phase/task:** Phase B Task 7 correlation repair and reconnect Task 5 setback logging
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** admitted baseline `10b228b`
 
@@ -55,3 +55,11 @@ Closed locally: the runtime-neutral UTC timestamp read succeeded without modifyi
   remaining read-only inspection succeeded, and no source, provider, or
   external state changed. The incident is contained by requiring the portable
   .NET UTC clock in all remaining Task 5 work.
+- 2026-08-02T19:32:40.2653351Z: The unsupported flag recurred while timestamping
+  the reconnect final-CI result incident. The portable .NET UTC clock
+  immediately succeeded; no application, test, credential, database, or
+  provider state changed. Future timestamp commands must use the already
+  documented portable form.
+- 2026-08-02T20:29:18.7290948Z: Recurred during reconnect Task 5 setback
+  logging. The already documented portable .NET UTC clock then returned a
+  canonical timestamp successfully; no project or external state changed.

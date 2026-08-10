@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T19:44:17Z
-- **Last observed:** 2026-07-29T19:44:17Z
+- **Last observed:** 2026-08-10T21:33:49Z
 - **Phase/task:** Phase B consolidated final-fix setback logging
 - **Environment:** Local Phase B worktree
 - **Version/commit:** Working changes based on `e3c1272`
@@ -41,3 +41,13 @@ The replacement returned a UTC timestamp without exposing private data.
   maintenance because a read-only timestamp command reused `Get-Date -AsUTC`.
   The command's file reads still completed, no state changed, and the
   controller immediately returned to `[DateTime]::UtcNow.ToString('o')`.
+- 2026-08-02T05:51:23.8451089Z: Recurred during Task 8 live acceptance
+  setback maintenance. Parameter binding failed before any repository or
+  provider state changed; the compatible .NET UTC clock expression succeeded.
+- 2026-08-02T22:58:28.1718576Z: Recurred during reconnect rollback-evidence
+  maintenance. Parameter binding failed before any repository or provider
+  state changed; `[DateTime]::UtcNow.ToString('o')` succeeded immediately.
+- 2026-08-10T21:33:49Z: Recurred during Phase B artifact-verification
+  documentation. Parameter binding failed before any repository or provider
+  state changed; `[DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')`
+  succeeded immediately.

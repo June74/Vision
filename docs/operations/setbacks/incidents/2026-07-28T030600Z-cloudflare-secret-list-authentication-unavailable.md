@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T03:06:00Z
-- **Last observed:** 2026-08-01T17:15:52.0738476Z
-- **Phase/task:** Preview database role probe Task 2 and Phase B Task 8 reconciliation
+- **Last observed:** 2026-08-02T03:31:08.7912530Z
+- **Phase/task:** Phase B Task 8 owner authentication diagnosis
 - **Environment:** Local read-only Cloudflare diagnostic
 - **Version/commit:** `979228b`
 
@@ -64,3 +64,9 @@ The dashboard returned fixed exact counts without exposing secret values.
   than a sandbox or network denial. The recurrence is closed by selecting the
   signed-in dashboard name/type inventory; no CLI login or credential change
   is requested.
+- 2026-08-02T03:31:08.7912530Z: Recurred during the owner-allowlist name/type
+  check. Wrangler stopped before reading Cloudflare because the local
+  non-interactive process had no usable authentication. No secret value,
+  account identifier, callback data, token, deployment, or provider mutation
+  occurred. The correction remains the signed-in dashboard; no credential is
+  requested or copied.

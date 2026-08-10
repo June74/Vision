@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T20:19:07.520663Z
-- **Last observed:** 2026-07-31T22:24:22.0996423Z
+- **Last observed:** 2026-08-07T18:37:00Z
 - **Phase/task:** Phase B Tasks 4 and 5 worktree verification
 - **Environment:** Local Phase B worktree, Windows PowerShell
 - **Version/commit:** c23e301 plus Task 4 working changes
@@ -56,3 +56,8 @@ The corrected retry passed four files and 201 tests with an empty error stream.
   same four false absences after receiving the worktree directory. Root checks
   remain true; the next read uses four fully expanded absolute filenames with
   no relative path or brace notation.
+- 2026-08-07T18:37:00Z: Recurred during a scalar post-acceptance status probe
+  that used the parent repository root instead of the linked Phase B worktree.
+  The missing-path result was discarded; the corrected probe uses the verified
+  worktree path and no implementation, provider, credential, or private-data
+  state changed.

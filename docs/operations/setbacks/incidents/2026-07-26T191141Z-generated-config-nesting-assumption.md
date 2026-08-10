@@ -1,8 +1,8 @@
 # SB-20260726-191141-generated-config-nesting-assumption: Generated Wrangler config nesting was assumed
 
-- **Status:** closed
+- **Status:** contained
 - **First observed:** 2026-07-26T19:11:41.183325Z
-- **Last observed:** 2026-07-26T19:11:41.183325Z
+- **Last observed:** 2026-08-10T01:35:50.7990243Z
 - **Phase/task:** Phase B deployment diagnostics
 - **Environment:** Local generated preview artifact
 - **Version/commit:** `codex/phase-b-foundation`
@@ -54,3 +54,7 @@ The corrected artifact inspection and repository validator both passed.
 ## Recurrence history
 
 - 2026-07-26T19:11:41.183325Z: First observed.
+- 2026-08-10T01:35:50.7990243Z: The parent evidence writer assumed a nested
+  rollback artifact path that did not exist and stopped before writing. The
+  exact generated artifact shape is being inspected before retry; no provider
+  or evidence state changed.

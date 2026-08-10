@@ -1,9 +1,9 @@
 # SB-20260727-035801-provider-url-source-output: Provider URL entered command output
 
-- **Status:** contained
+- **Status:** closed
 - **First observed:** 2026-07-27T03:58:01Z
-- **Last observed:** 2026-07-31T03:58:15.2441612Z
-- **Phase/task:** Phase B live-acceptance closure Tasks 1-6
+- **Last observed:** 2026-08-02T23:12:24.4545728Z
+- **Phase/task:** Phase B live-acceptance closure Tasks 1-6 and OAuth reconnect Task 5 provider-state verification
 - **Environment:** Local Phase B worktree and read-only review agents
 - **Version/commit:** `1d6ad12`; `d24e24d`; `c8879b2`; `6bd0e45`; `7d5ca8a`
 
@@ -268,3 +268,23 @@ evidence without any further source or tool inspection.
   protected row, mutation, network request, or external state was involved.
   Further inspection is limited to exact diagnostic lines or in-memory
   classifications.
+- 2026-08-02T22:03:26.0257671Z: The short candidate's offline package-cache
+  miss again printed a public package-registry location. It contained no
+  credential, private registry, provider account data, or protected value.
+  The location is not reproduced in durable evidence; subsequent setup output
+  is captured and reduced to safe status fields.
+- 2026-08-02T22:27:45.1718301Z: Closed after both ordinary frozen installs,
+  full candidate CI, and candidate/rollback preview gates completed through
+  silent or locally captured output. Subsequent reporting used only exit
+  codes, booleans, and aggregate test counts, with no further URL output.
+- 2026-08-02T22:53:31.1775526Z: Recurred when a bounded workflow search for
+  the provider-state verifier printed committed Cloudflare API endpoint
+  literals. No credential, account value, private response, request, or
+  provider mutation was involved. Further discovery is restricted to exact
+  symbols, property names, and in-memory classifications without source-line
+  output.
+- 2026-08-02T23:12:24.4545728Z: Closed after all remaining deployment,
+  rollback, signed-in dashboard, and official-provider-contract checks returned
+  only safe booleans, counts, categories, and public documentation. No private
+  endpoint, account value, credential, protected response, or raw log was
+  rendered during closeout.

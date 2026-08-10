@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T20:13:08Z
-- **Last observed:** 2026-07-27T20:13:08Z
-- **Phase/task:** Phase B restore Task 4 rollback verification
+- **Last observed:** 2026-08-02T05:32:26.8942986Z
+- **Phase/task:** Phase B Task 8 reconnect-state diagnosis
 - **Environment:** Connected Chrome browser
 - **Version/commit:** normal runtime ref `40872a5`
 
@@ -34,3 +34,13 @@ Worker through this browser path.
 A direct read-only request returned HTTP 200 and an exact two-key response with
 the expected healthy status and Vision service identifier. No response body
 was printed.
+
+## Recurrence history
+
+- 2026-07-27T20:13:08Z: First observed and corrected through a closed
+  command-line request.
+- 2026-08-02T05:32:26.8942986Z: Direct authenticated navigation to the safe
+  diagnostics route was again rejected by client policy. The rejection was a
+  browser-local category, not an application response. Diagnosis continued
+  with a signed-in provider-native aggregate query that returned only fixed
+  Booleans and allowlisted status categories.

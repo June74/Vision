@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:42:29.7633250Z
-- **Last observed:** 2026-07-30T18:56:43.8315896Z
+- **Last observed:** 2026-08-03T00:36:28.2471845Z
 - **Phase/task:** Phase B clean-room verification
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** `9f5a0d5`
@@ -71,3 +71,8 @@ background quality gate ran to completion.
   was null, and no test or provider action started. The retry uses the
   resumable execution tool instead of PowerShell's environment-copying
   launcher.
+- 2026-08-03T00:36:28.2471845Z: Recurred when corrected-redeploy diagnostics
+  mistakenly used `Start-Process` to capture Wrangler output. The duplicate
+  `Path` category occurred before process creation and temporary files were
+  removed. A direct, fully captured native invocation then returned the safe
+  classification without exposing output, closing the recurrence.

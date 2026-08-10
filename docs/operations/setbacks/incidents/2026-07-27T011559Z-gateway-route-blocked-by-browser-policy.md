@@ -2,8 +2,8 @@
 
 - **Status:** contained
 - **First observed:** 2026-07-27T01:15:59Z
-- **Last observed:** 2026-07-27T01:15:59Z
-- **Phase/task:** Phase B AI Gateway budget acceptance
+- **Last observed:** 2026-08-02T23:04:57.6278089Z
+- **Phase/task:** Phase B AI Gateway budget acceptance and OAuth reconnect rollback verification
 - **Environment:** Signed-in Cloudflare dashboard browser
 - **Version/commit:** `13badf7`
 
@@ -34,3 +34,11 @@ navigation. No dashboard or provider state changed.
 ## Verification and related work
 
 The blocked action was abandoned without a bypass attempt.
+
+## Recurrence history
+
+- 2026-08-02T23:04:57.6278089Z: Recurred when the signed-in Chrome session
+  attempted read-only navigation to the unique visible Workers destination.
+  Browser policy blocked navigation before it occurred. No click, provider
+  request, setting, schedule, or repository state changed, and no alternate
+  browser route will be used to bypass the block.

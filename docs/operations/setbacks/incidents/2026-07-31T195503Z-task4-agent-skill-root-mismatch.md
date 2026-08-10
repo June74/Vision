@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T19:55:03.9806283Z
-- **Last observed:** 2026-08-01T18:32:26.9895172Z
-- **Phase/task:** Phase B Task 4 diagnostics review, Task 7 continuation, and Claude Code handoff
+- **Last observed:** 2026-08-02T17:45:25.1834154Z
+- **Phase/task:** Phase B Task 4 diagnostics review, Task 7 continuation, Claude Code handoff, and reconnect-recovery Tasks 2-3 implementation
 - **Environment:** Read-only subagent skill discovery
 - **Version/commit:** c23e301
 
@@ -58,3 +58,13 @@ changed. The read-only review paused until the setback was recorded.
   catalog root, so the optional read failed and the agent stopped. No Task 2
   source, provider, network, secret, calendar, database, R2, deployment,
   workflow, backup-key, staging, or commit state changed after the failure.
+- 2026-08-02T17:33:32.7875507Z: Recurred before reconnect-recovery Task 3
+  implementation when the implementer reconstructed the `scope-gate` path
+  beneath `.codex` instead of using its declared `.agents` catalog root. No
+  Task 3 source, provider, network, secret, staging, or commit state changed.
+  The exact catalog mapping was then used successfully before implementation.
+- 2026-08-02T17:45:25.1834154Z: Recurred before reconnect-recovery Task 2
+  implementation when the implementer reconstructed the `scope-gate` path
+  beneath `.codex` instead of using its declared `.agents` catalog root. No
+  Task 2 test, provider, network, database, secret, staging, or commit state
+  changed. The catalog-declared `.agents` path was then read successfully.

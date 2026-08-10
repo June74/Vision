@@ -4,7 +4,154 @@ This page explains Phase B progress in concise, plain language. It is updated af
 
 ## Current milestone
 
-Authentication and calendar setup.
+Phase B live acceptance and release closure.
+
+The implementation, local verification, OAuth/calendar setup, migrations, and
+preview safety instrumentation are complete. Phase B is still **in progress**
+because the remaining provider-facing acceptance exercises have to produce
+fresh evidence before cleanup, deployment closure, and the Phase C handoff.
+The authoritative gate-by-gate status is [Phase B completion evidence](phase-b-evidence.md).
+
+## Next manual checkpoint
+
+When a newly authorized monitored run is started, open the Cloudflare dashboard
+for the `vision-preview` Worker, choose **Settings → Triggers → Cron Triggers**,
+and confirm that the two normal plan-listed schedules are present and unchanged.
+Do not edit the schedules or send challenge contents. Reply only
+`baseline schedules confirmed` so the controller can receive fresh, nonce-bound
+evidence within its wait window.
+
+As of 2026-08-06, the full local `pnpm check` passes, the privacy-safe
+candidate classifier and direct launcher contracts pass, and no live provider
+mutation was performed during the latest repair. The remaining live work is
+tracked there rather than inferred from local tests.
+
+The one attempted classifier-enabled live launch was rejected by the execution
+boundary before the controller process started. It changed nothing; a new exact
+owner approval is required before the single monitored attempt can be retried.
+
+On 2026-08-07, the repaired controller received valid baseline evidence and
+attempted the newly authorized candidate run. The candidate failed closed with
+a safe resource-missing category, and rollback was not verified. A second
+freshly authorized run after the owner confirmed deployment access reproduced
+the same result. Read-only deployment/version checks found no candidate or
+rollback marker, and the live preview health contract stayed healthy. No
+further mutation is allowed until the provider deploy capability/resource cause
+is reconciled and a new exact approval is given.
+
+### Next live-run prerequisite
+
+The next action is not a manual deployment. First reconcile the saved Wrangler
+deploy capability and the preview Worker's provider activity in read-only mode.
+Do not change tokens, secrets, keys, bindings, schedules, or buckets while that
+diagnosis is open.
+
+For that check, open the Cloudflare account's API-token or member-access view
+and confirm that the identity used by Wrangler has Worker deployment edit access
+for `vision-preview` and access to the existing preview R2 bucket and Queue.
+Inspect only; do not create, rotate, or paste a token. If the access is already
+present, record that fact and return to the controller diagnosis. If it is
+missing, stop and request approval before changing permissions.
+
+The owner has confirmed deployment access, but a bounded read-only Wrangler
+identity check does not mention R2. That metadata is not proof of missing R2
+permission, so the next action is a read-only inspection of R2 access for the
+same signed-in Wrangler identity and the preview Worker's provider activity.
+No token, secret, key, binding, schedule, or bucket change is requested. Any
+future mutation still needs a fresh, exact approval.
+
+If that read-only access check is already satisfied, inspect the Worker in the
+Cloudflare dashboard under **Settings → Bindings** and **Deployments/Activity**.
+Confirm that the existing R2 and Queue bindings are attached and whether a
+failed deployment entry exists for the latest attempt. Do not edit anything and
+do not send identifiers; report only a generic result such as “bindings
+attached,” “failed entry shown,” or “no failed deployment entry.”
+
+The owner has clarified that both the preview R2 bucket and Queue exist. The
+earlier generic “binding missing” report therefore does not confirm a binding
+mismatch. No repair is authorized; the remaining investigation is a read-only
+comparison of the exact Worker environment, binding attachment, and provider
+activity.
+
+The owner also confirmed that Deployments/Activity shows no failed entry. That
+means Cloudflare rejected the request before creating a version record. The
+next check is the Wrangler account/context and Worker version capability, not a
+resource edit.
+
+The local identity probe cannot display permission names, so it cannot prove or
+disprove the required Worker Scripts Write access. Inspect the same Cloudflare
+member role read-only; do not create or rotate an API token.
+
+The owner confirms that identity has all privileges, so a simple role shortage
+is now unlikely. The next read-only check is the existing deployed-version
+shape and exact account/Worker context.
+
+The candidate artifact's own Wrangler binary is the same version as the root
+binary, and its exact deploy command passes a compile-only check. This rules out
+the local artifact CLI as the cause; the remaining rejection is during live
+upload.
+
+The currently deployed version is also readable through the same Wrangler
+context and contains both expected R2 and Queue binding names. The remaining
+problem is therefore a live upload/context rejection before version creation.
+
+Having all Cloudflare account privileges does not guarantee that Wrangler's
+saved OAuth grant selected the same account and scopes. The next manual step is
+to re-authenticate Wrangler for the intended account, then let me rerun only
+read-only checks. Do not deploy during re-authentication.
+
+Reauthentication is complete, and the read-only checks still pass. The next
+step is one fresh monitored candidate attempt with automatic rollback to test
+the live upload path. It cannot start until you give a new exact approval.
+
+That approved attempt has now reproduced the same pre-version failure for the
+third time. Deployment/version listings still show no candidate or rollback
+record, and preview health remains healthy. I am stopping further retries until
+Cloudflare exposes a provider-side cause or an explicitly approved provider
+change is made.
+
+The exact candidate artifact also passed a non-mutating Wrangler compile check:
+it built successfully, produced no error stream, and did not deploy. That means
+the remaining failure is in the live provider dispatch path, not a local build
+failure.
+
+The owner then checked the dashboard again: the Queue and R2 binding pairs
+match the expected preview resources, and neither Deployments nor account Audit
+Logs contains a failed attempt. Both pinned candidate and rollback commits also
+contain the same expected preview binding names. The remaining
+`resource_missing` label is therefore not yet specific enough to prove that a
+resource is absent; it comes from a deliberately broad, privacy-safe Wrangler
+error classifier. No further deployment retry is planned until that classifier
+records a safe failure fingerprint (source channel and matched category) without
+retaining provider output.
+
+That diagnostic-only classifier repair is now saved. Its local contract records
+only an allowlisted signature and source channel, and all 15 provider-free
+controller safety scripts plus documentation coverage pass. No Cloudflare
+request occurred. A new exact approval is required before using the fingerprint
+on one monitored live attempt.
+
+That approved fingerprinted attempt is now complete. Both the candidate and
+automatic rollback matched the safe `not_found` signature in Wrangler's bounded
+temporary log; no stdout/stderr text was retained. The candidate was not
+accepted, rollback was not verified, deployment/version lists still show no
+candidate or rollback record, and preview health remains healthy. The diagnosis
+is now narrowed to a provider request that reports a generic not-found result
+without identifying the object; no further retry is safe without provider-side
+support evidence or an explicitly approved provider-state change.
+
+The saved local logs do not contain the original error text: stderr is empty and
+the controller deliberately deletes its temporary Wrangler log after extracting
+the safe category. The preview Queue and R2 names in the root and reviewed
+configurations exactly match the dashboard. Do not run an unqualified
+`wrangler deploy --verbose` command; the root configuration is local, not the
+preview Worker. The earlier Cloudflare R2 availability issue affecting a small
+number of ENAM buckets began at 18:42 UTC on 2026-08-07 and overlapped the
+failed attempt. Cloudflare's status page listed R2 as operational when checked
+on 2026-08-10, so the incident is now historical; it remains a plausible
+cause, not proof that our specific bucket was affected. One fresh retry was
+authorized after the resolution but stopped before upload because the required
+schedule confirmation was not submitted in time.
 
 ## Completed
 
@@ -193,10 +340,11 @@ The focused Chromium suite passed 10/10. Independent review approved the task
 with four non-blocking minor follow-ups. The broader gate encountered unrelated
 PGlite setup-hook timeouts; no Task 4 browser failure was observed.
 
-### Next - External acceptance and read synchronization
+### Historical implementation sequence
 
-Task 5 covers manual Google/Neon/Cloudflare acceptance checks, then Phase B
-continues with Google calendar read synchronization.
+The following sections preserve the original task-by-task implementation
+narrative. Their historical wording is not the current release status; use the
+completion evidence linked above for what has actually passed.
 
 ### Authentication Task 5 - Acceptance preparation
 
@@ -207,6 +355,22 @@ external account, database, Worker, or secret was changed.
 The focused workflow policy test passed 2/2 and documentation coverage passed.
 The real acceptance run is paused until you approve the named external setup.
 
-## Not yet included
+## Historical note — superseded by current evidence
 
-No Google login, calendar connection, database, AI, alerts, or production deployment exists yet.
+The original draft ended with a statement that Google login, calendar
+connection, database, AI, alerts, and deployment did not yet exist. That was
+true before the Phase B implementation and live setup work; it is retained only
+as history and must not be used as the current project status.
+
+## Current live-acceptance checkpoint — 2026-08-10
+
+A fresh approved retry was started after the Cloudflare R2 incident was
+resolved. The owner confirmed the two normal schedules, so the controller
+reached the upload boundary. Cloudflare again returned a safe resource-missing
+failure before creating a candidate version, and the automatic rollback could
+not be verified. A bounded read-only deployment-list reconciliation then
+decoded successfully and showed no candidate or rollback marker. No manual
+retry is safe; the next step requires a Cloudflare diagnostic or an explicitly
+approved provider-state change. The owner also manually confirmed that the
+active deployment, both bindings, and both underlying resources exist, so the
+remaining uncertainty is inside Cloudflare's pre-version upload path.

@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:16:44.091309Z
-- **Last observed:** 2026-07-31T22:59:55.8433974Z
-- **Phase/task:** Phase B live-acceptance closure Tasks 1, 4, and 6
+- **Last observed:** 2026-08-02T17:06:38.8415571Z
+- **Phase/task:** Phase B live-acceptance closure Tasks 1, 4, and 6 plus reconnect-recovery preflight
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** `7d2f9f6`; reviewed candidate `0f08fc1`
 
@@ -42,7 +42,8 @@ The package runner reported that the installed executable was not recognized.
 - **Prevention:** Use the local Windows command wrapper for ad hoc tool
   invocations in this worktree.
 - **Owner:** Codex and project owner.
-- **Next diagnostic step:** None while closed.
+- **Next diagnostic step:** None while closed; retain the direct local Windows
+  wrapper in both plan call sites.
 
 ## Verification and related work
 
@@ -135,6 +136,14 @@ files with 59 passing tests.
 - 2026-07-31T22:59:55.8433974Z: Recurred when the Task 6 R2 lane invoked
   `pnpm exec tsc` directly. The compiler was not resolved, so no typecheck
   evidence was produced; the lane uses the project script or local wrapper.
+- 2026-08-02T17:04:57.6320361Z: Recurred during reconnect-recovery preflight
+  when the committed plan invoked the privacy-safe Git adapter through
+  `pnpm.cmd exec tsx`. The adapter never started, no network or provider action
+  occurred, and the confirmed local `tsx.cmd` wrapper is used for the retry and
+  both plan call sites.
+- 2026-08-02T17:06:38.8415571Z: Closed after the direct local `tsx.cmd`
+  wrapper reached the privacy-safe adapter and the approved read-only retry
+  returned the expected Boolean success facts.
 
 The repository-local wrapper reached the candidate script, confirming the
 package-runner resolution boundary. The workflow-equivalent local Node loader

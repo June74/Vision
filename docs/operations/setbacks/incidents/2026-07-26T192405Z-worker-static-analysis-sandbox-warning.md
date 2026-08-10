@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:24:05.647183Z
-- **Last observed:** 2026-07-31T22:41:29.9852547Z
-- **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 5
+- **Last observed:** 2026-08-07T18:14:57Z
+- **Phase/task:** Phase B acceptance instrumentation through reconnect-recovery Task 3 TDD
 - **Environment:** Local managed sandbox Worker test pool
 - **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`; `6ebabd1`;
   Task 2 commit `6f03ad0`
@@ -154,3 +154,16 @@ documentation, typecheck, and security validation also passed.
   advisory and all 11 tests passed with exit zero.
 - 2026-07-31T22:41:29.9852547Z: Recurred during the final complete Task 5 gate;
   all seven Worker files and 110 tests passed with exit zero.
+- 2026-08-02T17:35:47.724Z: Recurred during reconnect-recovery Task 3's
+  expected RED Worker run under the same restricted filesystem. Static export
+  analysis remained advisory; 13 pre-existing tests passed and exactly six new
+  recovery assertions failed for the expected missing behavior. No provider,
+  credential, staging, or external state changed.
+- 2026-08-02T17:36:57Z: Recurred during reconnect-recovery Task 3's GREEN
+  Worker run. The task-local Wrangler diagnostic path prevented the separate
+  log warning, static export analysis remained advisory, and all 19 focused
+  tests passed. No provider, credential, staging, or external state changed.
+- 2026-08-07T18:14:57Z: Recurred during the complete local `pnpm check`.
+  The optional analyzer reported the known managed-sandbox boundary, while
+  all 116 Worker assertions passed and the enclosing command exited zero; no
+  provider, credential, repository, or private-data state changed.

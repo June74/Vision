@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T21:13:05Z
-- **Last observed:** 2026-08-02T02:15:47.9672991Z
-- **Phase/task:** Phase B Task 7 reviewed-candidate publication
+- **Last observed:** 2026-08-02T19:57:08.4194431Z
+- **Phase/task:** Phase B OAuth reconnect recovery Task 5 isolated-candidate proof preparation
 - **Environment:** Local Codex command orchestration
 - **Version/commit:** Not applicable
 
@@ -65,3 +65,9 @@ The immediate retry completed without the wrapper error.
   corrected comparison required exactly one canonical fingerprint in each
   result, compared only those private values, and proved the reviewed candidate
   unchanged without displaying either value.
+- 2026-08-02T19:57:08.4194431Z: A read-only helper inspection attempted to
+  forward a shell result through an unavailable `content` collection and
+  displayed no command text. The underlying command made no mutation and its
+  result was not relied on. The inspection was immediately repeated using
+  direct result serialization; no source, database, credential, provider, or
+  deployment state changed.

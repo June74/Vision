@@ -2,8 +2,8 @@
 
 - **Status:** contained
 - **First observed:** 2026-07-26T18:24:45.816434Z
-- **Last observed:** 2026-07-27T21:26:00.5847673Z
-- **Phase/task:** Listener-first restore retry Task 2
+- **Last observed:** 2026-08-02T04:20:56.8588039Z
+- **Phase/task:** Phase B Task 8 owner identity source check
 - **Environment:** Signed-in provider dashboards controlled through the browser
 - **Version/commit:** `ca11c6c`
 
@@ -98,3 +98,9 @@ runtime.
   cookie, or callback value. No provider state changed. All remaining provider
   inspection is restricted to fixed-shape booleans and counts evaluated inside
   the browser runtime.
+- 2026-08-02T04:20:56.8588039Z: Recurred when a menu-label projection returned
+  one Neon account display label while locating generic navigation controls.
+  No email, database value, connection string, token, secret, encryption key,
+  OAuth value, cookie, callback value, or provider mutation occurred. Label
+  projections are stopped; the remaining check uses fixed booleans and counts
+  only.

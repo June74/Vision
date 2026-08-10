@@ -1,9 +1,9 @@
 # SB-20260731-145947-controller-repair-search-truncation: Controller repair search expanded into truncated output
 
-- **Status:** contained
+- **Status:** closed
 - **First observed:** 2026-07-31T14:59:47.6410820Z
-- **Last observed:** 2026-08-01T17:27:52.4309623Z
-- **Phase/task:** Phase B Tasks 3 through 8, Gate 0, exact-tip review, handoff, and Task 8 live-call-path mapping
+- **Last observed:** 2026-08-03T04:13:26.4346292Z
+- **Phase/task:** Phase B Tasks 3 through 8, Gate 0, exact-tip review, handoff, Task 8 live-call-path mapping, and reconnect Task 5 rollback verification
 - **Environment:** Local read-only repository inspection
 - **Version/commit:** 10b228bc2c18647f6a8a19c2dd5ad740e7f7491e plus unstaged setback records
 
@@ -46,6 +46,9 @@ involved.
   diagnostic and calendar terms and exceeded the model-context boundary. The
   incomplete output was discarded; no source, provider, or external state was
   changed.
+- The reconnect Task 5 resumption bundled six complete skill and reference
+  files into one read. The tool output exceeded the available model context
+  and was discarded before the approved worktree action began.
 
 ## Cause classification
 
@@ -62,7 +65,7 @@ involved.
 - **Prevention:** Do not combine context-expanding searches across large
   authoring documents in repair lanes.
 - **Owner:** Codex and project owner.
-- **Next diagnostic step:** None; incident closed.
+- **Next diagnostic step:** None; the individual reads completed through EOF.
 
 ## Verification and related work
 
@@ -72,6 +75,14 @@ function-local inspection without another broad search.
 
 Task 4 review then completed using explicit files and bounded ranges without
 another truncation.
+
+Reconnect Task 5 then reread the setback logger, Superpowers controller,
+Codex tool reference, plan executor, worktree, and verification instructions
+individually through EOF without another truncation.
+
+Rollback verification then reread all 170 lines of the Chrome-control skill in
+three bounded consecutive ranges through its explicit EOF marker. No browser
+action occurred until the complete instructions were available.
 
 ## Recurrence history
 
@@ -176,3 +187,35 @@ another truncation.
   repository-only output was discarded; no source or provider mutation
   occurred. Resume with one exact file or symbol and a strict result limit per
   read.
+- 2026-08-02T20:29:18.7290948Z: Recurred when reconnect Task 5 loaded six
+  complete instruction and reference files in one response. The incomplete
+  local-only output was discarded; no project, Git, provider, or external
+  state changed. Resume by reading each required file individually through
+  EOF before executing the approved action.
+- 2026-08-02T20:30:37.3264074Z: Closed after all six required local
+  instruction and reference files were read individually through EOF with
+  successful exit status and no further truncation.
+- 2026-08-02T22:16:25.2821973Z: Recurred when a broad incident-content search
+  timed out after returning only partial matches during CI-wrapper diagnosis.
+  The incomplete result was discarded. The exact identified native-stderr
+  incident file and its index row were then read successfully, closing this
+  recurrence without project or external mutation.
+- 2026-08-02T22:58:28.1718576Z: Recurred when the complete Chrome-control
+  skill was read in one response and exceeded the model-context boundary.
+  The incomplete instruction copy was discarded before any browser action.
+  A follow-up incident-content search also timed out without changing project
+  or provider state. Resume with bounded consecutive skill ranges and exact
+  incident paths only.
+- 2026-08-02T22:58:28.1718576Z: Closed after lines 1 through 170 were read in
+  three bounded consecutive ranges through the skill's explicit EOF marker.
+- 2026-08-03T00:26:31.6902742Z: Recurred when a complete historical incident
+  read unexpectedly exceeded the model-context boundary during corrected
+  redeploy diagnosis. The incomplete output was discarded without project or
+  provider mutation; the exact 64-line incident was then reread with a bounded
+  line count and confirmed the reserved PowerShell argument-name collision.
+- 2026-08-03T00:36:28.2471845Z: Closed after all remaining controller,
+  validator, and incident reads completed through explicit bounded ranges.
+- 2026-08-03T04:13:26.4346292Z: Recurred when an unbounded recursive search
+  entered the retained candidate and rollback worktrees and timed out. Partial
+  results were discarded; follow-up inspection is restricted to tracked source
+  and the exact relevant files. No credential or provider state changed.

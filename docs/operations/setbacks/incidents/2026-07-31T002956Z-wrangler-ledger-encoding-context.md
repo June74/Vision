@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T00:29:56.640284Z
-- **Last observed:** 2026-07-31T20:07:23.9884666Z
-- **Phase/task:** Phase B live-acceptance closure Tasks 3 and 4 setback logging
+- **Last observed:** 2026-08-02T17:57:18.310Z
+- **Phase/task:** Phase B live-acceptance closure and reconnect-recovery bookkeeping
 - **Environment:** Local setback-ledger update
 - **Version/commit:** Task 3 final bounded repair working tree
 
@@ -58,3 +58,17 @@ The stable-context retry applied successfully.
   matched rendered encoding instead of stable metadata while updating the
   Wrangler log-path incident. The patch applied nothing; this stable-context
   update closed the bookkeeping recurrence.
+- 2026-08-02T02:53:38.1616357Z: Recurred when the Task 8 readiness report was
+  patched against a rendered dash sequence instead of stable ASCII context.
+  Verification rejected the patch before any hunk applied. The retry appends
+  through an encoding-stable file boundary and keeps the evidence edit local.
+- 2026-08-02T17:07:37.4969923Z: Recurred when the reconnect progress section
+  matched an encoding-sensitive rendered dash line at the end of the ignored
+  ledger. Verification rejected the patch before any hunk applied. The retry
+  uses the final stable ASCII continuation line and changes no tracked or
+  external state.
+- 2026-08-02T17:57:18.310Z: Recurred while the reconnect-focused verification
+  tried to replace a previously rendered em-dash summary. Patch verification
+  rejected every hunk before applying anything. The retry read the file as
+  UTF-8 and used its exact stored punctuation; the ledger update then applied
+  cleanly without changing implementation or external state.

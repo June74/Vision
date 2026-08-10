@@ -1,9 +1,9 @@
 # Setback SB-20260801-004913-pnpm-capture-native-command-decoration
 
-- **Status:** contained
+- **Status:** closed
 - **Detected:** 2026-08-01T00:49:13.6609802Z
-- **Last observed:** 2026-08-02T01:58:30.3564670Z
-- **Scope:** Phase B Gate 0 bounded command-output capture and reviewed-candidate publication
+- **Last observed:** 2026-08-02T22:25:40.4919578Z
+- **Scope:** Phase B Gate 0 through OAuth reconnect Task 5 immutable-candidate CI capture
 
 ## What happened
 
@@ -35,7 +35,7 @@ decoration.
   that can emit a benign warning; leave streams separate and judge the native
   process by `$LASTEXITCODE`.
 - **Owner:** Codex.
-- **Next diagnostic step:** None while contained.
+- **Next diagnostic step:** None while closed.
 
 ## Recurrence history
 
@@ -50,3 +50,19 @@ decoration.
   before the exit-code check. Read-only reconciliation then proved all 93
   reviewed paths were staged, no unstaged or untracked path remained, local
   `HEAD` still matched its tracking tip, and no commit or push had occurred.
+- 2026-08-02T18:08:26.2233354Z: Recurred during the preview-scoped local build
+  because strict PowerShell error handling promoted pnpm's ordinary stderr
+  script banner before `$LASTEXITCODE` could be checked. The wrapper stopped
+  before preview validation or deployment. The retry leaves native streams
+  separate, discards them independently, and judges only native exit codes.
+- 2026-08-02T22:16:25.2821973Z: Recurred after roughly five minutes of the
+  immutable-candidate CI run because strict error handling promoted pnpm's
+  ordinary script banner from redirected stderr before the wrapper recorded
+  `$LASTEXITCODE` or post-run invariants. The run is discarded as evidence;
+  no verdict is inferred from its logs. The retry disables terminating error
+  promotion only around the direct native invocation, keeps streams separate,
+  and records the native exit plus fresh post-run Git checks.
+- 2026-08-02T22:25:40.4919578Z: Closed after direct `cmd.exe` redirection
+  preserved native stdout/stderr and exit status without PowerShell stream
+  decoration. Full CI exited zero, its durable result matched the exact
+  candidate, and post-run tracked-state checks returned clean.

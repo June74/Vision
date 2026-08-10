@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-08-01T17:21:53.8460773Z
-- **Last observed:** 2026-08-01T17:45:19.3061456Z
+- **Last observed:** 2026-08-10T20:15:29.766Z
 - **Phase/task:** Phase B Task 8 read-only reconciliation and provider-capability probing
 - **Environment:** Default sandbox versus approved scoped external execution
 - **Version/commit:** admitted Task 7 candidate
@@ -73,3 +73,26 @@ exposing remote child output.
   the run-detail response does not expose dispatch inputs. Raw provider output,
   run identifiers, and input values were captured and discarded. The sandbox
   boundary is classified and this recurrence is closed.
+- 2026-08-02T05:01:54.0140488Z: The permanent `assert_tip` adapter again failed
+  closed inside the restricted sandbox and emitted only its constant safe
+  error. The known network/authentication boundary was contained before a
+  scoped external retry; no Git or provider state changed.
+- 2026-08-02T05:02:33.5526607Z: The same permanent adapter succeeded through
+  the approved scoped boundary and emitted only `True`, freshly proving the
+  reviewed remote tip still equals the local candidate.
+- 2026-08-10T19:03:09.018Z: The final-retry preflight found the normal GitHub
+  CLI authentication unavailable: `gh auth status` reported an invalid saved
+  token. No workflow dispatch, provider request, source mutation, or secret
+  value access occurred. A user reauthentication is required before the
+  already-approved single retry can start.
+- 2026-08-10T20:11:56.001Z: After the owner reported reauthentication complete,
+  a fresh status-only check still returned the safe `token_invalid` category.
+  No workflow dispatch, provider request, source mutation, or credential value
+  access occurred; the retry remains unstarted.
+- 2026-08-10T20:13:31.309Z: One additional status-only verification returned
+  the same `token_invalid` category. The final retry was not dispatched and no
+  provider or credential state was changed.
+- 2026-08-10T20:15:29.766Z: After the owner reported a scope refresh complete,
+  the status-only host-scoped check still found one invalid active credential
+  and no successful login entry. No workflow dispatch, provider request, or
+  credential value access occurred.

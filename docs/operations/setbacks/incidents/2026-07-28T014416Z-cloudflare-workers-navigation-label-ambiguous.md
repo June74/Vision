@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T01:44:16.5948330Z
-- **Last observed:** 2026-07-28T01:44:16.5948330Z
-- **Phase/task:** Listener-first restore retry Task 3 Step 2
+- **Last observed:** 2026-08-02T04:54:11.0965032Z
+- **Phase/task:** Phase B Task 8 owner-allowlist deployment verification
 - **Environment:** Signed-in Cloudflare dashboard
 - **Version/commit:** `7d2f9f6`; reviewed candidate `0f08fc1`
 
@@ -50,3 +50,11 @@ the current signed-in account view. The count is not exactly one.
 
 No external mutation occurred, and the task later reached the signed-in Worker
 control surface before stopping on the separate database-role gate.
+
+## Recurrence history
+
+- 2026-07-28T01:44:16.5948330Z: First observed and contained before a click.
+- 2026-08-02T04:54:11.0965032Z: Recurred when the signed-in account home
+  exposed three exact visible `Workers & Pages` matches. Strict mode rejected
+  the ambiguous click without changing provider state. The retry uses the
+  unique link name returned by the safe error.

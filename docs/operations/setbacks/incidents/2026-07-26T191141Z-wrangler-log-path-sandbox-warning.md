@@ -2,14 +2,14 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-08-01T00:39:33.3812929Z
-- **Phase/task:** Phase B Tasks 4 through 6 Worker and full verification
+- **Last observed:** 2026-08-10T19:00:33.232Z
+- **Phase/task:** Phase B Task 8 owner authentication diagnosis through reconnect-recovery Task 4 focused verification
 - **Environment:** Local managed sandbox
-- **Version/commit:** Uncommitted Task 2 worktree based on `ff6a767`; `6ebabd1`
-- **Latest recurrence:** 2026-07-30T03:32:34.1083650Z — the segmented Gate 0
-  Worker run omitted the task-local diagnostic setting. The optional log write
-  was denied, while all 94 Worker assertions passed with a zero exit. No
-  provider, credential, repository, or private-data state changed.
+- **Version/commit:** `a4376ab` plus the uncommitted Task 2 PostgreSQL proof
+- **Latest recurrence:** 2026-08-02T17:58:18.244Z — closed after the identical
+  19-test Worker gate passed with the approved task-local diagnostic path and
+  filesystem access; neither sandbox warning recurred. No provider,
+  credential, repository, deployment, or private-data state changed.
 
 ## Symptom
 
@@ -26,6 +26,13 @@ Run a Vite build while Wrangler uses its default user-profile log directory.
 ## Safe evidence
 
 The build completed, but the sandbox denied the optional Wrangler log write.
+
+## Recurrence history
+
+- 2026-08-07T19:43:54Z: The sandbox-only log-path boundary recurred during a
+  local Wrangler-version probe. The first invocation was discarded; a
+  task-local configuration directory then allowed all three artifact/root
+  binaries to report the same version without provider access.
 
 ## Attempts and outcomes
 
@@ -57,6 +64,10 @@ warning. The latest recurrence was warning-only: the complete repository check
 exited zero with 694 unit/integration tests passed and one skipped, 179 contract
 tests passed, 75 Worker tests passed, and build, documentation, typecheck, and
 security validation passed.
+
+The reconnect-recovery Task 4 focused rerun also passed all 19 Worker tests
+with the approved task-local diagnostic path and filesystem access; neither the
+optional log-path warning nor static export-analysis warning recurred.
 
 ## Recurrence history
 
@@ -245,3 +256,60 @@ security validation passed.
   candidate builds. Browser, preview build/check, and production build/check
   all exited zero. A separate generated-debug-artifact recurrence was safely
   removed without reading it.
+- 2026-08-02T03:28:54.9085762Z: Recurred before the filtered Task 8 live
+  authentication tail connected because the workspace-local diagnostic
+  setting was omitted. The tail stopped before reading a Worker event, and no
+  application, account, provider, credential, or private-data state changed.
+  The retry must set a task-local `XDG_CONFIG_HOME` before Wrangler starts.
+- 2026-08-02T17:03:04.5416381Z: Recurred during the corrected reconnect
+  baseline because the task-local Wrangler diagnostic setting was omitted.
+  The complete repository CI script still exited zero with 1,730 unit and
+  integration tests plus one intentional skip, 179 contract tests, 110 Worker
+  tests, 36 browser tests, typecheck, documentation, both production builds,
+  and release security passing. The Worker pool also repeated its known
+  sandbox-only static export-analysis warning. No external or private state
+  changed; focused Worker and build reruns use the approved local diagnostic
+  path with elevated filesystem access.
+- 2026-08-02T17:04:00.3746920Z: Closed after the focused Worker suite passed
+  all 110 tests and both production builds plus the crypto-boundary validator
+  passed with a task-local diagnostic path and approved filesystem access;
+  neither warning recurred.
+- 2026-08-02T17:35:47.724Z: Recurred during reconnect-recovery Task 3's
+  expected RED Worker run because the task-local Wrangler diagnostic setting
+  was omitted. The intended test process still ran: 13 pre-existing tests
+  passed and exactly six new recovery assertions failed for the expected
+  missing behavior. No provider, credential, repository staging, or private
+  data changed. Subsequent Worker runs use a task-local diagnostic path.
+- 2026-08-02T17:56:17.357Z: Recurred during reconnect-recovery Task 4 focused
+  verification because the task-local Wrangler diagnostic setting was
+  omitted. The command exited zero with all 19 callback assertions passing;
+  only the optional user-profile log and static export analysis were
+  sandbox-limited. The clean rerun restores the approved task-local diagnostic
+  path and elevated filesystem access. No external or private state changed.
+- 2026-08-02T17:58:18.244Z: Closed after the identical 19-test Worker gate
+  passed with the approved task-local diagnostic path and filesystem access;
+  neither sandbox warning recurred.
+- 2026-08-03T00:36:28.2471845Z: Recurred during corrected-redeploy read-only
+  Wrangler inspection when an exact untracked worktree `debug.log` was
+  created. Its path, untracked status, and byte count were verified without
+  opening it. No deployment occurred; the exact log is quarantined for
+  immediate deletion because it may contain provider metadata.
+- 2026-08-03T00:40:32.3834308Z: Closed after the exact path was proven inside
+  the worktree and exactly untracked, then the 396-byte log was permanently
+  deleted without opening it. It is not recoverable from the worktree.
+- 2026-08-07T18:14:57.499Z and 2026-08-07T18:15:19.827Z: Recurred during
+  the complete local `pnpm check` when Wrangler used its default external
+  profile log path. The unit, contract, Worker, documentation, build, and
+  security stages still exited zero; no provider or private-data state
+  changed. The warning is classified as known environment noise and remains
+  closed.
+- 2026-08-10T01:22:00.707Z: Recurred during the complete local `pnpm check`
+  when the sandbox denied Wrangler's optional user-profile log write and
+  static export analysis. The contract and Worker suites, build, documentation,
+  and release security stages continued; no provider, credential, deployment,
+  or private-data state changed. The warning remains environment-only.
+- 2026-08-10T19:00:33.232Z: Recurred during the bounded `pnpm build` because
+  Wrangler used its default user-profile log path. Both Vite bundles and the
+  production crypto-boundary validator still exited zero; no provider,
+  credential, deployment, or private-data state changed. The clean retry must
+  set the known worktree-local Wrangler diagnostic path.

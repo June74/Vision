@@ -18,13 +18,13 @@ email addresses, protected calendar content, or secret values.
 | Cloudflare Queues | One private synchronization queue; low-volume single-user messages | Far below 10,000 operations per day | Within Workers Free Queue allowance |
 | Cloudflare R2 | Paid R2 subscription active at zero fixed monthly charge; one private Standard bucket | Thirty encrypted daily objects plus verification reads are far below 10 GB-month, 1 million Class A, and 10 million Class B free allowances | Expected $0 at private-pilot scale |
 | Google Calendar API | Push notifications plus 15-minute repair/renewal maintenance | Far below 10,000 requests/minute per project, 600 requests/minute per user, and 1,000,000 requests/day | Expected $0 |
-| OpenAI through AI Gateway | One global fixed 30-day $9.50 Gateway spend rule is live and independently verified | Application hard stop is 950 cents per Chicago accounting month | Provider-side ceiling passes; one harmless live category request and aggregate usage evidence remain |
+| OpenAI through AI Gateway | Existing `vision-preview` Gateway opened; owner freshly confirmed exactly one enabled, global, fixed 30-day $9.50 rule | Application hard stop is 950 cents per Chicago accounting month | Provider-side ceiling passes owner dashboard inspection; same-run automated verification remains required before the live AI request |
 
 The measured infrastructure subtotal is currently $0. The application AI
-barrier and independently verified Gateway rule both limit AI dispatch to
-$9.50, leaving more than $10 of the personal budget for unexpected
-managed-service usage. Phase B is not cost-accepted until one harmless live
-category request and fixed-shape aggregate usage evidence pass.
+barrier limits AI dispatch to $9.50. After an incomplete dashboard observation,
+Cloudflare's duplicate-name guard and the existing Gateway page reconciled the
+resource identity; the owner then freshly confirmed the exact provider-side
+rule without changing it. Phase B is not cost-accepted until one harmless live category request and aggregate usage evidence remain to be captured, after the guarded AI workflow repeats its same-run automated verification.
 
 The dedicated AI acceptance candidate does not configure or raise the Gateway
 limit. Its guarded workflow first runs the existing verifier in read-only mode
@@ -105,10 +105,12 @@ values. Its command reports only whether the policy is valid and does not print 
 ## Release decision
 
 **Pending.** Current measured and projected infrastructure usage is compatible
-with the ceiling, and the provider-side $9.50 rule is verified. The remaining
-cost gate is a harmless live OpenAI category request through the configured
-Gateway, followed by fixed-shape usage evidence from the guarded dedicated AI
-candidate and verified normal rollback.
+with the ceiling, and the owner freshly confirmed the exact provider-side
+$9.50 rule. The remaining cost gate is a harmless live OpenAI category request
+through that Gateway, plus fixed-shape usage evidence from the guarded
+dedicated AI candidate and verified normal rollback. The guarded dedicated AI
+candidate and verified normal rollback remain pending until that same-run
+evidence is captured.
 
 ## Permanent post-acceptance closure order
 

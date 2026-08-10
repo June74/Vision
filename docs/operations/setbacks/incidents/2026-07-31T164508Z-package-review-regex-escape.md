@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T16:45:08.1021012Z
-- **Last observed:** 2026-07-31T16:45:08.1021012Z
+- **Last observed:** 2026-08-02T05:55:01.8518443Z
 - **Phase/task:** Phase B Task 3 third sanitized package review
 - **Environment:** Read-only package review
 - **Version/commit:** 6f7c7be
@@ -37,3 +37,7 @@ secret, URL, identifier, or runtime value was read or emitted.
 
 - 2026-07-31T16:45:08.1021012Z: First observed and closed after selecting the
   literal-search fallback.
+- 2026-08-02T05:55:01.8518443Z: Recurred during Task 8 query preflight when a
+  composite PowerShell search expression mixed nested quote forms and failed
+  to parse. It exited before reading the target files or touching external
+  state; the controller switched to simple literal searches.

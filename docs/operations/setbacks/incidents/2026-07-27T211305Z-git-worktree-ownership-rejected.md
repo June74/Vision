@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T21:13:05Z
-- **Last observed:** 2026-07-29T21:45:45.9840176Z
+- **Last observed:** 2026-08-10T23:25:36Z
 - **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave
 - **Environment:** Managed local sandbox, linked worktree
 - **Version/commit:** Not inspected; Git metadata access was rejected first.
@@ -79,3 +79,12 @@ configuration was changed.
   repository or provider state changed; subsequent Git commands use the existing
   command-scoped safe-directory override, without changing persistent Git
   configuration.
+- 2026-08-07T19:09:19Z: Recurred during a read-only Phase B scalar probe. Plain
+  Git metadata reads stopped at the ownership check; the probe was discarded
+  and the command-scoped override then returned the expected branch, commit,
+  status count, and zero open incident rows. No persistent Git configuration or
+  provider state changed.
+- 2026-08-10T23:25:36Z: Recurred while independently checking the detached
+  candidate worktree. Plain Git reads stopped at the ownership check; no
+  configuration or repository state changed. Future candidate reads use the
+  command-scoped `safe.directory` override only.

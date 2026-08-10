@@ -1,11 +1,13 @@
-# Setback SB-20260801-030147-task8-read-wrapper-and-broad-search
+# SB-20260801-030147-task8-read-wrapper-and-broad-search: Task 8 reads used incompatible wrappers and broad searches
 
 - **Status:** contained
-- **Detected:** 2026-08-01T03:01:47.3966300Z
-- **Last observed:** 2026-08-01T22:09:32.3478221Z
-- **Scope:** Phase B Task 8 read-only reconciliation and Claude Code handoff validation
+- **First observed:** 2026-08-01T03:01:47.3966300Z
+- **Last observed:** 2026-08-03T21:25:23.6971358Z
+- **Phase/task:** Phase B reconnect-recovery implementation planning
+- **Environment:** Local Phase B worktree read tooling
+- **Version/commit:** `e283410`
 
-## What happened
+## Symptom
 
 The first local instruction-read command used an incompatible result wrapper.
 A follow-up local discovery command searched too broadly, encountered transient
@@ -24,13 +26,32 @@ live action. No provider, Git, credential, calendar, database, R2, or source
 state was intentionally changed by the failed commands. The timestamp was
 corrected before the incident was used as evidence.
 
+## Reproduction conditions
+
+Use an unsupported result wrapper, search a broad repository or package tree
+for an already known path, or apply a literal/wildcard shape incompatible with
+the selected PowerShell command.
+
+## Safe evidence
+
+The affected reads stopped locally with fixed errors or bounded timeouts. Only
+safe filenames, counts, categories, and verification statuses were retained.
+
+## Attempts and outcomes
+
+- Broad or incorrectly shaped reads failed without external action.
+- Exact confirmed paths and bounded native PowerShell reads succeeded.
+
 ## Cause classification
 
 - **Confirmed cause:** The command wrapper assumed an unsupported result shape;
   the follow-up discovery command did not constrain its search to the known
   operations path; the incident draft used an inferred placeholder timestamp;
   and the resumed lookup used an invalid literal query shape.
-- **Rejected hypothesis:** No repository or provider defect was established.
+- **Hypotheses:** None remaining.
+- **Rejected hypotheses:** No repository or provider defect was established.
+- **Known exclusions:** No provider mutation, credential access, calendar edit,
+  database write, object deletion, deployment, or key change occurred.
 
 ## Correction and prevention
 
@@ -41,9 +62,12 @@ corrected before the incident was used as evidence.
 - **Owner:** Codex.
 - **Next diagnostic step:** Resume local reconciliation with confirmed exact
   paths while leaving this ledger change outside the admitted candidate.
-- **Verification:** The failures were limited to local read tooling; no
-  provider payload, credential value, calendar content, database row, object
-  key, or authorization URL was retained.
+
+## Verification and related work
+
+The corrected reads were limited to exact paths and fixed output shapes; no
+provider payload, credential value, calendar content, database row, object key,
+or authorization URL was retained.
 
 ## Recurrence history
 
@@ -126,3 +150,33 @@ corrected before the incident was used as evidence.
   the complete command at parse time, before the destination directory or any
   copy was created. The retry uses a simpler byte-safe comparison supported by
   this host.
+- 2026-08-02T04:20:56.8588039Z: A recurrence search traversed the full setback
+  incident directory and exceeded its bounded timeout after the exact target
+  incident had already been read. No source or provider state changed. Future
+  recurrence logging uses the already known incident path and one exact index
+  lookup only.
+- 2026-08-02T04:36:59.6112242Z: A readiness-command lookup searched every SDD
+  review package for a known test total and exceeded its bound while returning
+  irrelevant historical matches. No source or provider state changed and no
+  private value was retained. The command was abandoned; the already recorded
+  seven-suite readiness result remains the authoritative local evidence.
+- 2026-08-02T04:48:48.6816991Z: A local browser-API documentation lookup used
+  an invalid quoted pattern and failed before reading the file. It did not
+  affect the active browser or any external state. The lookup was abandoned in
+  favor of the previously verified browser invocation shape.
+- 2026-08-02T06:25:14.4751240Z: A read-only source/reference lookup recursively
+  traversed the broad `tests`, `src`, and `docs` roots and exceeded its bounded
+  command time after already returning the only relevant source matches. No
+  source, Git, provider, credential, calendar, database, object, deployment,
+  workflow, or backup-key state changed, and no private value was returned.
+  Planning resumed with exact known files and bounded file slices only.
+- 2026-08-02T06:32:32.4772424Z: The first plan self-review cleanup combined
+  multiple inferred context ranges in one patch. Exact-context verification
+  rejected it before changing the plan. No source, Git, provider, credential,
+  calendar, database, object, deployment, workflow, or backup-key state
+  changed. The correction reads and patches each verified section separately.
+- 2026-08-03T21:25:23.6971358Z: A deployment-diagnosis lookup searched every
+  setback incident for a Wrangler-log phrase and exceeded its bound after
+  already returning the exact known incident filename. The broad search was
+  abandoned for that exact file; no source, provider, credential, deployment,
+  or private state changed.

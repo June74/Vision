@@ -2,6 +2,149 @@
 
 This page records implementation commits, verification evidence, review decisions, and unresolved technical notes. It is updated after each reviewed task.
 
+## Current status — 2026-08-07
+
+- Phase B remains **in progress**; the authoritative gate map is
+  [`docs/operations/phase-b-evidence.md`](phase-b-evidence.md).
+- The current reviewed branch has a passing full local `pnpm check`, passing
+  privacy-safe classifier/direct-launcher contracts, and no provider mutation
+  in the latest repair cycle.
+- OAuth/calendar setup, preview migrations, encrypted backup foundations, live
+  schedule instrumentation, measured storage warnings, AI budget controls, and
+  the preview fault harness are implemented. Required live acceptance,
+  provider cleanup, final reviewed deployment, and the Phase C handoff remain
+  open until fresh evidence closes them.
+- The 2026-08-07 fresh-authorized attempt reached the baseline schedule
+  challenge, consumed valid nonce-bound evidence, and entered candidate
+  dispatch. The provider-facing deploy returned the allowlisted
+  `candidate_deploy_resource_missing` category; the automatic rollback path
+  returned `resource_missing`, so the safe result was
+  `rollback_outcome_uncertain` with `rollback_verified: false`.
+- Read-only deployment and version reconciliation decoded successfully and
+  found no candidate or rollback marker; the existing preview health contract
+  remained exact and healthy. The local artifacts and configured R2/Queue
+  resources were present. The raw provider text was not retained.
+- This single approval is consumed. Phase B must not retry deployment until a
+  provider-side deploy-capability/resource cause is reconciled and a new exact
+  owner approval is supplied.
+- The next diagnostic checkpoint is owner-scoped and read-only: confirm that
+  the identity used by the saved Wrangler OAuth session has Worker deployment
+  edit access for the preview Worker and access to the existing preview R2 and
+  Queue resources. A permission change, token rotation, re-login, or provider
+  resource mutation requires separate explicit approval; no secret value is
+  requested or recorded.
+- Owner confirmation has been received for that access checkpoint. The prior
+  mutation approval remains consumed; a fresh exact approval is required for
+  any new monitored candidate retry.
+- A second fresh baseline-confirmed attempt after that owner confirmation
+  reproduced `candidate_deploy_resource_missing`, followed by
+  `resource_missing` during rollback. Read-only deployment/version listings
+  again found no candidate or rollback marker, and preview health remained the
+  exact HTTP 200 contract. A bounded `wrangler whoami --json` probe exited and
+  decoded successfully, with Worker/edit and Queue-related metadata but no R2
+  text; this does not prove or disprove R2 permission and no raw identity data
+  was retained.
+- The next diagnostic is therefore owner-scoped and read-only: inspect R2
+  access for the same saved Wrangler identity and review preview Worker
+  provider activity. Do not change provider state. Any future mutation needs a
+  fresh exact approval.
+- If the identity check is already satisfied, inspect the preview Worker's
+  **Settings → Bindings** and **Deployments/Activity** views read-only. Confirm
+  that the existing R2 and Queue bindings are attached and whether the latest
+  attempt has a failed deployment entry. Record only generic categories; do not
+  copy identifiers or provider payloads.
+- The owner clarified that both the preview R2 bucket and Queue exist. The
+  earlier generic “binding missing” report therefore does not confirm a binding
+  mismatch. The provider-side cause remains unresolved; no binding change is
+  authorized.
+- The owner reported no failed deployment entry in Cloudflare Deployments or
+  Activity. The safe interpretation is a pre-version provider rejection. The
+  next read-only diagnostic is the saved Wrangler account/context and Worker
+  version/deploy capability; no account, token, resource, or Worker setting
+  change is requested.
+- The bounded `wrangler whoami --json` result decoded but exposed no permission
+  names, so it cannot confirm or deny the required Worker Scripts Write scope.
+  The same Cloudflare member role must be inspected read-only; no token
+  creation, rotation, or permission mutation is requested.
+- Owner confirmation says the Wrangler identity has all privileges, making a
+  simple role shortage unlikely. The next read-only diagnostic is the existing
+  deployed-version shape and exact account/Worker context.
+- Root and artifact-local Wrangler binaries report the same version. The
+  candidate artifact's exact deploy invocation also passed a compile-only
+  dry-run with no stderr, so local CLI/config drift is ruled out; the remaining
+  failure is in live provider upload/context.
+- The current deployed version list/detail also succeeds in the same Wrangler
+  context; its safe shape contains metadata/resources and both expected R2 and
+  Queue binding names. This makes the live upload rejection pre-version and
+  context-specific rather than an existing binding absence.
+- Owner privileges do not prove that the saved Wrangler OAuth grant selected
+  the same account and scopes. The next manual diagnostic is an interactive
+  Wrangler re-authentication followed by read-only identity/version checks;
+  deployment remains separately gated by fresh approval.
+- Reauthentication and post-reauth identity/version list/detail checks passed,
+  including both expected R2/Queue references. The next step is one fresh
+  monitored candidate upload/rollback attempt, which requires a new exact
+  owner approval.
+- That third fresh approved attempt reproduced the same pre-version resource
+  missing/rollback uncertainty. Final read-only deployment/version lists had
+  ten rows each with no candidate/rollback markers, and preview health remained
+  HTTP 200 with the exact contract. Further mutation is blocked pending a
+  Cloudflare-side diagnostic or explicitly approved provider-state change.
+- A compile-only Wrangler dry-run of the exact candidate artifact, including
+  the controller's tag/message flags, then exited zero with bounded output, no
+  stderr, and a temporary output directory. The
+  safe failure category is `none`; this independently confirms local
+  bundling/config validity and leaves the resource-missing boundary at live
+  provider dispatch. No deployment occurred.
+- The controller's local schedule-evidence wait was aligned from 180 seconds
+  to the existing 600-second freshness bound. A test-first wait contract was
+  RED then GREEN, and all 13 provider-free controller/launcher safety scripts
+  passed. This repair changes no provider state and still requires a new exact
+  approval before a future live attempt.
+- A fresh owner dashboard check confirmed the Queue and R2 binding pairs match
+  the expected preview resources, while both Deployments and account Audit Logs
+  contain no failed attempt. The pinned candidate and rollback commit configs
+  independently contain the same preview binding names and environment.
+- Because the controller intentionally classifies only bounded allowlisted
+  signatures, `resource_missing` currently means that a broad `not found` or
+  equivalent signature matched; it does not prove which provider object was
+  absent. No raw provider output is retained. The required next diagnostic
+  change was limited to an allowlisted fingerprint (matched category and source
+  channel), followed by a new exact approval before any live retry.
+- The diagnostic fingerprint change is now implemented and test-first
+  verified. `Invoke-NativeBounded` returns only an allowlisted signature and
+  source channel alongside the existing category; the controller propagates
+  those fields as `candidate_failure_signature/source` and
+  `rollback_failure_signature/source`. Fifteen provider-free controller
+  contracts and documentation coverage pass. No provider request occurred, and
+  the subsequent live retry remained separately gated by fresh approval.
+- The fresh approved fingerprinted attempt completed with
+  `candidate_failure_signature: not_found` and
+  `candidate_failure_source: temporary_log`; rollback produced the same safe
+  fingerprint. Candidate acceptance and rollback verification both remained
+  false. Corrected read-only reconciliation decoded ten deployment rows and ten
+  version rows with zero candidate/rollback markers; preview health returned the
+  exact HTTP 200 contract. The remaining failure is a generic provider
+  not-found response whose object is not identified by the privacy-safe
+  boundary, so further mutation is blocked pending external provider evidence
+  or an explicitly approved provider-state change.
+- Local inspection of the attempt's retained logs found only the safe controller
+  envelope (stderr was empty); the temporary Wrangler log was cleaned up, so a
+  raw 404/auth/network message cannot be recovered from that run. The root and
+  reviewed preview configurations contain the exact Queue and R2 names already
+  confirmed in the dashboard. The unqualified root `wrangler deploy --verbose`
+  command is not a valid preview diagnostic because the root configuration is
+  the local environment and has no preview R2 attachment.
+- Cloudflare's public status page listed R2 as operational when checked on
+  2026-08-10. The ENAM R2 availability incident posted at 18:42 UTC on
+  2026-08-07 overlaps the failed attempt near 20:56 UTC and remains the first
+  credible external correlation, but bucket-specific impact is not proven. One
+  fresh controlled retry was authorized after resolution and stopped before
+  upload at the schedule-evidence gate; a future retry still requires fresh
+  exact approval and timely nonce-bound evidence.
+- Historical task entries below retain their original implementation notes;
+  they do not override the current gate map or release decision.
+
 ## Runtime Task 1 — Application foundation
 
 - Status: complete and independently approved.
@@ -195,3 +338,21 @@ Codex's restricted sandbox blocks Wrangler's normal AppData cache/log paths. The
 - Privacy evidence: no callback URL, authorization code, token, database URL, key, full calendar ID, account identifier, or OAuth secret was recorded.
 - Deployment-attribution note: the live client asset names match the local production build, but the server deployment was made from uncommitted working-tree changes. Commit and deployment identity must be reconciled before this milestone can be treated as immutable release evidence.
 - Remaining Plan 3 evidence: wrong-account denial, exact-confirmation enforcement, raw encrypted-token inspection, logout/revocation behavior, disposable-calendar cleanup, and a reviewed commit whose local, remote, and deployed identities are attributable.
+
+## Current live-acceptance checkpoint — 2026-08-10
+
+A fresh approved `deploy_candidate` controller run was launched after the
+Cloudflare R2 incident was resolved. Fresh nonce-bound baseline evidence passed
+after owner schedule confirmation, and the controller reached the live upload
+boundary. The safe result was `candidate_deploy_resource_missing` with a
+`not_found` temporary-log signature, followed by
+`rollback_outcome_uncertain`/`resource_missing`; `rolled_back: false` and
+`rollback_verified: false`. No candidate or rollback version marker appeared.
+A bounded read-only deployments-list reconciliation then exited zero and
+decoded ten existing records with no candidate or rollback marker. This is the
+fourth reproduction, including one after R2 was operational; no further
+automatic retry is safe without a Cloudflare-side diagnostic or an explicitly
+approved provider-state change. Owner dashboard evidence independently
+confirms the active deployment, both binding/resource pairs, and no missing
+resource; the unresolved boundary is therefore the provider's pre-version
+upload lookup or upload-side metadata path.

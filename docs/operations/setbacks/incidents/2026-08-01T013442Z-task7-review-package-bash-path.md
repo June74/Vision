@@ -2,7 +2,8 @@
 
 - **Status:** closed
 - **Detected:** 2026-08-01T01:34:42.2827824Z
-- **Scope:** Phase B Task 7 fresh exact-tip review package
+- **Last observed:** 2026-08-02T20:21:42.1996326Z
+- **Scope:** Phase B Task 7 review package through OAuth reconnect Task 5 remaining-plan audit
 
 ## What happened
 
@@ -51,3 +52,23 @@ state changed.
   with this host/worktree. The skill's documented Windows fallback will create
   the equivalent ignored package from native Git commit-list, stat, and
   full-context diff output.
+- 2026-08-02T17:08:32.6408667Z: Recurred when the Task 1 brief helper used
+  Git's minimal `bin/bash.exe`, whose PATH omitted `awk`. The helper exited
+  before writing content and left only a zero-byte ignored target. Read-only
+  lookup confirmed `awk` under `usr/bin`; the explicit-output retry uses that
+  launcher and avoids the incompatible workspace helper.
+- 2026-08-02T17:09:23.0911116Z: The direct `usr/bin/bash.exe` retry inherited
+  the same Windows PATH and again could not resolve `awk`; the zero-byte
+  ignored target remained the only effect. The final launcher attempt
+  explicitly prepends `/usr/bin`, as the earlier incident requires.
+- 2026-08-02T17:10:14.9347364Z: Closed after the explicit `/usr/bin` PATH
+  produced the exact Task 1 brief with 941 lines and the expected heading.
+- 2026-08-02T20:20:49.0134535Z: Recurred when Task 8-10 brief generation used
+  the same helper in the Windows worktree path with spaces. Even with explicit
+  `/usr/bin`, its workspace-directory handling split the path and failed before
+  writing any brief. No repository, candidate, provider, database, credential,
+  or deployment state changed. The contained fallback is bounded direct plan
+  reading; this recurrence remains open until that read succeeds.
+- 2026-08-02T20:21:42.1996326Z: Closed after bounded direct reads captured the
+  complete authoritative Task 8, Task 9, and Task 10 requirements without
+  creating a malformed brief or changing repository/provider state.

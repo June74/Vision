@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T01:47:01.149184Z
-- **Last observed:** 2026-07-31T01:50:37.2528640Z
-- **Phase/task:** Phase B Task 3 parallel worktree setup
+- **Last observed:** 2026-08-02T23:07:59.8233834Z
+- **Phase/task:** Phase B Task 3 parallel worktree setup and OAuth reconnect Task 5 isolated-candidate proof preparation
 - **Environment:** Windows managed sandbox; parent repository plus linked Git worktrees
 - **Version/commit:** 2bfbc23f13c44e60b01bbffcecc9748d322765b5
 
@@ -49,10 +49,12 @@ or protected value was printed.
 ## Correction and prevention
 
 - **Correction:** Treat the identical literal base commit as the dependency
-  compatibility proof and run any later Git validation with that worktree as
-  the command working directory. Check the exit code before consuming output.
-- **Prevention:** Do not batch linked-worktree Git commands through parent
-  `-C` calls under the sandbox; use one exact worktree per command.
+  compatibility proof and run later Git validation from the exact worktree or
+  with an exact command-local `safe.directory`. Check the exit code before
+  consuming output.
+- **Prevention:** Do not batch linked-worktree Git commands through unadmitted
+  parent `-C` calls under the sandbox. Use one exact worktree per command and
+  never mutate global Git configuration.
 - **Owner:** Codex and project owner.
 - **Next diagnostic step:** None; later Git checks run from their exact
   worktree context.
@@ -71,3 +73,19 @@ test then passed.
 - 2026-07-31T01:50:37.2528640Z: Closed after path-only validation, local
   junction creation, and a successful focused test avoided the failing
   cross-worktree command shape.
+- 2026-08-02T19:59:01.3575094Z: Recurred while validating the detached OAuth
+  reconnect candidate helper. The read-only `-C` command omitted the
+  candidate's command-local safe-directory admission, and the missing result
+  then caused a local null-method error. Helper syntax had already passed; no
+  source, candidate commit, credential, database, provider, or deployment
+  state changed. The helper and retry use only the exact candidate path as a
+  command-local safe directory and check the Git exit before consuming output.
+- 2026-08-02T23:07:59.8233834Z: Recurred during the read-only preflight for
+  approved short rollback-worktree cleanup. The parent repository was admitted
+  but the child worktree was not, and the wrapper then trimmed the absent HEAD
+  result. Containment/path/registration checks passed, no deletion ran, and no
+  repository or external state changed. Retry must admit the exact child path
+  command-locally and gate every consumed result on Git exit zero.
+- 2026-08-02T23:09:52.9851982Z: Closed after the command-local child admission
+  returned the exact rollback commit, tracked-clean state, containment, and
+  registration facts with every Git exit checked before output consumption.

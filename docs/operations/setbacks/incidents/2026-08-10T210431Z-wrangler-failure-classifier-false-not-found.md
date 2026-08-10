@@ -26,6 +26,24 @@ live-deployment acceptance was blocked while the real cause went unexamined.
 Four attempts were attributed to the provider that the evidence does not
 support.
 
+## Correction recorded after version/deployment reconciliation
+
+The current session did not run `wrangler deploy`. It ran three
+`wrangler versions upload` calls, and all three succeeded. Those calls create
+versions but do not create a deployment or move traffic. The uploaded artifact
+was pinned to commit `c1911f82c0fb274e3d50d20c3cbe82ba2abceb51` in the local
+candidate worktree at `.superpowers/c/dist/vision`.
+
+The prior statement that Cloudflare rejected the upload during resource lookup
+is therefore a **rejected hypothesis**. The local `not_found` classification
+was a false positive from the benign Wrangler `.env file not found` preamble;
+it is not evidence that a provider lookup failed.
+
+A later `Promote version to 100%` event moved one uploaded version to live
+traffic at `2026-08-10T20:37:36Z`, displacing the reviewed 2026-08-03
+deployment. That promotion was not initiated by this session and its actor is
+not established. The owner is restoring the reviewed deployment.
+
 ## Cause classification
 
 **Confirmed cause.** `Get-WranglerFailureFingerprint` in
@@ -67,6 +85,9 @@ returned `resource_missing`, the fixed revision returns `unknown_failure`.
   with `--strict` returned exit 0, refuting this.
 - *Controller wrapper defect.* Driving `Invoke-NativeBounded` directly with the
   production launch mechanics returned exit 0 in 7.3s with no failure category.
+- *`wrangler versions upload` was rejected before a version existed.* Rejected:
+  all three version-upload calls from this session succeeded and produced
+  version IDs; no `wrangler deploy` call was made in this session.
 
 **Known exclusions.** No credential, key, schedule, database, or calendar
 mutation was made during this investigation.
@@ -146,8 +167,9 @@ setback at 20:38:02, and workflow run 31428489171 was in flight from 20:19:53
 for 10m36s. None of this identifies the actor.
 
 What is attributable to this session is the artifact: the promoted version was
-uploaded here. Preview health remained HTTP 200 with the `ok` contract
-throughout. The owner is restoring the 2026-08-03 deployment.
+uploaded here, but its later promotion was external to this session. Preview
+health remained HTTP 200 with the `ok` contract throughout. The owner is
+restoring the 2026-08-03 deployment.
 
 ## Immediate handling
 

@@ -1,9 +1,9 @@
 # SB-20260726-193142-stale-cloudflare-tab-descriptor: Stale Cloudflare tab descriptor was reused
 
-- **Status:** closed
+- **Status:** contained
 - **First observed:** 2026-07-26T19:31:42.622047Z
-- **Last observed:** 2026-07-27T23:42:27.0051244Z
-- **Phase/task:** Listener-first restore retry Task 2
+- **Last observed:** 2026-08-02T04:21:56.3753300Z
+- **Phase/task:** Phase B Task 8 owner authentication diagnosis
 - **Environment:** Signed-in provider browser session
 - **Version/commit:** `4420f6d`
 
@@ -88,3 +88,41 @@ action.
   part of the browser session. The browser connection itself remained
   responsive; the stale tab binding was discarded before any provider
   selection or database action.
+- 2026-08-02T02:21:16.6256802Z: Fresh discovery found exactly one Vision, one
+  Cloudflare, and one Neon tab, but the combined claim sequence exceeded the
+  browser-control deadline and reset before any page was read. No page content,
+  credential, provider identifier, repository state, or external state was
+  accessed or changed. The immediate cause is the claim timeout; whether one
+  specific tab or the combined sequence caused it remains unconfirmed. Recovery
+  must follow the Chrome troubleshooting guidance and claim tabs one at a time.
+- 2026-08-02T02:22:42.0822228Z: Chrome's lightweight open-tab call succeeded,
+  proving the extension connection was available, but claiming the single
+  freshly discovered Vision tab alone again exceeded the deadline and reset
+  before page access. The existing-tab claim path is now rejected for this
+  task. Recovery uses separate read-only tabs in the same Chrome profile so
+  signed-in cookies can be reused without controlling or altering the user's
+  existing tabs.
+- 2026-08-02T02:28:43.2430255Z: The retained read-only Vision, Cloudflare, and
+  Neon tab bindings survived in local JavaScript state, but their underlying
+  browser session contained no tabs. The first bounded DOM read failed before
+  any page access or provider action. The browser connection remains valid;
+  recovery discards only the stale tab bindings and opens fresh read-only tabs.
+- 2026-08-02T02:35:33.9645634Z: The authenticated Cloudflare root exposed two
+  matching R2 text nodes, but the counted locator expired during bounded
+  element classification before any click. No provider state changed. Recovery
+  discards the locator and rebuilds it from a fresh dashboard snapshot.
+- 2026-08-02T03:20:13.4599351Z: The retained Vision tab binding was no longer
+  defined after the session boundary, so the first boolean-only page check
+  stopped before reading or changing the page. No application, account, or
+  provider state changed. Recovery reinitializes the browser connection and
+  obtains a fresh read-only Vision tab before continuing.
+- 2026-08-02T04:18:55.2729497Z: The retained Chrome binding was no longer
+  defined between the completed Cloudflare name/type check and the attempted
+  Neon read-only check. No page interaction, secret edit, query, or provider
+  mutation occurred. Recovery reinitializes the browser connection and opens
+  fresh provider tabs while preserving only boolean and count evidence.
+- 2026-08-02T04:21:56.3753300Z: The uniquely counted Neon navigation control
+  exceeded its interaction deadline before opening. No SQL editor, query,
+  database value, secret edit, or provider mutation occurred. Dashboard
+  automation stops at this boundary; the owner receives the exact manual path
+  instead of further locator retries.

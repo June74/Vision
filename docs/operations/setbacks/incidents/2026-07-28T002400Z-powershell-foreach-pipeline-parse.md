@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T00:24:00Z
-- **Last observed:** 2026-07-28T00:25:50Z
+- **Last observed:** 2026-08-07T19:18:12Z
 - **Phase/task:** Listener-first restore retry Task 2 implementation
 - **Environment:** Local Phase B worktree
 - **Version/commit:** `ff6a767`
@@ -49,3 +49,10 @@ before any loop body runs.
 ## Verification and related work
 
 Later read-only inspection commands completed with corrected PowerShell syntax.
+
+## Recurrence history
+
+- 2026-08-07T19:18:12Z: A candidate-config inventory repeated the direct
+  `foreach`-to-pipeline parse shape and failed before reading files. The result
+  was discarded; the next probe will collect objects before formatting. No
+  provider or repository state changed.

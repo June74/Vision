@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T20:30:35.2961897Z
-- **Last observed:** 2026-08-01T00:32:30.8793280Z
-- **Phase/task:** Phase B live-acceptance specification finalization
+- **Last observed:** 2026-08-03T17:52:01.2520470Z
+- **Phase/task:** Phase B live-acceptance specification finalization through corrected redeploy controller verification
 - **Environment:** Local Phase B worktree under the managed sandbox
 - **Version/commit:** Written-spec candidate based on `38c35eb`
 
@@ -198,3 +198,58 @@ commit `4420f6d`.
   Git still exited zero and proved 27 cached ledger paths, zero unexpected
   cached path, and a clean cached diff. Only this recurrence and its index row
   require restaging before the separate ledger commit.
+- 2026-08-02T17:34:20.6646398Z: Recurred during reconnect-recovery Task 3
+  repository preflight. Git exited zero and confirmed the expected worktree,
+  branch, base commit, dirty ledger state, and clean Task 3 path set. The
+  optional user-level ignore warning remained advisory; no application,
+  staging, provider, secret, or external state changed.
+- 2026-08-02T17:38:53.2285892Z: Recurred during reconnect-recovery Task 3's
+  read-only cached-path check after the four-file diff review. Git exited zero
+  and confirmed no staged path; the warning remained advisory. Subsequent Git
+  commands use the task-local diagnostic configuration path.
+- 2026-08-02T19:40:34.3659025Z: Recurred during the reconnect-recovery final
+  candidate freeze. The checks exited zero and independently proved the exact
+  ten-path allowlist, zero implementation residue, zero staged paths, clean
+  diff, canonical candidate, and passing security scan. The optional
+  user-level ignore warning remained advisory; no repository or external state
+  changed.
+- 2026-08-02T20:32:19.2240569Z: Recurred during the approved short-artifact
+  preflight. Both repository-local ignore checks exited zero and all path,
+  registration, branch, commit, and object guards returned true before the
+  optional global-ignore permission warning. No project or external state
+  changed.
+- 2026-08-02T21:56:33.6328945Z: Recurred during independent verification of
+  the newly created short LF artifacts. A generic wrapper stopped at the first
+  nonzero Git subcheck after the known global-ignore warning, but did not
+  identify the subcommand. The incomplete result was discarded. The confirmed
+  warning remains sandbox-local; which subcheck returned nonzero is still a
+  hypothesis pending labeled read-only diagnosis. No artifact, repository, or
+  external state changed during verification.
+- 2026-08-02T21:58:18.6675488Z: Labeled diagnosis closed the recurrence. The
+  warning was present, but both tracked-status checks exited zero; the generic
+  wrapper actually stopped on absent persistent `core.eol` configuration.
+  The warning therefore remains a known advisory and was rejected as the cause
+  of the verifier failure.
+- 2026-08-02T22:00:31.9006270Z: Recurred as an advisory during the successful
+  explicit artifact verifier. All requested invariant checks completed and
+  returned true; no workaround, repository mutation, or external action was
+  required.
+- 2026-08-02T22:05:13.2222238Z: Recurred during the post-offline-install
+  immutability check. The command still returned a tracked-clean candidate and
+  byte-identical lockfile; the warning remained advisory and no workaround or
+  external action occurred.
+- 2026-08-02T22:06:15.1618737Z: Recurred during the successful candidate
+  dependency/path immutability check. All requested results remained valid.
+  Future Git-only diagnostics set a task-local `XDG_CONFIG_HOME` instead of
+  consulting the unreadable optional user-level ignore location.
+- 2026-08-02T23:06:09.5268022Z: Recurred as an advisory during the read-only
+  rollback evidence status check because that command omitted the task-local
+  diagnostic configuration. Git exited zero and returned the expected ledger
+  changes; no repository or external state changed. Remaining Git-only checks
+  must set the task-local `XDG_CONFIG_HOME` already established for this task.
+- 2026-08-03T17:52:01.2520470Z: Recurred during the corrected-controller
+  worktree inventory because the Git command again omitted task-local
+  `XDG_CONFIG_HOME`. Git exited zero and returned the requested branch, dirty
+  inventory, and ignored-controller facts before the advisory. No repository
+  or external state changed; subsequent Git-only checks use the in-worktree
+  diagnostic configuration.

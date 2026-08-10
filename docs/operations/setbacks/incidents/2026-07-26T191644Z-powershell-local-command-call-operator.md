@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:16:44.231522Z
-- **Last observed:** 2026-07-26T19:16:44.231522Z
+- **Last observed:** 2026-08-07T19:50:20Z
 - **Phase/task:** Phase B deployment fix tests
 - **Environment:** Local Windows PowerShell
 - **Version/commit:** `codex/phase-b-foundation`
@@ -51,3 +51,7 @@ The corrected invocation ran the RED suite and the later GREEN suite.
 ## Recurrence history
 
 - 2026-07-26T19:16:44.231522Z: First observed.
+- 2026-08-07T19:50:20Z: The Wrangler login command was attempted from the
+  project parent or without a valid local invocation shape, so PowerShell could
+  not find the executable. The exact Phase B worktree and binary both exist;
+  no login, provider, or repository state changed.

@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-28T14:20:00Z
-- **Last observed:** 2026-07-28T14:20:00Z
+- **Last observed:** 2026-08-03T00:36:28.2471845Z
 - **Phase/task:** CI secret-handoff architecture audit
 - **Environment:** Local Windows worktree
 - **Version/commit:** `386b7d3`
@@ -47,3 +47,10 @@ rejects the helper while earlier exact evidence remains available.
 
 The CI handoff report completed with the required repository and provider
 boundary findings.
+
+## Recurrence history
+
+- 2026-08-03T00:36:28.2471845Z: Recurred when a compound array of source
+  ranges evaluated its arithmetic bound with the wrong shape during provider
+  validator inspection. No state changed. Two simple bounded reads then
+  completed the same inspection and closed the recurrence.

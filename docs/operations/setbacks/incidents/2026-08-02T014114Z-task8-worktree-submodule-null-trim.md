@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-08-02T01:41:14.3143298Z
-- **Last observed:** 2026-08-02T01:41:58.8442612Z
-- **Phase/task:** Phase B Task 8 prepublication readiness
+- **Last observed:** 2026-08-02T20:18:10.6580119Z
+- **Phase/task:** Phase B Task 8 prepublication readiness and OAuth reconnect Task 5 resume preflight
 - **Environment:** Local Phase B linked worktree
 - **Version/commit:** Reviewed uncommitted candidate
 
@@ -62,3 +62,11 @@ submodule, is a linked worktree, and is on the expected branch.
 - 2026-08-02T01:41:14.3143298Z: First observed and contained before retry.
 - 2026-08-02T01:41:58.8442612Z: Closed after array-normalized optional output
   produced a clean three-fact worktree result.
+- 2026-08-02T20:17:36.4120918Z: Recurred during the OAuth reconnect resume
+  preflight when the optional superproject result was again trimmed directly.
+  All other read-only state facts were returned and no repository or external
+  state changed. The optional output must be array-normalized before this
+  recurrence can close.
+- 2026-08-02T20:18:10.6580119Z: Closed after the corrected array-normalized
+  check exited zero and proved the expected branch, linked-worktree state, and
+  absence of a superproject.

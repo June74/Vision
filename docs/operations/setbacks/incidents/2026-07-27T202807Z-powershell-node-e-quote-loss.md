@@ -2,10 +2,10 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-27T20:28:07Z
-- **Last observed:** 2026-08-01T03:40:32.1352196Z
-- **Phase/task:** Phase B restore Task 4 diagnosis
-- **Environment:** Approved local shell network path
-- **Version/commit:** normal runtime ref `40872a5`
+- **Last observed:** 2026-08-02T18:18:11.4063877Z
+- **Phase/task:** Phase B Task 8 through OAuth reconnect Task 2 diagnostics
+- **Environment:** Local shell diagnostic path
+- **Version/commit:** `a4376ab` plus the uncommitted Task 2 PostgreSQL proof
 
 ## Symptom
 
@@ -58,3 +58,19 @@ required.
   `execFile` argument array, exactly as the acceptance controller invokes it.
   The rewritten self-test passes 5/5, and a mutation of the canonical-instant
   guard was confirmed to turn precisely one assertion red before restore.
+- 2026-08-02T05:13:53.8273916Z: Recurred when an import-only check passed an
+  inline expression through `tsx.cmd -e`; Windows command parsing rejected the
+  expression before importing the ignored OAuth-tail runner. The filter's
+  separate file-based self-test had already passed 8/8. No network, provider,
+  browser, deployment, credential, key, or application action occurred. The
+  runner will be checked through a file-based TypeScript command instead.
+- 2026-08-02T05:41:08.8049896Z: A later worktree inventory found that the same
+  failed inline-expression attempt had created one 474-byte script-fragment
+  file at the repository root. The fragment was positively attributed by its
+  name and timestamp to that attempt and removed with the patch tool. No user
+  file, source file, provider state, credential, or key was removed or changed.
+- 2026-08-02T18:18:11.4063877Z: Recurred when the reconnect diagnostic tried
+  to reproduce Windows native-stderr promotion through a nested `node -e`
+  expression. Quoting broke before Node executed the intended code. No
+  database, network, provider, credential, or repository state changed. The
+  correction uses ignored file-based scripts with no nested evaluation.

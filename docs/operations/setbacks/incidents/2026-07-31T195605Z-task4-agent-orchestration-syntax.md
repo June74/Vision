@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T19:56:05.9881048Z
-- **Last observed:** 2026-07-31T22:59:20.5223522Z
-- **Phase/task:** Phase B Tasks 4 and 5 agent orchestration
+- **Last observed:** 2026-08-02T04:46:30.1977161Z
+- **Phase/task:** Phase B Tasks 4, 5, 6, and 8 agent orchestration
 - **Environment:** Read-only subagent tool orchestration
 - **Version/commit:** 2cf0ff1
 
@@ -17,11 +17,29 @@ orchestration snippet. JavaScript parsing failed before any nested tool ran.
 No file, provider, environment, network, secret, staging state, or commit
 changed. The read-only review paused until the error was recorded.
 
+## Reproduction conditions
+
+Place syntax from one command language directly in the outer JavaScript
+orchestration layer, or supply a coordination argument outside its schema.
+
+## Safe evidence
+
+Each failure occurred during parsing, schema validation, or dispatch admission
+before the intended nested operation could mutate state.
+
+## Attempts and outcomes
+
+- Invalid mixed-language or out-of-schema calls were rejected.
+- Correct JavaScript and documented coordination fields completed their
+  intended read-only operations.
+
 ## Cause classification
 
 - **Confirmed cause:** Two command-language syntaxes were mixed at the
   orchestration boundary.
 - **Hypotheses:** None remaining.
+- **Rejected hypotheses:** No repository implementation defect caused these
+  orchestration-layer failures.
 - **Known exclusions:** No nested shell command executed.
 
 ## Correction and prevention
@@ -32,6 +50,11 @@ changed. The read-only review paused until the error was recorded.
   command.
 - **Owner:** Codex diagnostics review subagent.
 - **Next diagnostic step:** None; resume with valid JavaScript orchestration.
+
+## Verification and related work
+
+The corrected wrappers and coordination calls completed through their
+documented invocation shapes without changing provider state.
 
 ## Recurrence history
 
@@ -51,3 +74,12 @@ changed. The read-only review paused until the error was recorded.
   was dispatched just before the implementation lane's final completion freed
   a team slot. The dispatch was rejected before review or mutation and is
   retried only after formal lane completion.
+- 2026-08-02T04:30:22.6388045Z: Recurred when the Task 8 read-only verification
+  wrapper referenced an undeclared JavaScript identifier while constructing a
+  local path. The wrapper stopped before the shell command ran; no file,
+  repository, browser, or provider state changed. The retry used a literal path
+  and completed successfully.
+- 2026-08-02T04:46:30.1977161Z: Recurred when a Task 8 record-verification
+  wrapper left one PowerShell token in the outer JavaScript layer. Parsing
+  stopped before any nested check ran or state changed. The retry removes the
+  stray outer-language token.

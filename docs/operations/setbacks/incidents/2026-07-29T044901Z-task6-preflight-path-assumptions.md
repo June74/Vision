@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-29T04:46:00Z
-- **Last observed:** 2026-07-31T23:18:47.1299665Z
+- **Last observed:** 2026-08-10T22:54:37Z
 - **Phase/task:** Phase B acceptance instrumentation Task 7 final-fix wave 3
 - **Environment:** Local Phase B linked worktree
 - **Version/commit:** `1c7f89b`
@@ -86,3 +86,7 @@ path.
   The reviewer therefore reported two absent references; bounded controller
   checks confirmed both required singular-path files exist. No implementation
   or external state changed, and the corrected paths are supplied for re-review.
+- 2026-08-10T22:54:37Z: Recurred during read-only deployment-list
+  reconciliation when a probe assumed this PowerShell version supported
+  `ConvertFrom-Json -AsHashtable`. Parameter binding failed before any
+  response was interpreted; no repository or provider state changed.
