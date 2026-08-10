@@ -3,6 +3,7 @@
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
 | [SB-20260810-213050-c1911f8-worker-sandbox-warning](incidents/2026-08-10T213050Z-c1911f8-worker-sandbox-warning.md) | contained | 2026-08-10T21:30:50Z | Phase B exact uploaded-artifact verification | Worker suite passed but Wrangler emitted sandbox filesystem warnings |
+| [SB-20260810-233509-task8-driver-repository-env-missing](incidents/2026-08-10T233509Z-task8-driver-repository-env-missing.md) | contained | 2026-08-10T23:35:09Z | Phase B monitored candidate acceptance | Controller child driver lacked its non-secret repository selector |
 | [SB-20260810-232934-docs-diff-check-trailing-whitespace](incidents/2026-08-10T232934Z-docs-diff-check-trailing-whitespace.md) | contained | 2026-08-10T23:29:34Z | Phase B documentation freeze | Cached documentation check found one trailing-whitespace line |
 | [SB-20260810-225011-phase-b-preflight-probe-boundary](incidents/2026-08-10T225011Z-phase-b-preflight-probe-boundary.md) | contained | 2026-08-10T22:50:11Z | Phase B live-acceptance preflight | Read-only preflight used the wrong Wrangler root and hit the restricted network boundary |
 | [SB-20260810-232457-preflight-status-probe-parse](incidents/2026-08-10T232457Z-preflight-status-probe-parse.md) | contained | 2026-08-10T23:24:57Z | Phase B docs-freeze preflight | Read-only status probes misused PowerShell wildcard and had a syntax typo |
