@@ -264,3 +264,7 @@ then commit and push the listener repair before another monitored live attempt.
   cancelled and settled as cancelled; no candidate, rollback, traffic,
   Cloudflare, secret, database, or calendar state changed. The repeated
   boundary is being diagnosed before another retry.
+- 2026-08-11T03:15:00Z: A read-only deployments-list probe was not executed
+  because the local PowerShell version rejected the null-coalescing operator
+  used in the probe wrapper. No provider command ran and no state changed; the
+  wrapper is being rewritten with syntax supported by this host.
