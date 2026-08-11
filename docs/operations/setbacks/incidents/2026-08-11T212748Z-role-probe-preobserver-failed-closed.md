@@ -203,3 +203,7 @@ secret, or calendar mutation occurred.
   path and a directory path, so PowerShell reported two input-path errors after
   the relevant matches had already been collected. No files, provider state,
   or secrets changed; the search was rerun with existing file paths only.
+- `2026-08-11T23:39:19Z`: while refreshing the ignored acceptance input after
+  the docs commit, an abbreviated commit was expanded incorrectly. The value
+  was corrected immediately from `git rev-parse HEAD`; no workflow or provider
+  action used the bad pin.
