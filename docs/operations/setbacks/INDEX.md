@@ -528,6 +528,8 @@
 | [SB-20260810-235231-task8-observer-resolution-timeout](incidents/2026-08-10T235231Z-task8-observer-resolution-timeout.md) | contained | 2026-08-11T15:24:21Z | Phase B monitored candidate acceptance | Observer timing and listener diagnosis required bounded retries |
 | [SB-20260811-032823-versions-view-process-start](incidents/2026-08-11T032823Z-versions-view-process-start.md) | contained | 2026-08-11T03:28:23Z | Phase B monitored candidate acceptance diagnosis | Read-only version-detail probe failed before process start |
 | [SB-20260811-033227-metadata-shape-probe-syntax](incidents/2026-08-11T033227Z-metadata-shape-probe-syntax.md) | contained | 2026-08-11T03:32:27Z | Phase B monitored candidate acceptance diagnosis | Read-only metadata wrapper failed PowerShell parsing |
+| [SB-20260811-153223-browser-visibility-api-mismatch](incidents/2026-08-11T153223Z-browser-visibility-api-mismatch.md) | contained | 2026-08-11T15:32:23Z | Phase B Google account selection | Browser runtime did not expose the attempted visibility method |
+| [SB-20260811-153314-git-lock-push-blocked](incidents/2026-08-11T153314Z-git-lock-push-blocked.md) | contained | 2026-08-11T15:33:14Z | Phase B setback-log publication | Linked-worktree Git lock and restricted network blocked publication |
 
 ## Legacy history
 
