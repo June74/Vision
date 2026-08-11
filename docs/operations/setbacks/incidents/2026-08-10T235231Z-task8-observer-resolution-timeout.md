@@ -387,3 +387,9 @@ then commit and push the listener repair before another monitored live attempt.
   script named `ci`; the safe result was therefore invalidated before it could
   be used. No source, provider, deployment, secret, key, database, or calendar
   state changed. The actual script is being rerun explicitly as `pnpm run ci`.
+- 2026-08-11T13:38:11Z: With the fresh full-CI result accepted, the read-only
+  baseline controller stopped at `candidate_artifact_invalid` while checking
+  the pinned disposable artifact. No provider request reached a mutation
+  boundary and no deployment, traffic, rollback, secret, key, database, or
+  calendar state changed; the local artifact identity/build checks are being
+  inspected before another retry.
