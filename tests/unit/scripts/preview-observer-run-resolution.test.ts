@@ -810,6 +810,26 @@ describe("preview observer run resolution", () => {
     }, deps)).resolves.toBe("41");
   });
 
+  it("accepts a bounded provider clock skew before the local dispatch start", async () => {
+    const skewedRun = {
+      ...run(),
+      created_at: "2026-07-30T17:59:58Z",
+    };
+    const deps = dependencies(
+      [skewedRun],
+      [job("Capture foundation_probe signal")],
+    );
+    deps.readRun = vi.fn(async () => skewedRun);
+
+    await expect(resolvePreviewObserverRun({
+      expectedWorkflow: ".github/workflows/preview.yml",
+      expectedCommit: SHA,
+      dispatchStartedAt: START,
+      dispatchCompletedAt: END,
+      family: "foundation_probe",
+    }, deps)).resolves.toBe("41");
+  });
+
   it("continues pagination through the dispatch lower-bound second and exposes a same-second duplicate", async () => {
     let monotonic = 0;
     const lowerBoundBucket = Array.from({ length: 100 }, (_, index) => ({
@@ -1678,7 +1698,7 @@ describe("preview observer run resolution", () => {
     [[run("41"), run("42")]],
     [[{ ...run(), head_sha: "b".repeat(40) }]],
     [[{ ...run(), event: "push" }]],
-    [[{ ...run(), created_at: "2026-07-30T17:59:59Z" }]],
+    [[{ ...run(), created_at: "2026-07-30T17:59:55Z" }]],
     [[{ ...run(), created_at: "2026-07-30T18:00:01.001Z" }]],
     [[{ ...run(), id: "0" }]],
     [[{ ...run(), id: "01" }]],

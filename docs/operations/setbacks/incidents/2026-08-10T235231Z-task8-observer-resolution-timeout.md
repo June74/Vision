@@ -113,3 +113,81 @@ then commit and push the listener repair before another monitored live attempt.
   ownership guard under the restricted sandbox identity. No global Git
   configuration was changed and no candidate or provider state changed; the
   next check uses a per-command safe-directory allowance.
+- 2026-08-11T01:48:00Z: The first fresh monitored retry after the unrelated
+  terminal-family repair returned `failed_closed`. A safe workflow/job
+  reconciliation is required to identify the exact stage; no further retry is
+  being started until that evidence is classified.
+- 2026-08-11T01:52:00Z: A read-only mapping inspection omitted the nested
+  mappings directory and then attempted to read a null path. No provider,
+  candidate, repository, secret, database, or calendar state changed.
+- 2026-08-11T01:54:00Z: A bounded source inspection used invalid PowerShell
+  variable interpolation and failed before reading project files. No
+  application, candidate, provider, secret, database, or calendar state
+  changed.
+- 2026-08-11T01:55:00Z: A follow-up inspection initially targeted the parent
+  checkout instead of the Phase B linked worktree and found no incident file.
+  No files were changed and no application, candidate, provider, secret,
+  database, or calendar state changed.
+- 2026-08-11T01:56:00Z: A bounded test inspection used an invalid PowerShell
+  `for` initializer and failed before reading the test file. No application,
+  candidate, provider, secret, database, or calendar state changed.
+- 2026-08-11T01:58:00Z: A read-only GitHub workflow metadata probe returned no
+  usable result in the current shell before any provider data was displayed.
+  No run identifier, payload, secret, application, candidate, provider,
+  database, or calendar state changed; the existing repository resolver path
+  remains the source of truth for the diagnosis.
+- 2026-08-11T02:00:00Z: A read-only executable-availability check used an
+  empty PowerShell pipeline after a loop and failed before invoking anything.
+  No application, candidate, provider, secret, database, or calendar state
+  changed.
+- 2026-08-11T02:02:00Z: A read-only controller-test inspection guessed a
+  nonexistent filename and failed before reading project files. No
+  application, candidate, provider, secret, database, or calendar state
+  changed.
+- 2026-08-11T02:04:00Z: A bounded source search passed an unsupported
+  PowerShell `Select-String` option and failed before reading source files.
+  No application, candidate, provider, secret, database, or calendar state
+  changed.
+- 2026-08-11T02:06:00Z: A local candidate-config summary used an empty
+  PowerShell pipeline after a loop and failed before reading config files. No
+  application, candidate, provider, secret, database, or calendar state
+  changed.
+- 2026-08-11T02:08:00Z: A read-only live resolver reproduction did not return
+  a usable reduced result through the shell wrapper, so its outcome is
+  treated as inconclusive. No command output, provider payload, application,
+  candidate, provider, secret, database, or calendar state was exposed or
+  changed.
+- 2026-08-11T02:10:00Z: A safe public-clock comparison measured the local
+  machine approximately 1.33 seconds ahead of GitHub's API clock. The
+  resolver's 999-millisecond provider-second allowance is therefore too small
+  to cover the observed dispatch timestamp skew. No application, candidate,
+  provider, secret, database, or calendar state changed; a local regression is
+  being added before any live retry.
+- 2026-08-11T02:12:00Z: The direct `pnpm exec vitest` shortcut was unavailable
+  in the linked worktree and failed before running the new regression. No
+  application, candidate, provider, secret, database, or calendar state
+  changed; the repository's existing test script will be used instead.
+- 2026-08-11T02:14:00Z: The full unit-suite wrapper returned only the Vitest
+  startup banner, and a follow-up Windows process inspection was denied by
+  local permissions. No test result is inferred from that incomplete capture;
+  no application, candidate, provider, secret, database, or calendar state
+  changed.
+- 2026-08-11T02:18:00Z: The complete unit suite provided a valid RED result
+  for the new provider-clock-skew regression, and also exposed a regression
+  in the prior safe-tail repair: calendar-maintenance-only mode rejected its
+  own valid maintenance evidence. No application, candidate, provider,
+  secret, database, or calendar state changed; both failures are being fixed
+  locally before any live retry.
+- 2026-08-11T02:20:00Z: After adding the bounded clock-skew allowance, one
+  existing stale-run fixture became valid because it was only one second
+  before dispatch. The fixture was moved outside the new four-second envelope
+  so the stale-run fail-closed contract remains explicit; no application,
+  candidate, provider, secret, database, or calendar state changed.
+- 2026-08-11T02:23:00Z: The worker suite passed, while Wrangler again emitted
+  its known local log-file EPERM and linked-worktree static-analysis warnings.
+  The warnings were non-fatal and no application, candidate, provider, secret,
+  database, or calendar state changed.
+- 2026-08-11T02:24:00Z: The preview build and deploy-configuration check
+  passed; the build again emitted only the known Wrangler local log-file EPERM
+  warning. No application, candidate, provider, secret, database, or calendar
+  state changed.

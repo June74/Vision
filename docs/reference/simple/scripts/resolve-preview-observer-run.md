@@ -21,10 +21,11 @@ provider snapshot contradicts itself and fails immediately.
 
 ## `listRelevantRuns`
 
-Walks newest-first pages until a whole provider-second bucket is entirely
-before the millisecond dispatch start or a short final page proves completion.
-Overlapping boundary seconds and same-second duplicates remain visible. Ten
-full relevant pages fail closed rather than silently truncating.
+Walks newest-first pages until a whole provider-second bucket, plus the fixed
+three-second local/provider clock-skew allowance, is entirely before the
+millisecond dispatch start or a short final page proves completion. Overlapping
+boundary seconds and same-second duplicates remain visible. Ten full relevant
+pages fail closed rather than silently truncating.
 
 ## `readPreviewSignalObserverState`
 
@@ -140,8 +141,9 @@ Requires exact job and step keys before copying bounded metadata.
 ## `matchesRunIdentity`
 
 Checks immutable workflow attribution and overlap between the provider's
-whole-second creation bucket and the closed millisecond dispatch interval.
-Run state is checked separately so an attributed terminal run fails promptly.
+whole-second creation bucket, a fixed three-second clock-skew allowance, and
+the closed millisecond dispatch interval. Run state is checked separately so an
+attributed terminal run fails promptly.
 
 ## `validateResolutionInput`
 

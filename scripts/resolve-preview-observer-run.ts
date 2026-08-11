@@ -17,6 +17,10 @@ const RESOLUTION_MILLISECONDS = 120_000;
 // 120-second stable-listener window before the outer controller aborts.
 const TERMINAL_POLL_SETTLEMENT_MILLISECONDS = 60_000;
 const PROVIDER_TIMESTAMP_UNCERTAINTY_MILLISECONDS = 999;
+// GitHub reports whole-second creation times while the local controller uses
+// its own wall clock. Keep the measured local/provider skew bounded separately
+// from the provider-second truncation allowance.
+const DISPATCH_CLOCK_SKEW_MILLISECONDS = 3_000;
 const CONTEXT_INSTANT_PATTERN =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const PROVIDER_INSTANT_PATTERN =
@@ -244,7 +248,12 @@ async function listRelevantRuns(
       }
       previousCreatedAt = createdAt;
       runs.push(run);
-      if (createdAt + 999 < dispatchStartedAt.getTime()) {
+      if (
+        createdAt +
+          PROVIDER_TIMESTAMP_UNCERTAINTY_MILLISECONDS +
+          DISPATCH_CLOCK_SKEW_MILLISECONDS <
+        dispatchStartedAt.getTime()
+      ) {
         crossedDispatchStart = true;
       }
     }
@@ -1054,7 +1063,10 @@ function matchesRunIdentity(
   },
 ): boolean {
   const created = canonicalDate(run.createdAt).getTime();
-  const createdBucketEndsAt = created + 999;
+  const createdBucketEndsAt =
+    created +
+    PROVIDER_TIMESTAMP_UNCERTAINTY_MILLISECONDS +
+    DISPATCH_CLOCK_SKEW_MILLISECONDS;
   return (
     run.event === "workflow_dispatch" &&
     run.headSha === input.expectedCommit &&

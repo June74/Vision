@@ -26,10 +26,11 @@ poll as contradictory provider metadata.
 ## `listRelevantRuns`
 
 Requests pages 1 through at most 10, validates non-increasing creation time,
-and stops only after a short page or a provider-second bucket whose end is
-strictly before the millisecond dispatch start. This keeps every overlapping
-boundary bucket and same-second duplicate visible. Reaching the cap with a full
-relevant page is treated as truncation and fails closed.
+and stops only after a short page or a provider-second bucket whose end, plus
+the fixed three-second local/provider clock-skew allowance, is strictly before
+the millisecond dispatch start. This keeps every overlapping boundary bucket
+and same-second duplicate visible. Reaching the cap with a full relevant page
+is treated as truncation and fails closed.
 
 ## `readPreviewSignalObserverState`
 
@@ -170,10 +171,11 @@ invoking accessors.
 ## `matchesRunIdentity`
 
 Requires `workflow_dispatch`, the reviewed SHA, exact workflow path, and
-overlap between the whole provider-created second and the inclusive millisecond
-dispatch interval. The caller separately admits only queued or in-progress
-state with null conclusion, allowing attributed terminal failure to be detected
-without waiting for the discovery horizon.
+overlap between the whole provider-created second plus the fixed three-second
+clock-skew allowance and the inclusive millisecond dispatch interval. The
+caller separately admits only queued or in-progress state with null
+conclusion, allowing attributed terminal failure to be detected without
+waiting for the discovery horizon.
 
 ## `validateResolutionInput`
 
