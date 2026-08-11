@@ -426,3 +426,8 @@ then commit and push the listener repair before another monitored live attempt.
   candidate-acceptance result. No candidate-specific challenge file appeared
   during the bounded window. The provider state is being checked read-only
   before any retry; no key rotation is authorized or performed.
+- 2026-08-11T15:24:21Z: During the next monitored run, the candidate schedule
+  proof writer attempted to resolve the not-yet-created evidence file and
+  stopped before writing it. The controller remained waiting on its fresh
+  challenge; no provider, deployment, traffic, rollback, key, or secret state
+  changed. The retry writes through a validated parent directory path.
