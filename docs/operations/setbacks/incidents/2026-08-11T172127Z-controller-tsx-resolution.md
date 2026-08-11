@@ -2,7 +2,7 @@
 
 - Incident ID: `SB-20260811-172127-controller-tsx-resolution`
 - First observed: `2026-08-11T17:21:27Z`
-- Last observed: `2026-08-11T17:59:10Z`
+- Last observed: `2026-08-11T21:05:11Z`
 - Status: `contained`
 - Phase/task: Phase B role-probe acceptance preparation
 - Environment: Windows PowerShell, phase-b-foundation linked worktree
@@ -45,6 +45,10 @@ correction is to invoke Vitest without that option.
 A follow-up PowerShell diagnostic attempted arithmetic on a one-element array
 instead of a scalar timestamp. It produced no external request or mutation;
 the correction is to select and cast one timestamp before subtraction.
+
+A later PowerShell inspection attempted to pipe a `foreach` statement directly,
+which is invalid syntax in this shell. It produced no external request or
+mutation; collect the loop output before converting it to JSON.
 
 ## Next step
 
