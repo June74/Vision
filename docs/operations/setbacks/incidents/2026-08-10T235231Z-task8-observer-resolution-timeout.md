@@ -316,3 +316,8 @@ then commit and push the listener repair before another monitored live attempt.
   the same empty-pipeline wrapper mistake and stopped before reading the
   worktree metadata. No files or external state changed; subsequent checks use
   a single-object command without a trailing pipeline.
+- 2026-08-11T03:45:04Z: The approved read-only baseline controller invocation
+  used the PowerShell Core executable name, which is not installed on this
+  host, and stopped before the controller started. No Wrangler/provider request
+  or state change occurred; the native Windows PowerShell executable is being
+  used for the contained retry.
