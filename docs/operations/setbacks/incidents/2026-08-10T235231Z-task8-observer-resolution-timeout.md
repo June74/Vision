@@ -409,3 +409,10 @@ then commit and push the listener repair before another monitored live attempt.
   either disposable worktree. The already verified CI result and generated
   configs remain valid; no files, provider, secret, key, database, or calendar
   state changed. The next summary will use precomputed quoted path variables.
+- 2026-08-11T14:54:48Z: The fresh read-only baseline stopped at
+  `candidate_artifact_invalid` before any provider request. The disposable
+  worktrees and exact-tip CI result were at the new pushed tip, but the
+  gitignored controller pins still referenced the prior documentation tip. No
+  deployment, traffic, rollback, provider, secret, key, database, or calendar
+  state changed. The pins are being updated to the exact verified tip before a
+  bounded retry.
