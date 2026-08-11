@@ -363,3 +363,11 @@ then commit and push the listener repair before another monitored live attempt.
   worktree; no files, provider state, secrets, keys, database, or calendar
   state changed. The same read-only-to-local-repair step is being retried only
   through the approved external boundary.
+- 2026-08-11T13:16:08Z: The fresh candidate artifact passed typechecking and
+  build/config checks, but the full unit suite recorded 1 failure in
+  `preview-rollback-lifecycle.test.ts` (101 files passed, 1 skipped). The
+  file-based closure-chain child-process test exceeded Vitest's 5-second test
+  timeout while launching its local verifier; no provider, deployment, secret,
+  key, database, or calendar state changed. A bounded targeted rerun with a
+  larger test timeout is being used to distinguish local startup slowness from
+  a functional regression.
