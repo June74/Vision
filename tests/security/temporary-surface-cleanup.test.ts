@@ -22,8 +22,8 @@ const STRICT_CLEANUP =
 
 const REVIEWED_CLASSIFICATION_CONTRACT = {
   all: {
-    count: 184,
-    sha256: "1424f988b5c3676af9ed0eef60e11aa549a2165d2d435ad5d83ca783cc67a3ba",
+    count: 185,
+    sha256: "271e8c03cc79a192dd291ac328624f946162fd534794d5865b565a2f211737ad",
   },
   delete_dedicated: {
     count: 98,
@@ -38,8 +38,8 @@ const REVIEWED_CLASSIFICATION_CONTRACT = {
     sha256: "d0b0177caaa6561ef51ab83e5ffb524e3502da5fc7511f7731b8f571fb72f20e",
   },
   retain_historical: {
-    count: 12,
-    sha256: "443e30443fa2c463964b3a47f93964a84fc11cc09e8b91d5e877f34c43c2d757",
+    count: 13,
+    sha256: "2843a388cca5a731c208fb4775eec17c837e1edcebb3f3fc1abd83c1474020ef",
   },
 } as const;
 
@@ -403,6 +403,23 @@ const ACTIVE_OPERATIONS_SHARED_PATHS =
 
 const RETAINED_HISTORICAL_OPERATIONS = [
   {
+    path: "docs/operations/cloudflare-support-review.md",
+    anchors: [
+      {
+        name: "support review heading",
+        pattern: /# Cloudflare support review/u,
+      },
+      {
+        name: "withdrawn status",
+        pattern: /\*\*Status:\*\* Withdrawn/u,
+      },
+      {
+        name: "correction section",
+        pattern: /## Correction before any submission/u,
+      },
+    ],
+  },
+  {
     path: "docs/operations/calendar-setup-evidence.md",
     anchors: [
       {
@@ -675,6 +692,11 @@ const EXPECTED_ACTIVE_OPERATIONS_ANCHOR_NAMES = {
 } as const;
 
 const EXPECTED_HISTORICAL_OPERATIONS_ANCHOR_NAMES = {
+  "docs/operations/cloudflare-support-review.md": [
+    "support review heading",
+    "withdrawn status",
+    "correction section",
+  ],
   "docs/operations/calendar-setup-evidence.md": [
     "calendar evidence heading",
     "redacted evidence template",
@@ -1158,7 +1180,7 @@ describe("post-acceptance temporary surface cleanup", () => {
       delete_dedicated: 98,
       unwind_shared: 51,
       retain_permanent: 23,
-      retain_historical: 12,
+      retain_historical: 13,
     });
 
     for (const [index, reviewedEntry] of
@@ -1425,7 +1447,7 @@ describe("post-acceptance temporary surface cleanup", () => {
       [],
     );
     expect(ACTIVE_OPERATIONS_SHARED_PATHS).toHaveLength(4);
-    expect(RETAINED_HISTORICAL_OPERATIONS_PATHS).toHaveLength(8);
+    expect(RETAINED_HISTORICAL_OPERATIONS_PATHS).toHaveLength(9);
     expect(PERMANENT_OPERATIONS_REFERENCE_PATHS).toHaveLength(4);
     expect(ACTIVE_OPERATIONS_PATHS).toHaveLength(8);
     expect(ACTIVE_OPERATIONS_PORTABLE_RESIDUE_PATTERNS).toHaveLength(16);
@@ -1478,6 +1500,7 @@ describe("post-acceptance temporary surface cleanup", () => {
       ),
     ).toEqual({
       "docs/operations/calendar-setup-evidence.md": 2,
+      "docs/operations/cloudflare-support-review.md": 3,
       "docs/operations/cloud-integration-debugging-retrospective.md": 3,
       "docs/operations/credential-change-log.md": 4,
       "docs/operations/phase-b-evidence.md": 3,

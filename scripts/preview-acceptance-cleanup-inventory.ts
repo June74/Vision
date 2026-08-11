@@ -200,6 +200,7 @@ const LITERAL_PHASE_B_ACCEPTANCE_PATH_MAP = [
   ["docs/superpowers/plans/2026-07-28-phase-b-acceptance-instrumentation.md", "retain_historical"],
   ["docs/superpowers/specs/2026-07-28-phase-b-acceptance-instrumentation-design.md", "retain_historical"],
   ["docs/operations/phase-b-evidence.md", "retain_historical"],
+  ["docs/operations/cloudflare-support-review.md", "retain_historical"],
   ["docs/operations/calendar-setup-evidence.md", "retain_historical"],
   ["docs/operations/setbacks/INDEX.md", "retain_historical"],
 ] as const satisfies readonly (readonly [string, PhaseBAcceptancePathDisposition])[];
@@ -224,9 +225,9 @@ export const UNWIND_SHARED_PATHS = pathsFor("unwind_shared");
 export const RETAIN_PERMANENT_PATHS = pathsFor("retain_permanent");
 export const RETAIN_HISTORICAL_PATHS = pathsFor("retain_historical");
 
-const REVIEWED_CLASSIFICATION_COUNT = 184;
+const REVIEWED_CLASSIFICATION_COUNT = 185;
 const REVIEWED_CLASSIFICATION_SHA256 =
-  "1424f988b5c3676af9ed0eef60e11aa549a2165d2d435ad5d83ca783cc67a3ba";
+  "271e8c03cc79a192dd291ac328624f946162fd534794d5865b565a2f211737ad";
 
 /** Proves a candidate is the exact reviewed Task 1-8 path universe. */
 export function validateReviewedPhaseBAcceptanceClassification(

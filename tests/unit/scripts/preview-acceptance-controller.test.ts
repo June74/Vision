@@ -1720,7 +1720,7 @@ describe("preview acceptance controller decisive hardening", () => {
 
     expect(resolutionStartedAt).not.toBeNull();
     expect(terminalMetadataDeadline).toBe(
-      (resolutionStartedAt as unknown as number) + 125_000,
+      (resolutionStartedAt as unknown as number) + 150_000,
     );
   });
 

@@ -31,8 +31,11 @@ import {
 const FAILURE = "Preview acceptance controller failed closed.";
 const POLL_MILLISECONDS = 5_000;
 const UNIQUENESS_MILLISECONDS = 120_000;
+// The resolver needs a wider terminal metadata margin than one poll interval
+// because GitHub API reads can consume several seconds near the 120-second
+// stable-listener boundary.
 const OBSERVER_RESOLUTION_MILLISECONDS =
-  UNIQUENESS_MILLISECONDS + POLL_MILLISECONDS;
+  UNIQUENESS_MILLISECONDS + 30_000;
 const OBSERVER_LISTENER_MILLISECONDS = 46 * 60_000;
 const WORKFLOW_SETTLEMENT_MARGIN_MILLISECONDS = 60_000;
 const CANDIDATE_WORKFLOW_MILLISECONDS =
