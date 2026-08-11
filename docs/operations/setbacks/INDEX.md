@@ -540,6 +540,7 @@
 | [SB-20260811-161958-disposable-worktree-scan](incidents/2026-08-11T161958Z-disposable-worktree-scan.md) | contained | 2026-08-11T16:19:58Z | Phase B restore-drill preparation | Recursive disposable-worktree scan hit broken dependency junctions |
 | [SB-20260811-162249-wrangler-secret-list-permission](incidents/2026-08-11T162249Z-wrangler-secret-list-permission.md) | contained | 2026-08-11T16:22:49Z | Phase B encrypted restore-drill preparation | Wrangler secret-list probe could not write its local diagnostic log |
 | [SB-20260811-162802-restore-branch-absent](incidents/2026-08-11T162802Z-restore-branch-absent.md) | contained | 2026-08-11T16:28:02Z | Phase B encrypted restore-drill preparation | Historical disposable-branch state does not match the current Neon project |
+| [SB-20260811-171338-restore-secret-presence-mismatch](incidents/2026-08-11T171338Z-restore-secret-presence-mismatch.md) | contained | 2026-08-11T17:13:38Z | Phase B encrypted restore-drill preparation | Required restore secret names are absent from the current Worker inventory |
 
 ## Legacy history
 
