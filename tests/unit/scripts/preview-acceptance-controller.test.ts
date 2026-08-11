@@ -2166,7 +2166,7 @@ describe("preview acceptance controller decisive hardening", () => {
         await Promise.resolve();
       }
       expect(candidateDeadline).not.toBeNull();
-      await vi.advanceTimersByTimeAsync(120_000);
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
 
       await rejection;
       expect(candidateDispatchCount).toBe(1);
@@ -2191,6 +2191,75 @@ describe("preview acceptance controller decisive hardening", () => {
       expect(
         fixture.dispatches.map(({ operation }) => operation).slice(-2),
       ).toEqual(["rollback", "close_rollback"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps observer and candidate correlation open beyond the generic two-minute boundary", async () => {
+    vi.useFakeTimers();
+    try {
+      const fixture = harness();
+      const originalDispatch = vi
+        .mocked(fixture.dependencies.dispatch)
+        .getMockImplementation();
+      if (originalDispatch === undefined) {
+        throw new Error("missing harness dispatch implementation");
+      }
+      let observerDeadline: number | null = null;
+      let candidateDeadline: number | null = null;
+      let candidateResolved = false;
+      const reconcileCandidateDispatch = vi.fn(async () => null);
+      vi.mocked(fixture.dependencies.dispatch).mockImplementation(
+        async (operation, context, boundary) => {
+          if (operation === "observe") {
+            observerDeadline = boundary.deadlineMonotonic;
+            return originalDispatch(operation, context, boundary);
+          }
+          if (!operation.startsWith("deploy_")) {
+            return originalDispatch(operation, context, boundary);
+          }
+          candidateDeadline = boundary.deadlineMonotonic;
+          return new Promise<{ readonly runRef: string }>((resolvePromise) => {
+            setTimeout(() => {
+              candidateResolved = true;
+              resolvePromise({ runRef: "202" });
+            }, 120_001);
+          });
+        },
+      );
+      Object.assign(fixture.dependencies, { reconcileCandidateDispatch });
+
+      const run = runPreviewAcceptanceController(
+        {
+          family: "foundation_probe",
+          reviewedCommit: SHA,
+          expiresAt: new Date(START.getTime() + 10 * 60_000).toISOString(),
+          expectation: { kind: "foundation_succeeded" },
+        },
+        fixture.dependencies,
+      );
+      for (
+        let pendingTurns = 0;
+        candidateDeadline === null && pendingTurns < 32;
+        pendingTurns += 1
+      ) {
+        await Promise.resolve();
+      }
+      expect(observerDeadline).not.toBeNull();
+      expect(candidateDeadline).not.toBeNull();
+
+      const completion = run.then(
+        () => "resolved" as const,
+        () => "rejected" as const,
+      );
+      await vi.advanceTimersByTimeAsync(120_001);
+      expect(await completion).toBe("resolved");
+
+      expect(candidateResolved).toBe(true);
+      expect(observerDeadline as unknown as number).toBeGreaterThan(120_000);
+      expect(candidateDeadline as unknown as number).toBeGreaterThan(120_000);
+      expect(reconcileCandidateDispatch).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }

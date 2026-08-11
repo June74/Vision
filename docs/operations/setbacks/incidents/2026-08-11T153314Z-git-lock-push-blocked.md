@@ -2,7 +2,7 @@
 
 - Incident ID: `SB-20260811-153314-git-lock-push-blocked`
 - First observed: `2026-08-11T15:33:14Z`
-- Last observed: `2026-08-11T15:33:14Z`
+- Last observed: `2026-08-11T21:23:33Z`
 - Status: `contained`
 - Phase/task: Phase B setback-log publication
 - Environment: Windows linked Git worktree
@@ -44,3 +44,11 @@ outside the restricted write/network boundary.
 
 `git status` shows only the two intended setback documentation paths. The
 parent worktree lock path does not currently exist.
+
+## Recurrence
+
+- `2026-08-11T21:23:33Z`: staging the correlation-wait repair and its safe
+  documentation failed before staging because the linked worktree metadata
+  directory denied creation of its `index.lock`. A read-only existence check
+  confirmed that no lock file was present; no files were staged and no remote
+  or provider action ran.

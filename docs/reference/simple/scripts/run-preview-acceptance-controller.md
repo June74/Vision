@@ -31,11 +31,13 @@ before every dispatch.
 ## `dispatch`
 
 Serializes dispatch through the canonical closed context and accepts only one
-positive run reference. If a candidate or rollback receipt is uncertain,
-reconciliation uses a fresh bounded window and the exact frozen
-operation/context/commit tuple. A timed-out candidate is sent directly through
-rollback. An uncertain rollback is never retried; an exactly reconciled one is
-attributed, settled, closed, and then reported failed closed.
+positive run reference. Observer and candidate receipts receive a dedicated
+five-minute correlation window, bounded by the buffered candidate expiry;
+rollback and closure keep their strict cleanup windows. If a candidate or
+rollback receipt is uncertain, reconciliation uses a fresh bounded window and
+the exact frozen operation/context/commit tuple. A timed-out candidate is sent
+directly through rollback. An uncertain rollback is never retried; an exactly
+reconciled one is attributed, settled, closed, and then reported failed closed.
 
 ## `resolveObserver`
 
@@ -315,6 +317,11 @@ caller selects the maximum duration for the workflow stage.
 
 Chooses the tighter ordinary pre-signal call deadline before a signal is proven.
 
+## `nextDispatchCorrelationDeadline`
+
+Chooses an expiry-bounded five-minute receipt window for observer and candidate
+dispatches. It does not change candidate-intent validation or cleanup limits.
+
 ## `nextObserverResolutionDeadline`
 
 Allows the resolver's full two-minute discovery window plus its final polling
@@ -323,16 +330,11 @@ margin, without crossing the buffered candidate expiry.
 ## `nextCandidateWorkflowDeadline`
 
 Allows candidate deployment confirmation to use its workflow-aware duration,
-bounded by the candidate's buffered expiry. The longest successful family is
-restore: 120 seconds for the initial observer dispatch, 125 seconds to resolve
-the observer, 120 seconds each for restore admission, candidate dispatch, and
-attribution, 1,860 seconds for candidate confirmation, 120 seconds for signal
-detection, and 125 seconds for uniqueness. The post-dispatch stages total
-2,590 seconds; including observer dispatch gives 2,710 seconds (45 minutes 10
-seconds), leaving 50 seconds inside the 46-minute listener without changing
-any stage deadline. This total counts successful stage settlement only;
-timeout-abort cleanup belongs to a failed attempt and does not extend the
-valid success lifetime.
+bounded by the candidate's buffered expiry. Observer and candidate receipt
+windows are documented separately by `nextDispatchCorrelationDeadline`;
+restore admission and candidate attribution retain their 120-second limits.
+This total counts successful stage settlement only; timeout-abort cleanup
+belongs to a failed attempt and does not extend the valid success lifetime.
 
 ## `nextWorkflowDeadline`
 

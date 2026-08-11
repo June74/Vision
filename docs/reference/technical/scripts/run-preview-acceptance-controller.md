@@ -36,11 +36,14 @@ reference and requires its sole returned SHA to equal the reviewed commit.
 
 Rechecks the remote tip in the immediate pre-dispatch hook, serializes one
 canonical acceptance context, and admits only an exact positive-decimal
-`runRef` driver response. Candidate and rollback uncertainty are reconciled
-under a new bounded deadline with a frozen exact operation/context/commit
-tuple. A timed-out candidate is marked for mandatory rollback. An uncertain
-rollback is never redispatched; an exactly reconciled run is attributed before
-settlement and closure, after which the attempt remains failed closed.
+`runRef` driver response. Observer and `deploy_*` candidate receipts use a
+dedicated expiry-bounded five-minute correlation window; rollback and closure
+retain their strict cleanup limits. Candidate and rollback uncertainty are
+reconciled under a new bounded deadline with a frozen exact
+operation/context/commit tuple. A timed-out candidate is marked for mandatory
+rollback. An uncertain rollback is never redispatched; an exactly reconciled
+run is attributed before settlement and closure, after which the attempt
+remains failed closed.
 
 ## `resolveObserver`
 
@@ -365,6 +368,14 @@ every dependency failure into the constant public error.
 Derives an ordinary pre-signal absolute monotonic deadline from the uniqueness
 ceiling and buffered candidate expiry, rejecting exhausted or invalid time.
 
+## `nextDispatchCorrelationDeadline`
+
+Derives an absolute monotonic five-minute observer/candidate receipt deadline,
+clamped by the buffered candidate expiry. The wider receipt window only gives
+the provider correlation boundary time to return its exact dispatch proof; it
+does not accept a run without attribution or candidate-intent proof, and it
+does not alter rollback or closure cleanup bounds.
+
 ## `nextObserverResolutionDeadline`
 
 Derives an expiry-bounded 125-second outer deadline so the resolver can use its
@@ -373,18 +384,13 @@ Derives an expiry-bounded 125-second outer deadline so the resolver can use its
 ## `nextCandidateWorkflowDeadline`
 
 Derives a candidate-confirmation deadline from the 30-minute workflow duration
-plus settlement margin, capped by the buffered candidate expiry. The workflow
-observer lifetime is derived separately from the longest successful family,
-restore: 120 seconds of initial observer dispatch, 125 seconds of resolver
-startup, 120 seconds of restore admission, 120 seconds of candidate dispatch,
-120 seconds of candidate attribution, 1,860 seconds of candidate confirmation,
-120 seconds of signal detection, and 125 seconds of uniqueness settlement. The
-post-dispatch stages total 2,590 seconds. Including observer dispatch yields
-2,710 seconds, or 45 minutes 10 seconds, which fits the rounded 46-minute
-listener with 50 seconds of slack. These are sequential successful-settlement
-ceilings; an aborted stage and its mandatory cleanup describe a failed attempt
-and are not added to the listener's valid success lifetime. Every existing
-per-stage controller bound remains unchanged.
+plus settlement margin, capped by the buffered candidate expiry. The wider
+observer and candidate receipt windows are derived separately by
+`nextDispatchCorrelationDeadline`; restore admission and candidate attribution
+remain 120-second stages. These are sequential successful-settlement ceilings;
+an aborted stage and its mandatory cleanup describe a failed attempt and are
+not added to the listener's valid success lifetime. Every candidate-intent,
+rollback, closure, and fail-closed rule remains unchanged.
 
 ## `nextWorkflowDeadline`
 

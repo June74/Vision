@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-26T19:11:41.029672Z
-- **Last observed:** 2026-08-10T19:00:33.232Z
+- **Last observed:** 2026-08-11T21:19:07Z
 - **Phase/task:** Phase B Task 8 owner authentication diagnosis through reconnect-recovery Task 4 focused verification
 - **Environment:** Local managed sandbox
 - **Version/commit:** `a4376ab` plus the uncommitted Task 2 PostgreSQL proof
@@ -313,3 +313,11 @@ optional log-path warning nor static export-analysis warning recurred.
   production crypto-boundary validator still exited zero; no provider,
   credential, deployment, or private-data state changed. The clean retry must
   set the known worktree-local Wrangler diagnostic path.
+- 2026-08-11T21:19:07Z: Recurred during the correlation-wait repair build
+  because the default user-profile Wrangler log path was used. The Vite
+  bundles were generated and the production crypto-boundary validator ran, but
+  the optional log write was denied. No provider, credential, deployment, or
+  private-data state changed.
+- 2026-08-11T21:20:48Z: Closed after the same build and production
+  crypto-boundary validation were rerun with a worktree-local diagnostic
+  directory; both exited zero without the optional log-write warning.

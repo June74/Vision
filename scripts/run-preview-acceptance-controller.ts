@@ -31,6 +31,7 @@ import {
 const FAILURE = "Preview acceptance controller failed closed.";
 const POLL_MILLISECONDS = 5_000;
 const UNIQUENESS_MILLISECONDS = 120_000;
+const DISPATCH_CORRELATION_MILLISECONDS = 5 * 60_000;
 // The resolver needs a wider terminal metadata margin than one poll interval
 // because GitHub API reads can consume several seconds near the 120-second
 // stable-listener boundary.
@@ -491,6 +492,18 @@ export async function runPreviewAcceptanceController(
     if (expiryRemaining <= 0) fail();
     return monotonic + Math.min(UNIQUENESS_MILLISECONDS, expiryRemaining);
   };
+  /** Gives observer and candidate dispatches a dedicated correlation window. */
+  const nextDispatchCorrelationDeadline = (): number => {
+    const wall = safeNow(dependencies.wallNow());
+    const monotonic = safeMonotonic(dependencies.monotonicNow());
+    const expiryRemaining =
+      expiresAt.getTime() - EXPIRY_BUFFER_MILLISECONDS - wall.getTime();
+    if (expiryRemaining <= 0) fail();
+    return monotonic + Math.min(
+      DISPATCH_CORRELATION_MILLISECONDS,
+      expiryRemaining,
+    );
+  };
   /** Grants bounded cleanup time after an attributed candidate must fail. */
   const nextCleanupDeadline = (): number => {
     const monotonic = safeMonotonic(dependencies.monotonicNow());
@@ -578,6 +591,10 @@ export async function runPreviewAcceptanceController(
     let reconciledAfterFailure = false;
     let reconciledAfterTimeout = false;
     try {
+      const dispatchMaximumDuration =
+        context.kind === "observe" || context.kind.startsWith("deploy_")
+          ? DISPATCH_CORRELATION_MILLISECONDS
+          : UNIQUENESS_MILLISECONDS;
       result = await runControllerCall(
         deadlineMonotonic,
         dependencies,
@@ -589,6 +606,7 @@ export async function runPreviewAcceptanceController(
             boundary,
           );
         },
+        dispatchMaximumDuration,
       );
     } catch {
       if (
@@ -767,7 +785,7 @@ export async function runPreviewAcceptanceController(
       reviewedCommit,
       aiWindow,
     );
-    await dispatch(observeContext, nextPreSignalDeadline());
+    await dispatch(observeContext, nextDispatchCorrelationDeadline());
     const observerCompletedAt = safeNow(dependencies.wallNow());
     const observer = await runControllerCall(
       nextObserverResolutionDeadline(),
@@ -816,7 +834,7 @@ export async function runPreviewAcceptanceController(
       observerCompletedAt,
       restoreAdmission,
       aiWindow,
-    ), nextPreSignalDeadline());
+    ), nextDispatchCorrelationDeadline());
     const candidateDispatchReturnedAt = safeNow(dependencies.wallNow());
     const attributedCandidateRunRef = candidate.runRef;
     candidateRunRef = attributedCandidateRunRef;
