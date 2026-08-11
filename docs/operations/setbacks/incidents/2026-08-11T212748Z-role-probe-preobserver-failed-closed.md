@@ -99,3 +99,14 @@ before any external mutation was confirmed.
 - `2026-08-11T21:57:32Z`: two bounded local metadata probes initially used
   incompatible PowerShell quoting/path assumptions and stopped before their
   read-only request; corrected probes completed without provider mutation.
+- `2026-08-11T22:17:00Z`: the exact observer run from the corrected retry was
+  cancelled after its candidate and rollback jobs were verified skipped. The
+  cancellation cleared the single-observer slot; no candidate, deployment,
+  rollback, database, key, secret, or calendar mutation occurred.
+- `2026-08-11T22:17:30Z`: the first attempt to commit the cleanup note was
+  blocked by a permission error creating the worktree Git index lock. No
+  repository content or provider state changed; the commit is retried with
+  the normal repository permission boundary.
+- `2026-08-11T22:18:00Z`: the escalated commit retry used a POSIX `&&`
+  separator in PowerShell and stopped before Git ran. No repository or
+  provider state changed; the next retry uses separate PowerShell statements.
