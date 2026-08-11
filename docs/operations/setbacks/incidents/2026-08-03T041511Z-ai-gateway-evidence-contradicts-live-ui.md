@@ -72,3 +72,9 @@ verification.
   the account.
 - 2026-08-03T05:01:10.4517843Z: Owner opened the existing Gateway and confirmed
   the exact approved rule without mutation. Incident closed.
+- 2026-08-11T14:12:39Z: A read-only local Gateway verifier returned the safe
+  category `invalid_configuration` before making a provider request because
+  its required local credential environment is intentionally absent; the
+  values remain protected in the GitHub preview environment. No Gateway rule,
+  deployment, secret, key, database, or calendar state changed. The dedicated
+  AI workflow remains the authoritative same-run verification path.
