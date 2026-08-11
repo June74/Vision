@@ -544,7 +544,7 @@
 | [SB-20260811-171803-superpowers-frozen-search](incidents/2026-08-11T171803Z-superpowers-frozen-search.md) | contained | 2026-08-11T17:18:03Z | Phase B acceptance workflow preparation | Wildcard search hit protected frozen-worktree entries |
 | [SB-20260811-171943-task8-control-state-absent](incidents/2026-08-11T171943Z-task8-control-state-absent.md) | contained | 2026-08-11T17:19:43Z | Phase B monitored acceptance controller preparation | Ignored Task 8 control/state directories were absent before startup |
 | [SB-20260811-172127-controller-tsx-resolution](incidents/2026-08-11T172127Z-controller-tsx-resolution.md) | contained | 2026-08-11T17:21:27Z | Phase B role-probe acceptance preparation | `pnpm exec tsx` could not resolve the local executable on Windows |
-| [SB-20260811-173156-role-probe-controller-failed-closed](incidents/2026-08-11T173156Z-role-probe-controller-failed-closed.md) | contained | 2026-08-11T17:31:56Z | Phase B monitored role-probe acceptance | Controller failed closed during observer resolution before candidate dispatch |
+| [SB-20260811-173156-role-probe-controller-failed-closed](incidents/2026-08-11T173156Z-role-probe-controller-failed-closed.md) | contained | 2026-08-11T17:40:28Z | Phase B monitored role-probe acceptance | Controller failed closed during observer dispatch/resolution before candidate dispatch; provider run remained pending |
 
 ## Legacy history
 

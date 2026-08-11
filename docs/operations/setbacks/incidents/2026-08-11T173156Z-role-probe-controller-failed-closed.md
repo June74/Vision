@@ -2,7 +2,7 @@
 
 - Incident ID: `SB-20260811-173156-role-probe-controller-failed-closed`
 - First observed: `2026-08-11T17:31:56Z`
-- Last observed: `2026-08-11T17:34:53Z`
+- Last observed: `2026-08-11T17:40:28Z`
 - Status: `contained`
 - Phase/task: Phase B monitored role-probe acceptance
 - Environment: Windows PowerShell, phase-b-foundation linked worktree, GitHub Actions observer
@@ -33,8 +33,9 @@ database mutation, secret mutation, or calendar mutation was observed.
 
 - **Confirmed cause:** the controller failed closed before the candidate-dispatch
   boundary while the observer dispatch itself remained active.
-- **Hypothesis:** observer metadata resolution reached a deadline or encountered
-  a transient provider-read mismatch before returning a stable handle.
+- **Hypothesis:** observer dispatch admission reached the controller's bounded
+  deadline while the provider run was still pending, so its correlation artifact
+  and local mapping were not available in time.
 - **Rejected hypotheses:** missing restore-secret names, Cloudflare deployment
   rejection, Neon restore mutation, and application runtime failure; none was
   reached by this attempt.
@@ -58,6 +59,15 @@ and rerun the approved monitored controller with the explicit local Windows
 A standalone read-only resolver run against the existing observer returned exit
 code zero. This narrows the unresolved hypothesis to the controller's timing or
 dispatch boundary rather than a persistent observer metadata contract failure.
+
+## Recurrence
+
+On the fresh pin, the controller failed closed again. The matching workflow was
+still `pending` after roughly three minutes, with no selection/correlation
+artifact, no candidate-intent artifact, and no local mapping for the new commit.
+This is consistent with a provider dispatch queue delay exceeding the observer
+dispatch call's bounded window; the run was not yet at application or deployment
+execution.
 
 ## Verification
 
