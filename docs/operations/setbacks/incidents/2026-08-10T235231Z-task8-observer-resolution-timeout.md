@@ -416,3 +416,8 @@ then commit and push the listener repair before another monitored live attempt.
   deployment, traffic, rollback, provider, secret, key, database, or calendar
   state changed. The pins are being updated to the exact verified tip before a
   bounded retry.
+- 2026-08-11T14:56:21Z: While correcting the ignored pins, a manually supplied
+  abbreviated commit expansion did not match the actual full branch tip. The
+  controller was not rerun with that value and no provider request or state
+  change occurred; the exact SHA is being read directly from Git before the
+  next pin update.
