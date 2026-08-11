@@ -335,3 +335,8 @@ then commit and push the listener repair before another monitored live attempt.
   malformed working-directory string and failed during process creation before
   reading Git or artifact bytes. No files or external state changed; the
   comparison is being rerun only after the path is validated.
+- 2026-08-11T03:54:05Z: The first fresh-disposable-worktree creation emitted
+  Git's normal preparation message on stderr while PowerShell was configured
+  to stop on native stderr, so the wrapper stopped after the first worktree
+  was created. No provider state changed; the existing created path is being
+  reused and the second path will be added with stderr handled as informational.
