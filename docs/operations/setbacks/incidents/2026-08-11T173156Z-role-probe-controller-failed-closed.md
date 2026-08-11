@@ -2,7 +2,7 @@
 
 - Incident ID: `SB-20260811-173156-role-probe-controller-failed-closed`
 - First observed: `2026-08-11T17:31:56Z`
-- Last observed: `2026-08-11T17:31:56Z`
+- Last observed: `2026-08-11T17:34:53Z`
 - Status: `contained`
 - Phase/task: Phase B monitored role-probe acceptance
 - Environment: Windows PowerShell, phase-b-foundation linked worktree, GitHub Actions observer
@@ -52,6 +52,12 @@ Run one bounded read-only resolver diagnostic against the existing observer. If
 it is healthy, allow it to settle, then create a fresh pinned role-probe input
 and rerun the approved monitored controller with the explicit local Windows
 `tsx.cmd` executable.
+
+## Latest verification
+
+A standalone read-only resolver run against the existing observer returned exit
+code zero. This narrows the unresolved hypothesis to the controller's timing or
+dispatch boundary rather than a persistent observer metadata contract failure.
 
 ## Verification
 
