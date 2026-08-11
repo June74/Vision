@@ -307,3 +307,8 @@ then commit and push the listener repair before another monitored live attempt.
   orchestration expression and failed before reading the observer resolver.
   No repository command, provider request, or application state changed; the
   inspection is being rerun with a corrected wrapper.
+- 2026-08-11T03:42:56Z: A bounded disposable-worktree status wrapper left an
+  empty PowerShell pipeline after its loop and failed before reading either
+  worktree. No files, candidate artifacts, provider state, secrets, keys,
+  database, or calendar state changed; the status check is being rerun with an
+  explicit result collection.
