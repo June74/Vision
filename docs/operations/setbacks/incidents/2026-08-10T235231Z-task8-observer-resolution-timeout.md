@@ -393,3 +393,8 @@ then commit and push the listener repair before another monitored live attempt.
   boundary and no deployment, traffic, rollback, secret, key, database, or
   calendar state changed; the local artifact identity/build checks are being
   inspected before another retry.
+- 2026-08-11T13:54:56Z: After the artifact and exact full-CI gates passed, the
+  approved read-only baseline waited its full bounded live window and failed at
+  `live_schedule_evidence_timeout`. No deployment, traffic, rollback, secret,
+  key, database, or calendar state changed; the challenge/evidence path is
+  being inspected against the active normal schedule before any mutation.
