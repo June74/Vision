@@ -143,3 +143,7 @@ secret, or calendar mutation occurred.
 - `2026-08-11T22:41:00Z`: an attempted incident-section patch used a duplicated
   worktree path and an empty patch, so no edit was applied. No repository or
   provider state changed; the section update is retried with the verified path.
+- `2026-08-11T22:43:00Z`: refreshing the ignored acceptance input initially
+  wrote a 41-character reviewed-commit value instead of the 40-character
+  branch tip. The mismatch was caught by a local length/equality check before
+  any dispatch; no provider action occurred.
