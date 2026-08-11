@@ -345,3 +345,9 @@ then commit and push the listener repair before another monitored live attempt.
   local boundary (`EACCES`/registry metadata failure). No source, provider,
   secret, key, database, or calendar state changed; the same locked install is
   being retried through the approved external package boundary.
+- 2026-08-11T04:00:41Z: The fresh rollback worktree still lacked a complete
+  dependency tree after the first install boundary, so its build command
+  attempted the locked package install and failed again on registry fetch
+  permissions (`EACCES`/fetch failed). The build did not run and no source,
+  provider, secret, key, database, or calendar state changed; the install is
+  being retried explicitly through the approved external package boundary.
