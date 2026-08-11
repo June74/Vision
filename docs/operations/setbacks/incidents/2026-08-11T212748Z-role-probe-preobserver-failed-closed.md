@@ -172,3 +172,30 @@ secret, or calendar mutation occurred.
 - `2026-08-11T23:06:20Z`: a local `rg.exe` lookup could not launch in this
   Windows environment. No files or provider state changed; repository searches
   use the available PowerShell fallback.
+- `2026-08-11T23:29:58Z`: the next monitored retry again failed at
+  `Verify live preview is normal before candidate deployment` with the generic
+  temporary restore-pair provider-state error. The candidate-intent artifact
+  count and candidate-run matches were both zero, so no candidate mutation or
+  restore mutation occurred; rollback then failed closed at its missing-intent
+  guard. The observer was cancelled and settled as completed/cancelled.
+- `2026-08-11T23:30:20Z`: an attempted follow-up log patch used an incorrect
+  date in its context and applied nothing. No repository or provider state
+  changed; the corrected entry is applied above.
+- `2026-08-11T23:31:00Z`: a local PowerShell range probe used an invalid loop
+  assignment and stopped before reading the incident file. No repository,
+  provider, or secret state changed; the corrected read succeeded.
+- `2026-08-11T23:32:00Z`: a local `rg.exe` search could not launch in this
+  Windows environment. No files or provider state changed; the available
+  PowerShell search was used instead.
+- `2026-08-11T23:34:40Z`: a read-only Wrangler probe supplied `--env preview`
+  with the already suffixed Worker name and targeted the nonexistent
+  `vision-preview-preview` script. It changed no provider state; the corrected
+  default-Worker probe succeeded.
+- `2026-08-11T23:35:29Z`: the corrected read-only secret-name probe against the
+  actual `vision-preview` Worker found twelve secrets but neither
+  `PREVIEW_RESTORE_DATABASE_URL` nor `PREVIEW_RESTORE_TARGET_ID`. Only names
+  and presence flags were inspected; secret values were never read or printed.
+- `2026-08-11T23:36:59Z`: the first attempt to stage this ledger update was
+  blocked by Windows permission on the linked worktree index lock. No files or
+  provider state were lost or changed; the same stage/commit is retried with
+  the required repository permission.
