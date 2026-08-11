@@ -76,3 +76,7 @@ Do not use raw formatted JSON lines as semantic equality values.
   the repository's CommonJS `tsx` evaluation mode, so it failed during
   transformation before running the read-only guard check. No repository or
   provider state changed; use an async IIFE for inline probes.
+- 2026-08-11T00:18:04.153Z: A candidate deployment-check invocation was
+  rejected before execution because the sandbox permission label was
+  misspelled. No repository, candidate, or provider state changed; validate
+  tool parameters before dispatching the command.
