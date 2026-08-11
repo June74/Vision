@@ -421,3 +421,8 @@ then commit and push the listener repair before another monitored live attempt.
   controller was not rerun with that value and no provider request or state
   change occurred; the exact SHA is being read directly from Git before the
   next pin update.
+- 2026-08-11T15:15:13Z: The fresh approved monitored candidate run passed exact
+  local gates but ended at `live_schedule_evidence_timeout` without a safe
+  candidate-acceptance result. No candidate-specific challenge file appeared
+  during the bounded window. The provider state is being checked read-only
+  before any retry; no key rotation is authorized or performed.
