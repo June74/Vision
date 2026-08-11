@@ -351,3 +351,9 @@ then commit and push the listener repair before another monitored live attempt.
   permissions (`EACCES`/fetch failed). The build did not run and no source,
   provider, secret, key, database, or calendar state changed; the install is
   being retried explicitly through the approved external package boundary.
+- 2026-08-11T04:01:31Z: A follow-up status/checkout probe for the fresh
+  disposable worktrees was rejected by Git's ownership safety check because
+  those paths are owned by the interactive Windows account while this local
+  probe runs under the sandbox account. No files, provider state, secrets,
+  keys, database, or calendar state changed; the retry will use an explicit
+  per-command safe-directory allowance without changing global Git settings.
