@@ -2,7 +2,7 @@
 
 - Incident ID: `SB-20260811-172127-controller-tsx-resolution`
 - First observed: `2026-08-11T17:21:27Z`
-- Last observed: `2026-08-11T17:53:41Z`
+- Last observed: `2026-08-11T17:59:10Z`
 - Status: `contained`
 - Phase/task: Phase B role-probe acceptance preparation
 - Environment: Windows PowerShell, phase-b-foundation linked worktree
@@ -41,6 +41,10 @@ application or provider state changed. Use the explicit project-local
 The first explicit Vitest retry then rejected the Jest-only `--runInBand`
 option. The test did not run and no application or provider state changed; the
 correction is to invoke Vitest without that option.
+
+A follow-up PowerShell diagnostic attempted arithmetic on a one-element array
+instead of a scalar timestamp. It produced no external request or mutation;
+the correction is to select and cast one timestamp before subtraction.
 
 ## Next step
 
