@@ -62,6 +62,10 @@ At `2026-08-11T01:40:19Z`, the preview production build and deployment
 configuration check completed successfully while Wrangler emitted the same
 local log-write `EPERM`. No provider action ran.
 
+At `2026-08-11T01:44:05Z`, the refreshed disposable candidate worktree
+completed typecheck, build, and preview deployment-configuration checks while
+Wrangler emitted the same local log-write `EPERM`. No provider action ran.
+
 ## Confirmed cause
 
 The test run encountered local filesystem restrictions while Wrangler attempted to write its debug log and inspect the linked-worktree path. The test assertions did not fail.
