@@ -2,7 +2,7 @@
 
 - Incident ID: `SB-20260811-172127-controller-tsx-resolution`
 - First observed: `2026-08-11T17:21:27Z`
-- Last observed: `2026-08-11T17:21:27Z`
+- Last observed: `2026-08-11T17:53:41Z`
 - Status: `contained`
 - Phase/task: Phase B role-probe acceptance preparation
 - Environment: Windows PowerShell, phase-b-foundation linked worktree
@@ -30,6 +30,17 @@ deployment, secret, database, key, calendar, or provider state changed.
 
 Use the exact project-local `node_modules\\.bin\\tsx.cmd` path for this bounded
 controller invocation and keep the driver arguments unchanged.
+
+## Recurrence
+
+The same Windows local-binary resolution pattern appeared during a read-only
+controller test when `pnpm.cmd vitest` was used. The test did not run and no
+application or provider state changed. Use the explicit project-local
+`node_modules\\.bin\\vitest.cmd` executable for this test suite.
+
+The first explicit Vitest retry then rejected the Jest-only `--runInBand`
+option. The test did not run and no application or provider state changed; the
+correction is to invoke Vitest without that option.
 
 ## Next step
 
