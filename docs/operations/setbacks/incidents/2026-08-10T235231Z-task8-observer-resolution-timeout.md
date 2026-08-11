@@ -191,3 +191,9 @@ then commit and push the listener repair before another monitored live attempt.
   passed; the build again emitted only the known Wrangler local log-file EPERM
   warning. No application, candidate, provider, secret, database, or calendar
   state changed.
+- 2026-08-11T02:26:00Z: While repinning the disposable acceptance controller
+  after commit `40d026c`, I initially typed an incorrect full SHA into the two
+  ignored local pin files. Verification caught the mismatch before any
+  dispatch; the pins are being corrected to the exact repository SHA. No
+  application, candidate, provider, secret, database, or calendar state
+  changed.
