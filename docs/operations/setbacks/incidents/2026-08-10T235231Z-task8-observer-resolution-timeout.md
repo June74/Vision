@@ -292,3 +292,14 @@ then commit and push the listener repair before another monitored live attempt.
   `try` as an expression inside a PowerShell cast, so the wrapper failed before
   inspecting the CLI response. No version or provider state changed; the
   JSON parse check is being rewritten with an explicit catch block.
+- 2026-08-11T03:35:00Z: A bounded local tail capture completed without seeing
+  any foundation evidence during its window. Source and workflow inspection
+  confirmed that the committed preview configuration has only the normal
+  fifteen-minute and daily schedules, while the generated acceptance
+  configuration adds the one-minute acceptance cron and selector. The
+  observer operation runs before the separate candidate-deployment operation,
+  so an active normal Worker cannot emit a foundation acceptance signal during
+  that observer window. The active provider schedule is still unconfirmed;
+  this is a sequencing risk, not yet a provider-state conclusion. No
+  deployment, traffic, rollback, secret, key, database, or calendar mutation
+  ran.
