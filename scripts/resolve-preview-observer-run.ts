@@ -166,8 +166,14 @@ export async function resolvePreviewObserverRun(
   let candidate: PreviewObserverRunHandle | null = null;
   for (;;) {
     const pollStarted = validMonotonic(deps.monotonicNow());
+    // If a metadata poll starts within one normal poll interval of the
+    // stable-listener close, give it the same terminal settlement margin as a
+    // poll that starts exactly at the close. Otherwise a slow final API read
+    // can cross the close and be rejected before the terminal poll is reached.
+    const terminalPollWindow =
+      pollStarted >= deadline - POLL_MILLISECONDS;
     const pollDeadline = boundedObserverDeadline(
-      pollStarted >= deadline
+      terminalPollWindow
         ? deadline + TERMINAL_POLL_SETTLEMENT_MILLISECONDS
         : deadline,
       deps,

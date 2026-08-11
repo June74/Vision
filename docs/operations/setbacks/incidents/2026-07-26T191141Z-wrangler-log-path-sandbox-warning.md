@@ -321,3 +321,11 @@ optional log-path warning nor static export-analysis warning recurred.
 - 2026-08-11T21:20:48Z: Closed after the same build and production
   crypto-boundary validation were rerun with a worktree-local diagnostic
   directory; both exited zero without the optional log-write warning.
+- 2026-08-11T22:12:40Z: Recurred during the full Worker suite because the
+  task-local Wrangler diagnostic setting was omitted. All 116 Worker tests
+  still passed; the warning and static export-analysis message were
+  environment-only, with no provider or private-data change.
+- 2026-08-11T22:13:32Z: Closed after rerunning all 116 Worker tests with a
+  worktree-local Wrangler diagnostic directory. The optional log-write warning
+  did not recur; the remaining static export-analysis warning is the known
+  sandbox filesystem limitation and the suite still exited zero.

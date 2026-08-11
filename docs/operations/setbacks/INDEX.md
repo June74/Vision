@@ -191,7 +191,7 @@
 | [SB-20260726-190637-unbounded-backup-code-inspection](incidents/2026-07-26T190637Z-unbounded-backup-code-inspection.md) | closed | 2026-07-28T22:23:26.3813087Z | Phase B restore Task 1 fix wave | Backup source inspection was too broad |
 | [SB-20260726-190816-assumed-progress-document-paths](incidents/2026-07-26T190816Z-assumed-progress-document-paths.md) | closed | 2026-07-28T14:34:48Z | Phase B completion resume verification discovery | Repository paths were assumed |
 | [SB-20260726-191035-preview-deploy-missing-nonsecret-vars](incidents/2026-07-26T191035Z-preview-deploy-missing-nonsecret-vars.md) | closed | 2026-07-26T19:33:19.4460335Z | Phase B recovery acceptance | Preview deployment omitted required non-secret variables |
-| [SB-20260726-191141-wrangler-log-path-sandbox-warning](incidents/2026-07-26T191141Z-wrangler-log-path-sandbox-warning.md) | closed | 2026-08-11T21:20:48Z | Phase B correlation-wait repair build | Wrangler log path was blocked by sandbox; task-local diagnostic rerun passed |
+| [SB-20260726-191141-wrangler-log-path-sandbox-warning](incidents/2026-07-26T191141Z-wrangler-log-path-sandbox-warning.md) | closed | 2026-08-11T22:13:32Z | Phase B correlation-wait repair Worker suite | Wrangler log write was closed by a local-diagnostic rerun; all 116 Worker tests passed |
 | [SB-20260726-191141-generated-config-nesting-assumption](incidents/2026-07-26T191141Z-generated-config-nesting-assumption.md) | closed | 2026-07-26T19:19:40.5249114Z | Phase B deployment diagnostics | Generated Wrangler config nesting was assumed |
 | [SB-20260726-191224-wrangler-dry-run-probe-failed](incidents/2026-07-26T191224Z-wrangler-dry-run-probe-failed.md) | closed | 2026-07-26T19:19:40.5249114Z | Phase B deployment diagnostics | Wrangler dry-run diagnostic failed |
 | [SB-20260726-191644-pnpm-exec-local-binary-resolution](incidents/2026-07-26T191644Z-pnpm-exec-local-binary-resolution.md) | closed | 2026-07-31T22:59:55.8433974Z | Phase B live-acceptance closure Tasks 1, 4, and 6 | pnpm exec did not resolve local binary |
@@ -547,6 +547,7 @@
 | [SB-20260811-173156-role-probe-controller-failed-closed](incidents/2026-08-11T173156Z-role-probe-controller-failed-closed.md) | contained | 2026-08-11T17:42:47Z | Phase B monitored role-probe acceptance | Single-observer concurrency queued the retry beyond the controller dispatch window |
 | [SB-20260811-175437-role-probe-candidate-attribution-failed](incidents/2026-08-11T175437Z-role-probe-candidate-attribution-failed.md) | contained | 2026-08-11T17:54:37Z | Phase B monitored role-probe acceptance | Controller reached observer-ready but failed before candidate attribution |
 | [SB-20260811-211548-controller-test-old-dispatch-deadline](incidents/2026-08-11T211548Z-controller-test-old-dispatch-deadline.md) | closed | 2026-08-11T21:22:26Z | Phase B monitored acceptance correlation-wait repair | Existing controller test still exercised the former two-minute dispatch boundary; aligned and verified |
+| [SB-20260811-212748-role-probe-preobserver-failed-closed](incidents/2026-08-11T212748Z-role-probe-preobserver-failed-closed.md) | contained | 2026-08-11T21:57:32Z | Phase B monitored role-probe acceptance after correlation-wait repair | Corrected retry dispatched an observer but failed before observer-ready; no candidate or deployment occurred |
 
 ## Legacy history
 

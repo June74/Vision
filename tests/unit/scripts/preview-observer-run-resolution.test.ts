@@ -1315,6 +1315,46 @@ describe("preview observer run resolution", () => {
     }
   });
 
+  it("uses the terminal poll margin when metadata crosses the close during a final poll", async () => {
+    let monotonic = 0;
+    let calls = 0;
+    const candidate = run();
+    const controller = new AbortController();
+    const deps: PreviewObserverResolutionDependencies = {
+      monotonicNow: () => monotonic,
+      sleep: vi.fn(async (milliseconds) => {
+        monotonic += milliseconds;
+      }),
+      listRuns: vi.fn(async () => {
+        calls += 1;
+        if (calls === 24) monotonic = 120_001;
+        return { workflow_runs: [candidate] };
+      }),
+      readRun: vi.fn(async () => candidate),
+      listJobs: vi.fn(async () => ({
+        jobs: [job("Capture foundation_probe signal")],
+      })),
+    };
+
+    await expect(
+      resolvePreviewObserverRun(
+        {
+          expectedWorkflow: candidate.path,
+          expectedCommit: candidate.head_sha,
+          dispatchStartedAt: new Date(Date.parse(candidate.created_at) - 1_000),
+          dispatchCompletedAt: new Date(Date.parse(candidate.created_at) + 1_000),
+          family: "foundation_probe",
+        },
+        deps,
+        {
+          deadlineMonotonic: 180_000,
+          signal: controller.signal,
+        },
+      ),
+    ).resolves.toBe(candidate.id);
+    expect(calls).toBe(24);
+  });
+
   it("filters a realistic full workflow job list and finds the named listener among setup steps", async () => {
     const listener = job("Capture restore signal");
     listener.steps = [
