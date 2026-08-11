@@ -534,6 +534,7 @@
 | [SB-20260811-153637-rg-unavailable](incidents/2026-08-11T153637Z-rg-unavailable.md) | contained | 2026-08-11T15:36:37Z | Phase B live sync diagnosis | Preferred repository search executable was unavailable |
 | [SB-20260811-154929-evidence-ledger-line-endings](incidents/2026-08-11T154929Z-evidence-ledger-line-endings.md) | contained | 2026-08-11T15:49:29Z | Phase B evidence-ledger publication | Evidence patch mixed line endings and created noisy documentation diff |
 | [SB-20260811-155021-git-blob-probe-env](incidents/2026-08-11T155021Z-git-blob-probe-env.md) | contained | 2026-08-11T15:50:21Z | Phase B evidence-ledger formatting verification | Raw Git blob probe hit duplicate PowerShell path keys before process start |
+| [SB-20260811-160226-calendar-context-mismatch](incidents/2026-08-11T160226Z-calendar-context-mismatch.md) | contained | 2026-08-11T16:02:26Z | Phase B near-real-time synchronization acceptance | Controlled Google Calendar session lacked the expected Vision calendar |
 
 ## Legacy history
 
