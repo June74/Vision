@@ -288,3 +288,7 @@ then commit and push the listener repair before another monitored live attempt.
   starting because its ignored helper imported the tracked classifier through
   one parent path too many. No Wrangler tail or provider action ran and no
   state changed; the helper import path is being corrected.
+- 2026-08-11T03:25:28Z: A read-only Wrangler versions-list wrapper used
+  `try` as an expression inside a PowerShell cast, so the wrapper failed before
+  inspecting the CLI response. No version or provider state changed; the
+  JSON parse check is being rewritten with an explicit catch block.
