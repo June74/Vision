@@ -257,3 +257,10 @@ then commit and push the listener repair before another monitored live attempt.
   of the required full commit SHA. Pin verification caught the mismatch before
   any dispatch; the exact full SHA is being written now. No candidate,
   provider, secret, database, or calendar state changed.
+- 2026-08-11T03:11:40Z: The fresh monitored retry after the bounded provider-
+  metadata retry repair again returned `failed_closed` before any candidate
+  status. Safe workflow metadata showed the foundation listener had started,
+  the candidate job was skipped, and no mutation job ran. The observer was
+  cancelled and settled as cancelled; no candidate, rollback, traffic,
+  Cloudflare, secret, database, or calendar state changed. The repeated
+  boundary is being diagnosed before another retry.
