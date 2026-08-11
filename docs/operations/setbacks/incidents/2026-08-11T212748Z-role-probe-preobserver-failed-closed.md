@@ -169,3 +169,6 @@ secret, or calendar mutation occurred.
   endpoint independently returned HTTP 200/`ok`; the remaining predicate is
   the authenticated schedule/binding restore-pair check. The orphaned observer
   was cancelled and cancellation settled successfully.
+- `2026-08-11T23:06:20Z`: a local `rg.exe` lookup could not launch in this
+  Windows environment. No files or provider state changed; repository searches
+  use the available PowerShell fallback.
