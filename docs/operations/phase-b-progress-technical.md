@@ -142,6 +142,17 @@ This page records implementation commits, verification evidence, review decision
   fresh controlled retry was authorized after resolution and stopped before
   upload at the schedule-evidence gate; a future retry still requires fresh
   exact approval and timely nonce-bound evidence.
+- The newest foundation observer retry created one valid, active listener and
+  skipped every mutation job, but the local controller failed closed before
+  `observer_ready`. Safe reconciliation proved exact run identity, active
+  topology, correlation-artifact presence, and ample API quota; replaying the
+  same snapshots through the resolver succeeded. The failure is classified as a
+  transient provider-process metadata read/timing race. The concrete adapter
+  now retries one early settled child failure for 250 ms within the existing
+  absolute deadline; timeout, cancellation, output-bound, parse, and projection
+  failures remain fail-closed. Local unit (1,760 passed, 6 skipped), type,
+  contract, Worker, documentation, build, deploy-check, and security gates pass.
+  The live candidate/rollback proof is still open.
 - Historical task entries below retain their original implementation notes;
   they do not override the current gate map or release decision.
 

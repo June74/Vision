@@ -205,3 +205,46 @@ then commit and push the listener repair before another monitored live attempt.
   malformed local worktree path and failed before invoking GitHub. No
   application, candidate, provider, secret, database, or calendar state
   changed.
+- 2026-08-11T02:36:00Z: The first monitored retry at the final frozen tip,
+  after the bounded clock-skew repair and stale-observer cleanup, returned
+  `failed_closed` with no candidate status. Safe workflow reconciliation is
+  required before another retry; no candidate, rollback, Cloudflare, traffic,
+  secret, database, or calendar mutation ran.
+- 2026-08-11T02:41:00Z: A local resolver probe using the package-runner alias
+  failed before executing because the Windows `tsx` executable was not
+  resolved. No application, candidate, provider, secret, database, or
+  calendar state changed; use the repository's explicit executable path for
+  the probe.
+- 2026-08-11T02:46:25Z: Safe reconciliation of the newest observer showed
+  exact workflow identity, one active foundation listener, a present
+  correlation artifact, and ample GitHub API quota. The same metadata resolved
+  successfully through the resolver when replayed locally, so the live
+  `failed_closed` result is classified as a transient bounded provider-metadata
+  read failure or timing race, not an identity, topology, candidate, or
+  Cloudflare failure. The still-running observer was cancelled and settled as
+  cancelled; no candidate, rollback, traffic, secret, database, or calendar
+  mutation ran.
+- 2026-08-11T02:47:40Z: The new resolver regression test correctly failed before
+  implementation because one provider metadata command was still fatal on its
+  first transient error. This intentional RED result confirms the test is
+  exercising the live adapter boundary; no application, candidate, provider,
+  secret, database, or calendar state changed.
+- 2026-08-11T02:49:05Z: The first retry implementation caused two existing
+  deadline/outer-cancellation contract tests to hang because a timed-out child
+  command was indistinguishable from a retryable process failure. The change
+  is being narrowed so deadline and cancellation errors remain fail-closed and
+  only an early settled provider failure is retried; no application, candidate,
+  provider, secret, database, or calendar state changed.
+- 2026-08-11T02:49:52Z: A recursive documentation search used an invalid
+  PowerShell parameter and stopped before reading files. No application,
+  candidate, provider, secret, database, or calendar state changed; use an
+  explicit Markdown file list for the search.
+- 2026-08-11T02:56:34Z: The first full unit-suite invocation produced no output
+  for the local polling window and was stopped; the same suite was rerun with
+  a verbose reporter and completed green with 1,760 passed and 6 skipped tests.
+  The delay was test-runner output scheduling, not a product failure; no
+  application, candidate, provider, secret, database, or calendar state changed.
+- 2026-08-11T03:00:11Z: The first staging attempt was blocked by Windows
+  permission on the linked worktree's Git index lock. No files were staged and
+  no commit or provider action ran; the same explicit staging operation must be
+  retried through the approved elevated Git boundary.

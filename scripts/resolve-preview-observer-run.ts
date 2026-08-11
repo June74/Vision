@@ -21,6 +21,17 @@ const PROVIDER_TIMESTAMP_UNCERTAINTY_MILLISECONDS = 999;
 // its own wall clock. Keep the measured local/provider skew bounded separately
 // from the provider-second truncation allowance.
 const DISPATCH_CLOCK_SKEW_MILLISECONDS = 3_000;
+// A transient GitHub CLI/API process failure must not discard an otherwise
+// attributable observer. Retry once inside the same caller deadline, while
+// leaving malformed successful responses fail-closed.
+const METADATA_RETRY_ATTEMPTS = 2;
+const METADATA_RETRY_DELAY_MILLISECONDS = 250;
+class PreviewObserverDeadlineError extends Error {
+  constructor() {
+    super(FAILURE);
+    this.name = "PreviewObserverDeadlineError";
+  }
+}
 const CONTEXT_INSTANT_PATTERN =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const PROVIDER_INSTANT_PATTERN =
@@ -425,40 +436,63 @@ export function createGitHubObserverResolutionDependencies(input: {
         context,
         monotonicNow,
       ));
+  const sleep =
+    input.sleep ??
+    ((milliseconds: number, context: PreviewObserverCallContext) =>
+      interruptibleSleep(milliseconds, context));
   /** Invokes one captured metadata command without a shell. */
   const invoke = async (
     arguments_: readonly string[],
     context: PreviewObserverCallContext,
     validateProjection: (payload: unknown) => void,
   ): Promise<unknown> => {
-    try {
-      const result = await raceCommandAgainstDeadline(
-        (commandContext) =>
-          runCommand(executable, [...arguments_], commandContext),
-        context,
-        monotonicNow,
-      );
-      if (
-        typeof result?.stdout !== "string" ||
-        typeof result.stderr !== "string" ||
-        Buffer.byteLength(result.stdout, "utf8") > MAX_RESPONSE_BYTES ||
-        Buffer.byteLength(result.stderr, "utf8") > MAX_RESPONSE_BYTES
-      ) {
-        fail();
+    let result: PreviewObserverCommandResult | undefined;
+    for (let attempt = 0; attempt < METADATA_RETRY_ATTEMPTS; attempt += 1) {
+      try {
+        result = await raceCommandAgainstDeadline(
+          (commandContext) =>
+            runCommand(executable, [...arguments_], commandContext),
+          context,
+          monotonicNow,
+        );
+        break;
+      } catch (error) {
+        if (error instanceof PreviewObserverDeadlineError) {
+          fail();
+        }
+        const remaining =
+          validMonotonic(context.deadlineMonotonic) -
+          validMonotonic(monotonicNow());
+        if (
+          attempt + 1 >= METADATA_RETRY_ATTEMPTS ||
+          context.signal.aborted ||
+          remaining <= 0
+        ) {
+          fail();
+        }
+        try {
+          await sleep(METADATA_RETRY_DELAY_MILLISECONDS, context);
+        } catch {
+          fail();
+        }
       }
-      const payload = JSON.parse(result.stdout) as unknown;
-      validateProjection(payload);
-      return payload;
-    } catch {
+    }
+    if (result === undefined) fail();
+    if (
+      typeof result.stdout !== "string" ||
+      typeof result.stderr !== "string" ||
+      Buffer.byteLength(result.stdout, "utf8") > MAX_RESPONSE_BYTES ||
+      Buffer.byteLength(result.stderr, "utf8") > MAX_RESPONSE_BYTES
+    ) {
       fail();
     }
+    const payload = JSON.parse(result.stdout) as unknown;
+    validateProjection(payload);
+    return payload;
   };
   const dependencies: PreviewObserverResolutionDependencies = {
     monotonicNow,
-    sleep:
-      input.sleep ??
-      ((milliseconds: number, context: PreviewObserverCallContext) =>
-        interruptibleSleep(milliseconds, context)),
+    sleep,
     /** Lists bounded workflow-dispatch runs for resolution. */
     listRuns: (page, context) => {
       if (!Number.isSafeInteger(page) || page < 1 || page > MAX_RUN_PAGES) {
@@ -796,7 +830,10 @@ async function raceCommandAgainstDeadline(
       controller.abort();
     }, Math.max(1, remaining));
     const settled = await commandResult;
-    if (!settled.ok || timedOut || context.signal.aborted) fail();
+    if (timedOut || context.signal.aborted) {
+      throw new PreviewObserverDeadlineError();
+    }
+    if (!settled.ok) fail();
     return settled.value;
   } finally {
     if (timer !== undefined) clearTimeout(timer);

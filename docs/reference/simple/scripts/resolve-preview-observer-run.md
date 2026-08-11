@@ -59,9 +59,11 @@ no shell.
 
 ## `invoke`
 
-Runs one captured metadata command before its absolute deadline, validates the
-exact projected key set, and returns parsed JSON. Every child, size, timeout,
-or parse failure becomes the fixed resolver error.
+Runs one captured metadata command before its absolute deadline. An early
+settled provider-process failure gets one short retry inside that same deadline;
+deadline/cancellation failures and malformed successful responses remain the
+fixed fail-closed resolver error. The exact projected key set is validated
+before parsed JSON is returned.
 
 ## `jobsFor`
 

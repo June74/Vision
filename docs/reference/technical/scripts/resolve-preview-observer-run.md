@@ -73,10 +73,12 @@ never invokes a shell or renders child output.
 
 ## `invoke`
 
-Executes one metadata request, races it against the absolute deadline, enforces
-captured stdout/stderr bounds, parses stdout as JSON, validates the expected
-projection before returning, and maps every execution, timeout, or parse
-failure to the sole resolver error.
+Executes one metadata request, racing each child against the same absolute
+deadline. An early settled provider-process failure receives one fixed
+250-millisecond retry without renewing that deadline. Child timeout or caller
+cancellation remains immediately fail-closed; captured stdout/stderr bounds,
+JSON parsing, and exact projection validation also remain fail-closed before a
+payload is returned.
 
 ## `jobsFor`
 

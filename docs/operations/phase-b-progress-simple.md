@@ -153,6 +153,16 @@ cause, not proof that our specific bucket was affected. One fresh retry was
 authorized after the resolution but stopped before upload because the required
 schedule confirmation was not submitted in time.
 
+The newest observer-only attempt got past workflow admission and created its
+listener, but the local controller still stopped before candidate deployment.
+Safe checks showed the workflow identity, listener topology, correlation
+artifact, and API capacity were all valid; replaying that same metadata locally
+worked. The issue was therefore a transient provider-metadata read/timing race,
+not Cloudflare or the Vision Worker. The resolver now makes one short retry for
+that narrow case while still stopping on timeouts, cancellations, and malformed
+metadata. All local gates pass; the one monitored candidate-and-rollback proof
+is still the remaining Phase B acceptance step.
+
 ## Completed
 
 ### Runtime Task 1 — Application foundation

@@ -958,6 +958,35 @@ describe("preview observer run resolution", () => {
     expect(controller.signal.aborted).toBe(false);
   });
 
+  it("retries one transient provider metadata failure within the same call", async () => {
+    let attempts = 0;
+    const runCommand: PreviewObserverCommandRunner = vi.fn(async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw new Error("discarded-transient-provider-canary");
+      }
+      return {
+        stdout: JSON.stringify({ workflow_runs: [run()] }),
+        stderr: "",
+      };
+    });
+    const dependencies = createGitHubObserverResolutionDependencies({
+      repository: "owner/repository",
+      executable: "provider-cli",
+      monotonicNow: () => 0,
+      sleep: vi.fn(async () => undefined),
+      runCommand,
+    });
+
+    await expect(
+      dependencies.listRuns(1, Object.freeze({
+        deadlineMonotonic: 10_000,
+        signal: new AbortController().signal,
+      })),
+    ).resolves.toEqual({ workflow_runs: [run()] });
+    expect(attempts).toBe(2);
+  });
+
   it("aborts an injected provider command at its deadline and waits for settlement", async () => {
     vi.useFakeTimers();
     try {
