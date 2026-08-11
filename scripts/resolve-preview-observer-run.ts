@@ -733,7 +733,7 @@ function conservativeUniquenessClose(
 }
 
 /** Captures and bounds one real provider child until it has settled. */
-async function runCapturedProviderCommand(
+export async function runCapturedProviderCommand(
   executable: string,
   arguments_: readonly string[],
   context: PreviewObserverCallContext,
@@ -748,7 +748,7 @@ async function runCapturedProviderCommand(
     maxBuffer: MAX_RESPONSE_BYTES,
     windowsHide: true,
     signal: context.signal,
-    timeout: Math.max(1, remaining),
+    timeout: Math.max(1, Math.ceil(remaining)),
     killSignal: "SIGTERM",
   });
   return Object.freeze({

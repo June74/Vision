@@ -2,11 +2,11 @@
 
 - Incident ID: `SB-20260810-235231-task8-observer-resolution-timeout`
 - First observed: `2026-08-10T23:52:31Z`
-- Last observed: `2026-08-11T00:29:47.553Z`
+- Last observed: `2026-08-11T00:48:13.125Z`
 - Status: `contained`
 - Phase/task: Phase B monitored candidate acceptance
 - Environment: Windows PowerShell, frozen Phase B worktree
-- Version/commit: `c2c64365`
+- Version/commit: `a6cd3d95`
 
 ## Symptom
 
@@ -54,3 +54,15 @@ controller/resolver suites before another live attempt.
   listener still active; no candidate, rollback, or provider mutation ran.
   The 30-second terminal margin was not sufficient for this live metadata
   settlement. The margin is being widened in a bounded follow-up repair.
+
+- 2026-08-11T00:48:13.125Z: The next fresh retry reached and correlated the
+  correct observer, but resolver metadata failed immediately before
+  `observer_ready`. A captured read-only probe reproduced Node's
+  `ERR_OUT_OF_RANGE` because the child-process timeout received a fractional
+  millisecond value derived from `performance.now()`. No candidate, rollback,
+  or provider mutation ran. The fix is to round that bounded timeout before
+  invoking the child process.
+- 2026-08-11T00:52:19.679Z: The new regression test reproduced the same
+  fractional-timeout `ERR_OUT_OF_RANGE` under the old implementation. This was
+  an intentional RED test only; no application, candidate, or provider state
+  changed.

@@ -45,3 +45,7 @@ committing the repair.
   test because its runtime null assertions did not narrow the captured values
   for the compiler. No application, branch, provider, deployment, traffic,
   secret, key, database, or calendar state changed.
+- 2026-08-11T00:55:01.384Z: After the timeout was correctly rounded, the new
+  child-process regression fixture used an 11-millisecond budget and Windows
+  terminated Node before startup. The production code was no longer failing;
+  only the local fixture budget required adjustment.

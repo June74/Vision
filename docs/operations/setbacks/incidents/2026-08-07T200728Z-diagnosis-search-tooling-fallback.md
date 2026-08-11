@@ -96,3 +96,6 @@ Do not use raw formatted JSON lines as semantic equality values.
   text and were rejected before changing the incident record. No repository,
   candidate, or provider state changed; inspect the exact local context before
   applying a follow-up patch.
+- 2026-08-11T00:48:51.121Z: The `rg.exe` repository-file listing was blocked by
+  Windows access control before searching. The named-file PowerShell fallback
+  remains the required search path; no repository or provider state changed.

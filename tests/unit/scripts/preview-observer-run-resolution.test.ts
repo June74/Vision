@@ -502,11 +502,28 @@ import {
   readPreviewSignalObserverState,
   readPreviewTwoJobObserverState,
   resolvePreviewObserverRun,
+  runCapturedProviderCommand,
   runPreviewObserverCli,
   type PreviewObserverCallContext,
   type PreviewObserverCommandRunner,
   type PreviewObserverResolutionDependencies,
 } from "../../../scripts/resolve-preview-observer-run";
+
+describe("captured provider command boundary", () => {
+  it("rounds fractional remaining milliseconds before spawning", async () => {
+    await expect(
+      runCapturedProviderCommand(
+        process.execPath,
+        ["-e", "process.stdout.write('ok')"],
+        {
+          deadlineMonotonic: 10_000.5,
+          signal: new AbortController().signal,
+        },
+        () => 0,
+      ),
+    ).resolves.toMatchObject({ stdout: "ok", stderr: "" });
+  });
+});
 
 describe("AI observer metadata state", () => {
   it("requires the exact concurrent signal and uniqueness jobs", async () => {
