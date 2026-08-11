@@ -268,3 +268,15 @@ then commit and push the listener repair before another monitored live attempt.
   because the local PowerShell version rejected the null-coalescing operator
   used in the probe wrapper. No provider command ran and no state changed; the
   wrapper is being rewritten with syntax supported by this host.
+- 2026-08-11T03:18:10Z: The corrected Wrangler deployments-list probe reached
+  the CLI but returned a nonzero command result with undecodable output. The
+  bounded classifier found only the generic command marker, not a safe
+  provider category; no deployment or other provider state changed. This
+  probe is not being used as evidence for the observer failure.
+- 2026-08-11T03:19:06Z: Read-only GitHub job reconciliation narrowed the newest
+  monitored failure to the `Print only allowlisted acceptance evidence` step:
+  the observer listener had started, the candidate job was skipped, and all
+  mutation jobs were skipped. The failed step exposed no allowlisted
+  foundation evidence marker or category, so the earlier metadata-race theory
+  is not sufficient; the next diagnosis targets the scheduled probe/tail
+  boundary before any retry.
