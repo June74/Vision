@@ -340,3 +340,8 @@ then commit and push the listener repair before another monitored live attempt.
   to stop on native stderr, so the wrapper stopped after the first worktree
   was created. No provider state changed; the existing created path is being
   reused and the second path will be added with stderr handled as informational.
+- 2026-08-11T03:56:06Z: Locked dependency installation in the two fresh
+  disposable worktrees could not read/download packages under the restricted
+  local boundary (`EACCES`/registry metadata failure). No source, provider,
+  secret, key, database, or calendar state changed; the same locked install is
+  being retried through the approved external package boundary.
