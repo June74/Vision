@@ -252,3 +252,8 @@ then commit and push the listener repair before another monitored live attempt.
   by Git's dubious-ownership guard in the sandbox identity. No candidate files
   or provider state changed; candidate inspection and refresh must use the
   exact disposable path with an explicit temporary safe-directory option.
+- 2026-08-11T03:03:38Z: While repinning the ignored local controller and input
+  after the candidate refresh, I initially wrote the abbreviated tip instead
+  of the required full commit SHA. Pin verification caught the mismatch before
+  any dispatch; the exact full SHA is being written now. No candidate,
+  provider, secret, database, or calendar state changed.
