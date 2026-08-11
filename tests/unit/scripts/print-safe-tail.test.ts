@@ -415,6 +415,7 @@ describe(
       signalArguments("--foundation-probe-only", "foundation_succeeded"),
       [
         scheduledTail(),
+        maintenanceTail(maintenanceSuccess()),
         foundationTail(foundationSuccess()),
       ],
     );

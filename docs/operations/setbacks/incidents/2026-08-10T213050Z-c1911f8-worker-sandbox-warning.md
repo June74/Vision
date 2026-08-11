@@ -53,6 +53,15 @@ At `2026-08-11T01:01:06.840Z`, the production build repeated the local
 Wrangler log-write `EPERM` while completing successfully; the preview
 deployment configuration check passed and no provider action ran.
 
+At `2026-08-11T01:39:42Z`, the worker suite on the observer-repair branch
+again passed all 116 assertions while emitting the same local Wrangler
+log-write `EPERM` and linked-worktree static-analysis warnings. No application
+or provider state changed.
+
+At `2026-08-11T01:40:19Z`, the preview production build and deployment
+configuration check completed successfully while Wrangler emitted the same
+local log-write `EPERM`. No provider action ran.
+
 ## Confirmed cause
 
 The test run encountered local filesystem restrictions while Wrangler attempted to write its debug log and inspect the linked-worktree path. The test assertions did not fail.

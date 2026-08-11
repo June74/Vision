@@ -37,8 +37,21 @@ Requires the millisecond UTC grammar and round-trip byte identity.
 
 ## `isRejectedTerminalEvent`
 
-Recognizes a parsed target-marker line rejected by `createSafeTailAccumulator`
-so a malformed terminal fails immediately without being rendered.
+Recognizes a parsed expected-family marker line rejected by
+`createSafeTailAccumulator` so a malformed terminal fails immediately without
+being rendered. Valid terminals from other scheduled families are not treated
+as failures.
+
+## `expectedEvidenceType`
+
+Maps the closed observer expectation to the exact evidence-type marker that it
+may admit or fail on.
+
+## `isExpectedEvidence`
+
+Filters reconstructed safe-tail results to the configured evidence family so a
+normal maintenance or another acceptance schedule cannot terminate a pending
+observer.
 
 ## `runLegacyTail`
 

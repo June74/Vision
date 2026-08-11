@@ -525,6 +525,7 @@
 | [SB-20260803-192241-tsx-design-spec-trailing-whitespace](incidents/2026-08-03T192241Z-tsx-design-spec-trailing-whitespace.md) | resolved | 2026-08-03T19:22:41.361232Z | Phase B controller repair design | Design specification failed staged whitespace validation |
 | [SB-20260803-200251-tsx-adapter-task2-evidence-patch-context](incidents/2026-08-03T200251Z-tsx-adapter-task2-evidence-patch-context.md) | resolved | 2026-08-03T20:02:51.971257Z | Phase B TSX adapter Task 2 final evidence reconciliation | Task 2 documentation patch rejection was not durably recorded |
 | [SB-20260803-200702-fix-brief-omitted-setback-index](incidents/2026-08-03T200702Z-fix-brief-omitted-setback-index.md) | resolved | 2026-08-03T20:18:34.5600855Z | Phase B TSX repair final-review fix | Final-review fix brief omitted the setback index |
+| [SB-20260810-235231-task8-observer-resolution-timeout](incidents/2026-08-10T235231Z-task8-observer-resolution-timeout.md) | contained | 2026-08-11T01:18:00Z | Phase B monitored candidate acceptance | Observer timing and listener diagnosis required bounded retries |
 
 ## Legacy history
 

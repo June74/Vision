@@ -37,6 +37,15 @@ Recognizes one byte-stable millisecond UTC timestamp.
 Detects a target evidence marker that parsed as JSON but failed the safe
 classifier, without printing the rejected line.
 
+## `expectedEvidenceType`
+
+Maps each expectation to its one admitted terminal evidence family.
+
+## `isExpectedEvidence`
+
+Ignores a valid terminal from another scheduled family while retaining only
+the evidence family the observer is waiting for.
+
 ## `runLegacyTail`
 
 Preserves the no-argument recovery diagnostic: it prints the first allowlisted

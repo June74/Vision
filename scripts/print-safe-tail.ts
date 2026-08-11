@@ -130,16 +130,6 @@ const EXPECTATIONS = Object.freeze([
   "ai_succeeded",
 ] as const);
 type ExpectationKind = (typeof EXPECTATIONS)[number];
-const TERMINAL_MARKERS = Object.freeze([
-  "vision.sync-suppression/v1",
-  "vision.phase-b-foundation-probe/v1",
-  "vision.preview-fault/v1",
-  "vision.preview-role-probe/v1",
-  "vision.preview-restore/v1",
-  "vision.calendar-maintenance/v2",
-  "vision.ai-usage/v1",
-]);
-
 /** Parses one strict, output-free observer command. */
 function parseObserverConfiguration(
   arguments_: readonly string[],
@@ -317,13 +307,56 @@ function isCanonicalInstant(value: unknown): value is string {
 }
 
 /** Detects a complete target-shaped event that the classifier rejected. */
-function isRejectedTerminalEvent(line: string): boolean {
+function isRejectedTerminalEvent(
+  line: string,
+  expectation: PreviewObserverAcceptanceExpectation,
+): boolean {
   try {
     JSON.parse(line);
   } catch {
     return false;
   }
-  return TERMINAL_MARKERS.some((marker) => line.includes(marker));
+  const expectedMarker = expectedEvidenceType(expectation);
+  return expectedMarker !== null && line.includes(expectedMarker);
+}
+
+/** Returns the one terminal evidence family admitted by an expectation. */
+function expectedEvidenceType(
+  expectation: PreviewObserverAcceptanceExpectation,
+): string | null {
+  switch (expectation.kind) {
+    case "sync_suppressed":
+      return "vision.sync-suppression/v1";
+    case "foundation_succeeded":
+      return "vision.phase-b-foundation-probe/v1";
+    case "fault_expected":
+      return "vision.preview-fault/v1";
+    case "role_probe_succeeded":
+      return "vision.preview-role-probe/v1";
+    case "restore_succeeded":
+      return "vision.preview-restore/v1";
+    case "maintenance_succeeded":
+    case "maintenance_repair_reserved":
+      return "vision.calendar-maintenance/v2";
+    case "ai_succeeded":
+      return "vision.ai-usage/v1";
+  }
+}
+
+/** Ignores valid terminal evidence from another scheduled acceptance family. */
+function isExpectedEvidence(
+  evidence: SafeTailResult,
+  expectation: PreviewObserverAcceptanceExpectation,
+): boolean {
+  const expectedType = expectedEvidenceType(expectation);
+  if (
+    expectedType === null ||
+    typeof evidence !== "object" ||
+    evidence === null
+  ) {
+    return false;
+  }
+  return "evidenceType" in evidence && evidence.evidenceType === expectedType;
 }
 
 /** Runs the legacy non-observer filter used by recovery diagnostics. */
@@ -388,9 +421,12 @@ function runObserverTail(configuration: ObserverConfiguration): void {
     if (completed) return;
     const evidence = accumulator.push(line);
     if (!evidence) {
-      if (isRejectedTerminalEvent(line)) complete(false);
+      if (isRejectedTerminalEvent(line, configuration.expectation)) {
+        complete(false);
+      }
       return;
     }
+    if (!isExpectedEvidence(evidence, configuration.expectation)) return;
     if (!("evidenceType" in evidence)) return;
     const observedAt = new Date();
     const result = observer.push(evidence, observedAt);

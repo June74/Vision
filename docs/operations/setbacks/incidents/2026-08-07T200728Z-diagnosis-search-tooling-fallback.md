@@ -99,3 +99,10 @@ Do not use raw formatted JSON lines as semantic equality values.
 - 2026-08-11T00:48:51.121Z: The `rg.exe` repository-file listing was blocked by
   Windows access control before searching. The named-file PowerShell fallback
   remains the required search path; no repository or provider state changed.
+- 2026-08-11T01:17:12.004Z: A redacted observer-log probe was rejected before
+  execution because a PowerShell newline escape was mis-escaped in the command
+  wrapper. No log, repository, candidate, or provider state was accessed.
+- 2026-08-11T01:20:18.981Z: A multi-path `Get-ChildItem` search omitted the
+  explicit `-Path` parameter and failed before reading. No repository,
+  candidate, or provider state changed; use `Get-ChildItem -Path` with named
+  roots for this fallback.
