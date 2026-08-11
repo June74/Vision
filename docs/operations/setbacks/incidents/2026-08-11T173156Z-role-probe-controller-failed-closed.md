@@ -2,7 +2,7 @@
 
 - Incident ID: `SB-20260811-173156-role-probe-controller-failed-closed`
 - First observed: `2026-08-11T17:31:56Z`
-- Last observed: `2026-08-11T17:40:28Z`
+- Last observed: `2026-08-11T17:42:47Z`
 - Status: `contained`
 - Phase/task: Phase B monitored role-probe acceptance
 - Environment: Windows PowerShell, phase-b-foundation linked worktree, GitHub Actions observer
@@ -32,7 +32,9 @@ database mutation, secret mutation, or calendar mutation was observed.
 ## Cause classification
 
 - **Confirmed cause:** the controller failed closed before the candidate-dispatch
-  boundary while the observer dispatch itself remained active.
+  boundary because the preview workflow's single-observer concurrency group was
+  occupied by the prior long-lived observer; the retry stayed queued past the
+  controller's bounded dispatch window.
 - **Hypothesis:** observer dispatch admission reached the controller's bounded
   deadline while the provider run was still pending, so its correlation artifact
   and local mapping were not available in time.
@@ -44,15 +46,16 @@ database mutation, secret mutation, or calendar mutation was observed.
 
 Keep the observer and candidate boundaries separate, preserve the fail-closed
 resolver, and retry only with a fresh expiry and the final reviewed branch tip.
-Before retrying, verify the prior observer has settled or is excluded from the
-new dispatch interval, and retain only aggregate workflow evidence.
+Before retrying, verify the single-observer concurrency slot is clear. The two
+owned read-only observer runs from this incident were cancelled only after
+confirming neither had a candidate-intent artifact; a read-only aggregate check
+then reported zero active preview dispatches.
 
 ## Next step
 
-Run one bounded read-only resolver diagnostic against the existing observer. If
-it is healthy, allow it to settle, then create a fresh pinned role-probe input
-and rerun the approved monitored controller with the explicit local Windows
-`tsx.cmd` executable.
+Create a fresh pinned role-probe input and rerun the approved monitored
+controller with the explicit local Windows `tsx.cmd` executable only after the
+observer concurrency slot is clear.
 
 ## Latest verification
 
