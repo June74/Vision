@@ -197,3 +197,11 @@ then commit and push the listener repair before another monitored live attempt.
   dispatch; the pins are being corrected to the exact repository SHA. No
   application, candidate, provider, secret, database, or calendar state
   changed.
+- 2026-08-11T02:28:00Z: A bounded cleanup-path search traversed a broken
+  linked-worktree dependency path and failed before reading the requested
+  scripts. No application, candidate, provider, secret, database, or calendar
+  state changed; the search is being rerun against explicit tracked files.
+- 2026-08-11T02:30:00Z: A short read-only cancellation-settlement poll used a
+  malformed local worktree path and failed before invoking GitHub. No
+  application, candidate, provider, secret, database, or calendar state
+  changed.
