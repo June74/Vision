@@ -530,6 +530,8 @@
 | [SB-20260811-033227-metadata-shape-probe-syntax](incidents/2026-08-11T033227Z-metadata-shape-probe-syntax.md) | contained | 2026-08-11T03:32:27Z | Phase B monitored candidate acceptance diagnosis | Read-only metadata wrapper failed PowerShell parsing |
 | [SB-20260811-153223-browser-visibility-api-mismatch](incidents/2026-08-11T153223Z-browser-visibility-api-mismatch.md) | contained | 2026-08-11T15:32:23Z | Phase B Google account selection | Browser runtime did not expose the attempted visibility method |
 | [SB-20260811-153314-git-lock-push-blocked](incidents/2026-08-11T153314Z-git-lock-push-blocked.md) | contained | 2026-08-11T15:33:14Z | Phase B setback-log publication | Linked-worktree Git lock and restricted network blocked publication |
+| [SB-20260811-153535-browser-tab-stale](incidents/2026-08-11T153535Z-browser-tab-stale.md) | contained | 2026-08-11T15:35:35Z | Phase B live sync diagnosis | Prior browser tab handle was stale during safe status inspection |
+| [SB-20260811-153637-rg-unavailable](incidents/2026-08-11T153637Z-rg-unavailable.md) | contained | 2026-08-11T15:36:37Z | Phase B live sync diagnosis | Preferred repository search executable was unavailable |
 
 ## Legacy history
 
