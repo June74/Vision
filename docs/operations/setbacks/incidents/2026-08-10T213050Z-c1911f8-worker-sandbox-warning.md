@@ -37,6 +37,14 @@ The worker assertions themselves passed, but the environment warnings prevent tr
 
 At `2026-08-10T21:32:38Z`, the production build reproduced the local Wrangler log-write warning while still completing successfully. This is the same contained environment condition, not a new application failure.
 
+At `2026-08-11T00:40:42.775Z`, the worker suite on the repaired branch
+reproduced the same log-write `EPERM` and linked-worktree access warnings while
+still passing all 116 assertions. No application or provider state changed.
+
+At `2026-08-11T00:41:07.128Z`, the repaired-branch production build emitted
+the same local Wrangler log-write `EPERM` while completing successfully; the
+preview deployment configuration check also passed. No provider action ran.
+
 ## Confirmed cause
 
 The test run encountered local filesystem restrictions while Wrangler attempted to write its debug log and inspect the linked-worktree path. The test assertions did not fail.

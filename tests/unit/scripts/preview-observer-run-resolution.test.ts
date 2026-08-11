@@ -1235,9 +1235,9 @@ describe("preview observer run resolution", () => {
 
       expect(calls).toBe(25);
       expect(monotonic).toBe(120_000);
-      expect(terminalContext?.deadlineMonotonic).toBe(150_000);
+      expect(terminalContext?.deadlineMonotonic).toBe(180_000);
 
-      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(60_000);
       await pending;
       expect(rejection).toBeInstanceOf(Error);
       expect((rejection as Error).message).toBe(

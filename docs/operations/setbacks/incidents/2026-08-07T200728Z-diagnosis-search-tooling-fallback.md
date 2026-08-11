@@ -80,3 +80,19 @@ Do not use raw formatted JSON lines as semantic equality values.
   rejected before execution because the sandbox permission label was
   misspelled. No repository, candidate, or provider state changed; validate
   tool parameters before dispatching the command.
+- 2026-08-11T00:22:21.175Z: A read-only source-inspection invocation repeated
+  the same permission-label typo and was rejected before execution. No
+  repository, candidate, or provider state changed; use the default read-only
+  workspace access for local inspection.
+- 2026-08-11T00:23:34.709Z: A local test-file read used the parent checkout
+  instead of the Phase B worktree and failed before reading. No repository,
+  candidate, or provider state changed; use the explicit worktree path for
+  checkout-specific inspection.
+- 2026-08-11T00:24:33.929Z: A focused regression command invoked `pnpm exec
+  vitest` directly, but this checkout exposes the runner through its package
+  script and no direct binary was available. No repository, candidate, or
+  provider state changed; use the repository test script.
+- 2026-08-11T00:30:27.097Z: Two documentation patches used stale surrounding
+  text and were rejected before changing the incident record. No repository,
+  candidate, or provider state changed; inspect the exact local context before
+  applying a follow-up patch.

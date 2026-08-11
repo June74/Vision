@@ -574,6 +574,38 @@ describe("preview acceptance controller", () => {
     expect(fixture.currentMonotonic()).toBeLessThanOrEqual(46 * 60_000);
   });
 
+  it("grants observer resolution the terminal settlement margin", async () => {
+    const fixture = harness();
+    let startedAt: number | null = null;
+    let deadline: number | null = null;
+    vi.mocked(fixture.dependencies.resolveObserver).mockImplementation(
+      async (_input, boundary) => {
+        startedAt = fixture.currentMonotonic();
+        deadline = boundary.deadlineMonotonic;
+        return "41" as never;
+      },
+    );
+
+    await expect(
+      runPreviewAcceptanceController(
+        {
+          family: "foundation_probe",
+          reviewedCommit: SHA,
+          expiresAt: new Date(START.getTime() + 10 * 60_000).toISOString(),
+          expectation: { kind: "foundation_succeeded" },
+        },
+        fixture.dependencies,
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(startedAt).not.toBeNull();
+    expect(deadline).not.toBeNull();
+    if (startedAt === null || deadline === null) {
+      throw new Error("missing observer resolution boundary");
+    }
+    expect(deadline - startedAt).toBe(180_000);
+  });
+
   it("does not accept maintenance success one millisecond before local close and accepts it at close", async () => {
     const close = START.getTime() + 120_000;
     const fixture = harness();
@@ -1720,7 +1752,7 @@ describe("preview acceptance controller decisive hardening", () => {
 
     expect(resolutionStartedAt).not.toBeNull();
     expect(terminalMetadataDeadline).toBe(
-      (resolutionStartedAt as unknown as number) + 150_000,
+      (resolutionStartedAt as unknown as number) + 180_000,
     );
   });
 

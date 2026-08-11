@@ -13,9 +13,9 @@ const MAX_JOBS = 100;
 const MAX_STEPS = 100;
 const POLL_MILLISECONDS = 5_000;
 const RESOLUTION_MILLISECONDS = 120_000;
-// Keep enough room for one or more slow GitHub metadata reads after the
+// Keep enough room for several slow GitHub metadata reads after the
 // 120-second stable-listener window before the outer controller aborts.
-const TERMINAL_POLL_SETTLEMENT_MILLISECONDS = 30_000;
+const TERMINAL_POLL_SETTLEMENT_MILLISECONDS = 60_000;
 const PROVIDER_TIMESTAMP_UNCERTAINTY_MILLISECONDS = 999;
 const CONTEXT_INSTANT_PATTERN =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;

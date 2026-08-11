@@ -2,11 +2,11 @@
 
 - Incident ID: `SB-20260810-235711-task8-timing-test-cap-mismatch`
 - First observed: `2026-08-10T23:57:11Z`
-- Last observed: `2026-08-10T23:57:11Z`
+- Last observed: `2026-08-11T00:33:52.829Z`
 - Status: `closed`
 - Phase/task: Phase B observer-margin regression
 - Environment: Vitest focused controller/resolver suites
-- Version/commit: `acb10542` plus uncommitted timing repair
+- Version/commit: `c2c64365` plus uncommitted timing repair
 
 ## Symptom
 
@@ -34,3 +34,14 @@ constants and fake-clock assertions synchronized when changing bounded waits.
 
 Run the focused suites again, then run the full repository verification before
 committing the repair.
+
+## Recurrence
+
+- 2026-08-11T00:33:52.829Z: Widening the live terminal margin to 60 seconds
+  exposed one additional stale controller test expectation at 150 seconds.
+  Only the focused local suite failed; no application, branch, provider,
+  deployment, traffic, secret, key, database, or calendar state changed.
+- 2026-08-11T00:39:17.035Z: The full TypeScript check rejected the new timing
+  test because its runtime null assertions did not narrow the captured values
+  for the compiler. No application, branch, provider, deployment, traffic,
+  secret, key, database, or calendar state changed.
