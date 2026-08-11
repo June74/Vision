@@ -312,3 +312,7 @@ then commit and push the listener repair before another monitored live attempt.
   worktree. No files, candidate artifacts, provider state, secrets, keys,
   database, or calendar state changed; the status check is being rerun with an
   explicit result collection.
+- 2026-08-11T03:43:43Z: A follow-up disposable-worktree path inspection repeated
+  the same empty-pipeline wrapper mistake and stopped before reading the
+  worktree metadata. No files or external state changed; subsequent checks use
+  a single-object command without a trailing pipeline.
