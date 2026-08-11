@@ -535,6 +535,7 @@
 | [SB-20260811-154929-evidence-ledger-line-endings](incidents/2026-08-11T154929Z-evidence-ledger-line-endings.md) | contained | 2026-08-11T15:49:29Z | Phase B evidence-ledger publication | Evidence patch mixed line endings and created noisy documentation diff |
 | [SB-20260811-155021-git-blob-probe-env](incidents/2026-08-11T155021Z-git-blob-probe-env.md) | contained | 2026-08-11T15:50:21Z | Phase B evidence-ledger formatting verification | Raw Git blob probe hit duplicate PowerShell path keys before process start |
 | [SB-20260811-160226-calendar-context-mismatch](incidents/2026-08-11T160226Z-calendar-context-mismatch.md) | contained | 2026-08-11T16:02:26Z | Phase B near-real-time synchronization acceptance | Controlled Google Calendar session lacked the expected Vision calendar |
+| [SB-20260811-161414-browser-calendar-handle-recurrence](incidents/2026-08-11T161414Z-browser-calendar-handle-recurrence.md) | contained | 2026-08-11T16:14:14Z | Phase B OAuth privacy acceptance preparation | Controlled Google Calendar tab handle became stale before safe inspection |
 
 ## Legacy history
 
