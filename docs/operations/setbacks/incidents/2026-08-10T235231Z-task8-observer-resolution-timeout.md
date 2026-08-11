@@ -398,3 +398,8 @@ then commit and push the listener repair before another monitored live attempt.
   `live_schedule_evidence_timeout`. No deployment, traffic, rollback, secret,
   key, database, or calendar state changed; the challenge/evidence path is
   being inspected against the active normal schedule before any mutation.
+- 2026-08-11T14:02:38Z: A bounded post-CI artifact summary wrapper built a
+  malformed Git argument expression and printed Git's command error before the
+  safe config/result fields were read. No files, provider, secret, key,
+  database, or calendar state changed; subsequent summaries use separate
+  argument variables rather than string concatenation.
