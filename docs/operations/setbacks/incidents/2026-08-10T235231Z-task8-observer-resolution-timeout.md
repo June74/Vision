@@ -321,3 +321,9 @@ then commit and push the listener repair before another monitored live attempt.
   host, and stopped before the controller started. No Wrangler/provider request
   or state change occurred; the native Windows PowerShell executable is being
   used for the contained retry.
+- 2026-08-11T03:45:39Z: The native read-only baseline controller started but
+  failed closed at `candidate_artifact_invalid` because the ignored disposable
+  candidate pin still referenced an older tip after later documentation
+  commits. The provider was not reached and no state changed; the candidate
+  and rollback artifacts must be refreshed at the final frozen tip before
+  baseline validation can be meaningful.
