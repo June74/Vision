@@ -284,3 +284,7 @@ then commit and push the listener repair before another monitored live attempt.
   nonempty collection and attempted to inspect a null first record. The
   corrected deployments-list command itself succeeded, but this follow-up
   probe stopped before reading any provider value; no state changed.
+- 2026-08-11T03:22:29Z: The bounded local tail-capture probe stopped before
+  starting because its ignored helper imported the tracked classifier through
+  one parent path too many. No Wrangler tail or provider action ran and no
+  state changed; the helper import path is being corrected.
