@@ -378,8 +378,10 @@ does not alter rollback or closure cleanup bounds.
 
 ## `nextObserverResolutionDeadline`
 
-Derives an expiry-bounded 125-second outer deadline so the resolver can use its
-120-second discovery window and five-second terminal metadata settlement poll.
+Derives an expiry-bounded 180-second outer deadline so the resolver can use its
+120-second discovery window and terminal metadata settlement margin. The final
+poll sleep may cross the internal close only within that margin; the resolver
+then performs one last bounded metadata poll before returning the stable run.
 
 ## `nextCandidateWorkflowDeadline`
 

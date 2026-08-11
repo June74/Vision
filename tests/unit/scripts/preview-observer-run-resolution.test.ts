@@ -1355,6 +1355,43 @@ describe("preview observer run resolution", () => {
     expect(calls).toBe(24);
   });
 
+  it("allows the terminal poll after the final sleep crosses the stable-listener close", async () => {
+    let monotonic = 0;
+    let sleeps = 0;
+    const candidate = run();
+    const controller = new AbortController();
+    const deps: PreviewObserverResolutionDependencies = {
+      monotonicNow: () => monotonic,
+      sleep: vi.fn(async (milliseconds) => {
+        sleeps += 1;
+        monotonic += milliseconds + (sleeps === 24 ? 1 : 0);
+      }),
+      listRuns: vi.fn(async () => ({ workflow_runs: [candidate] })),
+      readRun: vi.fn(async () => candidate),
+      listJobs: vi.fn(async () => ({
+        jobs: [job("Capture foundation_probe signal")],
+      })),
+    };
+
+    await expect(
+      resolvePreviewObserverRun(
+        {
+          expectedWorkflow: candidate.path,
+          expectedCommit: candidate.head_sha,
+          dispatchStartedAt: new Date(Date.parse(candidate.created_at) - 1_000),
+          dispatchCompletedAt: new Date(Date.parse(candidate.created_at) + 1_000),
+          family: "foundation_probe",
+        },
+        deps,
+        {
+          deadlineMonotonic: 180_000,
+          signal: controller.signal,
+        },
+      ),
+    ).resolves.toBe(candidate.id);
+    expect(sleeps).toBe(24);
+  });
+
   it("filters a realistic full workflow job list and finds the named listener among setup steps", async () => {
     const listener = job("Capture restore signal");
     listener.steps = [

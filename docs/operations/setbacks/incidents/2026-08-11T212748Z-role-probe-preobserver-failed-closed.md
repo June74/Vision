@@ -2,7 +2,7 @@
 
 - Incident ID: `SB-20260811-212748-role-probe-preobserver-failed-closed`
 - First observed: `2026-08-11T21:27:48Z`
-- Last observed: `2026-08-11T21:27:48Z`
+- Last observed: `2026-08-11T22:41:00Z`
 - Status: `contained`
 - Phase/task: Phase B monitored role-probe acceptance after correlation-wait repair
 - Environment: Windows PowerShell, pushed reviewed branch
@@ -25,21 +25,21 @@ application state change was authorized by this run.
 - **Confirmed cause:** the retry set `XDG_CONFIG_HOME` to a fresh empty folder,
   so GitHub CLI could not see the normal saved login; its dispatch call failed
   before a workflow run was created.
-- **Latest confirmed boundary:** after removing that override, the observer
-  dispatch and local mapping succeeded, but the controller still failed before
-  `observer_ready`; no candidate mapping or candidate-intent artifact exists.
-  The observer run remains a read-only listener.
+- **Confirmed second cause:** the corrected no-XDG retry dispatched a valid
+  observer, but the resolver's final five-second sleep crossed its internal
+  120-second stable-listener close by a small amount and failed before the
+  terminal metadata poll. The active listener topology and run attribution
+  were valid; no candidate mapping or candidate-intent artifact exists.
 - **Contributing diagnostic issue:** the first comparison wrapper was run in a
   restricted network context and a PowerShell wrapper stopped on native CLI
   stderr before collecting both sides.
 - **Rejected hypotheses:** the remote tip, workflow activation, repository
   write permission, local driver self-test, input/commit agreement, and saved
   GitHub authentication all passed safe checks.
-- **Remaining hypothesis:** the real observer-resolution boundary is too tight
-  or hit a transient metadata timing failure after the observer was admitted.
-  A later standalone read-only resolver against the same run succeeded and
-  reported the listener still active, so no application or deployment failure
-  was reached.
+- **Correction evidence:** a focused regression failed before the correction,
+  then passed after the terminal-sleep margin was applied. A live read-only
+  resolver trace against the same active observer resolved successfully in
+  about two minutes.
 - **Rejected hypotheses:** the five-minute correlation-window regression is
   not exercised by this attempt because observer dispatch did not reach the
   ready status.
@@ -47,21 +47,24 @@ application state change was authorized by this run.
 ## Correction and prevention
 
 Do not retry blindly. Inspect only safe state predicates and bounded command
-exit/status evidence, then correct the single confirmed boundary. Keep all
-provider responses, credentials, tokens, URLs, and private payloads out of the
-incident record.
+exit/status evidence. Keep the resolver's internal 120-second discovery close,
+but allow only its final poll sleep to use the existing bounded settlement
+margin; never extend candidate, rollback, or cleanup windows. Keep all provider
+responses, credentials, tokens, URLs, and private payloads out of the incident
+record.
 
 ## Next diagnostic step
 
-Check pending-journal and mapping counts, input/remote-tip agreement, driver
-executable availability, and the controller's safe status file. If the cause
-is local invocation, rerun one read-only driver self-test before another
-monitored acceptance.
+Commit and verify the resolver correction, clear the orphaned observer, refresh
+the reviewed tip pin, and run one fresh monitored role-probe acceptance. Do not
+start a candidate until `observer_ready` is observed.
 
 ## Verification
 
-The attempt emitted no candidate-intent or deployment status and was contained
-before any external mutation was confirmed.
+The failed controller attempt emitted no candidate-intent or deployment status.
+The orphaned observer was later cancelled after the live read-only trace
+verified the correction; no candidate, deployment, rollback, database, key,
+secret, or calendar mutation occurred.
 
 ## Recurrence
 
@@ -110,3 +113,33 @@ before any external mutation was confirmed.
 - `2026-08-11T22:18:00Z`: the escalated commit retry used a POSIX `&&`
   separator in PowerShell and stopped before Git ran. No repository or
   provider state changed; the next retry uses separate PowerShell statements.
+- `2026-08-11T22:24:00Z`: the fresh no-XDG monitored retry passed preflight and
+  dispatched the observer, but returned `failed_closed` before observer-ready.
+  No candidate-intent, deployment, rollback, database, key, secret, or
+  calendar mutation is recorded; the remaining observer boundary is under
+  diagnosis and no blind retry will be made.
+- `2026-08-11T22:27:00Z`: the first targeted regression command used
+  `pnpm exec vitest`, but this checkout exposes the runner through its local
+  Windows launcher instead. It stopped before tests ran; no repository or
+  provider state changed.
+- `2026-08-11T22:29:00Z`: a documentation search was pointed at a malformed
+  worktree path and the process could not start. No files or provider state
+  changed; the next read uses the verified worktree path.
+- `2026-08-11T22:32:47Z`: a bounded read-only trace reproduced the remaining
+  failure: the resolver's final five-second sleep crossed its internal
+  120-second close by a small amount and rejected before the terminal metadata
+  poll. The active observer topology was valid throughout. A regression test
+  failed before the correction; after allowing only that final sleep to use
+  the existing 60-second settlement margin, the test and a live read-only
+  trace resolved the observer successfully. No candidate, deployment,
+  rollback, database, key, secret, or calendar mutation occurred.
+- `2026-08-11T22:34:00Z`: a local process-status probe used a restricted WMI
+  query and received access denied. It did not alter processes, files, or
+  provider state; test verification continues through the test runner itself.
+- `2026-08-11T22:40:00Z`: after the live resolver trace verified the fix, the
+  orphaned observer from the failed controller retry was cancelled and its
+  completed/cancelled state was confirmed. Candidate and rollback jobs had
+  remained skipped; no other provider or application state changed.
+- `2026-08-11T22:41:00Z`: an attempted incident-section patch used a duplicated
+  worktree path and an empty patch, so no edit was applied. No repository or
+  provider state changed; the section update is retried with the verified path.

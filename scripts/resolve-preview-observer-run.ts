@@ -233,6 +233,7 @@ export async function resolvePreviewObserverRun(
       deadline,
       deps,
       outerContext,
+      deadline + TERMINAL_POLL_SETTLEMENT_MILLISECONDS,
     );
   }
 }
@@ -629,9 +630,10 @@ async function sleepBeforeDeadline(
   deadlineMonotonic: number,
   deps: PreviewObserverResolutionDependencies,
   outerContext?: PreviewObserverCallContext,
+  terminalSettlementDeadlineMonotonic?: number,
 ): Promise<void> {
   const deadline = boundedObserverDeadline(
-    deadlineMonotonic,
+    terminalSettlementDeadlineMonotonic ?? deadlineMonotonic,
     deps,
     outerContext,
   );
