@@ -248,3 +248,7 @@ then commit and push the listener repair before another monitored live attempt.
   permission on the linked worktree's Git index lock. No files were staged and
   no commit or provider action ran; the same explicit staging operation must be
   retried through the approved elevated Git boundary.
+- 2026-08-11T03:01:04Z: The first disposable-candidate status read was blocked
+  by Git's dubious-ownership guard in the sandbox identity. No candidate files
+  or provider state changed; candidate inspection and refresh must use the
+  exact disposable path with an explicit temporary safe-directory option.
