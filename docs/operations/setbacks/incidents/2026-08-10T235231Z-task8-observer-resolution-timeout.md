@@ -303,3 +303,7 @@ then commit and push the listener repair before another monitored live attempt.
   this is a sequencing risk, not yet a provider-state conclusion. No
   deployment, traffic, rollback, secret, key, database, or calendar mutation
   ran.
+- 2026-08-11T03:37:51Z: A local source-inspection wrapper contained a malformed
+  orchestration expression and failed before reading the observer resolver.
+  No repository command, provider request, or application state changed; the
+  inspection is being rerun with a corrected wrapper.
