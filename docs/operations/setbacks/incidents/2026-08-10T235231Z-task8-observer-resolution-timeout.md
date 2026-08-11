@@ -331,3 +331,7 @@ then commit and push the listener repair before another monitored live attempt.
   Windows working-directory string and the host rejected process creation
   before Git ran. No repository or provider state changed; the probe is being
   rerun with the explicit validated worktree path.
+- 2026-08-11T03:51:05Z: A follow-up disposable-artifact hash probe repeated a
+  malformed working-directory string and failed during process creation before
+  reading Git or artifact bytes. No files or external state changed; the
+  comparison is being rerun only after the path is validated.
