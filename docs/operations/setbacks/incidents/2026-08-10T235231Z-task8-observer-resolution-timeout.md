@@ -109,3 +109,7 @@ then commit and push the listener repair before another monitored live attempt.
   commit was created, and no application, candidate, provider, secret,
   database, or calendar state changed. The bounded retry will use the normal
   Git worktree outside the restricted sandbox.
+- 2026-08-11T01:43:00Z: A candidate-worktree status check hit Git's dubious
+  ownership guard under the restricted sandbox identity. No global Git
+  configuration was changed and no candidate or provider state changed; the
+  next check uses a per-command safe-directory allowance.
