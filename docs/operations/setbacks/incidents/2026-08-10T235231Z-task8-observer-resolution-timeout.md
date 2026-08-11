@@ -371,3 +371,9 @@ then commit and push the listener repair before another monitored live attempt.
   key, database, or calendar state changed. A bounded targeted rerun with a
   larger test timeout is being used to distinguish local startup slowness from
   a functional regression.
+- 2026-08-11T13:27:02Z: The approved read-only baseline controller failed
+  closed at `candidate_ci_evidence_invalid` after validating the freshly pinned
+  candidate and rollback artifacts. No provider request reached a mutation
+  boundary and no deployment, traffic, rollback, secret, key, database, or
+  calendar state changed; the CI-evidence contract is being inspected before
+  any retry.
