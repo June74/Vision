@@ -147,3 +147,25 @@ secret, or calendar mutation occurred.
   wrote a 41-character reviewed-commit value instead of the 40-character
   branch tip. The mismatch was caught by a local length/equality check before
   any dispatch; no provider action occurred.
+- `2026-08-11T23:00:55Z`: the final monitored retry reached `observer_ready`,
+  candidate dispatch, and `rollback_dispatched`, then returned
+  `failed_closed` before closure verification. Candidate and rollback mappings
+  exist; the exact post-rollback boundary is under diagnosis. No blind retry
+  will be made and no additional candidate will be dispatched.
+- `2026-08-11T23:01:30Z`: a source search passed the `scripts` directory as a
+  file path and stopped after the workflow results were collected. No files,
+  provider state, or secrets were changed or exposed.
+- `2026-08-11T23:03:20Z`: a local public-health request ran inside the
+  restricted network context and could not connect; its follow-on parser saw
+  no response. No provider state or files changed, and no private response was
+  exposed.
+- `2026-08-11T23:03:40Z`: an attempted log patch used an incorrect date in its
+  context and applied nothing. No repository or provider state changed.
+- `2026-08-11T23:05:45Z`: safe workflow inspection confirmed the candidate
+  failed before mutation at `Verify live preview is normal before candidate
+  deployment`; its candidate-intent artifact was therefore never created.
+  Rollback then failed closed at `Verify rollback targets the latest candidate
+  intent`, with no deployment or restore mutation. The public preview health
+  endpoint independently returned HTTP 200/`ok`; the remaining predicate is
+  the authenticated schedule/binding restore-pair check. The orphaned observer
+  was cancelled and cancellation settled successfully.
