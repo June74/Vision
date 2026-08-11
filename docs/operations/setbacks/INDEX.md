@@ -532,6 +532,7 @@
 | [SB-20260811-153314-git-lock-push-blocked](incidents/2026-08-11T153314Z-git-lock-push-blocked.md) | contained | 2026-08-11T15:33:14Z | Phase B setback-log publication | Linked-worktree Git lock and restricted network blocked publication |
 | [SB-20260811-153535-browser-tab-stale](incidents/2026-08-11T153535Z-browser-tab-stale.md) | contained | 2026-08-11T15:35:35Z | Phase B live sync diagnosis | Prior browser tab handle was stale during safe status inspection |
 | [SB-20260811-153637-rg-unavailable](incidents/2026-08-11T153637Z-rg-unavailable.md) | contained | 2026-08-11T15:36:37Z | Phase B live sync diagnosis | Preferred repository search executable was unavailable |
+| [SB-20260811-154929-evidence-ledger-line-endings](incidents/2026-08-11T154929Z-evidence-ledger-line-endings.md) | contained | 2026-08-11T15:49:29Z | Phase B evidence-ledger publication | Evidence patch mixed line endings and created noisy documentation diff |
 
 ## Legacy history
 
