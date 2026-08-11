@@ -357,3 +357,9 @@ then commit and push the listener repair before another monitored live attempt.
   probe runs under the sandbox account. No files, provider state, secrets,
   keys, database, or calendar state changed; the retry will use an explicit
   per-command safe-directory allowance without changing global Git settings.
+- 2026-08-11T04:02:12Z: The explicit safe-directory checkout still could not
+  create the shared worktree administrative lock under the sandbox account
+  (`index.lock` permission denied). The checkout stopped before changing either
+  worktree; no files, provider state, secrets, keys, database, or calendar
+  state changed. The same read-only-to-local-repair step is being retried only
+  through the approved external boundary.
