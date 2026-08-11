@@ -377,3 +377,8 @@ then commit and push the listener repair before another monitored live attempt.
   boundary and no deployment, traffic, rollback, secret, key, database, or
   calendar state changed; the CI-evidence contract is being inspected before
   any retry.
+- 2026-08-11T13:29:47Z: The first local wrapper for the durable full-CI result
+  contained an unescaped PowerShell backtick inside the JavaScript command
+  string and failed before starting CI. No files, provider, secret, key,
+  database, or calendar state changed; the wrapper is being rerun with a
+  newline expression that does not cross the host-language quoting boundary.
