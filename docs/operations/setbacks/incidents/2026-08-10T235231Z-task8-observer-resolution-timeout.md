@@ -382,3 +382,8 @@ then commit and push the listener repair before another monitored live attempt.
   string and failed before starting CI. No files, provider, secret, key,
   database, or calendar state changed; the wrapper is being rerun with a
   newline expression that does not cross the host-language quoting boundary.
+- 2026-08-11T13:31:34Z: The corrected wrapper initially invoked `pnpm ci`,
+  which this pnpm version treats as its install alias rather than the package
+  script named `ci`; the safe result was therefore invalidated before it could
+  be used. No source, provider, deployment, secret, key, database, or calendar
+  state changed. The actual script is being rerun explicitly as `pnpm run ci`.
