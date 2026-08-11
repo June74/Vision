@@ -29,6 +29,7 @@ const OTHER_COMMIT = "b".repeat(40);
 const CANDIDATE_RUN_REF = "1201";
 const NORMAL_CRONS = ["*/15 * * * *", "5 6 * * *"] as const;
 const ACCEPTANCE_CRON = "* * * * *";
+const FILE_CLOSURE_CHAIN_TEST_TIMEOUT_MS = 30_000;
 const NORMAL_PROVIDER_BINDINGS = [
   ...AI_PRICING_BINDING_CONTRACT.map(({ name, type, value }) => ({
     name,
@@ -1328,5 +1329,5 @@ describe("preview rollback lifecycle", () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
-  });
+  }, FILE_CLOSURE_CHAIN_TEST_TIMEOUT_MS);
 });
