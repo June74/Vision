@@ -403,3 +403,9 @@ then commit and push the listener repair before another monitored live attempt.
   safe config/result fields were read. No files, provider, secret, key,
   database, or calendar state changed; subsequent summaries use separate
   argument variables rather than string concatenation.
+- 2026-08-11T14:49:11Z: A follow-up read-only artifact-head summary repeated the
+  same PowerShell/Git argument-boundary mistake by embedding an unquoted
+  resolved path in the `-c safe.directory` argument. Git stopped before reading
+  either disposable worktree. The already verified CI result and generated
+  configs remain valid; no files, provider, secret, key, database, or calendar
+  state changed. The next summary will use precomputed quoted path variables.
