@@ -526,6 +526,7 @@
 | [SB-20260803-200251-tsx-adapter-task2-evidence-patch-context](incidents/2026-08-03T200251Z-tsx-adapter-task2-evidence-patch-context.md) | resolved | 2026-08-03T20:02:51.971257Z | Phase B TSX adapter Task 2 final evidence reconciliation | Task 2 documentation patch rejection was not durably recorded |
 | [SB-20260803-200702-fix-brief-omitted-setback-index](incidents/2026-08-03T200702Z-fix-brief-omitted-setback-index.md) | resolved | 2026-08-03T20:18:34.5600855Z | Phase B TSX repair final-review fix | Final-review fix brief omitted the setback index |
 | [SB-20260810-235231-task8-observer-resolution-timeout](incidents/2026-08-10T235231Z-task8-observer-resolution-timeout.md) | contained | 2026-08-11T01:18:00Z | Phase B monitored candidate acceptance | Observer timing and listener diagnosis required bounded retries |
+| [SB-20260811-032823-versions-view-process-start](incidents/2026-08-11T032823Z-versions-view-process-start.md) | contained | 2026-08-11T03:28:23Z | Phase B monitored candidate acceptance diagnosis | Read-only version-detail probe failed before process start |
 
 ## Legacy history
 
