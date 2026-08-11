@@ -280,3 +280,7 @@ then commit and push the listener repair before another monitored live attempt.
   foundation evidence marker or category, so the earlier metadata-race theory
   is not sufficient; the next diagnosis targets the scheduled probe/tail
   boundary before any retry.
+- 2026-08-11T03:20:20Z: A read-only deployment-response shape probe assumed a
+  nonempty collection and attempted to inspect a null first record. The
+  corrected deployments-list command itself succeeded, but this follow-up
+  probe stopped before reading any provider value; no state changed.
