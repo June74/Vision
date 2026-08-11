@@ -327,3 +327,7 @@ then commit and push the listener repair before another monitored live attempt.
   commits. The provider was not reached and no state changed; the candidate
   and rollback artifacts must be refreshed at the final frozen tip before
   baseline validation can be meaningful.
+- 2026-08-11T03:46:19Z: A read-only local/remote tip probe supplied a malformed
+  Windows working-directory string and the host rejected process creation
+  before Git ran. No repository or provider state changed; the probe is being
+  rerun with the explicit validated worktree path.
