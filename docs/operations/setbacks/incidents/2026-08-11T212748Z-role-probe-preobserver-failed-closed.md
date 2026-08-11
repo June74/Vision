@@ -199,3 +199,7 @@ secret, or calendar mutation occurred.
   blocked by Windows permission on the linked worktree index lock. No files or
   provider state were lost or changed; the same stage/commit is retried with
   the required repository permission.
+- `2026-08-11T23:38:19Z`: a repository search included a nonexistent README
+  path and a directory path, so PowerShell reported two input-path errors after
+  the relevant matches had already been collected. No files, provider state,
+  or secrets changed; the search was rerun with existing file paths only.
