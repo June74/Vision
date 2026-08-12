@@ -2,7 +2,7 @@
 
 - Incident ID: `SB-20260810-232934-docs-diff-check-trailing-whitespace`
 - First observed: `2026-08-10T23:29:34Z`
-- Last observed: `2026-08-10T23:29:34Z`
+- Last observed: `2026-08-12T18:32:10Z`
 - Status: `contained`
 - Phase/task: Phase B documentation freeze
 - Environment: Windows PowerShell, linked Phase B worktree
@@ -35,3 +35,10 @@ repository check.
 
 Restage the corrected documentation, rerun the cached diff check, and commit
 only the audited documentation changes.
+
+## Recurrence - 2026-08-12
+
+The new bounded-dialect specification initially used two Markdown hard-break
+spaces, which the staged diff check correctly rejected. The spaces were
+removed before commit; no application, branch, provider, deployment, traffic,
+secret, key, database, or calendar state changed.

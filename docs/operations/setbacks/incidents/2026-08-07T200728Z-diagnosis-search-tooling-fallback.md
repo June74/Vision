@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-08-07T20:06:50Z
-- **Last observed:** 2026-08-10T18:58:59.105Z
+- **Last observed:** 2026-08-12T18:28:21Z
 - **Phase/task:** Phase B Cloudflare-side deployment diagnosis
 - **Environment:** Windows PowerShell, linked Phase B worktree
 - **Version/commit:** Current reviewed Phase B checkout; no tracked implementation change
@@ -106,3 +106,9 @@ Do not use raw formatted JSON lines as semantic equality values.
   explicit `-Path` parameter and failed before reading. No repository,
   candidate, or provider state changed; use `Get-ChildItem -Path` with named
   roots for this fallback.
+- 2026-08-12T18:28:21Z: Three bounded local inspections were malformed before
+  execution: a nonexistent skill-path probe, a duplicated linked-worktree
+  path, and a tool-wrapper argument construction error. No repository,
+  candidate, provider, deployment, secret, or runtime state was accessed or
+  changed; use the catalog-root paths and the verified worktree root directly,
+  and keep wrapper arguments in simple bounded commands.
