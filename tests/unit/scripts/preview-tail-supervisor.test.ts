@@ -158,6 +158,44 @@ describe("preview tail producer supervision", () => {
     });
   });
 
+  it.each([
+    ["maintenance_schedule_mismatch", "consumer_maintenance_schedule_mismatch"],
+    ["maintenance_outcome_mismatch", "consumer_maintenance_outcome_mismatch"],
+    ["maintenance_category_mismatch", "consumer_maintenance_category_mismatch"],
+    ["maintenance_repair_failure", "consumer_maintenance_repair_failure"],
+    ["maintenance_renewal_failure", "consumer_maintenance_renewal_failure"],
+    ["maintenance_repair_not_reserved", "consumer_maintenance_repair_not_reserved"],
+  ] as const)("maps %s to %s", async (raw, expected) => {
+    await expect(
+      supervisePreviewTail({
+        producer: node("setInterval(()=>{},1000)"),
+        consumer: node(
+          `process.stderr.write("Preview tail observer failed closed: ${raw}.\\n");process.exit(1);`,
+        ),
+      }),
+    ).rejects.toMatchObject({
+      category: expected,
+      consumerExitCode: 1,
+      producerClosedFirst: false,
+    });
+  });
+
+  it("recognizes a maintenance marker split across stderr chunks", async () => {
+    await expect(
+      supervisePreviewTail({
+        producer: node("setInterval(()=>{},1000)"),
+        consumer: node(
+          'process.stderr.write("Preview tail observer failed closed: maintenance_");' +
+            'setImmediate(()=>{process.stderr.write("outcome_mismatch.\\n");process.exit(1);});',
+        ),
+      }),
+    ).rejects.toMatchObject({
+      category: "consumer_maintenance_outcome_mismatch",
+      consumerExitCode: 1,
+      producerClosedFirst: false,
+    });
+  });
+
   it("distinguishes a silent nonzero consumer from an unrecognised one", async () => {
     // Nothing on stderr: the observer died before it could name a category.
     await expect(
