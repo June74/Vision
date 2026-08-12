@@ -75,13 +75,13 @@ stderr; it never prints the rejected tail record.
 
 ## `classifyExpectationFailure`
 
-Names the kind of maintenance expectation mismatch using fixed words only;
-scheduled values and event contents stay private.
-
-## `classifyExpectationFailure`
-
 Names a maintenance expectation mismatch using fixed words only; scheduled
 values and event contents stay private.
+
+## `handleObserverRuntimeFailure`
+
+Converts an unexpected observer crash into one fixed diagnostic word without
+printing the error.
 
 ## `main`
 

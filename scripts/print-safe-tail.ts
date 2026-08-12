@@ -26,6 +26,7 @@ type PreviewTailObserverFailureCategory =
   | "maintenance_renewal_failure"
   | "maintenance_repair_not_reserved"
   | "observer_uniqueness_failed"
+  | "observer_runtime_error"
   | "input_closed_before_evidence";
 
 /** Emits one fixed diagnosis only when the supervisor explicitly requests it. */
@@ -41,6 +42,13 @@ function emitObserverFailure(
     `Preview tail observer failed closed: ${category}.\n`,
     onFlushed,
   );
+}
+
+/** Converts uncaught observer failures into one fixed, value-free category. */
+function handleObserverRuntimeFailure(): void {
+  emitObserverFailure("observer_runtime_error", () => {
+    process.exitCode = 1;
+  });
 }
 
 /** Classifies one semantic maintenance mismatch without exposing field values. */
@@ -572,6 +580,9 @@ function main(): void {
     });
   }
 }
+
+process.on("uncaughtException", handleObserverRuntimeFailure);
+process.on("unhandledRejection", handleObserverRuntimeFailure);
 
 if (
   process.argv[1] &&

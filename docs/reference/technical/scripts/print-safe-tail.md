@@ -101,3 +101,8 @@ malformed target-shaped records, expectation rejection, a missing terminal, and
 premature input closure with fixed categories only.
  A failed uniqueness close uses the fixed `observer_uniqueness_failed` category
 and does not expose the underlying record.
+
+## `handleObserverRuntimeFailure`
+
+Handles uncaught exceptions and rejected promises by emitting only the fixed
+`observer_runtime_error` category when diagnostic mode is enabled.
