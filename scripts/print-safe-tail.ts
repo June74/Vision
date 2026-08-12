@@ -12,28 +12,20 @@ import {
   TEMPORARY_PREVIEW_FAULT_SCENARIOS,
   type TemporaryPreviewFaultScenario,
 } from "../src/domain/operations/temporary-preview-fault";
-
-type PreviewTailObserverFailureCategory =
-  | "invalid_configuration"
-  | "observer_window_invalid"
-  | "observer_no_matching_evidence"
-  | "rejected_terminal_event"
-  | "evidence_rejected_by_expectation"
-  | "maintenance_schedule_mismatch"
-  | "maintenance_outcome_mismatch"
-  | "maintenance_category_mismatch"
-  | "maintenance_repair_failure"
-  | "maintenance_renewal_failure"
-  | "maintenance_repair_not_reserved"
-  | "observer_uniqueness_failed"
-  | "observer_runtime_error"
-  | "input_closed_before_evidence";
+import {
+  PREVIEW_TAIL_OBSERVER_FAILURE_CATEGORIES,
+  type PreviewTailObserverFailureCategory,
+} from "./preview-tail-observer-dialect";
 
 /** Emits one fixed diagnosis only when the supervisor explicitly requests it. */
 function emitObserverFailure(
   category: PreviewTailObserverFailureCategory,
   onFlushed: () => void,
 ): void {
+  if (!PREVIEW_TAIL_OBSERVER_FAILURE_CATEGORIES.includes(category)) {
+    onFlushed();
+    return;
+  }
   if (process.env.PREVIEW_TAIL_DIAGNOSTIC !== "1") {
     onFlushed();
     return;

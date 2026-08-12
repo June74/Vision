@@ -3,6 +3,11 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import {
+  PREVIEW_TAIL_OBSERVER_FAILURE_MAX_BYTES,
+  parsePreviewTailObserverFailureMarker,
+  type PreviewTailObserverFailureCategory,
+} from "./preview-tail-observer-dialect";
 
 const FAILURE = "Preview tail supervision failed closed.";
 const MAX_CAPTURE_BYTES = 65_536;
@@ -23,6 +28,12 @@ export type PreviewTailFailureCategory =
   | "consumer_observer_no_matching_evidence"
   | "consumer_rejected_terminal_event"
   | "consumer_evidence_rejected_by_expectation"
+  | "consumer_maintenance_schedule_mismatch"
+  | "consumer_maintenance_outcome_mismatch"
+  | "consumer_maintenance_category_mismatch"
+  | "consumer_maintenance_repair_failure"
+  | "consumer_maintenance_renewal_failure"
+  | "consumer_maintenance_repair_not_reserved"
   | "consumer_observer_uniqueness_failed"
   | "consumer_observer_runtime_error"
   | "consumer_input_closed_before_evidence"
@@ -138,7 +149,9 @@ export function supervisePreviewTail(input: {
     const candidate = `${consumerDiagnosticFragment}${chunk}`;
     const category = classifyConsumerFailureCategory(candidate);
     if (category !== null) consumerFailureCategory = category;
-    consumerDiagnosticFragment = candidate.slice(-96);
+    consumerDiagnosticFragment = candidate.slice(
+      -PREVIEW_TAIL_OBSERVER_FAILURE_MAX_BYTES,
+    );
   });
   consumer.stdout.setEncoding("utf8");
   // The observer may close stdin immediately after a valid signal. Swallow the
@@ -288,33 +301,35 @@ function spawnCommand(
   });
 }
 
-/** Admits only the consumer's fixed diagnostic vocabulary. */
+const CONSUMER_FAILURE_CATEGORY_BY_OBSERVER_CATEGORY: Readonly<
+  Record<PreviewTailObserverFailureCategory, PreviewTailFailureCategory>
+> = Object.freeze({
+  invalid_configuration: "consumer_invalid_configuration",
+  observer_window_invalid: "consumer_observer_window_invalid",
+  observer_no_matching_evidence: "consumer_observer_no_matching_evidence",
+  rejected_terminal_event: "consumer_rejected_terminal_event",
+  evidence_rejected_by_expectation:
+    "consumer_evidence_rejected_by_expectation",
+  maintenance_schedule_mismatch: "consumer_maintenance_schedule_mismatch",
+  maintenance_outcome_mismatch: "consumer_maintenance_outcome_mismatch",
+  maintenance_category_mismatch: "consumer_maintenance_category_mismatch",
+  maintenance_repair_failure: "consumer_maintenance_repair_failure",
+  maintenance_renewal_failure: "consumer_maintenance_renewal_failure",
+  maintenance_repair_not_reserved:
+    "consumer_maintenance_repair_not_reserved",
+  observer_uniqueness_failed: "consumer_observer_uniqueness_failed",
+  observer_runtime_error: "consumer_observer_runtime_error",
+  input_closed_before_evidence: "consumer_input_closed_before_evidence",
+});
+
+/** Admits only the shared consumer diagnostic vocabulary. */
 function classifyConsumerFailureCategory(
   chunk: string,
 ): PreviewTailFailureCategory | null {
-  const match = /Preview tail observer failed closed: ([a-z_]+)\./u.exec(
-    chunk,
-  );
-  switch (match?.[1]) {
-    case "invalid_configuration":
-      return "consumer_invalid_configuration";
-    case "observer_window_invalid":
-      return "consumer_observer_window_invalid";
-    case "observer_no_matching_evidence":
-      return "consumer_observer_no_matching_evidence";
-    case "rejected_terminal_event":
-      return "consumer_rejected_terminal_event";
-    case "evidence_rejected_by_expectation":
-      return "consumer_evidence_rejected_by_expectation";
-    case "observer_uniqueness_failed":
-      return "consumer_observer_uniqueness_failed";
-    case "observer_runtime_error":
-      return "consumer_observer_runtime_error";
-    case "input_closed_before_evidence":
-      return "consumer_input_closed_before_evidence";
-    default:
-      return null;
-  }
+  const category = parsePreviewTailObserverFailureMarker(chunk);
+  return category === null
+    ? null
+    : CONSUMER_FAILURE_CATEGORY_BY_OBSERVER_CATEGORY[category];
 }
 
 /** Waits for either a real child close or an unspawnable-child error. */

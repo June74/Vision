@@ -22,7 +22,7 @@ describe("preview tail observer dialect", () => {
     "Preview tail observer failed closed: observer_runtime_error;secret.",
     "Preview tail observer failed closed: observer_runtime_error",
     "xPreview tail observer failed closed: observer_runtime_error.",
-    "Preview tail observer failed closed: observer_runtime_error.\nextra",
+    "Preview tail observer failed closed: observer_runtime_error.extra",
   ])("rejects malformed or unknown marker %j", (input) => {
     expect(parsePreviewTailObserverFailureMarker(input)).toBeNull();
   });
