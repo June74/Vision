@@ -605,6 +605,8 @@
 | [SB-20260812-124954-test-cast](incidents/2026-08-12T124954Z-test-cast.md) | contained | 2026-08-12T12:49:54Z | Phase B CI tail-supervisor diagnosis | Focused diagnostic test spread an unknown fixture value; an explicit test-only record cast fixed it |
 | [SB-20260812-125108-doc-coverage-expectation-helper](incidents/2026-08-12T125108Z-doc-coverage-expectation-helper.md) | contained | 2026-08-12T12:51:08Z | Phase B CI tail-supervisor diagnosis | Documentation coverage caught missing simple and technical headings for the expectation helper; both were added |
 | [SB-20260812-130104-diagnostic-chunk-shape](incidents/2026-08-12T130104Z-diagnostic-chunk-shape.md) | contained | 2026-08-12T13:01:04Z | Phase B CI tail-supervisor diagnosis | Fixed consumer category was lost when stderr chunk framing included surrounding text; parser now matches only the allowlisted token |
+| [SB-20260812-131004-diagnostic-flush](incidents/2026-08-12T131004Z-diagnostic-flush.md) | contained | 2026-08-12T13:10:04Z | Phase B CI tail-supervisor diagnosis | Fixed consumer category could be lost before process exit; the observer now waits for the stderr flush callback |
+| [SB-20260812-131724-doc-coverage-finish](incidents/2026-08-12T131724Z-doc-coverage-finish.md) | contained | 2026-08-12T13:17:24Z | Phase B CI tail-supervisor diagnosis | Documentation coverage caught the new diagnostic flush callback without JSDoc; the required comment was added |
 
 ## Legacy history
 

@@ -28,9 +28,18 @@ type PreviewTailObserverFailureCategory =
   | "input_closed_before_evidence";
 
 /** Emits one fixed diagnosis only when the supervisor explicitly requests it. */
-function emitObserverFailure(category: PreviewTailObserverFailureCategory): void {
-  if (process.env.PREVIEW_TAIL_DIAGNOSTIC !== "1") return;
-  process.stderr.write(`Preview tail observer failed closed: ${category}.\n`);
+function emitObserverFailure(
+  category: PreviewTailObserverFailureCategory,
+  onFlushed: () => void,
+): void {
+  if (process.env.PREVIEW_TAIL_DIAGNOSTIC !== "1") {
+    onFlushed();
+    return;
+  }
+  process.stderr.write(
+    `Preview tail observer failed closed: ${category}.\n`,
+    onFlushed,
+  );
 }
 
 /** Classifies one semantic maintenance mismatch without exposing field values. */
@@ -458,12 +467,17 @@ function runObserverTail(configuration: ObserverConfiguration): void {
     if (succeeded && evidence) {
       process.stdout.write(`${JSON.stringify(evidence)}\n`);
     }
+    /** Finalizes exit state after any fixed diagnostic write is flushed. */
+    const finish = () => {
+      process.exitCode = succeeded ? 0 : 1;
+      lines.close();
+      process.stdin.destroy();
+    };
     if (!succeeded && failureCategory !== undefined) {
-      emitObserverFailure(failureCategory);
+      emitObserverFailure(failureCategory, finish);
+      return;
     }
-    process.exitCode = succeeded ? 0 : 1;
-    lines.close();
-    process.stdin.destroy();
+    finish();
   };
   if (configuration.closesAt !== undefined) {
     const delay = configuration.closesAt.getTime() - Date.now();
@@ -548,8 +562,9 @@ function main(): void {
   try {
     runObserverTail(parseObserverConfiguration(arguments_));
   } catch {
-    emitObserverFailure("invalid_configuration");
-    process.exitCode = 1;
+    emitObserverFailure("invalid_configuration", () => {
+      process.exitCode = 1;
+    });
   }
 }
 
