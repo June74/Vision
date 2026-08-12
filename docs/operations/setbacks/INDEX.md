@@ -579,6 +579,8 @@
 | [SB-20260812-103300-maintenance-observer-second-failed-closed](incidents/2026-08-12T103300Z-maintenance-observer-second-failed-closed.md) | contained | 2026-08-12T10:33:00Z | Phase B permanent maintenance baseline | Exact-tip observer covered the 10:30 boundary but again found no matching maintenance record; no provider mutation occurred |
 | [SB-20260812-103900-local-tail-probe-wrapper](incidents/2026-08-12T103900Z-local-tail-probe-wrapper.md) | contained | 2026-08-12T10:39:00Z | Phase B observability credential diagnosis | Null-safe capture and child cleanup were missing in a read-only local tail wrapper; no provider state changed |
 | [SB-20260812-104100-wrangler-package-export-probe](incidents/2026-08-12T104100Z-wrangler-package-export-probe.md) | contained | 2026-08-12T10:41:00Z | Phase B observability credential diagnosis | Direct probe stopped before process start because the Wrangler binary subpath was not exported; no provider request occurred |
+| [SB-20260812-104700-tail-marker-probe-regex](incidents/2026-08-12T104700Z-tail-marker-probe-regex.md) | contained | 2026-08-12T10:47:00Z | Phase B observability credential diagnosis | Read-only marker probe stopped on PowerShell-to-Node regex quoting; no provider request occurred |
+| [SB-20260812-105100-github-tail-permission-boundary](incidents/2026-08-12T105100Z-github-tail-permission-boundary.md) | awaiting owner action | 2026-08-12T10:51:00Z | Phase B permanent maintenance baseline / GitHub observer | CI setup passed but its tail step failed while local tail worked; the CI token likely lacks Workers Tail Read |
 
 ## Legacy history
 
