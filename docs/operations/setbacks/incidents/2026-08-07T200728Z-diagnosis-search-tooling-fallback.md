@@ -156,3 +156,8 @@ Do not use raw formatted JSON lines as semantic equality values.
   linked-worktree dependency paths and emitted directory-read errors before
   producing useful matches. No repository or provider state changed; restrict
   inspection to explicitly named files and avoid recursive dependency trees.
+- 2026-08-12T20:14:06.318Z: An inline Node REST-dispatch probe was passed
+  through PowerShell quoting and lost its JavaScript string delimiters before
+  Node parsed it. No GitHub request ran; no repository or provider state
+  changed. Use a bounded temporary script file when argv preservation is
+  required on Windows.
