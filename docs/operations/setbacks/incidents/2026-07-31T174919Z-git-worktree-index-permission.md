@@ -72,3 +72,7 @@ environment values, and secrets were unaffected.
   fix and its verification ledger. The sandbox denied linked-worktree
   `index.lock` creation before any path staged; no source, provider, or external
   state changed. Retry only with the established bounded metadata-write path.
+- 2026-08-12T20:32:07.174Z: Recurred while staging the baseline-admission
+  workflow fix and its verification records. The sandbox denied linked-worktree
+  `index.lock` creation before any path staged; no source, provider, or external
+  state changed. Retry only with the established bounded metadata-write path.

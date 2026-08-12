@@ -1425,6 +1425,31 @@ describe("preview acceptance candidate workflow", () => {
     );
   });
 
+  it("skips candidate-artifact lookup for the explicit baseline path", async () => {
+    const preview = await readWorkflow("preview.yml");
+    const admission = readWorkflowStep(
+      preview,
+      "Verify normal deploy lifecycle admission",
+    );
+    const baselineGuard =
+      'if [[ "$CANDIDATE_RUN_REF" != "baseline" ]]; then';
+    const guardStart = admission.indexOf(baselineGuard);
+    expect(guardStart).toBeGreaterThan(-1);
+    const guarded = admission.slice(guardStart);
+    expect(guarded).toContain(
+      "scripts/validate-preview-rollback-lifecycle.ts --verify-latest-candidate",
+    );
+    expect(guarded.indexOf("--verify-latest-candidate")).toBeLessThan(
+      guarded.indexOf("\n          fi"),
+    );
+    expect(admission).toContain(
+      'gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=vision-preview-candidate-intent&per_page=100"',
+    );
+    expect(admission.indexOf("actions/artifacts?name=vision-preview-candidate-intent")).toBeGreaterThanOrEqual(
+      guardStart,
+    );
+  });
+
   it("routes restore re-admission through one output-capturing metadata executable", async () => {
     const preview = await readWorkflow("preview.yml");
     const readmission = readWorkflowStep(

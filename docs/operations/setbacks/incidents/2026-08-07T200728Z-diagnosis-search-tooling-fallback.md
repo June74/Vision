@@ -161,3 +161,14 @@ Do not use raw formatted JSON lines as semantic equality values.
   Node parsed it. No GitHub request ran; no repository or provider state
   changed. Use a bounded temporary script file when argv preservation is
   required on Windows.
+- 2026-08-12T20:19:15.634Z: A read-only GitHub step-status query passed a jq
+  expression through PowerShell with its string quotes removed, so jq rejected
+  the filter before returning data. No provider or repository state changed;
+  parse the JSON with PowerShell objects when quoting is ambiguous.
+- 2026-08-12T20:26Z: `Get-Date -AsUTC` is not supported by this Windows
+  PowerShell version. No repository or provider state changed; use
+  `[DateTime]::UtcNow` or `Get-Date` followed by `.ToUniversalTime()` for
+  value-free UTC timestamps.
+- 2026-08-12T20:27:38.844Z: An append patch used a stale exact-text anchor and
+  was rejected before writing. No repository or provider state changed; inspect
+  the current tail before appending incident evidence.

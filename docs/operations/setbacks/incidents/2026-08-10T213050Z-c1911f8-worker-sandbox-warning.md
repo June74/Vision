@@ -110,3 +110,13 @@ for any warning-free release evidence.
 The production build at 2026-08-12T20:01:17Z emitted the same debug-log
 `EPERM` while completing successfully. The generated artifact and crypto
 boundary check passed; no provider or runtime state changed.
+
+The Worker suite at 2026-08-12T20:30:47Z emitted the same local Wrangler
+debug-log `EPERM` and linked-worktree static-analysis warnings. Assertions
+still passed: 116 tests in 7 files. No deployment, provider, credential,
+database, R2, Queue, or Worker configuration state changed.
+
+The production build at 2026-08-12T20:31:32Z emitted the same local Wrangler
+debug-log `EPERM` while completing successfully. Both Worker and client bundles
+and the production crypto-boundary check passed; no provider or runtime state
+changed.
