@@ -22,6 +22,11 @@ observer failure, or oversized output fails closed.
 Stops every started child, waits for process closure, and returns only the
 fixed safe error.
 
+## `detail`
+
+Captures the consumer's numeric exit status and whether the producer closed
+first. These are fixed lifecycle facts; child output is never retained.
+
 ## `validateCommand`
 
 Snapshots one bounded executable and argument array before either child starts.

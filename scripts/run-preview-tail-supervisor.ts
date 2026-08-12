@@ -153,6 +153,7 @@ export function supervisePreviewTail(input: {
       if (producer !== null) producer.stdout.unpipe(consumer.stdin);
       // Read the lifecycle facts when the error is built, not before: the
       // consumer may close while we are still tearing the producer down.
+      /** Captures only the safe consumer exit and producer-order facts. */
       const detail = (): PreviewTailFailureDetail => ({
         consumerExitCode,
         producerClosedFirst,

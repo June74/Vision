@@ -30,6 +30,13 @@ reaps every started side before rejecting with the constant failure.
 Unpipes the children, sends termination to each live child, awaits their
 closure, and rejects once without forwarding child data.
 
+## `detail`
+
+Builds the bounded `PreviewTailFailureDetail` snapshot used when a failure is
+settled. `consumerExitCode` is present only for a consumer that closed on its
+own, while `producerClosedFirst` records only a producer close that preceded
+that consumer boundary.
+
 ## `validateCommand`
 
 Validates and defensively copies the executable and at most 32 bounded,
