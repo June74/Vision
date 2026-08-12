@@ -23,6 +23,11 @@ Serializes one bounded input object and invokes one fixed driver operation.
 
 Accepts only the exact driver acknowledgement.
 
+## `expectClosureOk`
+
+Retries the value-free closure acknowledgement while a newly dispatched
+workflow settles, bounded by the same closure deadline.
+
 ## `assertRemoteTip`
 
 Confirms the reviewed branch still points to the reviewed commit immediately

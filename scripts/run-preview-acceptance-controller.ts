@@ -238,14 +238,22 @@ export function createPreviewControllerSubprocessDependencies(input: {
     (input.driverPrefixArguments ?? []).map(boundedCommandPart),
   );
   const gitExecutable = boundedCommandPart(input.gitExecutable ?? "git");
+  const wallNow = input.wallNow ?? (() => new Date());
+  const monotonicNow = input.monotonicNow ?? (() => performance.now());
+  const sleep =
+    input.sleep ??
+    ((milliseconds: number) =>
+      new Promise<void>((resolvePromise) =>
+        setTimeout(resolvePromise, milliseconds),
+      ));
   const runCommand = input.runCommand ?? runCapturedCommand;
   const observerPort =
     input.observerPort ??
     createInProcessObserverPort({
       repository: input.repository,
       dependencies: input.observerDependencies,
-      monotonicNow: input.monotonicNow,
-      sleep: input.sleep,
+      monotonicNow,
+      sleep,
     });
 
   /** Runs one captured child command without forwarding its streams. */
@@ -300,17 +308,32 @@ export function createPreviewControllerSubprocessDependencies(input: {
     if (ownData(record, "ok") !== true) fail();
   };
 
+  /** Retries value-free closure checks while a newly dispatched workflow settles. */
+  const expectClosureOk = async (
+    arguments_: readonly string[],
+    boundary: PreviewControllerCallBoundary,
+  ): Promise<void> => {
+    for (;;) {
+      try {
+        await expectOk("verify-closure", arguments_, boundary);
+        return;
+      } catch {
+        if (boundary.signal.aborted) fail();
+        const remaining =
+          safeMonotonic(boundary.deadlineMonotonic) -
+          safeMonotonic(monotonicNow());
+        if (remaining <= 0) fail();
+        await sleep(Math.min(POLL_MILLISECONDS, remaining));
+      }
+    }
+  };
+
   const dependencies: PreviewAcceptanceControllerDependencies = {
-    wallNow: input.wallNow ?? (() => new Date()),
-    monotonicNow: input.monotonicNow ?? (() => performance.now()),
+    wallNow,
+    monotonicNow,
     /** Creates one fresh correlation value for exactly one dispatch attempt. */
     createDispatchCorrelation: () => randomBytes(32).toString("hex"),
-    sleep:
-      input.sleep ??
-      ((milliseconds: number) =>
-        new Promise<void>((resolvePromise) =>
-          setTimeout(resolvePromise, milliseconds)
-        )),
+    sleep,
     /** Verifies the reviewed branch tip immediately before dispatch. */
     assertRemoteTip: async (commit, boundary) => {
       const expectedCommit = validCommit(commit);
@@ -416,11 +439,7 @@ export function createPreviewControllerSubprocessDependencies(input: {
       ),
     /** Verifies the exact rollback-closure binding. */
     verifyClosure: (closure, boundary) =>
-      expectOk(
-        "verify-closure",
-        [serializePreviewClosureInput(closure)],
-        boundary,
-      ),
+      expectClosureOk([serializePreviewClosureInput(closure)], boundary),
     /** Writes only one admitted controller status. */
     writeStatus: (status) => {
       if (!isControllerStatus(status)) fail();

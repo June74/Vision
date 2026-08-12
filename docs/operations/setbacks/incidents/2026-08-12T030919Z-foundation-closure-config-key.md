@@ -2,7 +2,7 @@
 
 - Incident ID: `SB-20260812-030919-foundation-closure-config-key`
 - First observed: `2026-08-12T02:40:02Z`
-- Last observed: `2026-08-12T03:23:10Z`
+- Last observed: `2026-08-12T03:29:32Z`
 - Status: `contained`
 - Phase/task: Phase B foundation-probe monitored acceptance and rollback closure
 - Environment: GitHub Actions preview workflow, Cloudflare preview Worker
@@ -60,6 +60,10 @@ database, calendar, or application data was changed.
   PowerShell timestamp option was also unavailable in this Windows shell; the
   equivalent Node timestamp path was used. No provider mutation or data
   exposure occurred.
+- The approved artifact-deletion command initially compared the full branch
+  SHA with a short SHA and failed closed before the delete call. A read-only
+  check confirmed that local and remote tips match the approved commit; no
+  artifact or provider state changed.
 
 ## Correction and prevention
 

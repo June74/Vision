@@ -1639,6 +1639,50 @@ describe("preview acceptance controller decisive hardening", () => {
     ).rejects.toThrow("Preview acceptance controller failed closed.");
   });
 
+  it("retries closure verification while the closure workflow settles", async () => {
+    let monotonic = 0;
+    const sleeps: number[] = [];
+    const runCommand = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("closure still settling"))
+      .mockResolvedValue({ stdout: '{"ok":true}\n', stderr: "" });
+    const dependencies = createPreviewControllerSubprocessDependencies({
+      driverExecutable: "driver-bin",
+      monotonicNow: () => monotonic,
+      sleep: async (milliseconds) => {
+        sleeps.push(milliseconds);
+        monotonic += milliseconds;
+      },
+      observerPort: {
+        resolveObserver: async () => Object.freeze(Object.create(null)),
+        readObserverState: async () => ({
+          signal: "listening",
+          uniqueness: "listening",
+          signalObservedAt: null,
+        }),
+      },
+      runCommand,
+    });
+
+    await dependencies.verifyClosure(
+      {
+        family: "foundation_probe",
+        operation: "deploy_foundation",
+        candidateRunRef: "101",
+        rollbackRunRef: "102",
+        closureRunRef: "103",
+        reviewedCommit: SHA,
+      },
+      {
+        deadlineMonotonic: 10_000,
+        signal: new AbortController().signal,
+      },
+    );
+
+    expect(runCommand).toHaveBeenCalledTimes(2);
+    expect(sleeps).toEqual([5_000]);
+  });
+
   it("propagates a shorter outer abort through the concrete resolver and waits for metadata settlement", async () => {
     let observedDeadline: number | null = null;
     let metadataSettled = false;

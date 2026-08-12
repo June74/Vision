@@ -27,6 +27,12 @@ driver operation, and parses its single JSON reply.
 Requires the exact ordinary `{ ok: true }` acknowledgement and rejects extra
 keys, accessors, symbols, or alternate truthy values.
 
+## `expectClosureOk`
+
+Retries the value-free closure acknowledgement at the fixed poll interval
+while the newly dispatched workflow settles, bounded by the caller's closure
+deadline; malformed or permanently failing replies still fail closed.
+
 ## `assertRemoteTip`
 
 Uses one captured `git ls-remote --heads` call for the fixed reviewed branch
