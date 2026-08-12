@@ -148,3 +148,11 @@ Do not use raw formatted JSON lines as semantic equality values.
   every line of the touched scheduler because the patch left that file with
   mixed CRLF/LF endings. The source change was otherwise only ten added lines;
   normalize the file to the repository's LF form before committing.
+- 2026-08-12T20:04:39.808Z: A bounded source inspection passed three directory
+  paths to `Select-String` without the array form, so PowerShell rejected the
+  command before reading. No repository or provider state changed; use one
+  explicit `-Path @(...)` list for multi-root inspection.
+- 2026-08-12T20:05:29.388Z: A recursive `.superpowers` search traversed stale
+  linked-worktree dependency paths and emitted directory-read errors before
+  producing useful matches. No repository or provider state changed; restrict
+  inspection to explicitly named files and avoid recursive dependency trees.
