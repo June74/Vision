@@ -548,6 +548,7 @@
 | [SB-20260811-175437-role-probe-candidate-attribution-failed](incidents/2026-08-11T175437Z-role-probe-candidate-attribution-failed.md) | contained | 2026-08-11T17:54:37Z | Phase B monitored role-probe acceptance | Controller reached observer-ready but failed before candidate attribution |
 | [SB-20260811-211548-controller-test-old-dispatch-deadline](incidents/2026-08-11T211548Z-controller-test-old-dispatch-deadline.md) | closed | 2026-08-11T21:22:26Z | Phase B monitored acceptance correlation-wait repair | Existing controller test still exercised the former two-minute dispatch boundary; aligned and verified |
 | [SB-20260811-212748-role-probe-preobserver-failed-closed](incidents/2026-08-11T212748Z-role-probe-preobserver-failed-closed.md) | contained | 2026-08-12T00:55:00Z | Phase B monitored role-probe acceptance after correlation-wait repair | Observer correlation arrived after the controller boundary; observer was cancelled, no candidate or deployment occurred |
+| [SB-20260812-012721-role-probe-rollback-temporary-secrets](incidents/2026-08-12T012721Z-role-probe-rollback-temporary-secrets.md) | contained | 2026-08-12T01:34:00Z | Phase B monitored role-probe acceptance and rollback closure | Normal rollback proof rejected lingering temporary restore secret names; no secret values or provider configuration were changed |
 
 ## Legacy history
 
