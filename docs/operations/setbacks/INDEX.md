@@ -576,6 +576,9 @@
 | [SB-20260812-100401-maintenance-input-abbreviated-sha](incidents/2026-08-12T100401Z-maintenance-input-abbreviated-sha.md) | contained | 2026-08-12T10:04:01Z | Phase B maintenance baseline | Ignored observer context briefly used an abbreviated commit before launch; no external action used it and it was corrected |
 | [SB-20260812-101710-maintenance-observer-failed-closed](incidents/2026-08-12T101710Z-maintenance-observer-failed-closed.md) | contained | 2026-08-12T10:17:10Z | Phase B permanent maintenance baseline | Scheduled observer reached readiness but closed without a uniquely correlated maintenance result; no provider mutation occurred |
 | [SB-20260812-101725-powershell-utc-flag-repeat](incidents/2026-08-12T101725Z-powershell-utc-flag-repeat.md) | contained | 2026-08-12T10:17:25Z | Phase B maintenance observer diagnosis | Unsupported PowerShell UTC flag repeated during a read-only time probe; no external action occurred |
+| [SB-20260812-103300-maintenance-observer-second-failed-closed](incidents/2026-08-12T103300Z-maintenance-observer-second-failed-closed.md) | contained | 2026-08-12T10:33:00Z | Phase B permanent maintenance baseline | Exact-tip observer covered the 10:30 boundary but again found no matching maintenance record; no provider mutation occurred |
+| [SB-20260812-103900-local-tail-probe-wrapper](incidents/2026-08-12T103900Z-local-tail-probe-wrapper.md) | contained | 2026-08-12T10:39:00Z | Phase B observability credential diagnosis | Null-safe capture and child cleanup were missing in a read-only local tail wrapper; no provider state changed |
+| [SB-20260812-104100-wrangler-package-export-probe](incidents/2026-08-12T104100Z-wrangler-package-export-probe.md) | contained | 2026-08-12T10:41:00Z | Phase B observability credential diagnosis | Direct probe stopped before process start because the Wrangler binary subpath was not exported; no provider request occurred |
 
 ## Legacy history
 
