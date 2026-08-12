@@ -116,3 +116,6 @@ Do not use raw formatted JSON lines as semantic equality values.
   execution. No repository, candidate, provider, deployment, secret, key,
   database, or runtime state changed; use separate simple status and diff
   commands when a composed wrapper is error-prone.
+- 2026-08-12T18:54:49.872Z: A UTC timestamp probe again used the unsupported
+  `Get-Date -AsUTC` parameter and failed before reading or changing state;
+  `(Get-Date).ToUniversalTime()` remains the compatible form.

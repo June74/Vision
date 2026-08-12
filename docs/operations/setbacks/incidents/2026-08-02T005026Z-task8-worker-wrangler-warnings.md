@@ -42,3 +42,7 @@ During the post-review-repair aggregate check, the worker static-analysis fallba
 At 2026-08-02T01:25:58.152Z the optional log warning recurred during the post-repair preview build. The build and crypto-boundary validator exited zero; the generated preview configuration and deploy validator remain authoritative.
 
 At 2026-08-02T01:26:30.707Z it recurred during the post-repair production build. The build and crypto-boundary validator exited zero; the generated production configuration and deploy validator remain authoritative.
+
+At 2026-08-12T18:51:49Z the same warning shape recurred during the bounded-dialect worker suite: all 7 worker test files and 116 tests passed, while Wrangler reported its local static-entrypoint analysis fallback and an optional user-level diagnostic-log permission warning. No provider, deployment, credential, database, or source state changed; the test exit status remains authoritative.
+
+At 2026-08-12T18:53:53Z the optional diagnostic-log permission warning recurred during the production build. The build exited zero and generated the Worker and client artifacts; the warning remains local-only and does not change the build result.
