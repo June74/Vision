@@ -22,7 +22,11 @@ const acceptingConsumer = (delay = 0): PreviewTailChildCommand =>
   );
 
 async function runSupervisorCli(
-  mode: "success" | "producer_failure" | "consumer_failure",
+  mode:
+    | "success"
+    | "producer_failure"
+    | "consumer_failure"
+    | "consumer_diagnostic",
 ): Promise<{
   readonly exitCode: number | null;
   readonly stdout: string;
@@ -40,6 +44,7 @@ if(producer){
   process.on("SIGTERM",()=>process.exit(0));
 }else{
   if(mode==="consumer_failure"){process.stderr.write("SECRET_CLI_CANARY");process.exit(9);}
+  if(mode==="consumer_diagnostic"){process.stderr.write("Preview tail observer failed closed: observer_runtime_error.\\n");process.exit(1);}
   process.stdin.once("data",()=>{process.stderr.write("SECRET_CLI_CANARY");process.stdout.write("accepted\\n");process.exit(0);});
 }`;
   await writeFile(shim, source, "utf8");
@@ -139,6 +144,14 @@ describe("preview tail producer supervision", () => {
       }),
     ).rejects.toMatchObject({
       category: "consumer_observer_runtime_error",
+    });
+  });
+
+  it("prints the fixed category through the CLI catch boundary", async () => {
+    await expect(runSupervisorCli("consumer_diagnostic")).resolves.toEqual({
+      exitCode: 1,
+      stdout: "",
+      stderr: "Preview tail supervision failed closed: consumer_observer_runtime_error.\n",
     });
   });
 

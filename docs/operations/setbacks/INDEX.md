@@ -610,6 +610,7 @@
 | [SB-20260812-132104-missed-uniqueness-category](incidents/2026-08-12T132104Z-missed-uniqueness-category.md) | contained | 2026-08-12T13:21:04Z | Phase B CI tail-supervisor diagnosis | Uniqueness timer omitted a fixed failure category and collapsed observer state to generic consumer_nonzero; the timer now reports observer_uniqueness_failed |
 | [SB-20260812-134104-consumer-runtime-category](incidents/2026-08-12T134104Z-consumer-runtime-category.md) | contained | 2026-08-12T13:41:04Z | Phase B CI tail-supervisor diagnosis | Repeated generic consumer failures had no fixed uncaught-runtime category; the observer now emits observer_runtime_error without error text |
 | [SB-20260812-140304-consumer-close-race](incidents/2026-08-12T140304Z-consumer-close-race.md) | contained | 2026-08-12T14:03:04Z | Phase B CI tail-supervisor diagnosis | Consumer close could race the final fixed diagnostic chunk; bounded suffix capture and one-turn deferred classification were added |
+| [SB-20260812-141750-generic-consumer-repeat](incidents/2026-08-12T141750Z-generic-consumer-repeat.md) | awaiting diagnosis | 2026-08-12T14:17:50Z | Phase B permanent maintenance baseline / GitHub observer | Fresh exact-tip observer still returned generic consumer_nonzero despite locally verified category transport; no provider mutation occurred |
 
 ## Legacy history
 
