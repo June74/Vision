@@ -1340,6 +1340,29 @@ describe("normal preview live provider-state validation", () => {
     expect(() => validateNormalPreviewProviderState(reversed)).not.toThrow();
   });
 
+  it("accepts Cloudflare's schedules nested under the result object", () => {
+    const nested = normalProviderState();
+    nested.schedulesResponse = {
+      success: true,
+      result: {
+        schedules: NORMAL_CRONS.map((cron) => ({ cron })),
+      },
+    };
+    expect(() => validateNormalPreviewProviderState(nested)).not.toThrow();
+  });
+
+  it("accepts Cloudflare resource metadata on R2 and Queue bindings", () => {
+    const providerState = normalProviderState();
+    const settings = providerState.settingsResponse as {
+      result: { bindings: Array<Record<string, unknown>> };
+    };
+    settings.result.bindings.find((binding) => binding.name === "BACKUP_BUCKET")!
+      .bucket_name = "vision-preview-backups";
+    settings.result.bindings.find((binding) => binding.name === "CALENDAR_SYNC_QUEUE")!
+      .queue_name = "vision-calendar-sync";
+    expect(() => validateNormalPreviewProviderState(providerState)).not.toThrow();
+  });
+
   it.each([
     ["missing settings result", undefined],
     ["empty bindings", { success: true, result: { bindings: [] } }],

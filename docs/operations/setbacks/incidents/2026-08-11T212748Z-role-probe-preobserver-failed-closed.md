@@ -224,3 +224,39 @@ secret, or calendar mutation occurred.
   the parser was corrected. The actual `vision-preview` inventory contains
   both restore names, each with type `secret_text`; the earlier absence finding
   is superseded. The user dashboard screenshot was correct.
+- `2026-08-12T00:31:00Z`: the corrected monitored retry reached the candidate
+  live-provider preflight but failed there with the generic restore-pair state
+  error; no candidate-intent artifact was created. Rollback stopped at its
+  missing-intent guard, and the observer was cancelled and settled. A first
+  safe summary probe also attempted to add an undeclared output property and
+  stopped before reporting; the corrected probe established the same stages.
+- `2026-08-12T00:35:00Z`: direct read-only Cloudflare inspection proved the
+  bindings are exact (26 total, including both temporary secrets), health is
+  `ok`, and the two cron values are correct. The live schedules response is
+  shaped as `result.schedules`, while the validator only accepted a direct
+  `result` array. This is the confirmed code-level root cause.
+- `2026-08-12T00:36:00Z`: a focused regression was added first and failed as
+  expected on the nested Cloudflare schedule shape; the minimal validator
+  change then made the focused file pass (106 tests) and the full unit suite
+  pass (1,764 passed, 6 skipped).
+- `2026-08-12T00:38:00Z`: a first live-validator replay used an expired direct
+  OAuth token and returned a Cloudflare authentication error; `wrangler
+  whoami` refreshed the saved login. A second replay serialized the live
+  response through PowerShell and still failed because that serialization does
+  not reproduce the raw API shape; a Node-side raw-response replay passed.
+  No values were printed or provider state changed.
+- `2026-08-12T00:40:00Z`: an inline Node diagnostic was blocked by Windows
+  shell quoting before execution. A temporary file-based diagnostic was used
+  instead, then deleted; it confirmed the fixed validator passes the raw live
+  response (`result.schedules`, two crons, 26 bindings).
+- `2026-08-12T00:42:00Z`: a repository test-path lookup named a nonexistent
+  test file and stopped before searching; the existing test file was located
+  with an explicit recursive listing. No state changed.
+- `2026-08-12T00:44:04Z`: the first live-validator replay emitted the generic
+  error through PowerShell's terminating-error conversion, so its safe result
+  object was not printed. The corrected Node-side replay passed; no provider
+  mutation occurred.
+- `2026-08-12T00:48:11Z`: the production build passed, but Wrangler emitted a
+  known Windows `EPERM` while writing its local debug log under the protected
+  Wrangler config directory. The build output and crypto boundary check still
+  exited successfully; no provider state changed.

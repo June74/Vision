@@ -366,7 +366,13 @@ function matchesProviderHealthAndSchedules(
   const schedules = isPlainDataObject(input.schedulesResponse)
     ? input.schedulesResponse
     : {};
-  const scheduleResult = ownDataValue(schedules, "result");
+  const result = ownDataValue(schedules, "result");
+  const scheduleResult = Array.isArray(result)
+    ? result
+    : isPlainDataObject(result) &&
+        Array.isArray(ownDataValue(result, "schedules"))
+      ? ownDataValue(result, "schedules")
+      : [];
   const scheduleCrons =
     Array.isArray(scheduleResult) &&
     scheduleResult.every(
