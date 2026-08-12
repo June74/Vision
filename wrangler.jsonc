@@ -42,6 +42,20 @@
   },
   "env": {
     "preview": {
+      "observability": {
+        "enabled": true,
+        "logs": {
+          "enabled": true,
+          "invocation_logs": true,
+          "persist": true,
+          "head_sampling_rate": 1
+        },
+        "traces": {
+          "enabled": true,
+          "persist": true,
+          "head_sampling_rate": 1
+        }
+      },
       "triggers": {
         "crons": ["*/15 * * * *", "5 6 * * *"]
       },

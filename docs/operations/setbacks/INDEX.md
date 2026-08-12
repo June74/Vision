@@ -567,6 +567,9 @@
 | [SB-20260812-093800-browser-tab-summary](incidents/2026-08-12T093800Z-browser-tab-summary.md) | contained | 2026-08-12T09:38:00Z | Phase B Cloudflare observability diagnosis | Read-only tab summary used invalid async formatting and stopped before tab inspection |
 | [SB-20260812-093937-powershell-command-separator](incidents/2026-08-12T093937Z-powershell-command-separator.md) | contained | 2026-08-12T09:39:37Z | Phase B setback-ledger publication | PowerShell rejected a combined `&&` staging/commit command before Git execution |
 | [SB-20260812-094008-git-index-lock-permission](incidents/2026-08-12T094008Z-git-index-lock-permission.md) | contained | 2026-08-12T09:40:08Z | Phase B setback-ledger publication | Shared worktree index lock could not be created due to permission denial; no Git or external state changed |
+| [SB-20260812-094617-wrangler-build-log-permission](incidents/2026-08-12T094617Z-wrangler-build-log-permission.md) | contained | 2026-08-12T09:46:17Z | Phase B preview observability configuration verification | Wrangler's optional user-level debug log write was denied although the build exited zero |
+| [SB-20260812-095037-preview-build-environment-omitted](incidents/2026-08-12T095037Z-preview-build-environment-omitted.md) | contained | 2026-08-12T09:50:37Z | Phase B preview observability configuration | Initial artifact inspection used the local build environment; no deployment occurred and the corrected preview artifact passed validation |
+| [SB-20260812-095112-preview-validator-local-artifact](incidents/2026-08-12T095112Z-preview-validator-local-artifact.md) | contained | 2026-08-12T09:51:12Z | Phase B preview observability deployment preparation | Full-check rebuild replaced the preview artifact with local configuration; validator failed before any deployment |
 
 ## Legacy history
 

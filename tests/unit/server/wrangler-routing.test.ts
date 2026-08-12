@@ -82,6 +82,20 @@ const NORMAL_PREVIEW_PROVIDER_BINDINGS = [
 
 interface DeployConfig {
   targetEnvironment?: string;
+  observability?: {
+    enabled?: boolean;
+    logs?: {
+      enabled?: boolean;
+      invocation_logs?: boolean;
+      persist?: boolean;
+      head_sampling_rate?: number;
+    };
+    traces?: {
+      enabled?: boolean;
+      persist?: boolean;
+      head_sampling_rate?: number;
+    };
+  };
   assets?: { run_worker_first?: string[] };
   queues?: {
     producers?: Array<{ binding?: string; queue?: string }>;
@@ -267,6 +281,21 @@ describe("Cloudflare asset and normal schedule routing", () => {
     expect(config.triggers?.crons).toEqual(NORMAL_CRONS);
     expect(config.env?.preview.triggers?.crons).toEqual(NORMAL_CRONS);
     expect(config.env?.production.triggers?.crons).toEqual(NORMAL_CRONS);
+    expect(config.env?.preview.observability).toEqual({
+      enabled: true,
+      logs: {
+        enabled: true,
+        invocation_logs: true,
+        persist: true,
+        head_sampling_rate: 1,
+      },
+      traces: {
+        enabled: true,
+        persist: true,
+        head_sampling_rate: 1,
+      },
+    });
+    expect(config.env?.production.observability).toBeUndefined();
     expect(config.r2_buckets).toBeUndefined();
     expect(config.env?.preview.r2_buckets).toEqual([
       {
