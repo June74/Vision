@@ -29,6 +29,10 @@ schedule. A generated preview candidate may add the one-minute route for
 exactly one role probe, foundation probe, AI usage record, or strict fault
 scenario without mixing their credentials or database targets.
 
+## `normalizeCalendarMaintenanceScheduledAt`
+Represents a delayed maintenance delivery by its containing UTC minute so the
+evidence names the cron slot rather than transport seconds.
+
 ## `runScheduledJob`
 Calls only the function belonging to one of the three exact configured cron
 expressions.

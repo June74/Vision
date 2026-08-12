@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { scheduled } from "../../../src/jobs/scheduled";
+import {
+  CALENDAR_MAINTENANCE_CRON,
+  scheduled,
+} from "../../../src/jobs/scheduled";
 
 const NOW = new Date("2026-07-30T18:00:00.000Z");
 
@@ -98,5 +101,25 @@ describe("current-workflow preview role and restore routing", () => {
     expect(produced.temporaryRestore).toHaveBeenCalledTimes(1);
     expect(produced.temporaryRoleProbe).not.toHaveBeenCalled();
     expect(produced.foundationProbe).not.toHaveBeenCalled();
+  });
+});
+
+describe("calendar maintenance scheduled timestamp routing", () => {
+  it("normalizes seconds-level delivery offset to the containing UTC minute", async () => {
+    const deps = dependencies();
+    await scheduled(
+      {
+        cron: CALENDAR_MAINTENANCE_CRON,
+        scheduledTime: Date.parse("2026-08-12T19:45:56.000Z"),
+      } as ScheduledController,
+      { VISION_ENV: "preview" } as never,
+      {} as ExecutionContext,
+      deps,
+    );
+
+    expect(deps.maintenance).toHaveBeenCalledOnce();
+    expect(deps.maintenance).toHaveBeenCalledWith(
+      new Date("2026-08-12T19:45:00.000Z"),
+    );
   });
 });

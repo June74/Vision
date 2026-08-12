@@ -16,3 +16,8 @@ simple/technical reference headings. `pnpm.cmd docs:check` reported exactly
 those three safe violations; no provider or runtime state changed. The helper
 comment and both reference sections were added, then the documentation check
 was rerun.
+
+The same gate recurred at 2026-08-12T19:58:46Z after adding the maintenance
+timestamp normalizer. It correctly required both reference headings for the new
+production helper; no provider, deployment, credential, database, or key state
+changed. Add the headings before rerunning the gate.

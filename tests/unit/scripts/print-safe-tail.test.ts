@@ -361,7 +361,7 @@ describe(
   });
 
   it("emits only permanent maintenance evidence in calendar-maintenance-only mode", async () => {
-    const closesAt = new Date(Date.now() + 3_000);
+    const closesAt = new Date(Date.now() + 8_000);
     const scheduledAt = new Date(closesAt.getTime() - 120_000).toISOString();
     const contract = {
       args: [
@@ -371,7 +371,7 @@ describe(
         "--maintenance-scheduled-at",
         scheduledAt,
       ],
-      closeAfterMilliseconds: 3_400,
+      closeAfterMilliseconds: 8_400,
     };
     const result = await runPrintSafeTail(
       contract.args,

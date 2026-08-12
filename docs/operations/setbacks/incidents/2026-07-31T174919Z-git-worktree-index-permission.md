@@ -68,3 +68,7 @@ environment values, and secrets were unaffected.
   freeze. The sandbox denied linked-worktree `index.lock` creation before any
   path staged; no source, provider, or external state changed. The retry is
   bounded to `docs/` through the approved metadata-write path.
+- 2026-08-12T20:02:55.363Z: Recurred while staging the timestamp-normalization
+  fix and its verification ledger. The sandbox denied linked-worktree
+  `index.lock` creation before any path staged; no source, provider, or external
+  state changed. Retry only with the established bounded metadata-write path.

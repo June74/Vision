@@ -30,6 +30,11 @@ preview-only artifact may add the one-minute cron and exactly one admitted
 role-probe, foundation, AI-usage, or fault capability. The committed normal
 configuration has no one-minute cron or acceptance binding.
 
+## `normalizeCalendarMaintenanceScheduledAt`
+Truncates only the normal maintenance handler timestamp to the containing UTC
+minute. Temporary candidate routes and daily recovery retain the exact
+Cloudflare scheduled timestamp.
+
 ## `runScheduledJob`
 Matches only the three configured cron expressions and rejects any unexpected
 scheduled event.

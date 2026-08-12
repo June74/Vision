@@ -107,6 +107,11 @@ export const CALENDAR_MAINTENANCE_CRON = "*/15 * * * *";
 /** Daily UTC recovery cadence kept separate from provider maintenance. */
 export const DAILY_BACKUP_CRON = "5 6 * * *";
 
+/** Maps delayed maintenance delivery to the UTC minute represented by its cron slot. */
+function normalizeCalendarMaintenanceScheduledAt(scheduledAt: Date): Date {
+  return new Date(Math.floor(scheduledAt.getTime() / 60_000) * 60_000);
+}
+
 /** Replaceable dispatch boundaries proving each cron owns only its intended job. */
 export interface ScheduledJobDependencies {
   readonly maintenance: (now: Date) => Promise<void>;
@@ -451,7 +456,11 @@ export async function scheduled(
     }
     throw new Error("Temporary preview candidate is invalid.");
   }
-  await runScheduledJob(controller.cron, scheduledAt, dependencies);
+  const routedScheduledAt =
+    controller.cron === CALENDAR_MAINTENANCE_CRON
+      ? normalizeCalendarMaintenanceScheduledAt(scheduledAt)
+      : scheduledAt;
+  await runScheduledJob(controller.cron, routedScheduledAt, dependencies);
 }
 
 /** Creates lazy production closures only after scheduled candidate selection. */

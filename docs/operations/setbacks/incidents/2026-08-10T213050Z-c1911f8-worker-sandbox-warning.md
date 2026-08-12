@@ -97,3 +97,16 @@ The test run encountered local filesystem restrictions while Wrangler attempted 
 - TypeScript checks passed for the same candidate worktree.
 - Unit tests passed: 1,756 passed, 6 skipped.
 - Contract tests passed: 183 passed.
+
+## Recurrence - 2026-08-12
+
+At 2026-08-12T20:00:21Z, the Worker suite again emitted the local Wrangler
+debug-log `EPERM` and linked-worktree static-analysis warnings. The assertions
+still passed: 116 tests in 7 files. No deployment, provider, credential,
+database, R2, Queue, or Worker configuration state changed. Keep the warning
+separate from test outcomes and use a writable external Wrangler log location
+for any warning-free release evidence.
+
+The production build at 2026-08-12T20:01:17Z emitted the same debug-log
+`EPERM` while completing successfully. The generated artifact and crypto
+boundary check passed; no provider or runtime state changed.

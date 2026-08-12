@@ -123,3 +123,28 @@ Do not use raw formatted JSON lines as semantic equality values.
   tracked `scripts/` path instead of the ignored local task-state path and
   failed before reading. No external action ran; use the explicitly named
   `.superpowers/local/task8-provider-driver.mjs` path.
+- 2026-08-12T19:19:24.878Z: Observer-input preparation first wrote an incorrect
+  full commit value before the local `git rev-parse HEAD` check caught it.
+  No observer or provider request was dispatched; replace review pins only
+  from the exact command output.
+- 2026-08-12T19:34:00Z: A read-only Wrangler deployment-summary wrapper used an
+  invalid PowerShell property pipeline and failed after the provider response
+  had been discarded. No identifiers, source values, or provider state were
+  exposed or changed; use an explicit script block for property extraction.
+- 2026-08-12T19:35:00Z: A follow-up read-only deployment-age probe attempted to
+  parse an absent or non-date provider field and raised a local `DateTime.Parse`
+  exception. The provider response had already been reduced to safe metadata;
+  no identifiers, source values, or provider state were exposed or changed.
+  Validate nullable provider fields before date conversion.
+- 2026-08-12T19:54:47.172Z: A bounded PowerShell source-inspection command passed
+  multiple paths to `Select-String` without the array form, so it failed before
+  reading the requested configuration files. No repository or provider state
+  changed; use one explicit `-Path @(...)` list for multi-file inspection.
+- 2026-08-12T20:00:45.006Z: An empty documentation patch hunk was submitted while
+  recording the Worker warning recurrence, so the patch tool rejected it before
+  writing. No repository or provider state changed; inspect the exact target
+  tail before composing an append hunk.
+- 2026-08-12T20:01:59.209Z: `git diff --check` reported trailing whitespace on
+  every line of the touched scheduler because the patch left that file with
+  mixed CRLF/LF endings. The source change was otherwise only ten added lines;
+  normalize the file to the repository's LF form before committing.
