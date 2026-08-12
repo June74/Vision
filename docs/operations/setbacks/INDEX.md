@@ -599,6 +599,8 @@
 | [SB-20260812-121204-pnpm-wrapper](incidents/2026-08-12T121204Z-pnpm-wrapper.md) | contained | 2026-08-12T12:12:04Z | Phase B CI tail-supervisor diagnosis | PowerShell blocked the unsigned pnpm.ps1 wrapper before a focused test started; the Windows-safe pnpm.cmd entrypoint is required |
 | [SB-20260812-121235-pnpm-exec-bin](incidents/2026-08-12T121235Z-pnpm-exec-bin.md) | contained | 2026-08-12T12:12:35Z | Phase B CI tail-supervisor diagnosis | pnpm.cmd did not resolve the local Vitest binary; the explicit checked-in .CMD binary is required |
 | [SB-20260812-121549-git-index-lock](incidents/2026-08-12T121549Z-git-index-lock.md) | contained | 2026-08-12T12:15:49Z | Phase B CI tail-supervisor diagnosis publication | Shared worktree index-lock creation was denied; the exact scoped commit must run with the elevated filesystem boundary |
+| [SB-20260812-123105-tail-consumer-nonzero](incidents/2026-08-12T123105Z-tail-consumer-nonzero.md) | awaiting diagnosis | 2026-08-12T12:31:05Z | Phase B permanent maintenance baseline / GitHub observer | Fresh exact-tip observer reached the scheduled tick but the consumer exited nonzero without evidence; no provider mutation occurred |
+| [SB-20260812-123803-doc-coverage-diagnostic](incidents/2026-08-12T123803Z-doc-coverage-diagnostic.md) | contained | 2026-08-12T12:38:03Z | Phase B CI tail-supervisor diagnosis | Documentation coverage caught missing reference headings for the new diagnostic helpers; the headings were added before publication |
 
 ## Legacy history
 

@@ -13,6 +13,20 @@ import {
   type TemporaryPreviewFaultScenario,
 } from "../src/domain/operations/temporary-preview-fault";
 
+type PreviewTailObserverFailureCategory =
+  | "invalid_configuration"
+  | "observer_window_invalid"
+  | "observer_no_matching_evidence"
+  | "rejected_terminal_event"
+  | "evidence_rejected_by_expectation"
+  | "input_closed_before_evidence";
+
+/** Emits one fixed diagnosis only when the supervisor explicitly requests it. */
+function emitObserverFailure(category: PreviewTailObserverFailureCategory): void {
+  if (process.env.PREVIEW_TAIL_DIAGNOSTIC !== "1") return;
+  process.stderr.write(`Preview tail observer failed closed: ${category}.\n`);
+}
+
 /** Creates a clocked signal or uniqueness observer without raw output. */
 export function createPreviewTailObserver(input: {
   readonly mode: "accepting_signal" | "sync_suppression_signal" |
@@ -391,12 +405,16 @@ function runObserverTail(configuration: ObserverConfiguration): void {
   const complete = (
     succeeded: boolean,
     evidence: SafeTailResult | null = null,
+    failureCategory?: PreviewTailObserverFailureCategory,
   ) => {
     if (completed) return;
     completed = true;
     if (timer) clearTimeout(timer);
     if (succeeded && evidence) {
       process.stdout.write(`${JSON.stringify(evidence)}\n`);
+    }
+    if (!succeeded && failureCategory !== undefined) {
+      emitObserverFailure(failureCategory);
     }
     process.exitCode = succeeded ? 0 : 1;
     lines.close();
@@ -409,12 +427,16 @@ function runObserverTail(configuration: ObserverConfiguration): void {
       (configuration.mode === "ai_usage_uniqueness" &&
         delay > 63 * 60_000)
     ) {
-      complete(false);
+      complete(false, null, "observer_window_invalid");
       return;
     }
     timer = setTimeout(() => {
       const result = observer.finish(new Date());
-      complete(result.succeeded, result.output);
+      complete(
+        result.succeeded,
+        result.output,
+        result.succeeded ? undefined : "observer_no_matching_evidence",
+      );
     }, delay);
   }
   lines.on("line", (line) => {
@@ -422,7 +444,7 @@ function runObserverTail(configuration: ObserverConfiguration): void {
     const evidence = accumulator.push(line);
     if (!evidence) {
       if (isRejectedTerminalEvent(line, configuration.expectation)) {
-        complete(false);
+        complete(false, null, "rejected_terminal_event");
       }
       return;
     }
@@ -446,13 +468,18 @@ function runObserverTail(configuration: ObserverConfiguration): void {
         result.succeeded && configuration.outputSignalEvidence
           ? evidence
           : result.output,
+        result.succeeded ? undefined : "evidence_rejected_by_expectation",
       );
     }
   });
   lines.on("close", () => {
     if (completed) return;
     const result = observer.finish(new Date());
-    complete(result.succeeded, result.output);
+    complete(
+      result.succeeded,
+      result.output,
+      result.succeeded ? undefined : "input_closed_before_evidence",
+    );
   });
 }
 
@@ -474,6 +501,7 @@ function main(): void {
   try {
     runObserverTail(parseObserverConfiguration(arguments_));
   } catch {
+    emitObserverFailure("invalid_configuration");
     process.exitCode = 1;
   }
 }

@@ -30,6 +30,11 @@ Snapshots one bounded executable and argument array before either child starts.
 
 Starts an already validated captured child without a shell.
 
+## `classifyConsumerFailureCategory`
+
+Recognizes only the safe-tail consumer's fixed diagnostic words and maps them
+to a supervisor category; all other child text is ignored.
+
 ## `waitForChildClose`
 
 Waits until a started child is reaped or an unspawnable child reports its

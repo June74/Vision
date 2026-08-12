@@ -2,7 +2,9 @@
 
 Supervises the long-running Wrangler producer and the bounded evidence
 consumer as separate captured child processes. Raw producer stdout is routed
-only to the consumer; producer and consumer stderr are discarded.
+only to the consumer; provider and producer stderr remain discarded. The
+consumer may emit one fixed diagnostic category when explicitly enabled by the
+supervisor.
 
 ## `createDefaultPreviewTailCommandPlan`
 
@@ -36,6 +38,12 @@ newline-free arguments before either spawn.
 ## `spawnCommand`
 
 Starts one validated hidden, fully captured child with no shell parsing.
+
+## `classifyConsumerFailureCategory`
+
+Parses only the consumer's fixed `Preview tail observer failed closed` category
+line and maps the allowlisted words to supervisor categories. Arbitrary child
+stderr is never forwarded or retained.
 
 ## `waitForChildClose`
 

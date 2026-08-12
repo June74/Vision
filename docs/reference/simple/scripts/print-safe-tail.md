@@ -68,6 +68,11 @@ caller state.
 Closes input once, clears the deadline timer, and selects only exit status plus
 an optional allowlisted record.
 
+## `emitObserverFailure`
+
+When the supervisor asks for diagnosis, emits only a fixed failure category to
+stderr; it never prints the rejected tail record.
+
 ## `main`
 
 Routes no arguments to the legacy diagnostic. Every observer invocation must

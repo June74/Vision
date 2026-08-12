@@ -15,6 +15,12 @@ export type PreviewTailFailureCategory =
   | "consumer_error"
   | "consumer_nonzero"
   | "consumer_signal"
+  | "consumer_invalid_configuration"
+  | "consumer_observer_window_invalid"
+  | "consumer_observer_no_matching_evidence"
+  | "consumer_rejected_terminal_event"
+  | "consumer_evidence_rejected_by_expectation"
+  | "consumer_input_closed_before_evidence"
   | "capture_overflow"
   | "producer_unavailable"
   | "termination_failure";
@@ -93,14 +99,21 @@ export function supervisePreviewTail(input: {
   const consumerCommand = validateCommand(input.consumer);
   const awaitChildClose =
     dependencies.waitForChildClose ?? waitForChildClose;
-  const consumer = spawnCommand(consumerCommand);
+  const consumer = spawnCommand(consumerCommand, {
+    PREVIEW_TAIL_DIAGNOSTIC: "1",
+  });
   let producer: ChildProcessWithoutNullStreams | null = null;
   let output = "";
   let settled = false;
   let settling = false;
   let consumerSucceeded = false;
+  let consumerFailureCategory: PreviewTailFailureCategory | null = null;
 
-  consumer.stderr.resume();
+  consumer.stderr.setEncoding("utf8");
+  consumer.stderr.on("data", (chunk: string) => {
+    const category = classifyConsumerFailureCategory(chunk);
+    if (category !== null) consumerFailureCategory = category;
+  });
   consumer.stdout.setEncoding("utf8");
   // The observer may close stdin immediately after a valid signal. Swallow the
   // resulting pipe error; the observer exit status remains authoritative.
@@ -154,7 +167,7 @@ export function supervisePreviewTail(input: {
     consumer.on("close", (code, signal) => {
       if (settled || settling) return;
       if (code !== 0) {
-        rejectClosed("consumer_nonzero");
+        rejectClosed(consumerFailureCategory ?? "consumer_nonzero");
         return;
       }
       if (signal !== null) {
@@ -214,12 +227,39 @@ function validateCommand(
 /** Starts one validated child with captured streams and no shell. */
 function spawnCommand(
   command: PreviewTailChildCommand,
+  additionalEnvironment: Readonly<Record<string, string>> = {},
 ): ChildProcessWithoutNullStreams {
   return spawn(command.executable, [...command.arguments], {
+    env: { ...process.env, ...additionalEnvironment },
     shell: false,
     windowsHide: true,
     stdio: ["pipe", "pipe", "pipe"],
   });
+}
+
+/** Admits only the consumer's fixed diagnostic vocabulary. */
+function classifyConsumerFailureCategory(
+  chunk: string,
+): PreviewTailFailureCategory | null {
+  const match = /^Preview tail observer failed closed: ([a-z_]+)\.$/mu.exec(
+    chunk.trim(),
+  );
+  switch (match?.[1]) {
+    case "invalid_configuration":
+      return "consumer_invalid_configuration";
+    case "observer_window_invalid":
+      return "consumer_observer_window_invalid";
+    case "observer_no_matching_evidence":
+      return "consumer_observer_no_matching_evidence";
+    case "rejected_terminal_event":
+      return "consumer_rejected_terminal_event";
+    case "evidence_rejected_by_expectation":
+      return "consumer_evidence_rejected_by_expectation";
+    case "input_closed_before_evidence":
+      return "consumer_input_closed_before_evidence";
+    default:
+      return null;
+  }
 }
 
 /** Waits for either a real child close or an unspawnable-child error. */

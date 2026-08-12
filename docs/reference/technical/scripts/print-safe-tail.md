@@ -75,6 +75,12 @@ Makes completion idempotent, clears the timer, optionally serializes one
 allowlisted record, destroys stdin, and sets only the success/failure exit
 status.
 
+## `emitObserverFailure`
+
+Writes a fixed observer failure category to stderr only when
+`PREVIEW_TAIL_DIAGNOSTIC=1`; it never includes input, provider text, or
+credentials.
+
 ## `main`
 
 Separates the legacy no-argument path from strict observer commands. Invalid
@@ -84,4 +90,6 @@ Observer modes cover the exact safe-tail evidence families. Maintenance is
 bound to `vision.calendar-maintenance/v2` and its requested scheduled tick;
 fault evidence is bound to the requested scenario. Signal jobs return
 immediately, while uniqueness jobs remain open through the internally derived
-close instant.
+close instant. The opt-in diagnostic channel distinguishes invalid setup,
+malformed target-shaped records, expectation rejection, a missing terminal, and
+premature input closure with fixed categories only.

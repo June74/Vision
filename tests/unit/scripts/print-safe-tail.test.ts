@@ -13,6 +13,7 @@ async function runPrintSafeTail(
   args: readonly string[],
   input: readonly string[],
   closeAfterMilliseconds = 0,
+  diagnostic = false,
 ): Promise<{
   readonly exitCode: number | null;
   readonly stdout: string;
@@ -21,7 +22,13 @@ async function runPrintSafeTail(
   const child = spawn(
     process.execPath,
     ["--import", "tsx", resolve(process.cwd(), "scripts", "print-safe-tail.ts"), ...args],
-    { stdio: ["pipe", "pipe", "pipe"] },
+    {
+      env: {
+        ...process.env,
+        PREVIEW_TAIL_DIAGNOSTIC: diagnostic ? "1" : "0",
+      },
+      stdio: ["pipe", "pipe", "pipe"],
+    },
   );
   let stdout = "";
   let stderr = "";
@@ -611,6 +618,36 @@ describe(
     await expect(
       runPrintSafeTail(["--unrecognized"], [scheduledTail()]),
     ).resolves.toEqual({ exitCode: 1, stdout: "", stderr: "" });
+  });
+
+  it("emits only a fixed diagnostic category when opted in", async () => {
+    await expect(
+      runPrintSafeTail(["--unrecognized"], [], 0, true),
+    ).resolves.toEqual({
+      exitCode: 1,
+      stdout: "",
+      stderr: "Preview tail observer failed closed: invalid_configuration.\n",
+    });
+  });
+
+  it("classifies malformed target-shaped input without exposing the input", async () => {
+    const scheduledAt = new Date(Date.now() - 30_000).toISOString();
+    await expect(
+      runPrintSafeTail(
+        uniquenessArguments(
+          "--calendar-maintenance-only",
+          "maintenance_succeeded",
+          ["--maintenance-scheduled-at", scheduledAt],
+        ).args,
+        [JSON.stringify({ evidenceType: "vision.calendar-maintenance/v2" })],
+        0,
+        true,
+      ),
+    ).resolves.toEqual({
+      exitCode: 1,
+      stdout: "",
+      stderr: "Preview tail observer failed closed: rejected_terminal_event.\n",
+    });
   });
 
   it("rejects restore-only mode with extra arguments without emitting recovery evidence", async () => {
