@@ -81,6 +81,12 @@ Writes a fixed observer failure category to stderr only when
 `PREVIEW_TAIL_DIAGNOSTIC=1`; it never includes input, provider text, or
 credentials.
 
+## `classifyExpectationFailure`
+
+Evaluates only the semantic maintenance fields already reconstructed by the
+safe classifier and returns a closed category for schedule, outcome, category,
+repair, renewal, or reserved-repair mismatches. It never returns field values.
+
 ## `main`
 
 Separates the legacy no-argument path from strict observer commands. Invalid

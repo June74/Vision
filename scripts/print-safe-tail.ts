@@ -19,12 +19,57 @@ type PreviewTailObserverFailureCategory =
   | "observer_no_matching_evidence"
   | "rejected_terminal_event"
   | "evidence_rejected_by_expectation"
+  | "maintenance_schedule_mismatch"
+  | "maintenance_outcome_mismatch"
+  | "maintenance_category_mismatch"
+  | "maintenance_repair_failure"
+  | "maintenance_renewal_failure"
+  | "maintenance_repair_not_reserved"
   | "input_closed_before_evidence";
 
 /** Emits one fixed diagnosis only when the supervisor explicitly requests it. */
 function emitObserverFailure(category: PreviewTailObserverFailureCategory): void {
   if (process.env.PREVIEW_TAIL_DIAGNOSTIC !== "1") return;
   process.stderr.write(`Preview tail observer failed closed: ${category}.\n`);
+}
+
+/** Classifies one semantic maintenance mismatch without exposing field values. */
+function classifyExpectationFailure(
+  evidence: SafeTailResult,
+  expectation: PreviewObserverAcceptanceExpectation,
+): PreviewTailObserverFailureCategory {
+  if (
+    (expectation.kind === "maintenance_succeeded" ||
+      expectation.kind === "maintenance_repair_reserved") &&
+    evidence !== null &&
+    typeof evidence === "object"
+  ) {
+    const candidate = evidence as unknown as Record<string, unknown>;
+    if (
+      candidate.maintenanceScheduledAt !== expectation.maintenanceScheduledAt
+    ) {
+      return "maintenance_schedule_mismatch";
+    }
+    if (candidate.outcome !== "succeeded") {
+      return "maintenance_outcome_mismatch";
+    }
+    if (candidate.category !== "none") {
+      return "maintenance_category_mismatch";
+    }
+    if (candidate.repairOutcome === "failed") {
+      return "maintenance_repair_failure";
+    }
+    if (candidate.renewalOutcome === "failed") {
+      return "maintenance_renewal_failure";
+    }
+    if (
+      expectation.kind === "maintenance_repair_reserved" &&
+      candidate.repairOutcome !== "reserved"
+    ) {
+      return "maintenance_repair_not_reserved";
+    }
+  }
+  return "evidence_rejected_by_expectation";
 }
 
 /** Creates a clocked signal or uniqueness observer without raw output. */
@@ -468,7 +513,9 @@ function runObserverTail(configuration: ObserverConfiguration): void {
         result.succeeded && configuration.outputSignalEvidence
           ? evidence
           : result.output,
-        result.succeeded ? undefined : "evidence_rejected_by_expectation",
+        result.succeeded
+          ? undefined
+          : classifyExpectationFailure(evidence, configuration.expectation),
       );
     }
   });

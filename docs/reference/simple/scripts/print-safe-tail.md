@@ -73,6 +73,11 @@ an optional allowlisted record.
 When the supervisor asks for diagnosis, emits only a fixed failure category to
 stderr; it never prints the rejected tail record.
 
+## `classifyExpectationFailure`
+
+Names the kind of maintenance expectation mismatch using fixed words only;
+scheduled values and event contents stay private.
+
 ## `main`
 
 Routes no arguments to the legacy diagnostic. Every observer invocation must

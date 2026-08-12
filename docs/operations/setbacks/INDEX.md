@@ -601,6 +601,9 @@
 | [SB-20260812-121549-git-index-lock](incidents/2026-08-12T121549Z-git-index-lock.md) | contained | 2026-08-12T12:15:49Z | Phase B CI tail-supervisor diagnosis publication | Shared worktree index-lock creation was denied; the exact scoped commit must run with the elevated filesystem boundary |
 | [SB-20260812-123105-tail-consumer-nonzero](incidents/2026-08-12T123105Z-tail-consumer-nonzero.md) | awaiting diagnosis | 2026-08-12T12:31:05Z | Phase B permanent maintenance baseline / GitHub observer | Fresh exact-tip observer reached the scheduled tick but the consumer exited nonzero without evidence; no provider mutation occurred |
 | [SB-20260812-123803-doc-coverage-diagnostic](incidents/2026-08-12T123803Z-doc-coverage-diagnostic.md) | contained | 2026-08-12T12:38:03Z | Phase B CI tail-supervisor diagnosis | Documentation coverage caught missing reference headings for the new diagnostic helpers; the headings were added before publication |
+| [SB-20260812-124605-tail-evidence-expectation-rejected](incidents/2026-08-12T124605Z-tail-evidence-expectation-rejected.md) | awaiting diagnosis | 2026-08-12T12:46:05Z | Phase B permanent maintenance baseline / GitHub observer | Observer received a structurally valid maintenance record but its semantics failed the requested expectation; no provider mutation occurred |
+| [SB-20260812-124954-test-cast](incidents/2026-08-12T124954Z-test-cast.md) | contained | 2026-08-12T12:49:54Z | Phase B CI tail-supervisor diagnosis | Focused diagnostic test spread an unknown fixture value; an explicit test-only record cast fixed it |
+| [SB-20260812-125108-doc-coverage-expectation-helper](incidents/2026-08-12T125108Z-doc-coverage-expectation-helper.md) | contained | 2026-08-12T12:51:08Z | Phase B CI tail-supervisor diagnosis | Documentation coverage caught missing simple and technical headings for the expectation helper; both were added |
 
 ## Legacy history
 

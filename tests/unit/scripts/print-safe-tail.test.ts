@@ -650,6 +650,50 @@ describe(
     });
   });
 
+  it("classifies a maintenance schedule mismatch without values", async () => {
+    const expected = new Date(Date.now() + 10_000).toISOString();
+    const actual = new Date(Date.parse(expected) + 1_000).toISOString();
+    await expect(
+      runPrintSafeTail(
+        uniquenessArguments(
+          "--calendar-maintenance-only",
+          "maintenance_succeeded",
+          ["--maintenance-scheduled-at", expected],
+        ).args,
+        [maintenanceTail(maintenanceSuccess(actual))],
+        0,
+        true,
+      ),
+    ).resolves.toEqual({
+      exitCode: 1,
+      stdout: "",
+      stderr: "Preview tail observer failed closed: maintenance_schedule_mismatch.\n",
+    });
+  });
+
+  it("classifies a reserved-repair mismatch without values", async () => {
+    const expected = new Date(Date.now() + 10_000).toISOString();
+    await expect(
+      runPrintSafeTail(
+        uniquenessArguments(
+          "--calendar-maintenance-only",
+          "maintenance_repair_reserved",
+          ["--maintenance-scheduled-at", expected],
+        ).args,
+        [maintenanceTail({
+          ...(maintenanceSuccess(expected) as Record<string, unknown>),
+          repairOutcome: "no_work",
+        })],
+        0,
+        true,
+      ),
+    ).resolves.toEqual({
+      exitCode: 1,
+      stdout: "",
+      stderr: "Preview tail observer failed closed: maintenance_repair_not_reserved.\n",
+    });
+  });
+
   it("rejects restore-only mode with extra arguments without emitting recovery evidence", async () => {
     await expect(
       runPrintSafeTail(["--restore-only", "extra"], [scheduledTail()]),
