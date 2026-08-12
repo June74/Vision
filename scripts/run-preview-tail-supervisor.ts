@@ -20,6 +20,8 @@ export type PreviewTailFailureCategory =
   | "consumer_observer_no_matching_evidence"
   | "consumer_rejected_terminal_event"
   | "consumer_evidence_rejected_by_expectation"
+  | "consumer_observer_uniqueness_failed"
+  | "consumer_observer_runtime_error"
   | "consumer_input_closed_before_evidence"
   | "capture_overflow"
   | "producer_unavailable"
@@ -108,11 +110,14 @@ export function supervisePreviewTail(input: {
   let settling = false;
   let consumerSucceeded = false;
   let consumerFailureCategory: PreviewTailFailureCategory | null = null;
+  let consumerDiagnosticFragment = "";
 
   consumer.stderr.setEncoding("utf8");
   consumer.stderr.on("data", (chunk: string) => {
-    const category = classifyConsumerFailureCategory(chunk);
+    const candidate = `${consumerDiagnosticFragment}${chunk}`;
+    const category = classifyConsumerFailureCategory(candidate);
     if (category !== null) consumerFailureCategory = category;
+    consumerDiagnosticFragment = candidate.slice(-96);
   });
   consumer.stdout.setEncoding("utf8");
   // The observer may close stdin immediately after a valid signal. Swallow the
@@ -166,34 +171,39 @@ export function supervisePreviewTail(input: {
     });
     consumer.on("close", (code, signal) => {
       if (settled || settling) return;
-      if (code !== 0) {
-        rejectClosed(consumerFailureCategory ?? "consumer_nonzero");
-        return;
-      }
-      if (signal !== null) {
-        rejectClosed("consumer_signal");
-        return;
-      }
-      consumerSucceeded = true;
-      if (producer === null) {
-        rejectClosed("producer_unavailable");
-        return;
-      }
-      settling = true;
-      producer.stdout.unpipe(consumer.stdin);
-      void stopChild(
-        producer,
-        awaitChildClose,
-      ).then(() => {
-        if (settled) return;
-        settled = true;
-        resolvePromise(Object.freeze({
-          stdout: output,
-          producerTermination: "deliberate" as const,
-        }));
-      }, () => {
-        settled = true;
-        rejectPromise(new PreviewTailSupervisionError("termination_failure"));
+      // Give the stderr stream one event-loop turn to deliver a final fixed
+      // diagnostic chunk before selecting the fallback category.
+      setImmediate(() => {
+        if (settled || settling) return;
+        if (code !== 0) {
+          rejectClosed(consumerFailureCategory ?? "consumer_nonzero");
+          return;
+        }
+        if (signal !== null) {
+          rejectClosed("consumer_signal");
+          return;
+        }
+        consumerSucceeded = true;
+        if (producer === null) {
+          rejectClosed("producer_unavailable");
+          return;
+        }
+        settling = true;
+        producer.stdout.unpipe(consumer.stdin);
+        void stopChild(
+          producer,
+          awaitChildClose,
+        ).then(() => {
+          if (settled) return;
+          settled = true;
+          resolvePromise(Object.freeze({
+            stdout: output,
+            producerTermination: "deliberate" as const,
+          }));
+        }, () => {
+          settled = true;
+          rejectPromise(new PreviewTailSupervisionError("termination_failure"));
+        });
       });
     });
   });
@@ -255,6 +265,10 @@ function classifyConsumerFailureCategory(
       return "consumer_rejected_terminal_event";
     case "evidence_rejected_by_expectation":
       return "consumer_evidence_rejected_by_expectation";
+    case "observer_uniqueness_failed":
+      return "consumer_observer_uniqueness_failed";
+    case "observer_runtime_error":
+      return "consumer_observer_runtime_error";
     case "input_closed_before_evidence":
       return "consumer_input_closed_before_evidence";
     default:

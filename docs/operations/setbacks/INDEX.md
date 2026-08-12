@@ -609,6 +609,7 @@
 | [SB-20260812-131724-doc-coverage-finish](incidents/2026-08-12T131724Z-doc-coverage-finish.md) | contained | 2026-08-12T13:17:24Z | Phase B CI tail-supervisor diagnosis | Documentation coverage caught the new diagnostic flush callback without JSDoc; the required comment was added |
 | [SB-20260812-132104-missed-uniqueness-category](incidents/2026-08-12T132104Z-missed-uniqueness-category.md) | contained | 2026-08-12T13:21:04Z | Phase B CI tail-supervisor diagnosis | Uniqueness timer omitted a fixed failure category and collapsed observer state to generic consumer_nonzero; the timer now reports observer_uniqueness_failed |
 | [SB-20260812-134104-consumer-runtime-category](incidents/2026-08-12T134104Z-consumer-runtime-category.md) | contained | 2026-08-12T13:41:04Z | Phase B CI tail-supervisor diagnosis | Repeated generic consumer failures had no fixed uncaught-runtime category; the observer now emits observer_runtime_error without error text |
+| [SB-20260812-140304-consumer-close-race](incidents/2026-08-12T140304Z-consumer-close-race.md) | contained | 2026-08-12T14:03:04Z | Phase B CI tail-supervisor diagnosis | Consumer close could race the final fixed diagnostic chunk; bounded suffix capture and one-turn deferred classification were added |
 
 ## Legacy history
 

@@ -129,6 +129,19 @@ describe("preview tail producer supervision", () => {
     },
   );
 
+  it("retains a fixed consumer category through an immediate nonzero close", async () => {
+    await expect(
+      supervisePreviewTail({
+        producer: node("setInterval(()=>{},1000)"),
+        consumer: node(
+          'process.stderr.write("Preview tail observer failed closed: observer_runtime_error.\\n");process.exit(1);',
+        ),
+      }),
+    ).rejects.toMatchObject({
+      category: "consumer_observer_runtime_error",
+    });
+  });
+
   it("validates both command arrays before starting either child", async () => {
     const directory = await mkdtemp(join(tmpdir(), "preview-supervisor-"));
     const marker = join(directory, "producer-started");
