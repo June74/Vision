@@ -119,3 +119,7 @@ Do not use raw formatted JSON lines as semantic equality values.
 - 2026-08-12T18:54:49.872Z: A UTC timestamp probe again used the unsupported
   `Get-Date -AsUTC` parameter and failed before reading or changing state;
   `(Get-Date).ToUniversalTime()` remains the compatible form.
+- 2026-08-12T18:58:17.804Z: A read-only provider-driver inspection used the
+  tracked `scripts/` path instead of the ignored local task-state path and
+  failed before reading. No external action ran; use the explicitly named
+  `.superpowers/local/task8-provider-driver.mjs` path.

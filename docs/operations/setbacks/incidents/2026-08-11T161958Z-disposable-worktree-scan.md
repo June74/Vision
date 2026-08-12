@@ -43,6 +43,10 @@ when the same scan failure recurs.
   unbounded `Get-ChildItem -Recurse` over the disposable worktree; the command
   stopped on a missing dependency path. The attempted setback helper read then
   stopped because `scripts/new_setback.py` is absent. No external action ran.
+- `2026-08-12T18:56:34.344Z`: a bounded read of the ignored local task-state
+  paths attempted to open two directory-backed control entries as files and
+  was denied by Windows. No external action or state change occurred; inspect
+  these entries as directories and use only the known input JSON file.
 
 ## Next step
 
