@@ -37,8 +37,9 @@ Starts an already validated captured child without a shell.
 
 ## `classifyConsumerFailureCategory`
 
-Recognizes only the safe-tail consumer's fixed diagnostic words and maps them
-to a supervisor category; all other child text is ignored.
+Delegates to the shared bounded observer dialect parser and maps every
+allowlisted raw category, including maintenance failures, to a prefixed
+supervisor category. Unknown or malformed child text remains unrecognised.
 
 ## `waitForChildClose`
 

@@ -48,9 +48,11 @@ Starts one validated hidden, fully captured child with no shell parsing.
 
 ## `classifyConsumerFailureCategory`
 
-Parses only the consumer's fixed `Preview tail observer failed closed` category
-line and maps the allowlisted words to supervisor categories. Arbitrary child
-stderr is never forwarded or retained.
+Delegates to `preview-tail-observer-dialect.ts`, then maps the shared exact
+category tuple—including maintenance mismatch, repair, renewal, and
+reservation categories—to the supervisor's prefixed safe categories. The
+bounded parser admits no unknown values; arbitrary child stderr is never
+forwarded or retained.
 
 ## `waitForChildClose`
 

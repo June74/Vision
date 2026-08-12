@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-08-07T20:06:50Z
-- **Last observed:** 2026-08-12T18:28:21Z
+- **Last observed:** 2026-08-12T18:48:16Z
 - **Phase/task:** Phase B Cloudflare-side deployment diagnosis
 - **Environment:** Windows PowerShell, linked Phase B worktree
 - **Version/commit:** Current reviewed Phase B checkout; no tracked implementation change
@@ -112,3 +112,7 @@ Do not use raw formatted JSON lines as semantic equality values.
   candidate, provider, deployment, secret, or runtime state was accessed or
   changed; use the catalog-root paths and the verified worktree root directly,
   and keep wrapper arguments in simple bounded commands.
+- 2026-08-12T18:48:16Z: A read-only diff-inspection wrapper was malformed before
+  execution. No repository, candidate, provider, deployment, secret, key,
+  database, or runtime state changed; use separate simple status and diff
+  commands when a composed wrapper is error-prone.
