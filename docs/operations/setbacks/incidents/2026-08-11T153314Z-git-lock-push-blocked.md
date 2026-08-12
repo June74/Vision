@@ -2,7 +2,7 @@
 
 - Incident ID: `SB-20260811-153314-git-lock-push-blocked`
 - First observed: `2026-08-11T15:33:14Z`
-- Last observed: `2026-08-12T01:06:00Z`
+- Last observed: `2026-08-12T01:59:26Z`
 - Status: `contained`
 - Phase/task: Phase B setback-log publication
 - Environment: Windows linked Git worktree
@@ -56,3 +56,8 @@ parent worktree lock path does not currently exist.
   failed at the same linked-worktree metadata boundary before any file was
   staged. The intended four-file diff remains intact, no `index.lock` exists,
   and no remote, provider, secret, key, database, or calendar state changed.
+- `2026-08-12T01:59:26Z`: staging the stale-candidate lifecycle incident and
+  index row failed at the same boundary; the subsequent restricted push was
+  blocked before GitHub accepted anything. A read-only check again found no
+  `index.lock`; only the two intended lifecycle-document paths remain modified
+  or untracked, with no provider or application mutation.
