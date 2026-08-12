@@ -207,3 +207,11 @@ secret, or calendar mutation occurred.
   the docs commit, an abbreviated commit was expanded incorrectly. The value
   was corrected immediately from `git rev-parse HEAD`; no workflow or provider
   action used the bad pin.
+- `2026-08-12T00:06:00Z`: after the user re-saved the restore pair, read-only
+  Wrangler checks against both the direct `vision-preview` Worker and the
+  repository-configured preview environment still found neither restore secret
+  name. No monitored run was dispatched because the preflight would fail at
+  the same boundary; no secret values were read or printed.
+- `2026-08-12T00:07:00Z`: two local PowerShell source-search probes used invalid
+  path argument forms and stopped before producing results. No files, provider
+  state, or secrets changed; the searches were rerun with explicit paths.
