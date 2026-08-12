@@ -21,5 +21,8 @@
   requires `ROLLBACK_CLOSURE_RUN_ID=baseline` and validates a null closure.
   A workflow contract regression covers this branch, and the focused workflow,
   YAML, lifecycle, TypeScript, and diff checks pass. No provider state changed.
-- **Next action:** Re-dispatch one normal preview release from the final pushed
-  commit and inspect the safe deployment result.
+- **Follow-up:** The corrected workflow was pushed as commit
+  `5ec2887392d935751b591cc36248101b58071ee1`. One fresh normal preview run
+  passed selection, full verification, and the `Deploy normal preview` job.
+  The subsequent calendar-maintenance observer also passed, so this admission
+  failure is contained and the normal release gate is closed.

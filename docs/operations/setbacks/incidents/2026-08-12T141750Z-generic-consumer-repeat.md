@@ -1,8 +1,8 @@
 # SB-20260812-141750 - GitHub observer still returned generic consumer failure
 
-- **Status:** contained
+- **Status:** closed
 - **Detected:** 2026-08-12T14:17:50Z
-- **Last observed:** 2026-08-12T19:45:44Z
+- **Last observed:** 2026-08-12T20:47:32.118Z
 - **Area:** Phase B permanent maintenance baseline / GitHub observer
 - **Evidence:** The fresh observer was rebased and pinned to `568b36b616ced4e7c56e81c135c9d7ddb1f3cb9c`. Its one matching GitHub run completed with the privacy-safe lifecycle tuple `consumer_unrecognised`, `consumer_exit=1`, and `producer_closed_first=false`. No raw runner stderr was retained. The local end-to-end CLI harness preserves fixed categories through immediate nonzero close.
 - **Impact:** No deployment, rollback, database, R2, Queue, backup-key, Worker-configuration, or application-state mutation occurred. The maintenance gate remains pending.
@@ -42,3 +42,14 @@ scheduled-handler boundary, preserve exact timestamps for other cron families,
 and add a regression test through the live scheduled routing path. The
 previous next-tick input correction remains necessary for future observers but
 does not solve this seconds-level provider delivery offset.
+
+## Closure - 2026-08-12T20:47:32.118Z
+
+After the normal preview acceptance run completed successfully for the reviewed
+commit `5ec2887392d935751b591cc36248101b58071ee1`, the fresh
+`calendar_maintenance` uniqueness observer for `20:45:00Z` also completed
+successfully. Admission, exact checkout, dependency setup, and the allowlisted
+tail capture all passed; no deployment, rollback, credential, database, R2,
+Queue, or Worker configuration state changed during observation. The scoped
+timestamp normalization is therefore live and its maintenance evidence gate is
+closed.
