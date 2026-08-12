@@ -2,7 +2,7 @@
 
 - Incident ID: `SB-20260811-212748-role-probe-preobserver-failed-closed`
 - First observed: `2026-08-11T21:27:48Z`
-- Last observed: `2026-08-12T00:55:00Z`
+- Last observed: `2026-08-12T02:30:56Z`
 - Status: `contained`
 - Phase/task: Phase B monitored role-probe acceptance after correlation-wait repair
 - Environment: Windows PowerShell, pushed reviewed branch
@@ -285,3 +285,13 @@ secret, or calendar mutation occurred.
   the known local Wrangler log-file `EPERM` warning but exits successfully.
   No provider state changed; the next step is to publish this correction and
   run one fresh monitored acceptance.
+- `2026-08-12T02:17:52Z`: the approved fresh retry was queued behind one
+  obsolete in-progress `Capture role_probe signal` observer from the prior
+  failed-closed attempt. Read-only job inspection confirmed all deployment,
+  rollback, and cleanup jobs were skipped; the obsolete observer was cancelled
+  and the queued retry was left intact. No candidate, deployment, rollback,
+  secret, key, database, calendar, or application mutation occurred.
+- `2026-08-12T02:30:56Z`: the current role-probe candidate failed before
+  deployment because its restore-pair preflight correctly found both temporary
+  restore secret names absent. The remaining observer was cancelled after the
+  candidate and rollback jobs were verified not to have mutated provider state.

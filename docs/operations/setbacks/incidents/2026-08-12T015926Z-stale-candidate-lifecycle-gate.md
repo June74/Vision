@@ -2,7 +2,7 @@
 
 - Incident ID: `SB-20260812-015926-stale-candidate-lifecycle-gate`
 - First observed: `2026-08-12T01:38:12Z`
-- Last observed: `2026-08-12T01:59:26Z`
+- Last observed: `2026-08-12T02:15:18Z`
 - Status: `contained`
 - Phase/task: Phase B monitored role-probe acceptance after temporary restore-secret cleanup
 - Environment: GitHub Actions preview acceptance workflow, Cloudflare preview Worker, local Task 8 controller state
@@ -57,6 +57,9 @@ changed by these checks.
   is not present in this checkout, so this incident and index row were created
   with the repository patch workflow. These command errors caused no external
   mutation or data exposure.
+- `gh run list` was first called with an unsupported `jobs` JSON field and
+  failed before making a provider request. The corrected read-only status probe
+  uses only fields supported by the installed GitHub CLI.
 
 ## Correction and prevention
 
@@ -81,4 +84,3 @@ action is needed for this blocker.
 Read-only checks passed for the normal provider state and proved the stale
 artifact/closure asymmetry. The acceptance retry remains intentionally blocked
 until the artifact disposition is resolved.
-
