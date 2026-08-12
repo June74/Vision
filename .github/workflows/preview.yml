@@ -1047,7 +1047,7 @@ jobs:
           schedules_file="$(mktemp)"
           settings_file="$(mktemp)"
           trap 'rm -f "$health_file" "$schedules_file" "$settings_file"' EXIT
-          public_origin="$(node --input-type=module -e 'import { readFileSync } from "node:fs"; const config = JSON.parse(readFileSync("dist/vision/wrangler.json", "utf8")); process.stdout.write(new URL(config.vars.GOOGLE_OAUTH_REDIRECT_URI).origin)')"
+          public_origin="$(node --input-type=module -e 'import { readFileSync } from "node:fs"; const config = JSON.parse(readFileSync("dist/vision/wrangler.json", "utf8")); process.stdout.write(new URL(config.vars.GOOGLE_REDIRECT_URI).origin)')"
           provider_origin="$(printf '%s%s' 'https:' '//api.cloudflare.com/client/v4')"
           curl --fail --silent --show-error "$public_origin/api/health" > "$health_file"
           curl --fail --silent --show-error \

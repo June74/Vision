@@ -287,4 +287,23 @@ describe("workflow YAML contract", () => {
     expect(uploadIndex).toBe(writeIndex + 1);
     expect(deployIndex).toBe(uploadIndex + 1);
   });
+
+  it("derives closure health origin from the canonical preview redirect variable", async () => {
+    const source = await readFile(
+      resolve(process.cwd(), ".github", "workflows", "preview.yml"),
+      "utf8",
+    );
+    const closureStart = source.indexOf(
+      "name: Reverify normal provider state before rollback closure",
+    );
+    const closureEnd = source.indexOf(
+      "name: Close rollback after post-restore authenticated reads",
+      closureStart,
+    );
+    expect(closureStart).toBeGreaterThanOrEqual(0);
+    expect(closureEnd).toBeGreaterThan(closureStart);
+    const closure = source.slice(closureStart, closureEnd);
+    expect(closure).toContain("config.vars.GOOGLE_REDIRECT_URI");
+    expect(closure).not.toContain("config.vars.GOOGLE_OAUTH_REDIRECT_URI");
+  });
 });

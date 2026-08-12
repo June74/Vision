@@ -551,6 +551,7 @@
 | [SB-20260812-012721-role-probe-rollback-temporary-secrets](incidents/2026-08-12T012721Z-role-probe-rollback-temporary-secrets.md) | contained | 2026-08-12T01:34:00Z | Phase B monitored role-probe acceptance and rollback closure | Normal rollback proof rejected lingering temporary restore secret names; no secret values or provider configuration were changed |
 | [SB-20260812-015926-stale-candidate-lifecycle-gate](incidents/2026-08-12T015926Z-stale-candidate-lifecycle-gate.md) | contained | 2026-08-12T02:15:18Z | Phase B monitored role-probe acceptance after temporary restore-secret cleanup | Fresh candidate was blocked by one older candidate-intent artifact with no matching rollback closure; no new candidate mutation occurred |
 | [SB-20260812-023056-role-probe-restore-pair-absent](incidents/2026-08-12T023056Z-role-probe-restore-pair-absent.md) | contained | 2026-08-12T02:30:56Z | Phase B monitored role-probe acceptance after approved temporary-secret deletion | Role-probe preflight correctly rejected the normal provider because its required temporary restore pair was absent; no candidate mutation occurred |
+| [SB-20260812-030919-foundation-closure-config-key](incidents/2026-08-12T030919Z-foundation-closure-config-key.md) | contained | 2026-08-12T03:09:19Z | Phase B foundation-probe monitored acceptance and rollback closure | Closure recheck used a nonexistent redirect variable key after successful candidate and rollback; workflow fix is locally verified, fresh acceptance remains required |
 
 ## Legacy history
 
