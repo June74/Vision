@@ -2,7 +2,7 @@
 
 - Incident ID: `SB-20260812-035852-foundation-closure-settlement-race`
 - First observed: `2026-08-12T03:58:52Z`
-- Last observed: `2026-08-12T04:08:48Z`
+- Last observed: `2026-08-12T04:15:37Z`
 - Status: `closed`
 - Phase/task: Phase B foundation-probe monitored acceptance and rollback closure
 - Environment: local acceptance controller and GitHub Actions preview workflow
@@ -50,6 +50,10 @@ passed. No secret, database, calendar, or application data was changed.
 - The first repository docs-coverage check after the controller fix reported
   that the new `expectClosureOk` helper lacked the required simple and
   technical reference headings. No provider or workflow state changed.
+- The first post-push branch-tip check passed the arguments to `git
+  ls-remote` in the wrong order and therefore failed locally before reading
+  the remote. The corrected read-only check is still required; no provider or
+  repository state changed.
 
 ## Correction and prevention
 
