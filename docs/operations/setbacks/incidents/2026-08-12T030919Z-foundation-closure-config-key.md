@@ -2,7 +2,7 @@
 
 - Incident ID: `SB-20260812-030919-foundation-closure-config-key`
 - First observed: `2026-08-12T02:40:02Z`
-- Last observed: `2026-08-12T03:09:19Z`
+- Last observed: `2026-08-12T03:23:10Z`
 - Status: `contained`
 - Phase/task: Phase B foundation-probe monitored acceptance and rollback closure
 - Environment: GitHub Actions preview workflow, Cloudflare preview Worker
@@ -51,6 +51,15 @@ database, calendar, or application data was changed.
 - The first focused test command used `pnpm exec vitest`, which this Windows
   checkout did not resolve. The same test then ran successfully through the
   explicit local `vitest.cmd` launcher; no repository or provider state changed.
+- A local inspection initially guessed a provider-driver path that does not
+  exist in this checkout; listing the actual `.superpowers/local` files found
+  the driver without changing state.
+- Two read-only GitHub artifact filters were malformed and returned no usable
+  result; a bounded PowerShell JSON parse then confirmed one active candidate
+  intent, one rollback-restored proof, and zero rollback-closed proofs. A
+  PowerShell timestamp option was also unavailable in this Windows shell; the
+  equivalent Node timestamp path was used. No provider mutation or data
+  exposure occurred.
 
 ## Correction and prevention
 
