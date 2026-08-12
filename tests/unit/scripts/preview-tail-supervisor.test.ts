@@ -107,14 +107,24 @@ describe("preview tail producer supervision", () => {
   });
 
   it.each([
-    ["success", 0, "accepted\n"],
-    ["producer_failure", 1, ""],
-    ["consumer_failure", 1, ""],
+    ["success", 0, "accepted\n", ""],
+    [
+      "producer_failure",
+      1,
+      "",
+      "Preview tail supervision failed closed: producer_closed_before_consumer_success.\n",
+    ],
+    [
+      "consumer_failure",
+      1,
+      "",
+      "Preview tail supervision failed closed: consumer_nonzero.\n",
+    ],
   ] as const)(
     "keeps actual CLI %s child streams private and returns the expected exit",
-    async (mode, exitCode, stdout) => {
+    async (mode, exitCode, stdout, stderr) => {
       const result = await runSupervisorCli(mode);
-      expect(result).toEqual({ exitCode, stdout, stderr: "" });
+      expect(result).toEqual({ exitCode, stdout, stderr });
       expect(JSON.stringify(result)).not.toContain("SECRET_CLI_CANARY");
     },
   );

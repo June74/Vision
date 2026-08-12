@@ -8,6 +8,28 @@ const FAILURE = "Preview tail supervision failed closed.";
 const MAX_CAPTURE_BYTES = 65_536;
 const moduleRequire = createRequire(import.meta.url);
 
+/** Fixed categories for privacy-safe diagnosis of a failed tail boundary. */
+export type PreviewTailFailureCategory =
+  | "producer_error"
+  | "producer_closed_before_consumer_success"
+  | "consumer_error"
+  | "consumer_nonzero"
+  | "consumer_signal"
+  | "capture_overflow"
+  | "producer_unavailable"
+  | "termination_failure";
+
+/** Carries only a fixed failure category; child/provider output never crosses this boundary. */
+export class PreviewTailSupervisionError extends Error {
+  readonly category: PreviewTailFailureCategory;
+
+  constructor(category: PreviewTailFailureCategory) {
+    super(FAILURE);
+    this.name = "PreviewTailSupervisionError";
+    this.category = category;
+  }
+}
+
 export interface PreviewTailChildCommand {
   readonly executable: string;
   readonly arguments: readonly string[];
@@ -86,7 +108,7 @@ export function supervisePreviewTail(input: {
 
   return new Promise((resolvePromise, rejectPromise) => {
     /** Stops every started child, waits for closure, and exposes one error. */
-    const rejectClosed = () => {
+    const rejectClosed = (category: PreviewTailFailureCategory) => {
       if (settled || settling) return;
       settling = true;
       if (producer !== null) producer.stdout.unpipe(consumer.stdin);
@@ -97,10 +119,10 @@ export function supervisePreviewTail(input: {
           : [stopChild(producer, awaitChildClose)]),
       ]).then(() => {
         settled = true;
-        rejectPromise(new Error(FAILURE));
+        rejectPromise(new PreviewTailSupervisionError(category));
       }, () => {
         settled = true;
-        rejectPromise(new Error(FAILURE));
+        rejectPromise(new PreviewTailSupervisionError("termination_failure"));
       });
     };
 
@@ -111,31 +133,37 @@ export function supervisePreviewTail(input: {
           Buffer.byteLength(chunk, "utf8") >
           MAX_CAPTURE_BYTES
       ) {
-        rejectClosed();
+        rejectClosed("capture_overflow");
         return;
       }
       output += chunk;
     });
-    consumer.on("error", rejectClosed);
+    consumer.on("error", () => rejectClosed("consumer_error"));
     consumer.once("spawn", () => {
       if (settled || settling) return;
       producer = spawnCommand(producerCommand);
       producer.stderr.resume();
       producer.stdout.pipe(consumer.stdin);
-      producer.on("error", rejectClosed);
+      producer.on("error", () => rejectClosed("producer_error"));
       producer.on("close", () => {
-        if (!consumerSucceeded) rejectClosed();
+        if (!consumerSucceeded) {
+          rejectClosed("producer_closed_before_consumer_success");
+        }
       });
     });
     consumer.on("close", (code, signal) => {
       if (settled || settling) return;
-      if (code !== 0 || signal !== null) {
-        rejectClosed();
+      if (code !== 0) {
+        rejectClosed("consumer_nonzero");
+        return;
+      }
+      if (signal !== null) {
+        rejectClosed("consumer_signal");
         return;
       }
       consumerSucceeded = true;
       if (producer === null) {
-        rejectClosed();
+        rejectClosed("producer_unavailable");
         return;
       }
       settling = true;
@@ -152,7 +180,7 @@ export function supervisePreviewTail(input: {
         }));
       }, () => {
         settled = true;
-        rejectPromise(new Error(FAILURE));
+        rejectPromise(new PreviewTailSupervisionError("termination_failure"));
       });
     });
   });
@@ -266,7 +294,12 @@ async function main(): Promise<void> {
       : createDefaultPreviewTailCommandPlan(forwardedArguments);
     const result = await supervisePreviewTail(plan);
     process.stdout.write(result.stdout);
-  } catch {
+  } catch (error) {
+    if (error instanceof PreviewTailSupervisionError) {
+      process.stderr.write(
+        `Preview tail supervision failed closed: ${error.category}.\n`,
+      );
+    }
     process.exitCode = 1;
   }
 }
