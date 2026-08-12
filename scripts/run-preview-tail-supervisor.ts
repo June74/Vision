@@ -13,7 +13,10 @@ export type PreviewTailFailureCategory =
   | "producer_error"
   | "producer_closed_before_consumer_success"
   | "consumer_error"
-  | "consumer_nonzero"
+  // Nonzero exit with nothing on stderr: the observer died before it could
+  // name a category. Distinct from a category we simply do not recognise.
+  | "consumer_silent"
+  | "consumer_unrecognised"
   | "consumer_signal"
   | "consumer_invalid_configuration"
   | "consumer_observer_window_invalid"
@@ -27,14 +30,28 @@ export type PreviewTailFailureCategory =
   | "producer_unavailable"
   | "termination_failure";
 
+/** Lifecycle facts that are safe to report: an exit status and an ordering. */
+export interface PreviewTailFailureDetail {
+  /** Null when the consumer never closed on its own, e.g. we terminated it. */
+  readonly consumerExitCode?: number | null;
+  readonly producerClosedFirst?: boolean;
+}
+
 /** Carries only a fixed failure category; child/provider output never crosses this boundary. */
 export class PreviewTailSupervisionError extends Error {
   readonly category: PreviewTailFailureCategory;
+  readonly consumerExitCode: number | null;
+  readonly producerClosedFirst: boolean;
 
-  constructor(category: PreviewTailFailureCategory) {
+  constructor(
+    category: PreviewTailFailureCategory,
+    detail: PreviewTailFailureDetail = {},
+  ) {
     super(FAILURE);
     this.name = "PreviewTailSupervisionError";
     this.category = category;
+    this.consumerExitCode = detail.consumerExitCode ?? null;
+    this.producerClosedFirst = detail.producerClosedFirst ?? false;
   }
 }
 
@@ -111,9 +128,13 @@ export function supervisePreviewTail(input: {
   let consumerSucceeded = false;
   let consumerFailureCategory: PreviewTailFailureCategory | null = null;
   let consumerDiagnosticFragment = "";
+  let consumerStderrBytes = 0;
+  let consumerExitCode: number | null = null;
+  let producerClosedFirst = false;
 
   consumer.stderr.setEncoding("utf8");
   consumer.stderr.on("data", (chunk: string) => {
+    consumerStderrBytes += Buffer.byteLength(chunk, "utf8");
     const candidate = `${consumerDiagnosticFragment}${chunk}`;
     const category = classifyConsumerFailureCategory(candidate);
     if (category !== null) consumerFailureCategory = category;
@@ -130,6 +151,12 @@ export function supervisePreviewTail(input: {
       if (settled || settling) return;
       settling = true;
       if (producer !== null) producer.stdout.unpipe(consumer.stdin);
+      // Read the lifecycle facts when the error is built, not before: the
+      // consumer may close while we are still tearing the producer down.
+      const detail = (): PreviewTailFailureDetail => ({
+        consumerExitCode,
+        producerClosedFirst,
+      });
       void Promise.all([
         stopChild(consumer, awaitChildClose),
         ...(producer === null
@@ -137,10 +164,12 @@ export function supervisePreviewTail(input: {
           : [stopChild(producer, awaitChildClose)]),
       ]).then(() => {
         settled = true;
-        rejectPromise(new PreviewTailSupervisionError(category));
+        rejectPromise(new PreviewTailSupervisionError(category, detail()));
       }, () => {
         settled = true;
-        rejectPromise(new PreviewTailSupervisionError("termination_failure"));
+        rejectPromise(
+          new PreviewTailSupervisionError("termination_failure", detail()),
+        );
       });
     };
 
@@ -165,18 +194,29 @@ export function supervisePreviewTail(input: {
       producer.on("error", () => rejectClosed("producer_error"));
       producer.on("close", () => {
         if (!consumerSucceeded) {
+          // Only a producer close that beats the consumer is an ordering fact;
+          // a close during teardown is one we caused.
+          if (!settled && !settling) producerClosedFirst = true;
           rejectClosed("producer_closed_before_consumer_success");
         }
       });
     });
     consumer.on("close", (code, signal) => {
       if (settled || settling) return;
+      // Record the status only when the consumer closed of its own accord; a
+      // close we forced during teardown says nothing about why it failed.
+      consumerExitCode = code;
       // Give the stderr stream one event-loop turn to deliver a final fixed
       // diagnostic chunk before selecting the fallback category.
       setImmediate(() => {
         if (settled || settling) return;
         if (code !== 0) {
-          rejectClosed(consumerFailureCategory ?? "consumer_nonzero");
+          rejectClosed(
+            consumerFailureCategory ??
+              (consumerStderrBytes === 0
+                ? "consumer_silent"
+                : "consumer_unrecognised"),
+          );
           return;
         }
         if (signal !== null) {
@@ -351,7 +391,10 @@ async function main(): Promise<void> {
   } catch (error) {
     if (error instanceof PreviewTailSupervisionError) {
       process.stderr.write(
-        `Preview tail supervision failed closed: ${error.category}.\n`,
+        `Preview tail supervision failed closed: ${error.category}.\n` +
+          `Preview tail supervision detail: consumer_exit=${
+            error.consumerExitCode === null ? "none" : error.consumerExitCode
+          } producer_closed_first=${error.producerClosedFirst}.\n`,
       );
     }
     process.exitCode = 1;

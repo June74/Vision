@@ -26,6 +26,7 @@ async function runSupervisorCli(
     | "success"
     | "producer_failure"
     | "consumer_failure"
+    | "consumer_silent"
     | "consumer_diagnostic",
 ): Promise<{
   readonly exitCode: number | null;
@@ -44,6 +45,7 @@ if(producer){
   process.on("SIGTERM",()=>process.exit(0));
 }else{
   if(mode==="consumer_failure"){process.stderr.write("SECRET_CLI_CANARY");process.exit(9);}
+  if(mode==="consumer_silent"){process.exit(9);}
   if(mode==="consumer_diagnostic"){process.stderr.write("Preview tail observer failed closed: observer_runtime_error.\\n");process.exit(1);}
   process.stdin.once("data",()=>{process.stderr.write("SECRET_CLI_CANARY");process.stdout.write("accepted\\n");process.exit(0);});
 }`;
@@ -117,13 +119,22 @@ describe("preview tail producer supervision", () => {
       "producer_failure",
       1,
       "",
-      "Preview tail supervision failed closed: producer_closed_before_consumer_success.\n",
+      "Preview tail supervision failed closed: producer_closed_before_consumer_success.\n" +
+        "Preview tail supervision detail: consumer_exit=none producer_closed_first=true.\n",
     ],
     [
       "consumer_failure",
       1,
       "",
-      "Preview tail supervision failed closed: consumer_nonzero.\n",
+      "Preview tail supervision failed closed: consumer_unrecognised.\n" +
+        "Preview tail supervision detail: consumer_exit=9 producer_closed_first=false.\n",
+    ],
+    [
+      "consumer_silent",
+      1,
+      "",
+      "Preview tail supervision failed closed: consumer_silent.\n" +
+        "Preview tail supervision detail: consumer_exit=9 producer_closed_first=false.\n",
     ],
   ] as const)(
     "keeps actual CLI %s child streams private and returns the expected exit",
@@ -147,11 +158,67 @@ describe("preview tail producer supervision", () => {
     });
   });
 
+  it("distinguishes a silent nonzero consumer from an unrecognised one", async () => {
+    // Nothing on stderr: the observer died before it could name a category.
+    await expect(
+      supervisePreviewTail({
+        producer: node("setInterval(()=>{},1000)"),
+        consumer: node("process.exit(9);"),
+      }),
+    ).rejects.toMatchObject({
+      category: "consumer_silent",
+      consumerExitCode: 9,
+      producerClosedFirst: false,
+    });
+
+    // Bytes on stderr, but in no recognised dialect.
+    await expect(
+      supervisePreviewTail({
+        producer: node("setInterval(()=>{},1000)"),
+        consumer: node(
+          'process.stderr.write("ReferenceError: tsx is not defined");process.exit(127);',
+        ),
+      }),
+    ).rejects.toMatchObject({
+      category: "consumer_unrecognised",
+      consumerExitCode: 127,
+      producerClosedFirst: false,
+    });
+  });
+
+  it("records that the producer closed before the consumer", async () => {
+    await expect(
+      supervisePreviewTail({
+        producer: node("process.exit(7);"),
+        consumer: node("setInterval(()=>{},1000)"),
+      }),
+    ).rejects.toMatchObject({
+      category: "producer_closed_before_consumer_success",
+      producerClosedFirst: true,
+    });
+  });
+
+  it("still reports a recognised category with its exit code", async () => {
+    await expect(
+      supervisePreviewTail({
+        producer: node("setInterval(()=>{},1000)"),
+        consumer: node(
+          'process.stderr.write("Preview tail observer failed closed: observer_runtime_error.\\n");process.exit(1);',
+        ),
+      }),
+    ).rejects.toMatchObject({
+      category: "consumer_observer_runtime_error",
+      consumerExitCode: 1,
+      producerClosedFirst: false,
+    });
+  });
+
   it("prints the fixed category through the CLI catch boundary", async () => {
     await expect(runSupervisorCli("consumer_diagnostic")).resolves.toEqual({
       exitCode: 1,
       stdout: "",
-      stderr: "Preview tail supervision failed closed: consumer_observer_runtime_error.\n",
+      stderr: "Preview tail supervision failed closed: consumer_observer_runtime_error.\n" +
+        "Preview tail supervision detail: consumer_exit=1 producer_closed_first=false.\n",
     });
   });
 
