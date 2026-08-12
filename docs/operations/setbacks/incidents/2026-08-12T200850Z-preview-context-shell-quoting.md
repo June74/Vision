@@ -12,9 +12,17 @@
 - **Impact:** The validator failed closed before any repository checks,
   deployment, candidate, observer, rollback, secret, database, R2, Queue, or
   Worker configuration action ran.
-- **Correction:** Use GitHub CLI raw-field input for the JSON context, and
-  locally serialize it through `serializePreviewAcceptanceContext` before
-  dispatch. Do not use the typed field form for byte-sensitive JSON.
-- **Prevention:** For every workflow input that is canonical JSON, compare the
-  locally generated string with a safe JSON parse and send it with the raw
-  field transport; verify the admission job before any retry.
+- **Correction:** The follow-up raw-field retry showed that the higher-level
+  `gh workflow run` command still stripped JSON punctuation. Use the repository
+  driver's direct GitHub REST dispatch path, which sends the canonical string as
+  one form field, and locally serialize it through
+  `serializePreviewAcceptanceContext` before dispatch.
+- **Prevention:** Do not use `gh workflow run` for byte-sensitive JSON inputs.
+  Compare the locally generated string with a safe JSON parse, send it through
+  the direct API transport, and verify the admission job before any retry.
+
+## Recurrence
+
+At 2026-08-12T20:11:12Z, the raw-field form failed with the same safe symptom;
+the run again stopped in admission and all deployment/traffic jobs were
+skipped. No provider or runtime state changed.
