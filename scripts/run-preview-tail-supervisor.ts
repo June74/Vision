@@ -241,8 +241,8 @@ function spawnCommand(
 function classifyConsumerFailureCategory(
   chunk: string,
 ): PreviewTailFailureCategory | null {
-  const match = /^Preview tail observer failed closed: ([a-z_]+)\.$/mu.exec(
-    chunk.trim(),
+  const match = /Preview tail observer failed closed: ([a-z_]+)\./u.exec(
+    chunk,
   );
   switch (match?.[1]) {
     case "invalid_configuration":

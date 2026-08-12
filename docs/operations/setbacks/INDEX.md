@@ -604,6 +604,7 @@
 | [SB-20260812-124605-tail-evidence-expectation-rejected](incidents/2026-08-12T124605Z-tail-evidence-expectation-rejected.md) | awaiting diagnosis | 2026-08-12T12:46:05Z | Phase B permanent maintenance baseline / GitHub observer | Observer received a structurally valid maintenance record but its semantics failed the requested expectation; no provider mutation occurred |
 | [SB-20260812-124954-test-cast](incidents/2026-08-12T124954Z-test-cast.md) | contained | 2026-08-12T12:49:54Z | Phase B CI tail-supervisor diagnosis | Focused diagnostic test spread an unknown fixture value; an explicit test-only record cast fixed it |
 | [SB-20260812-125108-doc-coverage-expectation-helper](incidents/2026-08-12T125108Z-doc-coverage-expectation-helper.md) | contained | 2026-08-12T12:51:08Z | Phase B CI tail-supervisor diagnosis | Documentation coverage caught missing simple and technical headings for the expectation helper; both were added |
+| [SB-20260812-130104-diagnostic-chunk-shape](incidents/2026-08-12T130104Z-diagnostic-chunk-shape.md) | contained | 2026-08-12T13:01:04Z | Phase B CI tail-supervisor diagnosis | Fixed consumer category was lost when stderr chunk framing included surrounding text; parser now matches only the allowlisted token |
 
 ## Legacy history
 
