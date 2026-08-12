@@ -78,6 +78,11 @@ stderr; it never prints the rejected tail record.
 Names the kind of maintenance expectation mismatch using fixed words only;
 scheduled values and event contents stay private.
 
+## `classifyExpectationFailure`
+
+Names a maintenance expectation mismatch using fixed words only; scheduled
+values and event contents stay private.
+
 ## `main`
 
 Routes no arguments to the legacy diagnostic. Every observer invocation must
@@ -87,4 +92,5 @@ output.
 
 The maintenance mode accepts only `vision.calendar-maintenance/v2` evidence
 bound to the requested scheduled tick. Raw logs, URLs, object names, provider
-identifiers, and provider-controlled error text never cross stdout.
+identifiers, and provider-controlled error text never cross stdout. A failed
+uniqueness close uses only the fixed `observer_uniqueness_failed` word.

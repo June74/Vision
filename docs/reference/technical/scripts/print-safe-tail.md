@@ -99,3 +99,5 @@ immediately, while uniqueness jobs remain open through the internally derived
 close instant. The opt-in diagnostic channel distinguishes invalid setup,
 malformed target-shaped records, expectation rejection, a missing terminal, and
 premature input closure with fixed categories only.
+ A failed uniqueness close uses the fixed `observer_uniqueness_failed` category
+and does not expose the underlying record.

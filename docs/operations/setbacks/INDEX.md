@@ -607,6 +607,7 @@
 | [SB-20260812-130104-diagnostic-chunk-shape](incidents/2026-08-12T130104Z-diagnostic-chunk-shape.md) | contained | 2026-08-12T13:01:04Z | Phase B CI tail-supervisor diagnosis | Fixed consumer category was lost when stderr chunk framing included surrounding text; parser now matches only the allowlisted token |
 | [SB-20260812-131004-diagnostic-flush](incidents/2026-08-12T131004Z-diagnostic-flush.md) | contained | 2026-08-12T13:10:04Z | Phase B CI tail-supervisor diagnosis | Fixed consumer category could be lost before process exit; the observer now waits for the stderr flush callback |
 | [SB-20260812-131724-doc-coverage-finish](incidents/2026-08-12T131724Z-doc-coverage-finish.md) | contained | 2026-08-12T13:17:24Z | Phase B CI tail-supervisor diagnosis | Documentation coverage caught the new diagnostic flush callback without JSDoc; the required comment was added |
+| [SB-20260812-132104-missed-uniqueness-category](incidents/2026-08-12T132104Z-missed-uniqueness-category.md) | contained | 2026-08-12T13:21:04Z | Phase B CI tail-supervisor diagnosis | Uniqueness timer omitted a fixed failure category and collapsed observer state to generic consumer_nonzero; the timer now reports observer_uniqueness_failed |
 
 ## Legacy history
 

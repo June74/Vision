@@ -25,6 +25,7 @@ type PreviewTailObserverFailureCategory =
   | "maintenance_repair_failure"
   | "maintenance_renewal_failure"
   | "maintenance_repair_not_reserved"
+  | "observer_uniqueness_failed"
   | "input_closed_before_evidence";
 
 /** Emits one fixed diagnosis only when the supervisor explicitly requests it. */
@@ -518,7 +519,11 @@ function runObserverTail(configuration: ObserverConfiguration): void {
     ) {
       timer = setTimeout(() => {
         const finished = observer.finish(new Date());
-        complete(finished.succeeded, finished.output);
+        complete(
+          finished.succeeded,
+          finished.output,
+          finished.succeeded ? undefined : "observer_uniqueness_failed",
+        );
       }, 120_000);
     }
     if (result.done) {
