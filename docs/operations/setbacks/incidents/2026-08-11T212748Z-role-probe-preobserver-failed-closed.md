@@ -2,11 +2,11 @@
 
 - Incident ID: `SB-20260811-212748-role-probe-preobserver-failed-closed`
 - First observed: `2026-08-11T21:27:48Z`
-- Last observed: `2026-08-11T22:41:00Z`
+- Last observed: `2026-08-12T00:55:00Z`
 - Status: `contained`
 - Phase/task: Phase B monitored role-probe acceptance after correlation-wait repair
 - Environment: Windows PowerShell, pushed reviewed branch
-- Version/commit: `1a9881ce0bf50435af3cd4ef7ace7dcd60c2382a`
+- Version/commit: `aa5fafe8d25ff367af452d87d4b5dcc3ec1581c1`
 
 ## Symptom
 
@@ -43,6 +43,13 @@ application state change was authorized by this run.
 - **Rejected hypotheses:** the five-minute correlation-window regression is
   not exercised by this attempt because observer dispatch did not reach the
   ready status.
+- **Confirmed third cause:** the current controller dispatch did create a
+  valid observer run, and its matching safe correlation artifact became
+  available after the controller's five-minute dispatch boundary. The
+  controller treats an uncertain `observe` dispatch as immediately
+  fail-closed instead of using its existing pending-journal reconciliation
+  path. This left no observer-ready status and no candidate or rollback
+  dispatch, even though the later artifact matched the pending journal.
 
 ## Correction and prevention
 
@@ -260,3 +267,21 @@ secret, or calendar mutation occurred.
   known Windows `EPERM` while writing its local debug log under the protected
   Wrangler config directory. The build output and crypto boundary check still
   exited successfully; no provider state changed.
+- `2026-08-12T00:49:33Z`: the next monitored retry dispatched exactly one
+  observer for the reviewed commit, then the controller emitted
+  `failed_closed` before `observer_ready`. A later read-only artifact check
+  found one matching correlation artifact for the pending journal, proving
+  the observer completed after the controller's five-minute boundary. The
+  observer was cancelled and settled as completed/cancelled; no candidate,
+  deployment, rollback, restore, database, secret, key, calendar, or
+  application mutation occurred. The current pending journal is disposable
+  local state and will be removed only after this record is preserved.
+- `2026-08-12T00:59:15Z`: a regression test first failed on the controller's
+  observer fail-closed branch, then passed after the minimal change restricted
+  that branch to `close_rollback`; observer dispatches now use the existing
+  exact reconciliation helper. The focused controller suite passed (75), the
+  full unit suite passed (1,766 passed, 6 skipped), contract tests passed
+  (183), typecheck passed, and production build passed. The build still emits
+  the known local Wrangler log-file `EPERM` warning but exits successfully.
+  No provider state changed; the next step is to publish this correction and
+  run one fresh monitored acceptance.

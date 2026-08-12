@@ -1492,6 +1492,63 @@ describe("preview acceptance controller", () => {
 });
 
 describe("preview acceptance controller decisive hardening", () => {
+  it("reconciles an uncertain observer dispatch before resolving the observer", async () => {
+    const fixture = harness();
+    const originalDispatch = vi
+      .mocked(fixture.dependencies.dispatch)
+      .getMockImplementation();
+    if (originalDispatch === undefined) {
+      throw new Error("missing harness dispatch implementation");
+    }
+    const reconcileCandidateDispatch = vi.fn(async (
+      input: Readonly<Record<string, unknown>>,
+    ) => {
+      if (input.operation !== "observe") return null;
+      return { runRef: "42" };
+    });
+    vi.mocked(fixture.dependencies.dispatch).mockImplementation(
+      async (operation, context, boundary) => {
+        if (operation === "observe") {
+          fixture.dispatches.push({ operation, context });
+          throw new Error("uncertain observer dispatch");
+        }
+        return originalDispatch(operation, context, boundary);
+      },
+    );
+    Object.assign(fixture.dependencies, { reconcileCandidateDispatch });
+
+    await expect(
+      runPreviewAcceptanceController(
+        {
+          family: "foundation_probe",
+          reviewedCommit: SHA,
+          expiresAt: new Date(START.getTime() + 10 * 60_000).toISOString(),
+          expectation: { kind: "foundation_succeeded" },
+        },
+        fixture.dependencies,
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(reconcileCandidateDispatch).toHaveBeenCalledOnce();
+    expect(reconcileCandidateDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "observe",
+        reviewedCommit: SHA,
+      }),
+      expect.objectContaining({
+        deadlineMonotonic: expect.any(Number),
+        signal: expect.anything(),
+      }),
+    );
+    expect(fixture.statuses).toContain("observer_ready");
+    expect(fixture.dispatches.map(({ operation }) => operation)).toEqual([
+      "observe",
+      "deploy_foundation",
+      "rollback",
+      "close_rollback",
+    ]);
+  });
+
   it("reconciles an accepted candidate dispatch that throws before returning its receipt", async () => {
     const fixture = harness();
     let candidateDispatchCount = 0;

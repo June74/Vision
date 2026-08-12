@@ -2,7 +2,7 @@
 
 - Incident ID: `SB-20260811-153314-git-lock-push-blocked`
 - First observed: `2026-08-11T15:33:14Z`
-- Last observed: `2026-08-11T21:23:33Z`
+- Last observed: `2026-08-12T01:06:00Z`
 - Status: `contained`
 - Phase/task: Phase B setback-log publication
 - Environment: Windows linked Git worktree
@@ -52,3 +52,7 @@ parent worktree lock path does not currently exist.
   directory denied creation of its `index.lock`. A read-only existence check
   confirmed that no lock file was present; no files were staged and no remote
   or provider action ran.
+- `2026-08-12T01:06:00Z`: staging the observer-reconciliation correction
+  failed at the same linked-worktree metadata boundary before any file was
+  staged. The intended four-file diff remains intact, no `index.lock` exists,
+  and no remote, provider, secret, key, database, or calendar state changed.

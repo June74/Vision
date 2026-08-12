@@ -609,10 +609,7 @@ export async function runPreviewAcceptanceController(
         dispatchMaximumDuration,
       );
     } catch {
-      if (
-        context.kind === "observe" ||
-        context.kind === "close_rollback"
-      ) {
+      if (context.kind === "close_rollback") {
         fail();
       }
       const reconciliationInput = Object.freeze({
