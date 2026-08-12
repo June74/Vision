@@ -215,3 +215,12 @@ secret, or calendar mutation occurred.
 - `2026-08-12T00:07:00Z`: two local PowerShell source-search probes used invalid
   path argument forms and stopped before producing results. No files, provider
   state, or secrets changed; the searches were rerun with explicit paths.
+- `2026-08-12T00:10:00Z`: the first post-user secret check parsed Wrangler's
+  top-level JSON array as though it had a `.result` property and falsely
+  reported both restore names absent. A follow-up command also surfaced a
+  nonzero Wrangler probe as a PowerShell error before safe parsing. No provider
+  state or secret values were changed or exposed.
+- `2026-08-12T00:12:37Z`: the response shape was inspected without values and
+  the parser was corrected. The actual `vision-preview` inventory contains
+  both restore names, each with type `secret_text`; the earlier absence finding
+  is superseded. The user dashboard screenshot was correct.
