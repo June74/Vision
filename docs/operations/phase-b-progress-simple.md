@@ -2,17 +2,18 @@
 
 This page explains Phase B progress in concise, plain language. It is updated after each reviewed task.
 
-## Current milestone
+## Current accepted milestone — 2026-08-12
 
-Phase B live acceptance and release closure.
+Phase B is complete and live-accepted. The final normal preview deployment,
+calendar-maintenance observer, and live health check passed, and the accepted
+runtime remains on the Phase B branch.
 
-The implementation, local verification, OAuth/calendar setup, migrations, and
-preview safety instrumentation are complete. Phase B is still **in progress**
-because the remaining provider-facing acceptance exercises have to produce
-fresh evidence before cleanup, deployment closure, and the Phase C handoff.
 The authoritative gate-by-gate status is [Phase B completion evidence](phase-b-evidence.md).
+The [Phase C handoff](phase-c-handoff.md) is now the next design boundary.
+Phase C application implementation has not started, and Phase B still does
+not expose event-level Google create, update, move, cancel, or delete controls.
 
-## Next manual checkpoint
+## Historical pre-closure checkpoint (superseded)
 
 When a newly authorized monitored run is started, open the Cloudflare dashboard
 for the `vision-preview` Worker, choose **Settings → Triggers → Cron Triggers**,

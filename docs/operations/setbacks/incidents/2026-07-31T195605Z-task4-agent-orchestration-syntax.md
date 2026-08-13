@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T19:56:05.9881048Z
-- **Last observed:** 2026-08-02T04:46:30.1977161Z
+- **Last observed:** 2026-08-13T00:32:26Z
 - **Phase/task:** Phase B Tasks 4, 5, 6, and 8 agent orchestration
 - **Environment:** Read-only subagent tool orchestration
 - **Version/commit:** 2cf0ff1
@@ -83,3 +83,7 @@ documented invocation shapes without changing provider state.
   wrapper left one PowerShell token in the outer JavaScript layer. Parsing
   stopped before any nested check ran or state changed. The retry removes the
   stray outer-language token.
+- 2026-08-13T00:32:26Z: Recurred when the outer JavaScript orchestration
+  snippet contained an invalid PowerShell-style fragment. Parsing stopped
+  before any nested shell command ran; the retry used a valid JavaScript array
+  and literal PowerShell command strings.

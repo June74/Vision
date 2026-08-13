@@ -2,7 +2,7 @@
 
 - Incident ID: `SB-20260811-153314-git-lock-push-blocked`
 - First observed: `2026-08-11T15:33:14Z`
-- Last observed: `2026-08-12T01:59:26Z`
+- Last observed: `2026-08-13T00:40:31Z`
 - Status: `contained`
 - Phase/task: Phase B setback-log publication
 - Environment: Windows linked Git worktree
@@ -61,3 +61,7 @@ parent worktree lock path does not currently exist.
   blocked before GitHub accepted anything. A read-only check again found no
   `index.lock`; only the two intended lifecycle-document paths remain modified
   or untracked, with no provider or application mutation.
+- `2026-08-13T00:40:31Z`: staging the Phase B documentation reconciliation
+  failed before any path was staged because the linked worktree metadata
+  directory again denied creation of `index.lock`. No lock file, application,
+  provider, secret, key, calendar, or remote state changed.

@@ -2,7 +2,23 @@
 
 This page records implementation commits, verification evidence, review decisions, and unresolved technical notes. It is updated after each reviewed task.
 
-## Current status — 2026-08-07
+## Current accepted status — 2026-08-12
+
+- Phase B is complete and live-accepted. The accepted application commit is
+  `5ec2887392d935751b591cc36248101b58071ee1`, with closure documentation at
+  `0a1454144e55ffa3b303fcac9e4d2835a2ba6535`.
+- Final evidence includes application, contract, Worker, workflow, TypeScript,
+  documentation, production-build, browser, normal-deployment,
+  calendar-maintenance-observer, and live-health checks. The privacy-safe
+  references are collected in [`phase-b-evidence.md`](phase-b-evidence.md)
+  and [`phase-c-handoff.md`](phase-c-handoff.md).
+- Phase C is next. Its event-write pipeline must remain confirmation-based,
+  version-aware, idempotent, reconciled after lost responses, audit-recorded,
+  and verified against resulting Google state before success is shown.
+- No Phase C application code, event-level Google write route, or provider
+  mutation is introduced by this documentation reconciliation.
+
+## Historical pre-closure status — 2026-08-07 (superseded)
 
 - Phase B remains **in progress**; the authoritative gate map is
   [`docs/operations/phase-b-evidence.md`](phase-b-evidence.md).

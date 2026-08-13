@@ -2,7 +2,7 @@
 
 - Incident ID: `SB-20260811-153637-rg-unavailable`
 - First observed: `2026-08-11T15:36:37Z`
-- Last observed: `2026-08-11T15:36:37Z`
+- Last observed: `2026-08-13T00:32:26Z`
 - Status: `contained`
 - Phase/task: Phase B live sync diagnosis
 - Environment: Windows PowerShell, Phase B linked worktree
@@ -37,3 +37,9 @@ status path before proposing any fix.
 ## Verification
 
 No files or external services were changed by the failed search invocation.
+
+## Recurrence history
+
+- `2026-08-13T00:32:26Z`: A bounded repository-file search again could not
+  launch `rg.exe`; no repository, provider, secret, key, calendar, or
+  deployment state changed. PowerShell `Select-String` was used instead.

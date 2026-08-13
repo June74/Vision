@@ -2,7 +2,7 @@
 
 - **Status:** contained
 - **First observed:** 2026-07-30T21:38:04.779421Z
-- **Last observed:** 2026-07-31T03:15:37.1332096Z
+- **Last observed:** 2026-08-13T00:32:26Z
 - **Phase/task:** Phase B live-acceptance closure Tasks 3-4 read-only review
 - **Environment:** Read-only review/preflight agent sandbox
 - **Version/commit:** `38bed3e991d5bfb40b1452bd955634e30247c045`
@@ -66,3 +66,8 @@ completed its review. Task 4 recurrence verification remains pending.
 - 2026-07-31T03:15:37.1332096Z: A Task 4 preflight scout repeated the
   unbounded-discovery pattern and hit a read-only timeout before substantive
   inspection; it stopped without changing state.
+- 2026-08-13T00:32:26Z: A root-recursive PowerShell instruction-file scan
+  traversed generated and dependency trees and produced an oversized path
+  dump before substantive review; it made no file, Git, provider, or private
+  value changes. Subsequent inspections are restricted to literal paths and
+  shallow known directories.

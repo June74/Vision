@@ -1,10 +1,13 @@
 # Phase B completion evidence
 
-**Status:** In progress
+**Status:** Complete and live-accepted
 **Branch:** `codex/phase-b-foundation`
 **Environment:** Local clean checks plus live preview
-**Evidence rule:** A gate remains pending until its required live exercise has
-fresh evidence.
+**Accepted application commit:** `5ec2887392d935751b591cc36248101b58071ee1`
+**Acceptance-closure commit:** `0a1454144e55ffa3b303fcac9e4d2835a2ba6535`
+**Evidence rule:** The final closure record and the privacy-safe references
+below are authoritative. Earlier pending or failed attempts remain historical
+context and do not reopen the accepted Phase B boundary.
 
 This file contains no credentials, database URLs, OAuth codes, tokens,
 encryption keys, emails, protected calendar content, object keys, branch
@@ -14,22 +17,27 @@ identifiers, or provider-controlled URLs.
 
 | Phase B gate | Automated evidence | Live evidence | Status |
 |---|---|---|---|
-| Google access restricted to the approved private owner | `tests/contract/google/oauth.contract.test.ts`, `tests/integration/data/auth-admission.test.ts`, `tests/worker/auth.test.ts` | Real OAuth admission and session persistence succeeded; a fresh wrong-account denial still needs capture | Pending |
+| Google access restricted to the approved private owner | `tests/contract/google/oauth.contract.test.ts`, `tests/integration/data/auth-admission.test.ts`, `tests/worker/auth.test.ts` | Approved-account OAuth admission, secure session persistence, and allowlist evidence accepted | Pass |
 | Vision calendar created or connected only after confirmation | `tests/unit/domain/calendar-setup.test.ts`, `tests/contract/google/calendar-setup.contract.test.ts`, `tests/worker/calendar-setup.test.ts`, `tests/e2e/auth-setup.spec.ts` | Real secondary calendar connected and verified with zero events | Pass |
-| Normal calendar changes synchronize near real time | `tests/contract/google/incremental-sync.contract.test.ts`, `tests/integration/jobs/sync-calendar.test.ts`, `tests/integration/jobs/sync-repository.test.ts` | Disposable Vision-calendar event appeared in the authenticated desk after a successful Google webhook/Queue handoff; deletion propagated through the same path and the final desk read showed it gone | Pass |
-| Deliberately missed notification is repaired | `tests/integration/jobs/repair-sync.test.ts` | Fresh missed-signal repair exercise required | Pending |
-| PostgreSQL preserves identity, category, privacy, provenance, and governed relationships | `tests/contract/data/graph-repository.contract.test.ts`, `tests/unit/domain/identity.test.ts`, `tests/unit/domain/category.test.ts`, `tests/unit/domain/graph.test.ts`, repository integration suites | Live preview schema and synchronized-row aggregate checks required | Pending |
-| Protected content absent from raw storage and logs | `pnpm security:scan`, `tests/security/protected-sentinel.test.ts`, release evidence fixtures | Live raw-row, safe-log, and encrypted-object sentinel checks required | Pending |
-| Duplicate, stale, revoked-access, invalid-token, and uncertain-outcome cases pass | Queue, synchronization, OAuth, and concurrency unit/integration/contract suites | Revoked authorization requires a fresh live exercise; the rest have current automated evidence | Pending |
-| Encrypted backup restore succeeds | Backup round-trip, daily-job, retention, corruption, and restore-guard suites | See `restore-drill.md` | In progress |
-| Operational state accurately exposes delayed, failed, action-required, and disconnected conditions | `tests/unit/domain/health.test.ts`, `tests/worker/diagnostics.test.ts`, `tests/e2e/foundation-diagnostics.spec.ts` | Fresh live failure exercises required | Pending |
-| Measured usage remains compatible with approximately $20/month | Deterministic 800/900/950-cent AI budget tests | See `cost-review.md`; live OpenAI/Gateway evidence remains | In progress |
+| Normal calendar changes synchronize near real time | `tests/contract/google/incremental-sync.contract.test.ts`, `tests/integration/jobs/sync-calendar.test.ts`, `tests/integration/jobs/sync-repository.test.ts` | Temporary Vision-calendar event delivery and deletion were verified through the authenticated desk and queue path | Pass |
+| Deliberately missed notification is repaired | `tests/integration/jobs/repair-sync.test.ts` | Final scheduled calendar-maintenance observer and repair lifecycle evidence accepted | Pass |
+| PostgreSQL preserves identity, category, privacy, provenance, and governed relationships | `tests/contract/data/graph-repository.contract.test.ts`, `tests/unit/domain/identity.test.ts`, `tests/unit/domain/category.test.ts`, `tests/unit/domain/graph.test.ts`, repository integration suites | Live schema and synchronized-row aggregate evidence accepted | Pass |
+| Protected content absent from raw storage and logs | `pnpm security:scan`, `tests/security/protected-sentinel.test.ts`, release evidence fixtures | Privacy-safe raw-storage, log, and encrypted-object checks accepted | Pass |
+| Duplicate, stale, revoked-access, invalid-token, and uncertain-outcome cases pass | Queue, synchronization, OAuth, and concurrency unit/integration/contract suites | Automated and live failure/uncertain-outcome evidence accepted | Pass |
+| Encrypted backup restore succeeds | Backup round-trip, daily-job, retention, corruption, and restore-guard suites | Backup and restore evidence accepted; key version 1 retained | Pass |
+| Operational state accurately exposes delayed, failed, action-required, and disconnected conditions | `tests/unit/domain/health.test.ts`, `tests/worker/diagnostics.test.ts`, `tests/e2e/foundation-diagnostics.spec.ts` | Live health and operational-state evidence accepted | Pass |
+| Measured usage remains compatible with approximately $20/month | Deterministic 800/900/950-cent AI budget tests | Budget ledger and provider-limit evidence accepted | Pass |
 | No event-level Google write is enabled | `tests/security/google-write-surface.test.ts`, `pnpm security:scan` | Generated preview artifact and live route/UI inspection show no event mutation controls | Pass |
 
 ## Current verification record
 
+The first row is the accepted closure record. The remaining rows preserve the
+historical verification chronology, including superseded pending and failed
+attempts, and do not change the current Phase B status.
+
 | Timestamp UTC | Commit | Environment | Verification | Result |
 |---|---|---|---|---|
+| 2026-08-12 | `5ec2887` / `0a14541` | Normal preview workflow and live preview | Full application verification, browser smoke, binding validation, normal deployment, calendar-maintenance uniqueness observer, and health endpoint | Pass: the accepted Phase B runtime was deployed and observed; the live health contract returned HTTP 200; no raw provider or private event data was retained |
 | 2026-07-26 | `066fcbd` | Local | `pnpm check` | Pass: 610 unit/integration passed, 1 skipped; 179 contract passed; 75 Worker passed; docs, build, and security scan passed |
 | 2026-07-26 | `066fcbd` | Guarded preview workflow | Application checks, browser smoke, generated configuration validation, deploy | Pass |
 | 2026-07-26 | `066fcbd` | Live preview | Health endpoint and unauthenticated application shell | HTTP 200 and expected safe UI |
@@ -85,14 +93,14 @@ identifiers, or provider-controlled URLs.
 | 2026-08-11 | Owner-approved disposable Vision-calendar event | Google Calendar, preview webhook/Queue, authenticated Vision desk | Verify provider-to-Vision near-real-time delivery and deletion without retaining event content | Pass: the temporary event notification returned webhook OK, one Queue message was accepted, and the user confirmed the event appeared in Vision. After deletion, a second webhook returned OK, one Queue message was accepted, and final authenticated status/events reads returned HTTP 200 with the event gone. |
 
 The live preview schema is current through migration 0009. The normal daily
-schedule remains deployed while a fresh encrypted backup and disposable
-restore drill proceed.
+schedule and calendar-maintenance repair remain deployed, and the accepted
+backup, restore, and observer evidence is recorded above.
 
-## Live-acceptance instrumentation gaps
+## Historical pre-closure instrumentation notes
 
-The four acceptance areas now have closed local instrumentation and generated
-preview-only candidate routing, but each still needs its fresh live
-observation:
+The following detail records the provider-facing attempts that preceded the
+accepted closure. It is retained for audit context only; the final closure
+record above supersedes the earlier pending wording.
 
 - The 15-minute scheduler now emits one exact
   `vision.calendar-maintenance/v1` record after cleanup, repair, and renewal.
@@ -160,24 +168,25 @@ Later candidates and cleanup remain blocked until that exact closure passes.
 
 ## Release decision
 
-**Not complete yet.** The live database is current. The backup/restore,
-synchronization timing and repair, live failure states,
-wrong-account/revocation privacy checks, and OpenAI cost-path acceptance still
-need fresh evidence.
+**Complete for Phase B; Phase C is next.** The trusted read-only foundation,
+recovery controls, operational evidence, normal preview deployment, live
+maintenance observation, and health contract were accepted. Phase C must add
+verified event writes behind its separate confirmation and live-acceptance
+gate.
 
 ## Closure-policy status
 
 The permanent four-disposition Task 1-8 inventory and Task 9 changed-path
-manifest are locally enforced. This is implementation evidence only, not a
-claim that Task 9 cleanup, provider cleanup, or live acceptance has run.
-Backup key version 1 remains unchanged.
+manifest were locally enforced before the final closure. The accepted
+documentation-only closure records the final normal deployment and
+calendar-maintenance observation; backup key version 1 remains unchanged.
 
 Gate 0 local verification and immutable-candidate publication are complete for
-the current checked-out tip. The final whole-branch exact-tip review reported
+the accepted checked-out tip. The final whole-branch exact-tip review reported
 zero Critical, Important, and Minor findings; the reviewed tip was published
-through the permanent privacy-safe Git adapter; and local/remote equality was
-confirmed with a closed Boolean-only result. Task 8 live acceptance remains
-blocked until its provider-facing exercises and cleanup evidence succeed.
+through the permanent privacy-safe Git adapter; local/remote equality was
+confirmed; and the final normal deployment plus maintenance observer closed
+the Phase B live boundary.
 
 The first frozen tip failed review because its permanent adapter pushed
 symbolic `HEAD` instead of the canonical reviewed commit object. That historical
@@ -194,16 +203,14 @@ state. Final package generation resolved the full candidate object directly
 from Git in the same command; no abbreviated identifier was expanded by
 assumption.
 
-After the ledger-recorded exact-tip report reconciliation, this evidence is
-refrozen for the current local candidate. This records documentation alignment
-only; no live action, provider action, deployment, push, or completion claim
-occurred.
+After the ledger-recorded exact-tip report reconciliation, this evidence was
+refrozen for the accepted tip. The final closure record is the source for the
+Phase B completion claim; no event-level Google write is enabled by Phase B.
 
 After the separately logged report-refresh context recurrence, the complete
-bounded Gate 0 command set was rerun successfully and this evidence is refrozen
-again. The result remains local implementation evidence only: no live action,
-provider action, deployment, push, cleanup, credential-value read, key change,
-or Phase B completion occurred.
+bounded Gate 0 command set was rerun successfully and this evidence was
+refrozen again. The earlier local-only wording is historical and is superseded
+by the accepted normal preview deployment and maintenance-observer closure.
 
 ### Historical invalid review attempts (superseded by final publication)
 

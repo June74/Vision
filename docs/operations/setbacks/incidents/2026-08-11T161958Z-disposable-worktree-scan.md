@@ -2,7 +2,7 @@
 
 - Incident ID: `SB-20260811-161958-disposable-worktree-scan`
 - First observed: `2026-08-11T16:19:58Z`
-- Last observed: `2026-08-11T21:11:31Z`
+- Last observed: `2026-08-13T00:32:26Z`
 - Status: `contained`
 - Phase/task: Phase B restore-drill preparation
 - Environment: Windows PowerShell, Phase B linked worktree
@@ -47,6 +47,10 @@ when the same scan failure recurs.
   paths attempted to open two directory-backed control entries as files and
   was denied by Windows. No external action or state change occurred; inspect
   these entries as directories and use only the known input JSON file.
+- `2026-08-13T00:32:26Z`: a direct read of the assumed
+  `scripts/new_setback.py` path confirmed that the helper is absent from this
+  checkout. No external action or state change occurred; update the existing
+  incident directly when the helper is unavailable.
 
 ## Next step
 

@@ -2,11 +2,11 @@
 
 This file is the project's editable source of truth. It records the agreed direction, current phase, open decisions, and completion gates. Update it whenever a decision changes or a phase is completed.
 
-**Status:** Phase B — Build the data foundation
+**Status:** Phase B complete — Phase C next
 
-**Last updated:** 2026-07-22
+**Last updated:** 2026-08-12
 
-**Current deliverable:** Phase B runtime and CI implementation on `codex/phase-b-foundation`
+**Current deliverable:** Review the bounded Phase C scope and approve an acceptance-backed implementation plan; Phase C application writes have not started.
 
 ## Product vision
 
@@ -65,8 +65,8 @@ flowchart TD
 | Phase | Outcome | Status |
 |---|---|---|
 | A. Plan the product | Approved product contract and scope | **Completed** |
-| B. Build the data foundation | Trusted, read-only unified data model | **In progress** |
-| C. Build the core MVP | First complete secretary loop | Not started |
+| B. Build the data foundation | Trusted, read-only unified data model accepted in live preview | **Completed** |
+| C. Build the core MVP | First complete secretary loop and verified calendar-event writes | **Next** |
 | D. Add recommendations | Explainable next-action recommendations | Not started |
 | E. Add safe autonomy | Guarded, reversible automatic actions | Not started |
 | F. Test and improve | Validated safety, accuracy, and reliability | Not started |
@@ -503,6 +503,13 @@ The detailed design is recorded in [Phase B data foundation design](docs/superpo
 
 The execution sequence is recorded in the [Phase B implementation roadmap](docs/superpowers/plans/2026-07-22-phase-b-roadmap.md), with focused plans for runtime and CI, domain/data/privacy, authentication and calendar setup, Google read synchronization, AI budget and diagnostics, and recovery/release.
 
+Phase B is complete and live-accepted. The final application verification,
+normal preview deployment, calendar-maintenance observer, and health evidence
+are summarized in [Phase B completion evidence](docs/operations/phase-b-evidence.md)
+and the privacy-safe [Phase C handoff](docs/operations/phase-c-handoff.md).
+Phase C design is the next deliverable; no event-level Google write pipeline
+has been enabled by this documentation reconciliation.
+
 ### Approved foundation
 
 - Keep Neon PostgreSQL authoritative using a bounded node-and-edge model; add a rebuildable native-graph projection only if later scale justifies it.
@@ -532,6 +539,7 @@ The execution sequence is recorded in the [Phase B implementation roadmap](docs/
 
 | Date | Decision | Reason | Status |
 |---|---|---|---|
+| 2026-08-12 | Accept Phase B after the final normal preview deployment, maintenance observer, live health check, and closure documentation completed. | The trusted read-only foundation and its live operational evidence meet the Phase B boundary; verified event writes remain a separate Phase C approval gate. | Accepted; Phase C next |
 | 2026-07-22 | Execute Phase B with fresh implementation subagents, independent task reviews, test-first development, and two synchronized documentation layers for every production file and named function. | Isolated task context and review gates improve implementation reliability, while separate concise and technical references keep the code understandable at two depths. | Approved and in progress |
 | 2026-07-22 | Approve the written Phase B data-foundation specification and begin implementation planning. | The reviewed specification captures the agreed architecture, service boundary, storage model, encryption, synchronization, AI routing, cost controls, recovery, operational states, verification gates, technology stack, and repository layout. | Approved |
 | 2026-07-22 | Use one Google secondary calendar named `Vision`, while storing school, work, and personal categories only inside Vision. | One calendar removes provider-side calendar switching while Vision preserves category, provenance, and privacy boundaries internally. | Agreed |
