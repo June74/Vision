@@ -2,7 +2,7 @@
 
 - Incident ID: `SB-20260811-153314-git-lock-push-blocked`
 - First observed: `2026-08-11T15:33:14Z`
-- Last observed: `2026-08-13T00:40:31Z`
+- Last observed: `2026-08-13T00:42:02Z`
 - Status: `contained`
 - Phase/task: Phase B setback-log publication
 - Environment: Windows linked Git worktree
@@ -65,3 +65,7 @@ parent worktree lock path does not currently exist.
   failed before any path was staged because the linked worktree metadata
   directory again denied creation of `index.lock`. No lock file, application,
   provider, secret, key, calendar, or remote state changed.
+- `2026-08-13T00:42:02Z`: the verified local documentation commit was not
+  pushed because the external-write approval boundary rejected the push before
+  the Git process started. No network request or remote state change occurred;
+  the local commit remains intact pending explicit user approval.
