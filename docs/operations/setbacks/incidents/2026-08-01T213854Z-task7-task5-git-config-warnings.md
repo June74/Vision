@@ -2,7 +2,7 @@
 
 - **Status:** contained
 - **First observed:** 2026-08-01T21:38:54.5590424Z
-- **Last observed:** 2026-08-01T21:38:54.5590424Z
+- **Last observed:** 2026-08-16T15:15:45.1039002Z
 - **Phase/task:** Phase B Task 7 correlation repair Task 5 review repair
 - **Environment:** Local worktree status preflight
 - **Version/commit:** admitted baseline `10b228b`
@@ -49,3 +49,7 @@ Contained by the successful preflight and command-local Git settings. Final Git 
 ## Recurrence history
 
 - 2026-08-01T21:38:54.5590424Z: First observed during the Task 5 review-repair preflight.
+- 2026-08-16T15:15:45.1039002Z: The final read-only Phase C worktree check
+  again emitted the same optional Git ignore-file access warning while
+  returning the correct branch, root, commit, and clean status. No repository
+  or external state changed.
