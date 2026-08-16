@@ -2,11 +2,11 @@
 
 This file is the project's editable source of truth. It records the agreed direction, current phase, open decisions, and completion gates. Update it whenever a decision changes or a phase is completed.
 
-**Status:** Phase C increment 2 in progress — verified one-off create backend core
+**Status:** Phase C increment 3 locally implemented — authenticated one-off write surface verified; live acceptance pending
 
 **Last updated:** 2026-08-16
 
-**Current deliverable:** Verify the provider-neutral one-off create executor and bounded Google adapter; HTTP/browser composition, durable ledger wiring, and live write acceptance remain the next separately accepted increment.
+**Current deliverable:** Complete local verification of the authenticated preview/confirm/status/undo surface, encrypted approval store, durable execution ledger, browser composer, and release boundary; live Google acceptance and deployment remain separately gated.
 
 ## Product vision
 
@@ -66,7 +66,7 @@ flowchart TD
 |---|---|---|
 | A. Plan the product | Approved product contract and scope | **Completed** |
 | B. Build the data foundation | Trusted, read-only unified data model accepted in live preview | **Completed** |
-| C. Build the core MVP | First complete secretary loop and verified calendar-event writes | **In progress — increment 2 backend core; server composition next** |
+| C. Build the core MVP | First complete secretary loop and verified calendar-event writes | **In progress — increment 3 local write surface; live acceptance next** |
 | D. Add recommendations | Explainable next-action recommendations | Not started |
 | E. Add safe autonomy | Guarded, reversible automatic actions | Not started |
 | F. Test and improve | Validated safety, accuracy, and reliability | Not started |
@@ -508,12 +508,14 @@ normal preview deployment, calendar-maintenance observer, and health evidence
 are summarized in [Phase B completion evidence](docs/operations/phase-b-evidence.md)
 and the privacy-safe [Phase C handoff](docs/operations/phase-c-handoff.md).
 Phase C increment 1 is implemented as a provider-neutral approval contract and
-immutable state machine. Increment 2 now adds the provider-neutral verified
-one-off create executor and bounded Google event-write adapter, including
-version revalidation, idempotent marker reconciliation, exact read-back, safe
-audit, and compensating undo. No HTTP route, browser write control, durable
-ledger composition, live provider write, or deployment has been enabled; those
-are the next separately accepted boundaries.
+immutable state machine. Increment 2 adds the provider-neutral verified one-off
+create executor and bounded Google event-write adapter, including version
+revalidation, idempotent marker reconciliation, exact read-back, safe audit,
+and compensating undo. Increment 3 now composes the local authenticated
+preview/status/confirm/undo routes, encrypted approval store, durable execution
+ledger, browser composer, and exact release allowlist. This is locally verified
+only: no live Google mutation, deployment, push, or production database
+migration is authorized by this increment.
 
 ### Approved foundation
 
@@ -539,6 +541,47 @@ are the next separately accepted boundaries.
 - [x] Complete final review of the written Phase B specification.
 - [x] Produce the Phase B implementation plan.
 - [x] Approve the Phase B implementation plan for subagent-driven execution.
+
+## Phase C — Build the core MVP
+
+### Increment 3 local completion boundary
+
+The authenticated one-off write surface is implemented on the Phase C branch as
+an approval-backed local boundary:
+
+- `POST /api/calendar/writes/preview` validates the narrow one-off body, reads
+  the owner-scoped connected calendar and current provider version, encrypts
+  the exact proposal, and returns the immutable preview.
+- `GET /api/calendar/writes/:operationId` returns owner-scoped status and uses
+  the execution ledger as authoritative when one exists.
+- `POST .../confirm` accepts only `CONFIRM ONE-OFF EVENT`, claims one durable
+  execution row, and delegates create/reconciliation/read-back to the existing
+  executor.
+- `POST .../undo` accepts only `UNDO ONE-OFF EVENT` and delegates the
+  version-guarded compensating delete to the existing executor.
+- The browser retains at most `{ operationId, status }`, displays
+  `Verification pending` for HTTP 202, and shows undo only after `verified`.
+- The release scanner allowlists only the exact Phase C route module and keeps
+  unapproved mutating routes fail-closed.
+
+### Explicit Phase C non-goals for this increment
+
+- No update, move, cancellation, direct-delete, recurrence, attendees, or
+  provider notification feature.
+- No AI-generated permission, automatic confirmation, or client-supplied owner,
+  calendar, provider event, or version authority.
+- No live Google account call, production deployment, push, or production
+  database migration.
+- No more than 20 agents at once. This is a hard line. This implementation run
+  uses 0 active agents.
+
+### Local evidence boundary
+
+Focused schema, repository, route, adapter, security-surface, browser, source
+TypeScript, test TypeScript, and documentation checks are required before this
+local increment is marked complete. Live acceptance remains a separate gate
+that must prove one disposable preview/create/read-back/undo/absence cycle,
+replay safety, and privacy-safe logs/audit before any connected-write release.
 
 ## Decision log
 

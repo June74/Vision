@@ -9,6 +9,10 @@ does not call Google or write anything by itself.
 Checks a one-off event proposal, rejects unsupported attendees, recurrence, and
 notifications, and returns a frozen before/after preview.
 
+## `restoreCalendarWriteProposal`
+
+Rehydrates the exact persisted proposed shape through the same strict checks.
+
 ## `transitionCalendarWrite`
 
 Moves a proposal through proposed, confirmed, writing, and verified or pending
@@ -21,6 +25,10 @@ Provides one safe reason code without reflecting rejected event content.
 ## `readPlainRecord`
 
 Checks an object shape without running getters or accepting hidden fields.
+
+## `assertExactKeys`
+
+Rejects missing or unknown fields in persisted proposal data.
 
 ## `readPlainAttendees`
 

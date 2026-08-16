@@ -2,7 +2,6 @@
 import {
   useEffect,
   useState,
-  type ChangeEvent,
   type FormEvent,
   type JSX,
 } from "react";
@@ -73,16 +72,19 @@ export function OneOffEventComposer({ session }: { readonly session: BrowserSess
     return () => { active = false; };
   }, []);
 
+  /** Opens a fresh editable draft without carrying provider or event authority. */
   function openComposer(): void {
     setState({ kind: "editing", draft: DEFAULT_DRAFT });
   }
 
+  /** Updates one supported form field while keeping the draft local to the component. */
   function updateDraft<K extends keyof EditableDraft>(field: K, value: EditableDraft[K]): void {
     setState((current) => current.kind === "editing"
       ? { kind: "editing", draft: { ...current.draft, [field]: value } }
       : current);
   }
 
+  /** Submits the narrow draft to the server and replaces it with the immutable preview. */
   async function preview(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     if (state.kind !== "editing" || busy) return;
@@ -111,6 +113,7 @@ export function OneOffEventComposer({ session }: { readonly session: BrowserSess
     }
   }
 
+  /** Sends the exact confirmation phrase for the retained server-side proposal. */
   async function confirm(): Promise<void> {
     if (state.kind !== "preview" || busy) return;
     setBusy("confirm");
@@ -124,6 +127,7 @@ export function OneOffEventComposer({ session }: { readonly session: BrowserSess
     }
   }
 
+  /** Reconciles an unresolved operation without issuing another create request. */
   async function checkStatus(): Promise<void> {
     if (state.kind !== "pending" || busy) return;
     setBusy("status");
@@ -137,6 +141,7 @@ export function OneOffEventComposer({ session }: { readonly session: BrowserSess
     }
   }
 
+  /** Requests compensating undo only after the server has reported verified creation. */
   async function undo(): Promise<void> {
     if (state.kind !== "verified" || busy) return;
     setBusy("undo");
@@ -158,6 +163,7 @@ export function OneOffEventComposer({ session }: { readonly session: BrowserSess
     }
   }
 
+  /** Projects an authoritative API response into truthful browser state. */
   function applyResponse(
     response: CalendarWriteResponse,
     fallbackPreview?: CalendarWritePreview,
@@ -355,6 +361,7 @@ function PreviewDetails({
   );
 }
 
+/** Converts editable controls into the fixed server-owned one-off request shape. */
 function toApiDraft(draft: EditableDraft): OneOffEventDraft {
   if (!draft.title.trim()) throw new Error("Add a title before preparing the preview.");
   const startsAt = localDateTimeToOffsetIso(draft.startsAt, draft.timeZone);
@@ -407,6 +414,7 @@ function localDateTimeToOffsetIso(value: string, timeZone: string): string {
   return `${value}:00${sign}${hours}:${minutes}`;
 }
 
+/** Formats one server-returned timestamp in the proposal's declared time zone. */
 function formatPreviewDate(value: string, timeZone: string): string {
   return new Intl.DateTimeFormat("en-US", {
     day: "numeric",
@@ -416,6 +424,7 @@ function formatPreviewDate(value: string, timeZone: string): string {
   }).format(new Date(value));
 }
 
+/** Formats a server-returned wall-clock time without exposing provider fields. */
 function formatPreviewTime(value: string, timeZone: string): string {
   return new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
@@ -424,10 +433,12 @@ function formatPreviewTime(value: string, timeZone: string): string {
   }).format(new Date(value));
 }
 
+/** Converts one controlled enum value into sentence-case display copy. */
 function capitalize(value: string): string {
   return value.replace(/^\w/u, (letter) => letter.toUpperCase());
 }
 
+/** Maps all browser failures to constant, provider-free user guidance. */
 function safeErrorMessage(error: unknown, action: "preview" | "confirm" | "status" | "undo"): string {
   if (error instanceof CalendarWriteApiError && error.status === 409) {
     return action === "undo"
@@ -442,6 +453,7 @@ function safeErrorMessage(error: unknown, action: "preview" | "confirm" | "statu
     : "Vision could not complete this request. No new event was confirmed.";
 }
 
+/** Stores only the opaque operation handle and a non-authoritative status hint. */
 function storeOperation(operationId: string, status: CalendarWriteStatus): void {
   try {
     window.sessionStorage.setItem(OPERATION_STORAGE_KEY, JSON.stringify({ operationId, status }));
@@ -450,6 +462,7 @@ function storeOperation(operationId: string, status: CalendarWriteStatus): void 
   }
 }
 
+/** Removes the local recovery hint after a terminal or invalidated outcome. */
 function clearStoredOperation(): void {
   try {
     window.sessionStorage.removeItem(OPERATION_STORAGE_KEY);
@@ -458,6 +471,7 @@ function clearStoredOperation(): void {
   }
 }
 
+/** Reads and validates the bounded recovery hint without trusting it as authority. */
 function readStoredOperation(): { readonly operationId: string; readonly status: CalendarWriteStatus } | undefined {
   try {
     const value = JSON.parse(window.sessionStorage.getItem(OPERATION_STORAGE_KEY) ?? "null") as {
@@ -472,6 +486,7 @@ function readStoredOperation(): { readonly operationId: string; readonly status:
   }
 }
 
+/** Checks one stored status hint against the public operation-state allowlist. */
 function isCalendarWriteStatus(value: unknown): value is CalendarWriteStatus {
   return typeof value === "string" && [
     "proposed",

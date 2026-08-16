@@ -317,6 +317,7 @@ export function registerCalendarWriteRoutes(
         provider,
         ledger: dependencies.ledger,
         audit: dependencies.audit,
+        /** Supplies the route's validated current time to the executor. */
         now: () => readDate(dependencies.now()).toISOString(),
       });
     } catch {
@@ -367,6 +368,7 @@ export function registerCalendarWriteRoutes(
           provider,
           ledger: dependencies.ledger,
           audit: dependencies.audit,
+          /** Supplies the route's validated current time to the executor. */
           now: () => readDate(dependencies.now()).toISOString(),
         },
       );
@@ -407,12 +409,16 @@ export async function createProductionCalendarWriteDependencies(
   );
   return {
     logger,
+    /** Supplies a fresh server timestamp for previews and state transitions. */
     now: () => new Date(),
+    /** Generates the only operation authority exposed to the browser. */
     createOperationId: () => crypto.randomUUID(),
     sessions: auth.sessions,
     tokens: auth.tokens,
+    /** Rebinds calendar reads to the authenticated owner and Google subject. */
     createCalendarRepository: (ownerId, googleSubject) =>
       new CalendarRepository(calendarStore, ownerId, googleSubject),
+    /** Creates the bounded provider adapter only after token validation. */
     createProvider: (accessToken) =>
       createGoogleEventWriteClient({
         accessToken,
@@ -424,6 +430,7 @@ export async function createProductionCalendarWriteDependencies(
   };
 }
 
+/** Authenticates the opaque session cookie before body parsing or token lookup. */
 async function authenticateRequest(
   context: Context<{ Bindings: Env; Variables: AuthRequestVariables }>,
   dependencies: CalendarWriteRouteDependencies,
@@ -448,6 +455,7 @@ async function authenticateRequest(
   return requireSession(context);
 }
 
+/** Enforces the existing constant-time CSRF contract for state-changing routes. */
 async function requireCsrf(
   context: Context<{ Bindings: Env; Variables: AuthRequestVariables }>,
   session: AuthenticatedSession,
@@ -468,6 +476,7 @@ async function requireCsrf(
   }
 }
 
+/** Resolves the authenticated owner's already-connected Vision calendar. */
 async function resolveConnectedCalendar(
   dependencies: CalendarWriteRouteDependencies,
   session: AuthenticatedSession,
@@ -492,6 +501,7 @@ async function resolveConnectedCalendar(
   return snapshot.connection;
 }
 
+/** Resolves a non-expired Google token and constructs the bounded write adapter. */
 async function resolveProvider(
   dependencies: CalendarWriteRouteDependencies,
   session: AuthenticatedSession,
@@ -519,6 +529,7 @@ async function resolveProvider(
   }
 }
 
+/** Resolves injected or production dependencies without exposing resolver failures. */
 async function resolveRouteDependencies(
   resolver: CalendarWriteDependencyResolver,
   context: Context<{ Bindings: Env; Variables: AuthRequestVariables }>,
@@ -528,6 +539,7 @@ async function resolveRouteDependencies(
   });
 }
 
+/** Reads a bounded UTF-8 JSON body after authentication and content-type checks. */
 async function readBoundedJson(request: Request): Promise<unknown> {
   if (!/^application\/json(?:;|$)/iu.test(request.headers.get("content-type") ?? "")) {
     throw invalidCalendarWriteRequest();
@@ -571,12 +583,14 @@ async function readBoundedJson(request: Request): Promise<unknown> {
   }
 }
 
+/** Validates one opaque operation ID from a route parameter. */
 function readOperationId(value: unknown): string {
   const parsed = operationIdSchema.safeParse(value);
   if (!parsed.success) throw invalidCalendarWriteRequest();
   return parsed.data;
 }
 
+/** Copies one valid injected timestamp before it participates in a transition. */
 function readDate(value: unknown): Date {
   if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
     throw calendarWriteUnavailable();
@@ -584,6 +598,7 @@ function readDate(value: unknown): Date {
   return new Date(value.getTime());
 }
 
+/** Accepts bounded opaque identities without allowing control characters. */
 function isBoundedIdentity(value: unknown, maximum: number): value is string {
   return (
     typeof value === "string" &&
@@ -593,6 +608,7 @@ function isBoundedIdentity(value: unknown, maximum: number): value is string {
   );
 }
 
+/** Projects a proposal and executor status into the safe public response shape. */
 function writeResponse(
   proposal: CalendarWriteProposal,
   status: CalendarWriteExecutionResult["status"],
@@ -606,12 +622,14 @@ function writeResponse(
   };
 }
 
+/** Prevents browser and intermediary caches from retaining write state. */
 function noStore(
   context: Context<{ Bindings: Env; Variables: AuthRequestVariables }>,
 ): void {
   context.header("Cache-Control", "no-store");
 }
 
+/** Raises the constant public error for malformed or unsupported write input. */
 function invalidCalendarWriteRequest(): never {
   throwVisionError(
     new VisionError(
@@ -622,6 +640,7 @@ function invalidCalendarWriteRequest(): never {
   );
 }
 
+/** Raises the owner-scoped not-found response without revealing another owner. */
 function calendarWriteNotFound(): never {
   throwVisionError(
     new VisionError(
@@ -632,6 +651,7 @@ function calendarWriteNotFound(): never {
   );
 }
 
+/** Raises the safe conflict response for stale or non-continuable operations. */
 function calendarWriteConflict(): never {
   throwVisionError(
     new VisionError(
@@ -642,6 +662,7 @@ function calendarWriteConflict(): never {
   );
 }
 
+/** Raises the safe availability response for persistence or provider boundaries. */
 function calendarWriteUnavailable(): never {
   throwVisionError(
     new VisionError(

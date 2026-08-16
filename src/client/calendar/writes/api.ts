@@ -179,6 +179,7 @@ function isCalendarWriteResponse(value: unknown): value is CalendarWriteResponse
   return value.preview === undefined || isCalendarWritePreview(value.preview);
 }
 
+/** Validates the immutable preview fields that are safe for the browser to render. */
 function isCalendarWritePreview(value: unknown): value is CalendarWritePreview {
   if (!isRecord(value) || value.before !== null || !isRecord(value.after)) return false;
   const after = value.after;
@@ -203,14 +204,17 @@ function isCalendarWritePreview(value: unknown): value is CalendarWritePreview {
     notifications.willNotify === false;
 }
 
+/** Narrows untrusted JSON to a plain property bag before allowlist checks. */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** Accepts only bounded opaque operation identities from the server. */
 function isBoundedIdentity(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= 512 && !/[\u0000-\u001F\u007F]/u.test(value);
 }
 
+/** Tests an untrusted value against one immutable public string allowlist. */
 function isOneOf<const Value extends string>(
   value: unknown,
   allowed: readonly Value[],

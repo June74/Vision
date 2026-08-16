@@ -1,7 +1,8 @@
 # Phase C handoff
 
 Phase B is complete and live-accepted. This handoff is the privacy-safe
-boundary between the trusted read-only foundation and Phase C design review.
+boundary between the trusted read-only foundation and the locally verified
+Phase C write surface. Live connected-write acceptance remains a separate gate.
 It contains no provider identifiers, account details, secret values, raw logs,
 private event data, authorization codes, tokens, database URLs, or encryption
 keys.
@@ -37,7 +38,8 @@ keys.
 ## Phase C entry decision
 
 - Decision: proceed with Phase C in acceptance-backed increments. The first
-  two backend-core increments are now implemented from this handoff.
+  three local implementation increments are now implemented from this handoff;
+  live connected-write acceptance remains pending.
 - Approved boundary: build the authenticated, approval-based, verified
   calendar-event write pipeline while preserving Phase B read-sync and
   recovery behavior.
@@ -62,11 +64,10 @@ keys.
   actions remain confirmation-based in Version 1; AI may interpret and
   explain but cannot grant permission or perform the write; every accepted
   change has audit history and an undo or compensating path.
-- Open risks for the next server-composition increment: durable ledger schema
-  and transactions, authenticated route composition, browser confirmation and
-  undo controls, and the live acceptance fixture/cleanup contract. Recurrence,
-  attendees, and notification semantics remain explicitly out of this one-off
-  increment.
+- Remaining risks for the next acceptance gate: live disposable-fixture
+  cleanup, provider-side evidence, deployment admission, and production
+  database migration review. Recurrence, attendees, and notification semantics
+  remain explicitly out of this one-off increment.
 
 ## Phase C increment 1 — provider-neutral write contract
 
@@ -119,6 +120,43 @@ ledger implementation, add a browser confirmation control, call a live Google
 account, deploy, or enable user-facing connected writes. The next increment
 must wire those boundaries and earn fresh browser and live-preview acceptance.
 
+## Phase C increment 3 — authenticated local one-off write surface
+
+Increment 3 is implemented and locally verified on the Phase C branch. Its
+design and implementation plan are recorded in
+[the authenticated one-off write surface design](../superpowers/specs/2026-08-16-phase-c-authenticated-one-off-write-surface-design.md)
+and [implementation plan](../superpowers/plans/2026-08-16-phase-c-authenticated-one-off-write-surface.md).
+
+It now provides:
+
+- additive encrypted approval and durable execution tables with owner scope;
+- a Drizzle/Neon repository that encrypts proposal content, uses the
+  `proposal_domain` key partition, and fails closed on malformed rows;
+- authenticated preview, status, confirm, and undo routes with authentication
+  before body parsing, CSRF on every mutation, server-derived authority, and
+  no-store responses;
+- exact-one durable claim, uncertain-create pending state, verified read-back,
+  and verified compensating undo through the existing provider-neutral executor;
+- a browser one-off composer with immutable preview, deliberate confirmation,
+  truthful pending status, opaque-only reload recovery, and verified undo; and
+- a narrow release-scan allowlist for the Phase C route module.
+
+Local evidence includes focused schema, repository, Worker-route, browser,
+security-surface, adapter, TypeScript, and documentation checks. The existing
+Wrangler linked-worktree filesystem warning may appear in Worker output while
+assertions pass; it is recorded as an environment-only contained warning.
+
+This increment is not live acceptance. It has made no live Google create or
+delete call, no deployment, no push, and no production database migration.
+Live acceptance must use an explicitly approved disposable/private-pilot
+fixture and prove preview, one confirmed create, exact read-back, replay safety,
+verified undo, absence, and privacy-safe logs/audit before release.
+
+## Phase C agent-concurrency hardline
+
+**No more than 20 agents at once. This is a hard line.** The implementation run
+uses 0 active agents and does not dispatch parallel implementation agents.
+
 ## Phase C product scope to divide into increments
 
 Phase C also begins the secretary MVP. It must be divided into acceptance-
@@ -128,8 +166,8 @@ backed increments rather than implemented as one batch:
    provider mutation.
 2. One-off event creation through preview, confirmation, version check,
    idempotent write, verified read-back, audit, and compensating undo. The
-   backend core and bounded Google adapter are implemented; server composition
-   and live acceptance remain next.
+   backend core, bounded Google adapter, server composition, durable ledger,
+   and browser loop are locally implemented; live acceptance remains next.
 3. One-off event update, move, cancel, and delete through the same shared
    pipeline, each with its own conflict and live acceptance cases.
 4. Recurring-event scope plus attendee and notification behavior, with

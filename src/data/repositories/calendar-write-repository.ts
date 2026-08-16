@@ -452,6 +452,7 @@ interface ApprovalRow extends CalendarWriteApprovalRecord {
   readonly proposalEnvelope: Uint8Array;
 }
 
+/** Removes encrypted-envelope transport data before returning a public approval record. */
 function toApprovalRecord(row: ApprovalRow): CalendarWriteApprovalRecord {
   return {
     ownerId: row.ownerId,
@@ -465,6 +466,7 @@ function toApprovalRecord(row: ApprovalRow): CalendarWriteApprovalRecord {
   };
 }
 
+/** Strictly decodes one database approval row before any proposal decryption. */
 function decodeApprovalRow(row: Record<string, unknown>): ApprovalRow {
   const provider = readProvider(row.provider);
   const proposalDomain = readProposalDomain(row.proposalDomain);
@@ -490,6 +492,7 @@ function decodeApprovalRow(row: Record<string, unknown>): ApprovalRow {
   };
 }
 
+/** Strictly decodes ledger identity, status, timestamp, and paired event fields. */
 function decodeLedgerRecord(
   row: Record<string, unknown>,
 ): CalendarWriteLedgerRecord {
@@ -531,6 +534,7 @@ function decodeLedgerRecord(
   };
 }
 
+/** Rejects proposals that do not satisfy the one-off approval persistence contract. */
 function assertProposalForApproval(
   proposal: CalendarWriteProposal,
 ): void {
@@ -547,6 +551,7 @@ function assertProposalForApproval(
   }
 }
 
+/** Validates the owner and operation scope used in every persistence predicate. */
 function assertOwnerAndOperation(ownerId: string, operationId: string): void {
   if (
     !isBoundedIdentity(ownerId, MAX_OWNER_ID_CHARS) ||
@@ -556,12 +561,14 @@ function assertOwnerAndOperation(ownerId: string, operationId: string): void {
   }
 }
 
+/** Validates a bounded opaque provider identity before it reaches SQL. */
 function assertProviderIdentity(value: string): void {
   if (!isBoundedIdentity(value, MAX_PROVIDER_ID_CHARS)) {
     throw persistenceFailure();
   }
 }
 
+/** Accepts non-empty bounded identities without control characters. */
 function isBoundedIdentity(value: unknown, maximum: number): value is string {
   return (
     typeof value === "string" &&
@@ -571,16 +578,19 @@ function isBoundedIdentity(value: unknown, maximum: number): value is string {
   );
 }
 
+/** Decodes one bounded text field or returns the constant persistence failure. */
 function readBoundedText(value: unknown, maximum: number): string {
   if (!isBoundedIdentity(value, maximum)) throw persistenceFailure();
   return value;
 }
 
+/** Decodes the only provider currently admitted by the Phase C repository. */
 function readProvider(value: unknown): "google" {
   if (value !== "google") throw persistenceFailure();
   return value;
 }
 
+/** Decodes the controlled key-partition domain stored beside the envelope. */
 function readProposalDomain(value: unknown): ProposalDomain {
   if (value !== "school" && value !== "work" && value !== "personal") {
     throw persistenceFailure();
@@ -588,6 +598,7 @@ function readProposalDomain(value: unknown): ProposalDomain {
   return value;
 }
 
+/** Decodes the approval lifecycle status allowlist. */
 function readApprovalStatus(value: unknown): ApprovalStatus {
   if (
     value !== "proposed" &&
@@ -599,6 +610,7 @@ function readApprovalStatus(value: unknown): ApprovalStatus {
   return value;
 }
 
+/** Decodes the durable execution lifecycle status allowlist. */
 function readExecutionStatus(value: unknown): ExecutionStatus {
   if (
     value !== "writing" &&
@@ -612,6 +624,7 @@ function readExecutionStatus(value: unknown): ExecutionStatus {
   return value;
 }
 
+/** Serializes a bounded canonical proposal before encryption. */
 function serializeProposal(proposal: CalendarWriteProposal): string {
   const serialized = JSON.stringify(proposal);
   if (
@@ -624,6 +637,7 @@ function serializeProposal(proposal: CalendarWriteProposal): string {
   return serialized;
 }
 
+/** Serializes the protected envelope into bounded database bytes. */
 function encodeEnvelope(envelope: CipherEnvelope): Uint8Array {
   const serialized = serializeCipherEnvelope(envelope);
   if (
@@ -635,6 +649,7 @@ function encodeEnvelope(envelope: CipherEnvelope): Uint8Array {
   return textEncoder.encode(serialized);
 }
 
+/** Parses bounded database bytes back into a validated cipher envelope. */
 function parseEnvelope(bytes: Uint8Array): CipherEnvelope {
   if (
     bytes.byteLength === 0 ||
@@ -645,6 +660,7 @@ function parseEnvelope(bytes: Uint8Array): CipherEnvelope {
   return parseCipherEnvelope(textDecoder.decode(bytes));
 }
 
+/** Accepts native bytes or canonical PostgreSQL bytea text without lossy coercion. */
 function readDatabaseBytes(value: unknown): Uint8Array {
   if (value instanceof Uint8Array) {
     if (
@@ -669,6 +685,7 @@ function readDatabaseBytes(value: unknown): Uint8Array {
   return bytes;
 }
 
+/** Decodes native or offset-bearing database timestamps into fresh Date values. */
 function readDatabaseDate(value: unknown): Date {
   if (value instanceof Date && !Number.isNaN(Date.prototype.getTime.call(value))) {
     return new Date(Date.prototype.getTime.call(value));
@@ -685,6 +702,7 @@ function readDatabaseDate(value: unknown): Date {
   return parsed;
 }
 
+/** Rejects invalid timestamps before a persistence query is issued. */
 function assertDate(value: unknown): asserts value is Date {
   if (
     !(value instanceof Date) ||
@@ -694,10 +712,12 @@ function assertDate(value: unknown): asserts value is Date {
   }
 }
 
+/** Creates the one constant persistence error used at the public boundary. */
 function persistenceFailure(): CalendarWriteRepositoryError {
   return new CalendarWriteRepositoryError();
 }
 
+/** Collapses unknown SQL, crypto, and decoder failures into the safe public error. */
 function normalizePersistenceError(error: unknown): CalendarWriteRepositoryError {
   return error instanceof CalendarWriteRepositoryError
     ? error

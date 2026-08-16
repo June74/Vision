@@ -15,6 +15,14 @@ empty attendee list, requires `recurrence: null`, and requires
 `notifications: "none"`. It produces an immutable `before: null` and exact
 after preview with no attendee notification effect.
 
+## `restoreCalendarWriteProposal`
+
+**Signature:** `restoreCalendarWriteProposal(input: unknown): CalendarWriteProposal`
+
+Strictly decodes the canonical persisted proposal shape, then delegates to the
+same proposal constructor so encryption/decryption cannot create a weaker
+contract than a fresh preview.
+
 ## `transitionCalendarWrite`
 
 **Signature:** `transitionCalendarWrite(operation, transition): CalendarWriteProposal`
@@ -44,6 +52,11 @@ operation values. Covered by
 
 Requires a plain object or null-prototype object, inspects own descriptors, and
 copies only enumerable string data properties into a null-prototype record.
+
+## `assertExactKeys`
+
+Compares sorted own keys against the expected canonical list and rejects both
+missing and unknown persisted fields.
 
 ## `readPlainAttendees`
 
