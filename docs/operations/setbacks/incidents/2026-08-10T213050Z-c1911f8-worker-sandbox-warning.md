@@ -2,7 +2,7 @@
 
 - Incident ID: `SB-20260810-213050-c1911f8-worker-sandbox-warning`
 - First observed: `2026-08-10T21:30:50Z`
-- Last observed: `2026-08-10T21:30:50Z`
+- Last observed: `2026-08-16T15:11:54Z`
 - Status: `contained`
 - Phase/task: Phase B exact uploaded-artifact verification
 - Environment: local `c1911f82` candidate worktree; restricted Windows execution environment
@@ -120,3 +120,19 @@ The production build at 2026-08-12T20:31:32Z emitted the same local Wrangler
 debug-log `EPERM` while completing successfully. Both Worker and client bundles
 and the production crypto-boundary check passed; no provider or runtime state
 changed.
+
+## Recurrence - 2026-08-16
+
+At 2026-08-16T15:10:51Z, the Phase C Worker suite passed all 116 assertions in
+7 files while emitting the same local Wrangler log-write `EPERM` and
+linked-worktree static-analysis access warning. No provider, deployment,
+credential, database, R2, Queue, Worker configuration, or source state
+changed. The warning remains contained and separate from the passing
+assertions.
+
+At 2026-08-16T15:11:54Z, the repository-configured Phase C Worker suite
+passed all 116 assertions in 7 files while emitting the same local Wrangler
+log-write `EPERM` and linked-worktree static-analysis access warning. No
+provider, deployment, credential, database, R2, Queue, Worker configuration,
+or source state changed. The warning remains contained and separate from the
+passing assertions.
