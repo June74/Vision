@@ -2,6 +2,7 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
+| [SB-20260816-193818-phase-c-executor-ledger-signature-mismatch](incidents/2026-08-16T193818Z-phase-c-executor-ledger-signature-mismatch.md) | contained | 2026-08-16T19:38:18.1939857Z | Phase C create executor TDD | Ledger calendar identity was added without updating every related TypeScript signature |
 | [SB-20260816-151133-phase-c-worker-rerun-config-mismatch](incidents/2026-08-16T151133Z-phase-c-worker-rerun-config-mismatch.md) | closed | 2026-08-16T15:11:33.4084464Z | Phase C verification | Manual Worker rerun used a nonexistent Vitest config filename |
 | [SB-20260816-145455-phase-b-progress-anchor-regression](incidents/2026-08-16T145455Z-phase-b-progress-anchor-regression.md) | closed | 2026-08-16T14:54:55.8227633Z | Phase C isolated-worktree baseline verification | Phase B progress heading lost a retained cleanup anchor |
 | [SB-20260810-213050-c1911f8-worker-sandbox-warning](incidents/2026-08-10T213050Z-c1911f8-worker-sandbox-warning.md) | contained | 2026-08-10T21:30:50Z | Phase B exact uploaded-artifact verification | Worker suite passed but Wrangler emitted sandbox filesystem warnings |
