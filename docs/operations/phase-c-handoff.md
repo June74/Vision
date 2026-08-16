@@ -2,7 +2,9 @@
 
 Phase B is complete and live-accepted. This handoff is the privacy-safe
 boundary between the trusted read-only foundation and the locally verified
-Phase C write surface. Live connected-write acceptance remains a separate gate.
+Phase C write surface. Live connected-write acceptance remains a separate gate,
+and the remaining Phase C continuation was explicitly authorized on 2026-08-16
+for an approved disposable/private-pilot fixture.
 It contains no provider identifiers, account details, secret values, raw logs,
 private event data, authorization codes, tokens, database URLs, or encryption
 keys.
@@ -151,6 +153,19 @@ delete call, no deployment, no push, and no production database migration.
 Live acceptance must use an explicitly approved disposable/private-pilot
 fixture and prove preview, one confirmed create, exact read-back, replay safety,
 verified undo, absence, and privacy-safe logs/audit before release.
+
+## Phase C continuation authorization and readiness
+
+- Authorization: approved on 2026-08-16 for the remaining Phase C increments
+  and live/private-pilot acceptance using a disposable fixture.
+- Current preview read-only readiness: the existing preview health contract
+  returned HTTP 200 and read-only Wrangler access was available.
+- Live mutation gate: pending independent confirmation of the disposable
+  database target, reviewed migration `0010`, and preview deployment admission.
+  No live event mutation is claimed until those prerequisites and the exact
+  create/read-back/replay/undo/absence sequence are recorded.
+- Continuation design: [remaining Phase C MVP design](../superpowers/specs/2026-08-16-phase-c-remaining-mvp-increments-design.md).
+- Continuation plan: [remaining Phase C MVP plan](../superpowers/plans/2026-08-16-phase-c-remaining-mvp-increments.md).
 
 ## Phase C agent-concurrency hardline
 

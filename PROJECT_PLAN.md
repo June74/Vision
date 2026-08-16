@@ -2,11 +2,11 @@
 
 This file is the project's editable source of truth. It records the agreed direction, current phase, open decisions, and completion gates. Update it whenever a decision changes or a phase is completed.
 
-**Status:** Phase C increment 3 locally implemented — authenticated one-off write surface verified; live acceptance pending
+**Status:** Phase C continuation authorized — one-off write surface locally verified; live acceptance and remaining MVP increments in progress
 
 **Last updated:** 2026-08-16
 
-**Current deliverable:** Complete local verification of the authenticated preview/confirm/status/undo surface, encrypted approval store, durable execution ledger, browser composer, and release boundary; live Google acceptance and deployment remain separately gated.
+**Current deliverable:** Execute the acceptance-backed Phase C continuation plan: live/private-pilot one-off acceptance, verified mutation parity, recurrence/attendee/notification policy, Vision-local secretary flows, and deterministic planning surfaces. Production deployment and migration remain separately gated.
 
 ## Product vision
 
@@ -513,9 +513,15 @@ create executor and bounded Google event-write adapter, including version
 revalidation, idempotent marker reconciliation, exact read-back, safe audit,
 and compensating undo. Increment 3 now composes the local authenticated
 preview/status/confirm/undo routes, encrypted approval store, durable execution
-ledger, browser composer, and exact release allowlist. This is locally verified
-only: no live Google mutation, deployment, push, or production database
-migration is authorized by this increment.
+ledger, browser composer, and exact release allowlist. The user authorized the
+remaining Phase C continuation on 2026-08-16, including live/private-pilot
+acceptance using a disposable fixture. The continuation design and plan are
+recorded in [the remaining MVP design](docs/superpowers/specs/2026-08-16-phase-c-remaining-mvp-increments-design.md)
+and [the remaining MVP plan](docs/superpowers/plans/2026-08-16-phase-c-remaining-mvp-increments.md).
+The current preview health read returned HTTP 200 and read-only Wrangler access
+was available; live mutation remains pending independent disposable-database
+migration and preview deployment admission. Production state remains outside
+this authorization.
 
 ### Approved foundation
 
@@ -587,6 +593,7 @@ replay safety, and privacy-safe logs/audit before any connected-write release.
 
 | Date | Decision | Reason | Status |
 |---|---|---|---|
+| 2026-08-16 | Authorize the remaining Phase C implementation and live/private-pilot acceptance using a disposable fixture, while retaining the production deployment and migration gate. | Continue the secretary MVP through acceptance-backed increments without treating local mocks or a healthy endpoint as proof of a live connected write. | Approved; continuation in progress |
 | 2026-08-12 | Accept Phase B after the final normal preview deployment, maintenance observer, live health check, and closure documentation completed. | The trusted read-only foundation and its live operational evidence meet the Phase B boundary; verified event writes remain a separate Phase C approval gate. | Accepted; Phase C next |
 | 2026-07-22 | Execute Phase B with fresh implementation subagents, independent task reviews, test-first development, and two synchronized documentation layers for every production file and named function. | Isolated task context and review gates improve implementation reliability, while separate concise and technical references keep the code understandable at two depths. | Approved and in progress |
 | 2026-07-22 | Approve the written Phase B data-foundation specification and begin implementation planning. | The reviewed specification captures the agreed architecture, service boundary, storage model, encryption, synchronization, AI routing, cost controls, recovery, operational states, verification gates, technology stack, and repository layout. | Approved |
