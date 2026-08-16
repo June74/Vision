@@ -1557,6 +1557,36 @@ const APPROVED_GOOGLE_OPERATIONS = new Map<
       },
     ],
   ],
+  [
+    "src/integrations/google-calendar/event-write-client.ts",
+    [
+      {
+        method: "GET",
+        endpoint:
+          /^https:\/\/www\.googleapis\.com\/calendar\/v3\/calendars\/(?:\$\{[^}]+\}|[^/]+)$/u,
+      },
+      {
+        method: "POST",
+        endpoint:
+          /^https:\/\/www\.googleapis\.com\/calendar\/v3\/calendars\/(?:\$\{[^}]+\}|[^/]+)\/events$/u,
+      },
+      {
+        method: "GET",
+        endpoint:
+          /^https:\/\/www\.googleapis\.com\/calendar\/v3\/calendars\/(?:\$\{[^}]+\}|[^/]+)\/events$/u,
+      },
+      {
+        method: "GET",
+        endpoint:
+          /^https:\/\/www\.googleapis\.com\/calendar\/v3\/calendars\/(?:\$\{[^}]+\}|[^/]+)\/events\/(?:\$\{[^}]+\}|[^/]+)$/u,
+      },
+      {
+        method: "DELETE",
+        endpoint:
+          /^https:\/\/www\.googleapis\.com\/calendar\/v3\/calendars\/(?:\$\{[^}]+\}|[^/]+)\/events\/(?:\$\{[^}]+\}|[^/]+)$/u,
+      },
+    ],
+  ],
 ]);
 
 const APPROVED_MUTATING_ROUTES = new Map<
@@ -2178,10 +2208,14 @@ function scanGoogleSource(
           parent = parent.parent;
         }
         const isReviewedTransportForwarder =
-          relativePath ===
+          ((relativePath ===
             "src/integrations/google-calendar/calendar-client.ts" &&
-          calleeName === "fetcher" &&
-          enclosingName === "request" &&
+            calleeName === "fetcher" &&
+            enclosingName === "request") ||
+            (relativePath ===
+              "src/integrations/google-calendar/event-write-client.ts" &&
+              calleeName === "fetcher" &&
+              enclosingName === "requestJson")) &&
           ts.isIdentifier(node.arguments[0]) &&
           node.arguments[0].text === "url" &&
           ts.isObjectLiteralExpression(node.arguments[1]) &&
@@ -2191,7 +2225,28 @@ function scanGoogleSource(
               ts.isIdentifier(property.expression) &&
               property.expression.text === "init",
           );
-        if (!isReviewedTransportForwarder) {
+        const requestTarget = node.arguments[0];
+        const isReviewedEventWriteRequest =
+          relativePath ===
+            "src/integrations/google-calendar/event-write-client.ts" &&
+          calleeName === "requestJson" &&
+          [
+            "readCalendarVersion",
+            "createOneOffEvent",
+            "findByOperationId",
+            "readEvent",
+            "deleteEvent",
+          ].includes(enclosingName ?? "") &&
+          declaredMethod !== undefined &&
+          requestTarget !== undefined &&
+          ((ts.isCallExpression(requestTarget) &&
+            ts.isIdentifier(requestTarget.expression) &&
+            requestTarget.expression.text === "buildEventsUrl") ||
+            (ts.isTemplateExpression(requestTarget) &&
+              requestTarget
+                .getText(sourceFile)
+                .includes("GOOGLE_CALENDAR_BASE_URL")));
+        if (!isReviewedTransportForwarder && !isReviewedEventWriteRequest) {
           const method = declaredMethod;
           const approved =
             endpoint !== undefined &&
@@ -2212,7 +2267,7 @@ function scanGoogleSource(
               category: "google-event-write",
               file: fileIdentifier,
               reason:
-                "Google call is unresolved or outside the exact Phase B operation allowlist",
+                "Google call is unresolved or outside the exact approved operation allowlist",
             });
           }
         }

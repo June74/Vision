@@ -43,6 +43,36 @@ describe("Phase B Google and route write surface", () => {
     expect(result.violations).toEqual([]);
   });
 
+  it("accepts the bounded Phase C Google event-write transport forwarder", async () => {
+    const root = await createCleanReleaseFixture();
+    roots.push(root);
+    await writeFixtureFile(
+      root,
+      "src/integrations/google-calendar/event-write-client.ts",
+      `
+        const GOOGLE_CALENDAR_BASE_URL = "https://www.googleapis.com/calendar/v3";
+        async function requestJson(
+          url: string,
+          init: RequestInit,
+          fetcher: typeof fetch,
+        ) {
+          return fetcher(url, { ...init });
+        }
+        export async function create(fetcher: typeof fetch) {
+          return requestJson(
+            GOOGLE_CALENDAR_BASE_URL + "/calendars/id/events",
+            { method: "POST" },
+            fetcher,
+          );
+        }
+      `,
+    );
+
+    const result = await scanRelease({ projectRoot: root, protectedSentinel: PROTECTED_SENTINEL });
+
+    expect(result.violations).toEqual([]);
+  });
+
   it.each(["insert", "update", "patch", "move", "delete"])(
     "rejects Google calendar.events.%s",
     async (method) => {

@@ -18,6 +18,7 @@
 - Create: `tests/unit/domain/calendar-write-create-execution.test.ts` — stale, idempotency, uncertainty, read-back, audit, and undo tests.
 - Create: `src/integrations/google-calendar/event-write-client.ts` — bounded Google events insert, marker lookup, get, and delete adapter.
 - Create: `tests/contract/integrations/google-event-write-client.contract.test.ts` — request and response boundary tests with an injected fetcher.
+- Modify: `scripts/scan-release.ts` and `tests/security/google-write-surface.test.ts` — allowlist and regression coverage for the bounded Phase C provider surface.
 - Create: `docs/reference/simple/src/domain/calendar-write/create-execution.md` — plain-language reference.
 - Create: `docs/reference/technical/src/domain/calendar-write/create-execution.md` — signatures and invariants.
 - Modify: both calendar-write folder guides, `docs/operations/phase-c-handoff.md`, and `PROJECT_PLAN.md`.
@@ -152,18 +153,18 @@ Task 3 contract test.
   `.\\node_modules\\.bin\\tsc.cmd --noEmit` and
   `.\\node_modules\\.bin\\tsc.cmd --noEmit -p tests\\tsconfig.json`; both
   must exit 0.
-- [ ] **Step 2: Run focused and full suites.** Run the two focused commands,
+- [x] **Step 2: Run focused and full suites.** Run the two focused commands,
   `vitest run --project unit`, `vitest run --project contract`, and
   `vitest run --project worker`; require zero failing tests. Record known
   Wrangler linked-worktree warnings separately.
-- [ ] **Step 3: Run release-boundary checks.** Run `vite build`, the production
+- [x] **Step 3: Run release-boundary checks.** Run `vite build`, the production
   crypto-boundary validator, release-evidence capture, release scan, and
   `git diff --check`; run no provider or deployment command.
-- [ ] **Step 4: Commit narrow changes.** Commit the execution test/core,
+- [x] **Step 4: Commit narrow changes.** Commit the execution test/core,
   adapter test/adapter, and documentation/handoff changes separately with
   messages `feat: add verified calendar create executor`,
   `feat: add Google event write adapter`, and
   `docs: record Phase C create execution core`.
-- [ ] **Step 5: Verify the branch.** Run `git status --short`,
+- [x] **Step 5: Verify the branch.** Run `git status --short`,
   `git branch --show-current`, and `git rev-parse HEAD`. The isolated Phase C
   branch must be clean. Do not push or deploy without explicit instruction.

@@ -192,3 +192,15 @@ Do not use raw formatted JSON lines as semantic equality values.
   surrounding adapter text and was rejected before writing. The exact current
   context was inspected and smaller hunks are being used; no source or runtime
   state changed.
+- 2026-08-16T19:59:05.2022347Z: A scanner diagnostic imported a top-level-await
+  module through the repository's CommonJS `tsx -e` mode and failed during
+  transformation before the scanner ran. No repository, provider, deployment,
+  secret, or runtime state changed; use the ESM loader for this probe.
+- 2026-08-16T20:00:01.7480091Z: A new scanner regression fixture nested an
+  unescaped template literal inside its outer template string and failed
+  during test transformation before the scanner ran. No production or
+  external state changed; use a plain concatenated fixture URL in the test.
+- 2026-08-16T20:00:31.1973805Z: A follow-up fixture patch used the rendered
+  nested-template text instead of the source line and was rejected before
+  writing. The exact file context was inspected; no production or external
+  state changed.
