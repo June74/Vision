@@ -1571,6 +1571,11 @@ const APPROVED_GOOGLE_OPERATIONS = new Map<
           /^https:\/\/www\.googleapis\.com\/calendar\/v3\/calendars\/(?:\$\{[^}]+\}|[^/]+)\/events$/u,
       },
       {
+        method: "PATCH",
+        endpoint:
+          /^https:\/\/www\.googleapis\.com\/calendar\/v3\/calendars\/(?:\$\{[^}]+\}|[^/]+)\/events\/(?:\$\{[^}]+\}|[^/]+)$/u,
+      },
+      {
         method: "GET",
         endpoint:
           /^https:\/\/www\.googleapis\.com\/calendar\/v3\/calendars\/(?:\$\{[^}]+\}|[^/]+)\/events$/u,
@@ -2241,6 +2246,9 @@ function scanGoogleSource(
           [
             "readCalendarVersion",
             "createOneOffEvent",
+            "updateEvent",
+            "moveEvent",
+            "cancelEvent",
             "findByOperationId",
             "readEvent",
             "deleteEvent",

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   CalendarWriteProviderError,
-  type CalendarWriteProvider,
+  type CalendarWriteMutationProvider,
 } from "../../../src/domain/calendar-write/create-execution";
 import { createGoogleEventWriteClient } from "../../../src/integrations/google-calendar/event-write-client";
 
@@ -59,9 +59,30 @@ function createInput() {
   };
 }
 
+function mutationInput(overrides: Record<string, unknown> = {}) {
+  return {
+    calendarId: CALENDAR_ID,
+    eventId: "event-001",
+    expectedVersion: "etag-event-001",
+    operationId: OPERATION_ID,
+    title: "Updated focus block",
+    description: "Protected planning note",
+    startsAt: "2026-08-17T15:00:00.000Z",
+    endsAt: "2026-08-17T16:00:00.000Z",
+    timeZone: "America/Chicago",
+    domain: "work" as const,
+    privacy: "private" as const,
+    status: "confirmed" as const,
+    attendees: [] as const,
+    recurrence: null,
+    notifications: "none" as const,
+    ...overrides,
+  };
+}
+
 function clientFor(
   response: Response,
-): { readonly client: CalendarWriteProvider; readonly fetcher: ReturnType<typeof vi.fn> } {
+): { readonly client: CalendarWriteMutationProvider; readonly fetcher: ReturnType<typeof vi.fn> } {
   const fetcher = vi.fn(async () => response);
   return {
     fetcher,
@@ -147,6 +168,74 @@ describe("Google one-off event write adapter contract", () => {
     });
     expect(body).not.toHaveProperty("attendees");
     expect(body).not.toHaveProperty("recurrence");
+  });
+
+  it("patches an update through the fixed event endpoint with notifications disabled", async () => {
+    const { client, fetcher } = clientFor(jsonResponse(eventPayload({
+      summary: "Updated focus block",
+    })));
+
+    await expect(client.updateEvent(mutationInput())).resolves.toMatchObject({
+      eventId: "event-001",
+      version: "etag-event-001",
+      title: "Updated focus block",
+    });
+
+    const [input, init] = fetcher.mock.calls[0]!;
+    const url = new URL(String(input));
+    expect(url.pathname).toBe(
+      `/calendar/v3/calendars/${CALENDAR_ID}/events/event-001`,
+    );
+    expect(url.searchParams.get("sendUpdates")).toBe("none");
+    expect(init?.method).toBe("PATCH");
+    expect(init?.headers).toMatchObject({
+      authorization: `Bearer ${ACCESS_TOKEN}`,
+      "if-match": "etag-event-001",
+    });
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      summary: "Updated focus block",
+      start: { dateTime: "2026-08-17T15:00:00.000Z", timeZone: "America/Chicago" },
+      end: { dateTime: "2026-08-17T16:00:00.000Z", timeZone: "America/Chicago" },
+    });
+  });
+
+  it("patches a move with only the disclosed time fields", async () => {
+    const { client, fetcher } = clientFor(jsonResponse(eventPayload({
+      start: { dateTime: "2026-08-17T16:00:00.000Z", timeZone: "America/Chicago" },
+      end: { dateTime: "2026-08-17T17:00:00.000Z", timeZone: "America/Chicago" },
+    })));
+
+    await expect(client.moveEvent(mutationInput({
+      startsAt: "2026-08-17T16:00:00.000Z",
+      endsAt: "2026-08-17T17:00:00.000Z",
+    }))).resolves.toMatchObject({
+      startsAt: "2026-08-17T16:00:00.000Z",
+      endsAt: "2026-08-17T17:00:00.000Z",
+    });
+
+    const [, init] = fetcher.mock.calls[0]!;
+    expect(init?.method).toBe("PATCH");
+    expect(JSON.parse(String(init?.body))).toEqual({
+      start: { dateTime: "2026-08-17T16:00:00.000Z", timeZone: "America/Chicago" },
+      end: { dateTime: "2026-08-17T17:00:00.000Z", timeZone: "America/Chicago" },
+    });
+  });
+
+  it("patches cancellation as a status mutation rather than deletion", async () => {
+    const { client, fetcher } = clientFor(
+      jsonResponse(eventPayload({ status: "cancelled" })),
+    );
+
+    await expect(client.cancelEvent(mutationInput({ status: "cancelled" }))).resolves.toMatchObject({
+      eventId: "event-001",
+      status: "cancelled",
+    });
+
+    const [input, init] = fetcher.mock.calls[0]!;
+    const url = new URL(String(input));
+    expect(url.searchParams.get("sendUpdates")).toBe("none");
+    expect(init?.method).toBe("PATCH");
+    expect(JSON.parse(String(init?.body))).toEqual({ status: "cancelled" });
   });
 
   it("finds only strictly normalized events by the private operation marker", async () => {

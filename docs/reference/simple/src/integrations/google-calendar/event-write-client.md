@@ -19,6 +19,21 @@ Reads the selected calendar's current version before a confirmed write.
 Creates exactly one timed event with `sendUpdates=none`, no attendees or
 recurrence, and private operation, domain, and privacy markers.
 
+## `updateEvent`
+
+Patches the disclosed event fields with the expected provider version and
+`sendUpdates=none`, then returns a normalized event for read-back.
+
+## `moveEvent`
+
+Patches only the disclosed start, end, and timezone values with the expected
+provider version and no notifications.
+
+## `cancelEvent`
+
+Patches provider status to `cancelled` with the expected version. Cancellation
+remains distinct from direct deletion.
+
 ## `findByOperationId`
 
 Searches for events carrying the private operation marker after an uncertain
@@ -41,6 +56,11 @@ Builds a fixed-origin, encoded Google events URL.
 ## `validateCreateInput`
 
 Checks the closed one-off event shape before any provider request.
+
+## `validateMutationInput`
+
+Checks bounded event identity/version, preview fields, status, timing, and the
+currently supported empty attendee, recurrence, and notification policy.
 
 ## `normalizeEvent`
 

@@ -33,6 +33,26 @@ export interface CalendarWriteProviderEvent {
   readonly operationId: string;
   readonly domain: ConcreteDomain;
   readonly privacy: Privacy;
+  readonly status?: "confirmed" | "tentative" | "cancelled";
+  readonly attendees: readonly [];
+  readonly recurrence: null;
+  readonly notifications: "none";
+}
+
+/** Provider-neutral event facts sent by an approved one-off mutation. */
+export interface CalendarWriteMutationProviderInput {
+  readonly calendarId: string;
+  readonly eventId: string;
+  readonly expectedVersion: string;
+  readonly operationId: string;
+  readonly title: string;
+  readonly description: string | null;
+  readonly startsAt: string;
+  readonly endsAt: string;
+  readonly timeZone: string;
+  readonly domain: ConcreteDomain;
+  readonly privacy: Privacy;
+  readonly status: "confirmed" | "tentative" | "cancelled";
   readonly attendees: readonly [];
   readonly recurrence: null;
   readonly notifications: "none";
@@ -70,6 +90,31 @@ export interface CalendarWriteProvider {
     readonly eventId: string;
     readonly expectedVersion: string;
   }): Promise<"deleted" | "not_found">;
+  /** Applies an explicitly previewed content/status update when supported. */
+  updateEvent?: (
+    input: CalendarWriteMutationProviderInput,
+  ) => Promise<CalendarWriteProviderEvent>;
+  /** Applies an explicitly previewed time move when supported. */
+  moveEvent?: (
+    input: CalendarWriteMutationProviderInput,
+  ) => Promise<CalendarWriteProviderEvent>;
+  /** Applies an explicitly previewed cancellation when supported. */
+  cancelEvent?: (
+    input: CalendarWriteMutationProviderInput,
+  ) => Promise<CalendarWriteProviderEvent>;
+}
+
+/** Provider port required by the verified update/move/cancel/delete executor. */
+export interface CalendarWriteMutationProvider extends CalendarWriteProvider {
+  readonly updateEvent: (
+    input: CalendarWriteMutationProviderInput,
+  ) => Promise<CalendarWriteProviderEvent>;
+  readonly moveEvent: (
+    input: CalendarWriteMutationProviderInput,
+  ) => Promise<CalendarWriteProviderEvent>;
+  readonly cancelEvent: (
+    input: CalendarWriteMutationProviderInput,
+  ) => Promise<CalendarWriteProviderEvent>;
 }
 
 /** Durable metadata needed to replay or reconcile one owner-scoped operation. */

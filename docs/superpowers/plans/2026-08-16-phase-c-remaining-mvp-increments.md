@@ -143,27 +143,27 @@ Run `git diff --check` and commit with `feat: persist Phase C event mutations`.
 - Test: `tests/contract/integrations/google-event-write-client.contract.test.ts`
 - Test: `tests/security/google-write-surface.test.ts`
 
-- [ ] **Step 1: Write failing executor and adapter tests**
+- [x] **Step 1: Write failing executor and adapter tests**
 
 Cover one update, one move, one cancellation, one direct delete, stale version invalidation, exact read-back, definite versus uncertain provider outcomes, no blind retry, exactly-one ledger claim, and owner/provider/event/version binding. Cover Google fixed-origin PATCH/DELETE URLs, `sendUpdates` policy, bounded request/response parsing, and constant provider failures.
 
-- [ ] **Step 2: Run the focused tests RED**
+- [x] **Step 2: Run the focused tests RED**
 
 Run `pnpm.cmd exec vitest run tests/unit/domain/calendar-write-mutation-execution.test.ts tests/contract/integrations/google-event-write-client.contract.test.ts tests/security/google-write-surface.test.ts --config vitest.config.ts` and confirm missing mutation methods fail.
 
-- [ ] **Step 3: Implement minimal provider-neutral mutation execution**
+- [x] **Step 3: Implement minimal provider-neutral mutation execution**
 
 Revalidate the stored target and event version immediately before the single provider mutation, reconcile uncertain outcomes through one read-back, require the approved fields to match, write safe audit facts, and expose only verified or pending results.
 
-- [ ] **Step 4: Implement the bounded Google adapter methods**
+- [x] **Step 4: Implement the bounded Google adapter methods**
 
 Add only the exact event PATCH/DELETE operations required by the executor. Reuse fixed-origin URL construction, token bounds, abort deadlines, status classification, and normalized event decoding. Do not add arbitrary fetch or provider SDK access.
 
-- [ ] **Step 5: Run focused tests GREEN and the release scan**
+- [x] **Step 5: Run focused tests GREEN and the release scan**
 
 Run the focused command, `pnpm.cmd exec tsc --noEmit`, and `pnpm.cmd security:scan`. Update the exact release allowlist only for the reviewed route/adapter operations.
 
-- [ ] **Step 6: Commit the mutation executor and adapter**
+- [x] **Step 6: Commit the mutation executor and adapter**
 
 Commit with `feat: add verified Phase C event mutations`.
 
@@ -335,4 +335,3 @@ Mark only evidence-backed increments complete, distinguish local and live status
 - [ ] **Step 5: Commit the final handoff**
 
 Commit documentation only after all required verification evidence is fresh and the worktree is clean.
-

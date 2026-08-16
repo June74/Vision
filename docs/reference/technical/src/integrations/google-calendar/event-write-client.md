@@ -15,8 +15,9 @@ be quoted. Control characters are rejected before URL or `If-Match` use.
 **Signature:** `(options: GoogleEventWriteClientOptions) => CalendarWriteProvider`
 
 Snapshots a nonempty access token, validates the deadline and response byte
-limit, and returns exactly five provider methods. The adapter fixes the event
-write policy to no attendees, no recurrence, and `sendUpdates=none`.
+limit, and returns the calendar read, create, update, move, cancel, reconcile,
+event-read, and delete methods. The adapter fixes the currently supported
+mutation policy to no attendees, no recurrence, and `sendUpdates=none`.
 
 ## `readCalendarVersion`
 
@@ -36,6 +37,30 @@ only summary, optional description, timed start/end, and private
 response must normalize as a confirmed timed event carrying the expected
 operation marker. A 5xx, timeout, transport error, or malformed success is
 `uncertain`; a definite 4xx is `definite_failure`.
+
+## `updateEvent`
+
+**Signature:** `(input: CalendarWriteMutationProviderInput) => Promise<CalendarWriteProviderEvent>`
+
+PATCHes the encoded event path with `If-Match`, `sendUpdates=none`, all
+disclosed content/time fields, and the private Vision operation markers. It
+normalizes the response through the same bounded event decoder.
+
+## `moveEvent`
+
+**Signature:** `(input: CalendarWriteMutationProviderInput) => Promise<CalendarWriteProviderEvent>`
+
+PATCHes only the disclosed timed start/end fields with `If-Match` and
+`sendUpdates=none`; it does not silently change title, attendees, recurrence,
+or notification policy.
+
+## `cancelEvent`
+
+**Signature:** `(input: CalendarWriteMutationProviderInput) => Promise<CalendarWriteProviderEvent>`
+
+PATCHes `{ status: "cancelled" }` with `If-Match` and `sendUpdates=none`.
+Cancellation is a provider status mutation and is never represented as a
+delete.
 
 ## `findByOperationId`
 
@@ -77,14 +102,22 @@ Checks provider-safe calendar and operation identities, bounded event fields,
 chronological time, and the closed Phase C effects. Invalid input raises only
 `CalendarWriteProviderError("definite_failure")`.
 
+## `validateMutationInput`
+
+**Signature:** `(input: CalendarWriteMutationProviderInput) => void`
+
+Bounds calendar/event/operation identities and expected version, validates the
+disclosed event fields and chronological interval, and rejects attendees,
+recurrence, and notifications until their separate contract is accepted.
+
 ## `normalizeEvent`
 
 **Signature:** `(value: unknown, expectedOperationId?: string) => CalendarWriteProviderEvent`
 
-Validates the bounded Google response with Zod, requires a confirmed timed
-event, requires all three private markers, rejects attendees and recurrence,
-requires matching start/end time zones, and returns only the provider-neutral
-fields used by exact read-back.
+Validates the bounded Google response with Zod, accepts the controlled
+confirmed/tentative/cancelled status set, requires all three private markers,
+rejects attendees and recurrence, requires matching start/end time zones, and
+returns only the provider-neutral fields used by exact read-back.
 
 ## `requestJson`
 

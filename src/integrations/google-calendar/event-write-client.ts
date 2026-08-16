@@ -2,6 +2,8 @@
 import { z } from "zod";
 import {
   CalendarWriteProviderError,
+  type CalendarWriteMutationProvider,
+  type CalendarWriteMutationProviderInput,
   type CalendarWriteProvider,
   type CalendarWriteProviderEvent,
 } from "../../domain/calendar-write/create-execution";
@@ -20,7 +22,7 @@ const eventResponseSchema = z
   .object({
     id: z.string().min(1).max(1_024),
     etag: z.string().min(1).max(1_024),
-    status: z.literal("confirmed"),
+    status: z.enum(["confirmed", "tentative", "cancelled"]),
     summary: z.string().min(1).max(1_024),
     description: z.string().max(8_192).optional(),
     start: z
@@ -62,7 +64,7 @@ export interface GoogleEventWriteClientOptions {
 /** Creates the only Google event-write adapter exposed to the Phase C executor. */
 export function createGoogleEventWriteClient(
   options: GoogleEventWriteClientOptions,
-): CalendarWriteProvider {
+): CalendarWriteMutationProvider {
   if (!isBoundedText(options.accessToken, MAX_TOKEN_CHARS)) {
     throw new CalendarWriteProviderError("definite_failure");
   }
@@ -119,6 +121,96 @@ export function createGoogleEventWriteClient(
               },
             },
           }),
+        },
+        true,
+        false,
+        fetcher,
+        deadlineMs,
+        maxBodyBytes,
+        accessToken,
+      );
+      return normalizeEvent(payload, input.operationId);
+    },
+
+    /** Patches the explicitly previewed event fields with provider notifications disabled. */
+    async updateEvent(input) {
+      validateMutationInput(input);
+      const payload = await requestJson(
+        buildEventsUrl(input.calendarId, {
+          eventId: input.eventId,
+          sendUpdates: "none",
+        }),
+        {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "if-match": input.expectedVersion,
+          },
+          body: JSON.stringify({
+            summary: input.title,
+            description: input.description ?? "",
+            start: { dateTime: input.startsAt, timeZone: input.timeZone },
+            end: { dateTime: input.endsAt, timeZone: input.timeZone },
+            extendedProperties: {
+              private: {
+                "vision.operationId": input.operationId,
+                "vision.domain": input.domain,
+                "vision.privacy": input.privacy,
+              },
+            },
+          }),
+        },
+        true,
+        false,
+        fetcher,
+        deadlineMs,
+        maxBodyBytes,
+        accessToken,
+      );
+      return normalizeEvent(payload, input.operationId);
+    },
+
+    /** Patches only the disclosed time fields for an explicitly previewed move. */
+    async moveEvent(input) {
+      validateMutationInput(input);
+      const payload = await requestJson(
+        buildEventsUrl(input.calendarId, {
+          eventId: input.eventId,
+          sendUpdates: "none",
+        }),
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json", "if-match": input.expectedVersion },
+          body: JSON.stringify({
+            start: { dateTime: input.startsAt, timeZone: input.timeZone },
+            end: { dateTime: input.endsAt, timeZone: input.timeZone },
+          }),
+        },
+        true,
+        false,
+        fetcher,
+        deadlineMs,
+        maxBodyBytes,
+        accessToken,
+      );
+      return normalizeEvent(payload, input.operationId);
+    },
+
+    /** Patches provider status to cancelled; cancellation remains distinct from deletion. */
+    async cancelEvent(input) {
+      validateMutationInput(input);
+      if (input.status !== "cancelled") {
+        throw new CalendarWriteProviderError("definite_failure");
+      }
+      const payload = await requestJson(
+        buildEventsUrl(input.calendarId, {
+          eventId: input.eventId,
+          sendUpdates: "none",
+        }),
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json", "if-match": input.expectedVersion },
+          body: JSON.stringify({ status: "cancelled" }),
         },
         true,
         false,
@@ -237,6 +329,30 @@ function validateCreateInput(input: Parameters<CalendarWriteProvider["createOneO
   }
 }
 
+/** Validates the closed one-off mutation payload before a PATCH reaches Google. */
+function validateMutationInput(input: CalendarWriteMutationProviderInput): void {
+  assertProviderText(input.calendarId, 2_048);
+  assertOpaqueId(input.eventId);
+  assertOpaqueId(input.operationId);
+  if (
+    !isProviderText(input.expectedVersion, 1_024) ||
+    !isBoundedText(input.title, 1_024) ||
+    (input.description !== null && !isBoundedText(input.description, 8_192)) ||
+    !isBoundedText(input.timeZone, 255) ||
+    !isBoundedText(input.domain, 32) ||
+    !isBoundedText(input.privacy, 32) ||
+    (input.status !== "confirmed" &&
+      input.status !== "tentative" &&
+      input.status !== "cancelled") ||
+    input.attendees.length !== 0 ||
+    input.recurrence !== null ||
+    input.notifications !== "none" ||
+    Date.parse(input.endsAt) <= Date.parse(input.startsAt)
+  ) {
+    throw new CalendarWriteProviderError("definite_failure");
+  }
+}
+
 /** Converts a validated Google event into the provider-neutral read-back shape. */
 function normalizeEvent(
   value: unknown,
@@ -266,13 +382,17 @@ function normalizeEvent(
     eventId: parsed.data.id,
     version: parsed.data.etag,
     title: parsed.data.summary,
-    description: parsed.data.description ?? null,
+    description:
+      parsed.data.description === undefined || parsed.data.description === ""
+        ? null
+        : parsed.data.description,
     startsAt: parsed.data.start.dateTime,
     endsAt: parsed.data.end.dateTime,
     timeZone: parsed.data.start.timeZone,
     operationId,
     domain,
     privacy,
+    status: parsed.data.status,
     attendees: [] as const,
     recurrence: null,
     notifications: "none",

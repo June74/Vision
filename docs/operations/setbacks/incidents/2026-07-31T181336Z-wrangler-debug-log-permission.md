@@ -45,3 +45,6 @@ touched.
 - 2026-08-16T23:15:57Z: Recurred during the Phase C mutation-persistence full
   gate. Worker tests and the production build completed successfully; only the
   optional Wrangler roaming-profile debug log remained unwritable.
+- 2026-08-16T23:30:05Z: Recurred during the Phase C provider-mutation full
+  gate. Worker tests, both production bundles, and release security scan
+  completed successfully; only the optional external debug log was denied.

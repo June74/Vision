@@ -2,8 +2,8 @@
 
 - **Status:** closed
 - **First observed:** 2026-08-16T20:03:26.7552327Z
-- **Last observed:** 2026-08-16T20:03:26.7552327Z
-- **Phase/task:** Phase C one-off create release-boundary verification
+- **Last observed:** 2026-08-16T23:26:54.0445189Z
+- **Phase/task:** Phase C verified mutation executor and adapter release-boundary verification
 - **Environment:** Windows isolated Phase C worktree
 - **Version/commit:** Adapter present after `2110509`; scanner correction uncommitted at detection
 
@@ -42,4 +42,8 @@ passing the gate; no external or private state changed.
 ## Verification and related work
 
 The bounded scanner regression passed and the actual release scan passed at
-2026-08-16T20:03:16Z. No deployment or live provider command was run.
+2026-08-16T20:03:16Z for the create surface. It recurred at
+2026-08-16T23:26:54Z when the newly reviewed PATCH operations were first
+introduced; adding exact PATCH path and `updateEvent`/`moveEvent`/`cancelEvent`
+allowlist entries made the scan pass. No deployment or live provider command
+was run.
