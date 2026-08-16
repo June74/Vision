@@ -43,6 +43,27 @@ describe("Phase B Google and route write surface", () => {
     expect(result.violations).toEqual([]);
   });
 
+  it("accepts only the exact authenticated Phase C one-off write route surface", async () => {
+    const root = await createCleanReleaseFixture();
+    roots.push(root);
+    await writeFixtureFile(
+      root,
+      "src/server/api/calendar-write-routes.ts",
+      `
+        export function registerCalendarWriteRoutes(app: Hono) {
+          app.post("/api/calendar/writes/preview", preview);
+          app.get("/api/calendar/writes/:operationId", status);
+          app.post("/api/calendar/writes/:operationId/confirm", confirm);
+          app.post("/api/calendar/writes/:operationId/undo", undo);
+        }
+      `,
+    );
+
+    const result = await scanRelease({ projectRoot: root, protectedSentinel: PROTECTED_SENTINEL });
+
+    expect(result.violations).toEqual([]);
+  });
+
   it("accepts the bounded Phase C Google event-write transport forwarder", async () => {
     const root = await createCleanReleaseFixture();
     roots.push(root);

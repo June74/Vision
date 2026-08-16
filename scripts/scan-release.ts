@@ -1615,6 +1615,14 @@ const APPROVED_MUTATING_ROUTES = new Map<
     ],
   ],
   [
+    "src/server/api/calendar-write-routes.ts",
+    [
+      { method: "POST", route: "/api/calendar/writes/preview" },
+      { method: "POST", route: "/api/calendar/writes/:operationId/confirm" },
+      { method: "POST", route: "/api/calendar/writes/:operationId/undo" },
+    ],
+  ],
+  [
     "src/server/auth/oauth-routes.ts",
     [{ method: "POST", route: "/api/auth/logout" }],
   ],
