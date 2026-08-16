@@ -2,9 +2,9 @@
 
 - Incident ID: `SB-20260810-213050-c1911f8-worker-sandbox-warning`
 - First observed: `2026-08-10T21:30:50Z`
-- Last observed: `2026-08-16T21:56:25.0588121Z`
+- Last observed: `2026-08-16T22:01:45.007Z`
 - Status: `contained`
-- Phase/task: Phase C authenticated one-off write surface Task 5 route RED diagnostics
+- Phase/task: Phase C authenticated one-off write surface Task 6 route GREEN verification
 - Environment: local `c1911f82` candidate worktree; restricted Windows execution environment
 - Version/commit: `c1911f82c0fb274e3d50d20c3cbe82ba2abceb51`
 
@@ -143,3 +143,9 @@ access warning before failing at the expected missing-route-module boundary.
 No provider, deployment, credential, database, R2, Queue, Worker
 configuration, or source state changed. The warning remains contained and
 separate from the intentional RED result.
+
+At 2026-08-16T22:01:45.007Z, the focused Phase C Worker route suite passed all
+16 assertions while emitting the same local Wrangler log-write `EPERM` and
+linked-worktree static-analysis access warning. No provider, deployment,
+credential, database, R2, Queue, Worker configuration, or source state
+changed. The warning remains contained and separate from the passing tests.

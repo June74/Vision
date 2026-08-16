@@ -16,6 +16,11 @@ import {
   type CalendarSetupRouteDependencies,
 } from "./server/api/calendar-setup-routes";
 import {
+  createProductionCalendarWriteDependencies,
+  registerCalendarWriteRoutes,
+  type CalendarWriteRouteDependencies,
+} from "./server/api/calendar-write-routes";
+import {
   createProductionAiCategoryProposalDependencies,
   registerAiCategoryProposalRoute,
   type AiCategoryProposalRouteDependencies,
@@ -40,6 +45,7 @@ export interface AppDependencies {
   createRequestId?: RequestIdFactory;
   auth?: AuthRouteDependencies;
   calendarSetup?: CalendarSetupRouteDependencies;
+  calendarWrite?: CalendarWriteRouteDependencies;
   aiCategoryProposal?: AiCategoryProposalRouteDependencies;
   diagnostic?: DiagnosticRouteDependencies;
   googleCalendarWebhook?: GoogleCalendarWebhookDependencies;
@@ -82,6 +88,12 @@ export function createApp(dependencies: AppDependencies = {}) {
     dependencies.calendarSetup ??
       ((environment) =>
         createProductionCalendarSetupDependencies(environment, logger)),
+  );
+  registerCalendarWriteRoutes(
+    app,
+    dependencies.calendarWrite ??
+      ((environment) =>
+        createProductionCalendarWriteDependencies(environment, logger)),
   );
   registerAiCategoryProposalRoute(
     app,

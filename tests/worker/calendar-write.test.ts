@@ -250,13 +250,17 @@ class MemoryWriteLedger implements CalendarWriteLedger {
   );
 }
 
+type StoredProviderEvent = CalendarWriteProviderEvent & {
+  readonly calendarId: string;
+};
+
 class FakeCalendarWriteProvider implements CalendarWriteProvider {
   calendarVersion = CALENDAR_VERSION;
   createMode: "verified" | "uncertain" | "definite_failure" = "verified";
   readBackMismatch = false;
   deleteMode: "deleted" | "not_found" | "uncertain" = "deleted";
-  private readonly events = new Map<string, CalendarWriteProviderEvent>();
-  private lastAttempt: CalendarWriteProviderEvent | undefined;
+  private readonly events = new Map<string, StoredProviderEvent>();
+  private lastAttempt: StoredProviderEvent | undefined;
 
   readonly readCalendarVersion = vi.fn(
     async (calendarId: string): Promise<{ calendarId: string; version: string }> => ({
@@ -272,7 +276,7 @@ class FakeCalendarWriteProvider implements CalendarWriteProvider {
       if (this.createMode === "definite_failure") {
         throw new CalendarWriteProviderError("definite_failure");
       }
-      const event: CalendarWriteProviderEvent = {
+      const event: StoredProviderEvent = {
         eventId: EVENT_ID,
         version: EVENT_VERSION,
         ...input,
