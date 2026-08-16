@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CalendarWriteContractError,
   createCalendarWriteMutationProposal,
+  restoreCalendarWriteMutationProposal,
   transitionCalendarWriteMutation,
   type CalendarWriteMutationInput,
   type CalendarWriteMutationEventInput,
@@ -160,6 +161,18 @@ describe("Phase C event mutation contract", () => {
       expect.objectContaining({ code: "INVALID_MUTATION_INPUT" }),
     );
     expect(getterCalled).toBe(false);
+  });
+
+  it("restores only the exact persisted proposed shape", () => {
+    const proposal = createCalendarWriteMutationProposal(input("update", {
+      after: event({ title: "Updated focus block" }),
+    }));
+
+    expect(
+      restoreCalendarWriteMutationProposal(JSON.parse(JSON.stringify(proposal))),
+    ).toEqual(proposal);
+    expect(() => restoreCalendarWriteMutationProposal({ ...proposal, status: "confirmed" }))
+      .toThrowError(expect.objectContaining({ code: "INVALID_MUTATION_INPUT" }));
   });
 
   it("does not expose rejected values through contract errors", () => {

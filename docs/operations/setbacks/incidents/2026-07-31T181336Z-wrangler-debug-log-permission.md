@@ -42,3 +42,6 @@ touched.
 
 - 2026-07-31T18:13:36.9511937Z: Observed and closed after confirming exit code
   0 and complete worker/client outputs.
+- 2026-08-16T23:15:57Z: Recurred during the Phase C mutation-persistence full
+  gate. Worker tests and the production build completed successfully; only the
+  optional Wrangler roaming-profile debug log remained unwritable.

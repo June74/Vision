@@ -58,3 +58,7 @@ state changed. The complete repository gate remains unproved.
   present before the final approved retry. Windows denied CIM command-line
   inspection before any result was usable; no process action or provider
   mutation occurred.
+- 2026-08-16T23:10:00Z: Recurred while checking why the uniquely wrapped
+  Phase C repository gate had not emitted another unit-test line. Windows
+  denied the narrow CIM command-line query; the running gate was left
+  untouched and its own exit code remains authoritative.

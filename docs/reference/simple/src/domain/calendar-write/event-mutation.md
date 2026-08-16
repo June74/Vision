@@ -12,6 +12,11 @@ Update and move show both snapshots; cancellation changes only status; delete
 has no after snapshot. Unknown keys, unsupported attendees/recurrence/
 notifications, and series scope fail with constant reason codes.
 
+## `restoreCalendarWriteMutationProposal`
+
+Rehydrates only the exact persisted proposed shape and sends its normalized
+facts back through the same strict mutation constructor.
+
 ## `transitionCalendarWriteMutation`
 
 Requires an exact target identity and provider version before confirmation, then
@@ -49,6 +54,10 @@ Inspects the root mutation shape without invoking caller accessors.
 ## `readEventInput`
 
 Inspects one event snapshot and its bounded attendee array.
+
+## `readPersistedPreviewEvent`
+
+Inspects the canonical nested before/after preview shape from encrypted JSON.
 
 ## `readPlainAttendees`
 

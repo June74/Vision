@@ -204,6 +204,58 @@ export function createCalendarWriteMutationProposal(
   });
 }
 
+/** Rehydrates one persisted proposed mutation through the strict admission contract. */
+export function restoreCalendarWriteMutationProposal(
+  input: unknown,
+): CalendarWriteMutationProposal {
+  const root = readPlainRecord(input);
+  assertExactKeys(root, [
+    "action",
+    "operationId",
+    "ownerId",
+    "preview",
+    "requestedAt",
+    "status",
+    "target",
+  ]);
+  if (
+    root.status !== "proposed" ||
+    root.action !== "update" &&
+      root.action !== "move" &&
+      root.action !== "cancel" &&
+      root.action !== "delete"
+  ) {
+    throw mutationError("INVALID_MUTATION_INPUT");
+  }
+
+  const target = readPlainRecord(root.target);
+  assertExactKeys(target, ["calendarId", "eventId", "scope", "version"]);
+  if (target.scope !== "single") {
+    throw mutationError("INVALID_MUTATION_INPUT");
+  }
+
+  const preview = readPlainRecord(root.preview);
+  assertExactKeys(preview, ["after", "before"]);
+  const before = readPersistedPreviewEvent(preview.before);
+  const after =
+    preview.after === null ? null : readPersistedPreviewEvent(preview.after);
+
+  return createCalendarWriteMutationProposal({
+    operationId: root.operationId,
+    ownerId: root.ownerId,
+    action: root.action,
+    target: {
+      calendarId: target.calendarId,
+      eventId: target.eventId,
+      version: target.version,
+      scope: "single",
+    },
+    requestedAt: root.requestedAt,
+    before,
+    after,
+  });
+}
+
 /** Applies one explicitly allowed mutation transition without changing the input. */
 export function transitionCalendarWriteMutation(
   proposal: CalendarWriteMutationProposal,
@@ -369,6 +421,60 @@ function readEventInput(value: unknown): unknown {
     "title",
   ]);
   return { ...event, attendees: readPlainAttendees(event.attendees) };
+}
+
+/** Reads the canonical nested preview shape without invoking persisted getters. */
+function readPersistedPreviewEvent(value: unknown): CalendarWriteMutationEventInput {
+  const event = readPlainRecord(value);
+  assertExactKeys(event, [
+    "attendees",
+    "description",
+    "domain",
+    "endsAt",
+    "notifications",
+    "privacy",
+    "recurrence",
+    "startsAt",
+    "status",
+    "timeZone",
+    "title",
+  ]);
+
+  const attendees = readPlainRecord(event.attendees);
+  assertExactKeys(attendees, ["addresses", "count", "mode"]);
+  if (attendees.mode !== "none" || attendees.count !== 0) {
+    throw mutationError("INVALID_MUTATION_INPUT");
+  }
+  const addresses = readPlainAttendees(attendees.addresses);
+  if (addresses.length !== 0) {
+    throw mutationError("INVALID_MUTATION_INPUT");
+  }
+
+  const recurrence = readPlainRecord(event.recurrence);
+  assertExactKeys(recurrence, ["rules", "scope"]);
+  if (recurrence.scope !== "one-off" || readPlainAttendees(recurrence.rules).length !== 0) {
+    throw mutationError("INVALID_MUTATION_INPUT");
+  }
+
+  const notifications = readPlainRecord(event.notifications);
+  assertExactKeys(notifications, ["policy", "willNotify"]);
+  if (notifications.policy !== "none" || notifications.willNotify !== false) {
+    throw mutationError("INVALID_MUTATION_INPUT");
+  }
+
+  return {
+    title: event.title as string,
+    description: event.description as string | null,
+    startsAt: event.startsAt as string,
+    endsAt: event.endsAt as string,
+    timeZone: event.timeZone as string,
+    domain: event.domain as Exclude<Domain, "unresolved">,
+    privacy: event.privacy as PrivacyLevel,
+    status: event.status as "confirmed" | "tentative" | "cancelled",
+    attendees: [],
+    recurrence: null,
+    notifications: "none",
+  };
 }
 
 /** Copies an ordinary array only when every indexed value is a data property. */

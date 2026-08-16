@@ -7,33 +7,26 @@ import {
   calendarWriteOperations,
 } from "../../../src/data/schema/calendar-write";
 
-describe("Phase C calendar-write schema", () => {
-  it("defines additive owner-scoped approval and execution tables", () => {
+describe("Phase C mutation persistence schema", () => {
+  it("adds mutation identity and scope without changing the existing tables destructively", () => {
     const sql = readFileSync(
-      resolve(
-        process.cwd(),
-        "migrations/0010_phase_c_calendar_write_surface.sql",
-      ),
+      resolve(process.cwd(), "migrations/0011_phase_c_event_mutations.sql"),
       "utf8",
     ).toLowerCase();
 
-    expect(sql).toContain("create table calendar_write_approvals");
-    expect(sql).toContain("proposal_envelope bytea");
-    expect(sql).toContain("proposal_domain text not null");
-    expect(sql).toContain(
-      "check (status in ('proposed', 'confirmed', 'invalidated'))",
-    );
-    expect(sql).toContain("create table calendar_write_operations");
-    expect(sql).toContain(
-      "check (status in ('writing', 'verification_pending', 'verified', 'failed', 'undone'))",
-    );
-    expect(sql).toContain(
-      "check ((provider_event_id is null) = (provider_event_version is null))",
-    );
+    expect(sql).toContain("alter table calendar_write_approvals");
+    expect(sql).toContain("add column action text");
+    expect(sql).toContain("add column provider_event_id text");
+    expect(sql).toContain("add column provider_event_version text");
+    expect(sql).toContain("add column mutation_scope text");
+    expect(sql).toContain("check (action in ('create', 'update', 'move', 'cancel', 'delete'))");
+    expect(sql).toContain("check (mutation_scope in ('single', 'series'))");
+    expect(sql).toContain("check ((provider_event_id is null) = (provider_event_version is null))");
     expect(sql).not.toContain("drop table");
+    expect(sql).not.toContain("drop column");
   });
 
-  it("declares the reviewed encrypted approval and execution columns", () => {
+  it("declares the mutation columns in the Drizzle manifest", () => {
     const manifest = extractDrizzleTablesManifest([
       calendarWriteApprovals,
       calendarWriteOperations,

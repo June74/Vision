@@ -8,6 +8,11 @@ provider/calendar/domain metadata, proposed/confirmed/invalidated status,
 expiry timestamps, and a non-null encrypted proposal envelope. It never stores
 title or description as ordinary database text.
 
+The approval table also records the allowlisted action (`create`, `update`,
+`move`, `cancel`, or `delete`), paired provider event identity/version for
+mutations, and a `single` or `series` scope. Phase C currently admits only
+single-event mutations; series scope is reserved for the recurrence increment.
+
 `calendar_write_operations` stores the exactly-one create ledger. It records
 owner/provider/calendar scope, writing/pending/verified/failed/undone status,
 timestamps, and paired provider event identity/version only after verification.

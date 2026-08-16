@@ -9,6 +9,12 @@ scoped by the authenticated owner and opaque operation ID.
 Encrypts the immutable proposal and inserts one proposed approval.
 `proposal_domain` is only the controlled key partition.
 
+## `createMutationApproval`
+
+Encrypts a one-off update, move, cancel, or delete preview and inserts its
+owner-scoped event identity/version. Protected event text never becomes query
+text.
+
 ## `findApproval`
 
 Reads approval status and safe target facts for one owner.
@@ -16,6 +22,12 @@ Reads approval status and safe target facts for one owner.
 ## `loadProposal`
 
 Decrypts and strictly rechecks the stored proposal after owner lookup.
+
+## `loadMutationProposal`
+
+Decrypts and strictly rehydrates a one-off mutation only when its action,
+calendar, event identity, version, scope, and key-partition domain still match
+the approval row.
 
 ## `confirmApproval`
 
@@ -69,6 +81,11 @@ Checks status, timestamps, and paired provider identity/version.
 
 Rejects proposals that are not valid one-off approvals.
 
+## `assertMutationProposalForApproval`
+
+Rejects mutation proposals outside the current single-event, no-attendee,
+one-off, no-notification persistence boundary.
+
 ## `assertOwnerAndOperation`
 
 Checks both query-scope identities before SQL.
@@ -85,6 +102,10 @@ Recognizes non-empty text without control characters.
 
 Decodes one bounded row value.
 
+## `readNullableBoundedText`
+
+Decodes an optional provider identity without coercing database nulls.
+
 ## `readProvider`
 
 Accepts only the current `google` provider code.
@@ -97,6 +118,14 @@ Accepts only school, work, or personal key partitions.
 
 Accepts the three approval statuses.
 
+## `readApprovalAction`
+
+Accepts the create action and the four mutation actions.
+
+## `readMutationScope`
+
+Accepts the controlled single or series scope value.
+
 ## `readExecutionStatus`
 
 Accepts the five execution statuses.
@@ -104,6 +133,14 @@ Accepts the five execution statuses.
 ## `serializeProposal`
 
 Bounds canonical proposal JSON before encryption.
+
+## `serializeMutationProposal`
+
+Bounds canonical mutation JSON before encryption.
+
+## `serializeJsonProposal`
+
+Applies the shared bounded JSON serialization rule to either proposal type.
 
 ## `encodeEnvelope`
 

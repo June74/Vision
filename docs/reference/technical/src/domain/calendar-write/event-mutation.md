@@ -17,6 +17,15 @@ time/timezone change; `cancel` requires the same non-status facts with
 deep-frozen and includes the opaque calendar/event identity and expected
 provider version inside the encrypted approval boundary.
 
+## `restoreCalendarWriteMutationProposal`
+
+**Signature:** `(input: unknown) => CalendarWriteMutationProposal`
+
+Requires the exact persisted root, target, preview, attendee, recurrence, and
+notification shapes; accepts only a proposed single-scope mutation; then
+rehydrates through `createCalendarWriteMutationProposal` so semantic action and
+interval rules are applied again.
+
 ## `transitionCalendarWriteMutation`
 
 **Signature:** `(proposal, transition) => CalendarWriteMutationProposal`
@@ -82,6 +91,14 @@ records before Zod sees them. Getter-backed or inherited objects fail closed.
 
 Requires the exact one-off event keys and delegates attendee-array inspection
 to `readPlainAttendees`.
+
+## `readPersistedPreviewEvent`
+
+**Signature:** `(value: unknown) => CalendarWriteMutationEventInput`
+
+Validates the canonical nested preview objects, requires empty attendees,
+one-off recurrence, and no notifications, and converts the persisted preview
+facts into the strict constructor input without invoking accessors.
 
 ## `readPlainAttendees`
 

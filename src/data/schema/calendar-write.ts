@@ -11,6 +11,10 @@ export const calendarWriteApprovals = pgTable(
     ownerId: text("owner_id").notNull(),
     provider: text("provider").notNull(),
     calendarId: text("calendar_id").notNull(),
+    action: text("action").notNull().default("create"),
+    providerEventId: text("provider_event_id"),
+    providerEventVersion: text("provider_event_version"),
+    mutationScope: text("mutation_scope").notNull().default("single"),
     proposalDomain: text("proposal_domain").notNull(),
     status: text("status").notNull(),
     requestedAt: timestamp("requested_at", {
@@ -39,6 +43,22 @@ export const calendarWriteApprovals = pgTable(
     check(
       "calendar_write_approvals_calendar_non_empty",
       sql`${table.calendarId} <> ''`,
+    ),
+    check(
+      "calendar_write_approvals_action_valid",
+      sql`${table.action} in ('create', 'update', 'move', 'cancel', 'delete')`,
+    ),
+    check(
+      "calendar_write_approvals_event_identity_paired",
+      sql`(${table.providerEventId} is null) = (${table.providerEventVersion} is null)`,
+    ),
+    check(
+      "calendar_write_approvals_action_identity",
+      sql`(${table.action} = 'create' and ${table.providerEventId} is null and ${table.providerEventVersion} is null) or (${table.action} <> 'create' and ${table.providerEventId} is not null and ${table.providerEventVersion} is not null)`,
+    ),
+    check(
+      "calendar_write_approvals_scope_valid",
+      sql`${table.mutationScope} in ('single', 'series')`,
     ),
     check(
       "calendar_write_approvals_domain_valid",

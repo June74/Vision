@@ -15,6 +15,11 @@ import {
   restoreCalendarWriteProposal,
   type CalendarWriteProposal,
 } from "../../domain/calendar-write/approval";
+import {
+  restoreCalendarWriteMutationProposal,
+  type CalendarWriteMutationAction,
+  type CalendarWriteMutationProposal,
+} from "../../domain/calendar-write/event-mutation";
 import type {
   CalendarWriteLedger,
   CalendarWriteLedgerRecord,
@@ -22,6 +27,8 @@ import type {
 import type { VisionDatabase } from "../db";
 
 type ProposalDomain = "school" | "work" | "personal";
+type ApprovalAction = "create" | CalendarWriteMutationAction;
+type MutationScope = "single" | "series";
 type ApprovalStatus = "proposed" | "confirmed" | "invalidated";
 type ExecutionStatus =
   | "writing"
@@ -51,6 +58,17 @@ export interface CalendarWriteApprovalStore {
     ownerId: string,
     operationId: string,
   ): Promise<CalendarWriteProposal | undefined>;
+  /** Optional mutation persistence port used by the remaining Phase C surface. */
+  createMutationApproval?(input: {
+    readonly proposal: CalendarWriteMutationProposal;
+    readonly requestedAt: Date;
+    readonly expiresAt: Date;
+  }): Promise<void>;
+  /** Optional owner-scoped mutation rehydration port used by mutation routes. */
+  loadMutationProposal?(
+    ownerId: string,
+    operationId: string,
+  ): Promise<CalendarWriteMutationProposal | undefined>;
   confirmApproval(
     ownerId: string,
     operationId: string,
@@ -69,6 +87,10 @@ export interface CalendarWriteApprovalRecord {
   readonly provider: "google";
   readonly calendarId: string;
   readonly proposalDomain: ProposalDomain;
+  readonly action?: ApprovalAction;
+  readonly eventId?: string;
+  readonly eventVersion?: string;
+  readonly scope?: MutationScope;
   readonly status: ApprovalStatus;
   readonly requestedAt: Date;
   readonly expiresAt: Date;
@@ -141,6 +163,60 @@ export class DrizzleCalendarWriteRepository
     }
   }
 
+  /** Encrypts and inserts one immutable one-off event mutation approval. */
+  async createMutationApproval(input: {
+    readonly proposal: CalendarWriteMutationProposal;
+    readonly requestedAt: Date;
+    readonly expiresAt: Date;
+  }): Promise<void> {
+    try {
+      assertDate(input.requestedAt);
+      assertDate(input.expiresAt);
+      assertMutationProposalForApproval(input.proposal);
+      if (input.expiresAt.getTime() <= input.requestedAt.getTime()) {
+        throw persistenceFailure();
+      }
+
+      const proposalDomain =
+        input.proposal.preview.after?.domain ?? input.proposal.preview.before.domain;
+      const encrypted = await encryptProtectedFields(
+        this.keyProvider,
+        {
+          ownerId: input.proposal.ownerId,
+          nodeId: input.proposal.operationId,
+          domain: proposalDomain,
+        },
+        {
+          proposal: serializeMutationProposal(input.proposal),
+        },
+      );
+      const proposalEnvelope = encrypted.proposal;
+      if (proposalEnvelope === null) throw persistenceFailure();
+
+      const result = await this.database.execute<Record<string, unknown>>(sql`
+        insert into calendar_write_approvals (
+          operation_id, owner_id, provider, calendar_id, action,
+          provider_event_id, provider_event_version, mutation_scope,
+          proposal_domain, status, requested_at, expires_at, proposal_envelope
+        ) values (
+          ${input.proposal.operationId}, ${input.proposal.ownerId}, 'google',
+          ${input.proposal.target.calendarId}, ${input.proposal.action},
+          ${input.proposal.target.eventId}, ${input.proposal.target.version},
+          ${input.proposal.target.scope}, ${proposalDomain}, 'proposed',
+          ${input.requestedAt}, ${input.expiresAt},
+          ${encodeEnvelope(proposalEnvelope)}::bytea
+        )
+        on conflict (operation_id) do nothing
+        returning operation_id as "operationId"
+      `);
+      if (result.rows[0]?.operationId !== input.proposal.operationId) {
+        throw persistenceFailure();
+      }
+    } catch (error) {
+      throw normalizePersistenceError(error);
+    }
+  }
+
   /** Reads one approval record inside the supplied owner scope. */
   async findApproval(
     ownerId: string,
@@ -190,6 +266,67 @@ export class DrizzleCalendarWriteRepository
         proposal.ownerId !== row.ownerId ||
         proposal.target.calendarId !== row.calendarId ||
         proposal.preview.after.domain !== row.proposalDomain ||
+        proposal.status !== "proposed"
+      ) {
+        throw persistenceFailure();
+      }
+      return proposal;
+    } catch (error) {
+      throw normalizePersistenceError(error);
+    }
+  }
+
+  /** Decrypts and revalidates one owner-scoped event mutation proposal. */
+  async loadMutationProposal(
+    ownerId: string,
+    operationId: string,
+  ): Promise<CalendarWriteMutationProposal | undefined> {
+    try {
+      const row = await this.readApprovalRow(ownerId, operationId);
+      if (!row || row.status === "invalidated") return undefined;
+      if (
+        row.action === undefined ||
+        row.action === "create" ||
+        row.scope !== "single" ||
+        row.eventId === undefined ||
+        row.eventVersion === undefined
+      ) {
+        throw persistenceFailure();
+      }
+
+      const decrypted = await decryptProtectedFields(
+        this.keyProvider,
+        {
+          ownerId: row.ownerId,
+          nodeId: row.operationId,
+          domain: row.proposalDomain,
+        },
+        {
+          proposal: parseEnvelope(row.proposalEnvelope),
+        },
+      );
+      if (
+        typeof decrypted.proposal !== "string" ||
+        decrypted.proposal.length === 0 ||
+        decrypted.proposal.length > MAX_SERIALIZED_PROPOSAL_CHARS
+      ) {
+        throw persistenceFailure();
+      }
+
+      const proposal = restoreCalendarWriteMutationProposal(
+        JSON.parse(decrypted.proposal) as unknown,
+      );
+      const proposalDomain =
+        proposal.preview.after?.domain ?? proposal.preview.before.domain;
+      if (
+        proposal.operationId !== row.operationId ||
+        proposal.ownerId !== row.ownerId ||
+        proposal.action !== row.action ||
+        proposal.target.calendarId !== row.calendarId ||
+        proposal.target.eventId !== row.eventId ||
+        proposal.target.version !== row.eventVersion ||
+        proposal.target.scope !== row.scope ||
+        proposalDomain !== row.proposalDomain ||
         proposal.status !== "proposed"
       ) {
         throw persistenceFailure();
@@ -427,6 +564,10 @@ export class DrizzleCalendarWriteRepository
         owner_id as "ownerId",
         provider,
         calendar_id as "calendarId",
+        action,
+        provider_event_id as "eventId",
+        provider_event_version as "eventVersion",
+        mutation_scope as "scope",
         proposal_domain as "proposalDomain",
         status,
         requested_at as "requestedAt",
@@ -460,6 +601,10 @@ function toApprovalRecord(row: ApprovalRow): CalendarWriteApprovalRecord {
     provider: row.provider,
     calendarId: row.calendarId,
     proposalDomain: row.proposalDomain,
+    ...(row.action === undefined ? {} : { action: row.action }),
+    ...(row.eventId === undefined ? {} : { eventId: row.eventId }),
+    ...(row.eventVersion === undefined ? {} : { eventVersion: row.eventVersion }),
+    ...(row.scope === undefined ? {} : { scope: row.scope }),
     status: row.status,
     requestedAt: new Date(row.requestedAt),
     expiresAt: new Date(row.expiresAt),
@@ -470,6 +615,33 @@ function toApprovalRecord(row: ApprovalRow): CalendarWriteApprovalRecord {
 function decodeApprovalRow(row: Record<string, unknown>): ApprovalRow {
   const provider = readProvider(row.provider);
   const proposalDomain = readProposalDomain(row.proposalDomain);
+  const action = readApprovalAction(
+    row.action === undefined ? "create" : row.action,
+  );
+  const eventId = readNullableBoundedText(
+    row.eventId === undefined ? row.providerEventId : row.eventId,
+    MAX_PROVIDER_ID_CHARS,
+  );
+  const eventVersion = readNullableBoundedText(
+    row.eventVersion === undefined
+      ? row.providerEventVersion
+      : row.eventVersion,
+    MAX_PROVIDER_ID_CHARS,
+  );
+  const scope = readMutationScope(
+    row.scope === undefined ? row.mutationScope ?? "single" : row.scope,
+  );
+  if ((eventId === undefined) !== (eventVersion === undefined)) {
+    throw persistenceFailure();
+  }
+  if (
+    (action === "create" &&
+      (eventId !== undefined || eventVersion !== undefined)) ||
+    (action !== "create" &&
+      (eventId === undefined || eventVersion === undefined))
+  ) {
+    throw persistenceFailure();
+  }
   const status = readApprovalStatus(row.status);
   const operationId = readBoundedText(row.operationId, MAX_OPERATION_ID_CHARS);
   const ownerId = readBoundedText(row.ownerId, MAX_OWNER_ID_CHARS);
@@ -485,6 +657,10 @@ function decodeApprovalRow(row: Record<string, unknown>): ApprovalRow {
     provider,
     calendarId,
     proposalDomain,
+    action,
+    ...(eventId === undefined ? {} : { eventId }),
+    ...(eventVersion === undefined ? {} : { eventVersion }),
+    scope,
     status,
     requestedAt,
     expiresAt,
@@ -551,6 +727,37 @@ function assertProposalForApproval(
   }
 }
 
+/** Rejects mutation proposals outside the approved one-off persistence scope. */
+function assertMutationProposalForApproval(
+  proposal: CalendarWriteMutationProposal,
+): void {
+  const after = proposal.preview.after;
+  if (
+    proposal.status !== "proposed" ||
+    !isBoundedIdentity(proposal.ownerId, MAX_OWNER_ID_CHARS) ||
+    !isBoundedIdentity(proposal.operationId, MAX_OPERATION_ID_CHARS) ||
+    !isBoundedIdentity(proposal.target.calendarId, MAX_PROVIDER_ID_CHARS) ||
+    !isBoundedIdentity(proposal.target.eventId, MAX_PROVIDER_ID_CHARS) ||
+    !isBoundedIdentity(proposal.target.version, MAX_PROVIDER_ID_CHARS) ||
+    proposal.target.scope !== "single" ||
+    (after !== null &&
+      (after.attendees.count !== 0 ||
+        after.recurrence.scope !== "one-off" ||
+        after.notifications.policy !== "none")) ||
+    proposal.preview.before.attendees.count !== 0 ||
+    proposal.preview.before.recurrence.scope !== "one-off" ||
+    proposal.preview.before.notifications.policy !== "none"
+  ) {
+    throw persistenceFailure();
+  }
+  if (
+    (proposal.action === "delete" && after !== null) ||
+    (proposal.action !== "delete" && after === null)
+  ) {
+    throw persistenceFailure();
+  }
+}
+
 /** Validates the owner and operation scope used in every persistence predicate. */
 function assertOwnerAndOperation(ownerId: string, operationId: string): void {
   if (
@@ -584,6 +791,15 @@ function readBoundedText(value: unknown, maximum: number): string {
   return value;
 }
 
+/** Decodes an optional provider identity while preserving database nulls. */
+function readNullableBoundedText(
+  value: unknown,
+  maximum: number,
+): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  return readBoundedText(value, maximum);
+}
+
 /** Decodes the only provider currently admitted by the Phase C repository. */
 function readProvider(value: unknown): "google" {
   if (value !== "google") throw persistenceFailure();
@@ -610,6 +826,28 @@ function readApprovalStatus(value: unknown): ApprovalStatus {
   return value;
 }
 
+/** Decodes the approval action allowlist, including the original create action. */
+function readApprovalAction(value: unknown): ApprovalAction {
+  if (
+    value !== "create" &&
+    value !== "update" &&
+    value !== "move" &&
+    value !== "cancel" &&
+    value !== "delete"
+  ) {
+    throw persistenceFailure();
+  }
+  return value;
+}
+
+/** Decodes the database mutation scope allowlist. */
+function readMutationScope(value: unknown): MutationScope {
+  if (value !== "single" && value !== "series") {
+    throw persistenceFailure();
+  }
+  return value;
+}
+
 /** Decodes the durable execution lifecycle status allowlist. */
 function readExecutionStatus(value: unknown): ExecutionStatus {
   if (
@@ -626,7 +864,19 @@ function readExecutionStatus(value: unknown): ExecutionStatus {
 
 /** Serializes a bounded canonical proposal before encryption. */
 function serializeProposal(proposal: CalendarWriteProposal): string {
-  const serialized = JSON.stringify(proposal);
+  return serializeJsonProposal(proposal);
+}
+
+/** Serializes a bounded mutation proposal before encryption. */
+function serializeMutationProposal(
+  proposal: CalendarWriteMutationProposal,
+): string {
+  return serializeJsonProposal(proposal);
+}
+
+/** Serializes any approved proposal through the one bounded JSON policy. */
+function serializeJsonProposal(value: unknown): string {
+  const serialized = JSON.stringify(value);
   if (
     typeof serialized !== "string" ||
     serialized.length === 0 ||

@@ -12,6 +12,13 @@ status, paired provider event ID/version, and timestamps.
 Requires a proposed canonical one-off value and `expiresAt > requestedAt`.
 Inserts with a conflict fence and requires the returned operation ID to match.
 
+## `createMutationApproval`
+
+Requires a proposed, single-scope mutation with paired event ID/version for
+the update, move, cancel, or delete action. It binds owner, operation, domain,
+and encrypted preview through the existing protected-fields boundary and uses
+the same insert conflict fence.
+
 ## `findApproval`
 
 Uses `owner_id AND operation_id` and returns no envelope bytes.
@@ -21,6 +28,12 @@ Uses `owner_id AND operation_id` and returns no envelope bytes.
 Decrypts only after the owner-scoped row is decoded, then rehydrates through
 the strict domain constructor and cross-checks operation, owner, calendar,
 domain, and proposed status.
+
+## `loadMutationProposal`
+
+Decrypts only after owner-scoped row validation, rehydrates through the strict
+mutation constructor, and cross-checks operation, owner, action, calendar,
+event ID/version, scope, key-partition domain, and proposed status.
 
 ## `confirmApproval`
 
@@ -83,6 +96,12 @@ and terminal rows without both provider fields.
 Requires proposed status, bounded owner/operation/calendar values, zero
 attendees, one-off recurrence, and no notifications.
 
+## `assertMutationProposalForApproval`
+
+Requires proposed status, bounded owner/operation/calendar/event identity,
+paired event version, single scope, zero attendees, one-off recurrence, no
+notifications, and an action-consistent before/after preview.
+
 ## `assertOwnerAndOperation`
 
 Prevents empty or control-bearing values from entering any owner predicate.
@@ -99,6 +118,11 @@ Provides a no-coercion bounded scalar check.
 
 Fails closed rather than converting numbers, objects, or invalid text.
 
+## `readNullableBoundedText`
+
+Preserves database null/undefined as absent while applying the same bounded
+identity checks to present provider values.
+
 ## `readProvider`
 
 Enforces the allowlisted `google` provider discriminator.
@@ -112,6 +136,14 @@ other values.
 
 Enforces `proposed | confirmed | invalidated`.
 
+## `readApprovalAction`
+
+Enforces `create | update | move | cancel | delete`.
+
+## `readMutationScope`
+
+Enforces `single | series`.
+
 ## `readExecutionStatus`
 
 Enforces `writing | verification_pending | verified | failed | undone`.
@@ -119,6 +151,15 @@ Enforces `writing | verification_pending | verified | failed | undone`.
 ## `serializeProposal`
 
 Caps canonical JSON at the protected proposal limit before encryption.
+
+## `serializeMutationProposal`
+
+Caps canonical mutation JSON at the same protected proposal limit before
+encryption.
+
+## `serializeJsonProposal`
+
+Shares the bounded JSON serialization rule across create and mutation values.
 
 ## `encodeEnvelope`
 
