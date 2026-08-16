@@ -74,6 +74,41 @@ const PREVIEW = {
   undoAvailable: false,
 };
 
+const MUTATION_PREVIEW = {
+  operationId: "op-browser-mutation-1",
+  action: "update",
+  expiresAt: "2026-08-20T19:10:00.000Z",
+  preview: {
+    before: {
+      title: "Advanced data systems",
+      description: null,
+      startsAt: "2026-08-20T14:00:00.000Z",
+      endsAt: "2026-08-20T15:15:00.000Z",
+      timeZone: "America/Chicago",
+      domain: "school",
+      privacy: "private",
+      status: "confirmed",
+      attendees: { mode: "none", count: 0, addresses: [] },
+      recurrence: { scope: "one-off", rules: [] },
+      notifications: { policy: "none", willNotify: false },
+    },
+    after: {
+      title: "Advanced data systems — revised",
+      description: null,
+      startsAt: "2026-08-20T14:00:00.000Z",
+      endsAt: "2026-08-20T15:15:00.000Z",
+      timeZone: "America/Chicago",
+      domain: "school",
+      privacy: "private",
+      status: "confirmed",
+      attendees: { mode: "none", count: 0, addresses: [] },
+      recurrence: { scope: "one-off", rules: [] },
+      notifications: { policy: "none", willNotify: false },
+    },
+  },
+  undoAvailable: false,
+};
+
 async function fulfillJson(
   route: Route,
   body: Record<string, unknown>,
@@ -186,6 +221,49 @@ test("previews and confirms a one-off event, reconciles pending state, and undoe
   await page.getByRole("button", { name: "Undo this event" }).click();
   await expect(page.getByRole("heading", { name: "Undone" })).toBeVisible();
   expect(statusReads).toBe(1);
+});
+
+test("previews and confirms an event update through the verified mutation surface", async ({ page }) => {
+  await mockConnectedShell(page);
+  await page.route("**/api/calendar/mutations/preview", async (route) => {
+    expect(route.request().method()).toBe("POST");
+    expect(route.request().headers()["x-vision-csrf"]).toBe(SESSION.csrfToken);
+    expect(JSON.parse(route.request().postData() ?? "{}")).toEqual({
+      action: "update",
+      eventId: "event-school",
+      after: { title: "Advanced data systems — revised" },
+    });
+    await fulfillJson(route, MUTATION_PREVIEW);
+  });
+  await page.route("**/api/calendar/mutations/op-browser-mutation-1/confirm", async (route) => {
+    expect(route.request().method()).toBe("POST");
+    expect(route.request().headers()["x-vision-csrf"]).toBe(SESSION.csrfToken);
+    expect(JSON.parse(route.request().postData() ?? "{}")).toEqual({
+      confirmation: "CONFIRM EVENT UPDATE",
+    });
+    await fulfillJson(route, {
+      operationId: MUTATION_PREVIEW.operationId,
+      action: MUTATION_PREVIEW.action,
+      status: "verified",
+      preview: MUTATION_PREVIEW.preview,
+      undoAvailable: false,
+    });
+  });
+
+  await page.goto("/");
+  const eventEntry = page.locator(".event-entry").filter({ hasText: "Advanced data systems" });
+  await eventEntry.getByRole("button", { name: "Change event: Advanced data systems" }).click();
+  await expect(eventEntry.getByRole("region", { name: "Change calendar event" })).toBeVisible();
+  await eventEntry.getByLabel("New title").fill("Advanced data systems — revised");
+  await eventEntry.getByRole("button", { name: "Preview update" }).click();
+
+  await expect(eventEntry.getByText("Review before changing Google Calendar")).toBeVisible();
+  await expect(eventEntry.getByText("Advanced data systems — revised", { exact: true })).toBeVisible();
+  await expect(eventEntry.getByText("CONFIRM EVENT UPDATE", { exact: true })).toBeVisible();
+  await eventEntry.getByRole("button", { name: "Confirm event update" }).click();
+
+  await expect(eventEntry.getByRole("heading", { name: "Verified" })).toBeVisible();
+  await expect(eventEntry.getByText("Advanced data systems — revised", { exact: true })).toHaveCount(2);
 });
 
 test("recovers one-off event status after reload using only an opaque operation handle", async ({ page }) => {

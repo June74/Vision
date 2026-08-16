@@ -89,6 +89,32 @@ Rejects empty, oversized, and control-bearing calendar/provider identities.
 Projects proposal preview and execution status while intentionally excluding
 provider body, token, subject, calendar authority, and audit details.
 
+## `toMutationEventInput`
+
+Normalizes a provider read into the immutable mutation preview descriptor. It
+sets the Phase C one-off policy explicitly: zero attendees, no recurrence, and
+no notifications.
+
+## `mergeMutationEventInput`
+
+Merges the narrow browser patch into the authenticated provider read. This
+prevents the browser from supplying hidden before-state, calendar, owner, or
+version authority.
+
+## `requireMutationProvider`
+
+Checks the optional provider port before a mutation route can reach execution.
+The route fails closed if any reviewed mutation method is absent.
+
+## `mutationConfirmationPhrase`
+
+Maps update, move, cancel, and delete to their fixed confirmation phrases.
+
+## `mutationWriteResponse`
+
+Projects verified, pending, failed, and invalidated mutation outcomes into the
+safe response envelope while keeping provider identity and version server-side.
+
 ## `noStore`
 
 Sets the no-store cache directive on success and error paths.

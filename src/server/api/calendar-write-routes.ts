@@ -24,6 +24,8 @@ import {
   type CalendarWriteAudit,
   type CalendarWriteExecutionResult,
   type CalendarWriteLedger,
+  type CalendarWriteMutationProvider,
+  type CalendarWriteProviderEvent,
   type CalendarWriteProvider,
 } from "../../domain/calendar-write/create-execution";
 import {
@@ -32,6 +34,16 @@ import {
   transitionCalendarWrite,
   type CalendarWriteProposal,
 } from "../../domain/calendar-write/approval";
+import {
+  createCalendarWriteMutationProposal,
+  transitionCalendarWriteMutation,
+  type CalendarWriteMutationAction,
+  type CalendarWriteMutationProposal,
+} from "../../domain/calendar-write/event-mutation";
+import {
+  executeConfirmedCalendarMutation,
+  type CalendarWriteMutationExecutionResult,
+} from "../../domain/calendar-write/mutation-execution";
 import { createGoogleEventWriteClient } from "../../integrations/google-calendar/event-write-client";
 import { createProductionAuthDependencies } from "../auth/oauth-routes";
 import { verifyCsrfToken } from "../auth/csrf";
@@ -84,10 +96,34 @@ const confirmationSchema = z
 const undoSchema = z
   .object({ confirmation: z.literal("UNDO ONE-OFF EVENT") })
   .strict();
+const mutationActionSchema = z.enum(["update", "move", "cancel", "delete"]);
+const mutationEventPatchSchema = z
+  .object({
+    title: z.string().min(1).max(1_024).optional(),
+    description: z.string().max(8_192).nullable().optional(),
+    startsAt: z.string().datetime({ offset: true }).optional(),
+    endsAt: z.string().datetime({ offset: true }).optional(),
+    timeZone: z.string().min(1).max(255).optional(),
+    domain: z.enum(["school", "work", "personal"]).optional(),
+    privacy: z.enum(["planning", "private", "restricted"]).optional(),
+    status: z.enum(["confirmed", "tentative", "cancelled"]).optional(),
+  })
+  .strict();
+const mutationPreviewSchema = z
+  .object({
+    action: mutationActionSchema,
+    eventId: operationIdSchema,
+    after: mutationEventPatchSchema.nullable(),
+  })
+  .strict();
+const mutationConfirmationSchema = z.object({ confirmation: z.string() }).strict();
+
+type MutationEventPatch = z.infer<typeof mutationEventPatchSchema>;
 
 /** Injected owner/session/provider/persistence boundaries used by the route tests and Worker. */
 export interface CalendarWriteRouteDependencies {
   readonly logger: SafeLogger;
+  /** Supplies the current trusted clock for session, approval, and expiry checks. */
   readonly now: () => Date;
   readonly createOperationId: () => string;
   readonly sessions: Pick<EncryptedSessionRepository, "findSession">;
@@ -123,6 +159,243 @@ export function registerCalendarWriteRoutes(
     typeof dependenciesOrResolver === "function"
       ? dependenciesOrResolver
       : () => dependenciesOrResolver;
+
+  app.post("/api/calendar/mutations/preview", async (context) => {
+    noStore(context);
+    const dependencies = await resolveRouteDependencies(
+      resolveDependencies,
+      context,
+    );
+    const session = await authenticateRequest(context, dependencies);
+    await requireCsrf(context, session);
+    const input = mutationPreviewSchema.safeParse(
+      await readBoundedJson(context.req.raw),
+    );
+    if (!input.success) throw invalidCalendarWriteRequest();
+
+    const connection = await resolveConnectedCalendar(dependencies, session);
+    const provider = await resolveProvider(dependencies, session);
+    let current: CalendarWriteProviderEvent | undefined;
+    try {
+      current = await provider.readEvent({
+        calendarId: connection.calendarId,
+        eventId: input.data.eventId,
+      });
+    } catch {
+      throw calendarWriteUnavailable();
+    }
+    if (!current || current.eventId !== input.data.eventId) {
+      throw calendarWriteConflict();
+    }
+
+    let proposal: CalendarWriteMutationProposal;
+    try {
+      const requestedAt = readDate(dependencies.now());
+      proposal = createCalendarWriteMutationProposal({
+        operationId: readOperationId(dependencies.createOperationId()),
+        ownerId: session.ownerId,
+        action: input.data.action,
+        target: {
+          calendarId: connection.calendarId,
+          eventId: current.eventId,
+          version: current.version,
+          scope: "single",
+        },
+        requestedAt: requestedAt.toISOString(),
+        before: toMutationEventInput(current),
+        after:
+          input.data.after === null
+            ? null
+            : mergeMutationEventInput(current, input.data.after),
+      });
+
+      const expiresAt = new Date(requestedAt.getTime() + APPROVAL_LIFETIME_MS);
+      if (!dependencies.approvals.createMutationApproval) {
+        throw calendarWriteUnavailable();
+      }
+      await dependencies.approvals.createMutationApproval({
+        proposal,
+        requestedAt,
+        expiresAt,
+      });
+      return context.json({
+        operationId: proposal.operationId,
+        action: proposal.action,
+        expiresAt: expiresAt.toISOString(),
+        preview: proposal.preview,
+        undoAvailable: false,
+      });
+    } catch (error) {
+      if (error instanceof VisionError) throw error;
+      if (error instanceof CalendarWriteContractError) {
+        throw invalidCalendarWriteRequest();
+      }
+      throw calendarWriteUnavailable();
+    }
+  });
+
+  app.get("/api/calendar/mutations/:operationId", async (context) => {
+    noStore(context);
+    const dependencies = await resolveRouteDependencies(
+      resolveDependencies,
+      context,
+    );
+    const session = await authenticateRequest(context, dependencies);
+    const operationId = readOperationId(context.req.param("operationId"));
+    if (!dependencies.approvals.loadMutationProposal) {
+      throw calendarWriteUnavailable();
+    }
+
+    let approval: Awaited<ReturnType<CalendarWriteApprovalStore["findApproval"]>>;
+    let execution;
+    let proposal: CalendarWriteMutationProposal | undefined;
+    try {
+      approval = await dependencies.approvals.findApproval(
+        session.ownerId,
+        operationId,
+      );
+      execution = await dependencies.ledger.find(session.ownerId, operationId);
+      if (
+        approval &&
+        approval.action !== undefined &&
+        approval.action !== "create" &&
+        approval.status !== "invalidated"
+      ) {
+        proposal = await dependencies.approvals.loadMutationProposal(
+          session.ownerId,
+          operationId,
+        );
+      }
+    } catch {
+      throw calendarWriteUnavailable();
+    }
+    if (!approval && !execution) throw calendarWriteNotFound();
+
+    const expired =
+      !execution &&
+      approval !== undefined &&
+      approval.expiresAt.getTime() <= readDate(dependencies.now()).getTime();
+    const projectedStatus = execution?.status ??
+      (expired ? "invalidated" : approval?.status ?? "invalidated");
+    return context.json({
+      operationId,
+      ...(approval?.action && approval.action !== "create"
+        ? { action: approval.action }
+        : {}),
+      status: projectedStatus,
+      ...(approval ? { expiresAt: approval.expiresAt.toISOString() } : {}),
+      ...(proposal ? { preview: proposal.preview } : {}),
+      undoAvailable: false,
+    });
+  });
+
+  app.post("/api/calendar/mutations/:operationId/confirm", async (context) => {
+    noStore(context);
+    const dependencies = await resolveRouteDependencies(
+      resolveDependencies,
+      context,
+    );
+    const session = await authenticateRequest(context, dependencies);
+    await requireCsrf(context, session);
+    const operationId = readOperationId(context.req.param("operationId"));
+    if (
+      !dependencies.approvals.loadMutationProposal ||
+      !dependencies.approvals.createMutationApproval
+    ) {
+      throw calendarWriteUnavailable();
+    }
+
+    let approval;
+    try {
+      approval = await dependencies.approvals.findApproval(
+        session.ownerId,
+        operationId,
+      );
+    } catch {
+      throw calendarWriteUnavailable();
+    }
+    const action = approval?.action;
+    if (!action || action === "create") throw calendarWriteConflict();
+    const confirmation = mutationConfirmationSchema.safeParse(
+      await readBoundedJson(context.req.raw),
+    );
+    if (
+      !confirmation.success ||
+      confirmation.data.confirmation !== mutationConfirmationPhrase(action)
+    ) {
+      throw invalidCalendarWriteRequest();
+    }
+
+    let outcome: "confirmed" | "already_confirmed" | "expired" | "missing";
+    try {
+      outcome = await dependencies.approvals.confirmApproval(
+        session.ownerId,
+        operationId,
+        readDate(dependencies.now()),
+      );
+    } catch {
+      throw calendarWriteUnavailable();
+    }
+    if (outcome === "missing" || outcome === "expired") {
+      throw calendarWriteConflict();
+    }
+
+    let stored: CalendarWriteMutationProposal | undefined;
+    try {
+      stored = await dependencies.approvals.loadMutationProposal(
+        session.ownerId,
+        operationId,
+      );
+    } catch {
+      throw calendarWriteUnavailable();
+    }
+    if (!stored) throw calendarWriteConflict();
+
+    let confirmed: CalendarWriteMutationProposal;
+    try {
+      confirmed = transitionCalendarWriteMutation(stored, {
+        kind: "approve",
+        target: stored.target,
+      });
+    } catch {
+      throw calendarWriteConflict();
+    }
+    if (confirmed.status !== "confirmed") throw calendarWriteConflict();
+
+    await resolveConnectedCalendar(dependencies, session);
+    const provider = requireMutationProvider(
+      await resolveProvider(dependencies, session),
+    );
+    let result: CalendarWriteMutationExecutionResult;
+    try {
+      result = await executeConfirmedCalendarMutation(confirmed, {
+        provider,
+        ledger: dependencies.ledger,
+        audit: dependencies.audit,
+        /** Supplies the route's validated current time to the mutation executor. */
+        now: () => readDate(dependencies.now()).toISOString(),
+      });
+    } catch {
+      throw calendarWriteUnavailable();
+    }
+    if (result.status === "invalidated") {
+      await dependencies.approvals
+        .invalidateApproval(
+          session.ownerId,
+          operationId,
+          readDate(dependencies.now()),
+        )
+        .catch(() => undefined);
+    }
+    return context.json(
+      mutationWriteResponse(result),
+      result.status === "verified"
+        ? 200
+        : result.status === "verification_pending"
+          ? 202
+          : 409,
+    );
+  });
 
   app.post("/api/calendar/writes/preview", async (context) => {
     noStore(context);
@@ -619,6 +892,93 @@ function writeResponse(
     status,
     preview: proposal.preview,
     undoAvailable,
+  };
+}
+
+/** Projects the server-read provider event into the strict mutation input shape. */
+function toMutationEventInput(
+  event: CalendarWriteProviderEvent,
+): {
+  readonly title: string;
+  readonly description: string | null;
+  readonly startsAt: string;
+  readonly endsAt: string;
+  readonly timeZone: string;
+  readonly domain: "school" | "work" | "personal";
+  readonly privacy: "planning" | "private" | "restricted";
+  readonly status: "confirmed" | "tentative" | "cancelled";
+  readonly attendees: readonly [];
+  readonly recurrence: null;
+  readonly notifications: "none";
+} {
+  return {
+    title: event.title,
+    description: event.description,
+    startsAt: event.startsAt,
+    endsAt: event.endsAt,
+    timeZone: event.timeZone,
+    domain: event.domain,
+    privacy: event.privacy,
+    status: event.status ?? "confirmed",
+    attendees: [],
+    recurrence: null,
+    notifications: "none",
+  };
+}
+
+/** Merges only explicitly requested after-fields onto the server-read event facts. */
+function mergeMutationEventInput(
+  current: CalendarWriteProviderEvent,
+  patch: MutationEventPatch,
+) {
+  const base = toMutationEventInput(current);
+  return {
+    ...base,
+    title: patch.title === undefined ? base.title : patch.title,
+    description: patch.description === undefined ? base.description : patch.description,
+    startsAt: patch.startsAt === undefined ? base.startsAt : patch.startsAt,
+    endsAt: patch.endsAt === undefined ? base.endsAt : patch.endsAt,
+    timeZone: patch.timeZone === undefined ? base.timeZone : patch.timeZone,
+    domain: patch.domain === undefined ? base.domain : patch.domain,
+    privacy: patch.privacy === undefined ? base.privacy : patch.privacy,
+    status: patch.status === undefined ? base.status : patch.status,
+  };
+}
+
+/** Requires the three reviewed mutation methods before a route can reach the provider. */
+function requireMutationProvider(
+  provider: CalendarWriteProvider,
+): CalendarWriteMutationProvider {
+  if (
+    typeof provider.updateEvent !== "function" ||
+    typeof provider.moveEvent !== "function" ||
+    typeof provider.cancelEvent !== "function"
+  ) {
+    throw calendarWriteUnavailable();
+  }
+  return provider as CalendarWriteMutationProvider;
+}
+
+/** Returns the exact action-specific phrase required for a mutation confirmation. */
+function mutationConfirmationPhrase(
+  action: Exclude<CalendarWriteMutationAction, "create">,
+): string {
+  if (action === "update") return "CONFIRM EVENT UPDATE";
+  if (action === "move") return "CONFIRM EVENT MOVE";
+  if (action === "cancel") return "CONFIRM EVENT CANCELLATION";
+  return "CONFIRM EVENT DELETE";
+}
+
+/** Projects mutation execution into a public response without provider event content. */
+function mutationWriteResponse(
+  result: CalendarWriteMutationExecutionResult,
+) {
+  return {
+    operationId: result.operationId,
+    action: result.proposal.action,
+    status: result.status,
+    preview: result.proposal.preview,
+    undoAvailable: false,
   };
 }
 

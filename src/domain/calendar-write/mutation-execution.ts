@@ -250,8 +250,10 @@ function matchesTargetAndSnapshot(
   if (
     expected === null ||
     event.eventId !== proposal.target.eventId ||
-    event.version !== proposal.target.version ||
-    event.operationId !== proposal.operationId ||
+    (snapshot === "before"
+      ? event.version !== proposal.target.version
+      : event.version.length === 0) ||
+    (snapshot === "after" && event.operationId !== proposal.operationId) ||
     event.title !== expected.title ||
     event.description !== expected.description ||
     event.startsAt !== expected.startsAt ||

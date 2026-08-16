@@ -23,6 +23,19 @@ Asks the server for owner-scoped truth after a reload or an uncertain result.
 
 Requests the fixed compensating-undo phrase for a verified operation.
 
+## `previewCalendarEventMutation`
+
+Creates a server-derived before/after preview for one event update, move,
+cancellation, or deletion.
+
+## `confirmCalendarEventMutation`
+
+Sends the exact confirmation phrase for the selected mutation action.
+
+## `readCalendarEventMutationStatus`
+
+Reads an owner-scoped mutation after an uncertain provider result.
+
 ## `readWriteResponse`
 
 Converts HTTP failures and malformed JSON into one safe client error.
@@ -30,6 +43,32 @@ Converts HTTP failures and malformed JSON into one safe client error.
 ## `isCalendarWriteResponse`
 
 Checks the public operation response before the UI uses it.
+
+## `readMutationResponse`
+
+Converts mutation HTTP failures and malformed JSON into the safe calendar-write
+API error.
+
+## `isCalendarMutationResponse`
+
+Checks the bounded mutation operation response before rendering it.
+
+## `isCalendarMutationPreview`
+
+Checks the exact before/after mutation snapshot, including a null deletion
+after-state.
+
+## `isCalendarMutationEvent`
+
+Checks the safe one-off event descriptors used by mutation previews.
+
+## `isCalendarWriteStatus`
+
+Checks the finite lifecycle state shared by create and mutation operations.
+
+## `mutationConfirmationPhrase`
+
+Returns the fixed action-specific confirmation phrase.
 
 ## `isCalendarWritePreview`
 

@@ -179,23 +179,23 @@ Commit with `feat: add verified Phase C event mutations`.
 - Test: `tests/worker/calendar-write.test.ts`
 - Test: `tests/e2e/calendar-mutations.spec.ts`
 
-- [ ] **Step 1: Write Worker and browser RED tests**
+- [x] **Step 1: Write Worker and browser RED tests**
 
 Assert authentication before body parsing, CSRF on every mutation, strict action-specific bodies, server-derived owner/calendar/event/version authority, exact confirmation phrases, 200/202/409/503 mapping, truthful pending state, reload recovery by opaque operation ID, verified undo/compensating result, and signed-out control absence.
 
-- [ ] **Step 2: Run Worker and browser RED checks**
+- [x] **Step 2: Run Worker and browser RED checks**
 
 Run the focused Worker test and `pnpm.cmd exec playwright test tests/e2e/calendar-mutations.spec.ts`. Confirm failures are caused by missing route and UI behavior.
 
-- [ ] **Step 3: Implement route composition and browser controls**
+- [x] **Step 3: Implement route composition and browser controls**
 
 Add action-specific preview/status/confirm/recovery handling without accepting client authority fields or exposing provider IDs. Keep destructive controls disabled until a matching preview exists and show `Verification pending` whenever provider state is unknown.
 
-- [ ] **Step 4: Run Worker and browser GREEN checks**
+- [x] **Step 4: Run Worker and browser GREEN checks**
 
 Run the focused Worker and browser commands, then the complete Worker and browser suites.
 
-- [ ] **Step 5: Commit the user-facing mutation surface**
+- [x] **Step 5: Commit the user-facing mutation surface**
 
 Run `git diff --check` and commit with `feat: compose Phase C mutation controls`.
 

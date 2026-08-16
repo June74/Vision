@@ -2,7 +2,7 @@
 
 - **Status:** closed
 - **First observed:** 2026-07-31T18:13:36.9511937Z
-- **Last observed:** 2026-07-31T18:13:36.9511937Z
+- **Last observed:** 2026-08-16T23:48:56Z
 - **Phase/task:** Phase B Task 3 combined root verification
 - **Environment:** Local sandboxed production build
 - **Version/commit:** 0c3ea58 plus lifecycle repair edits
@@ -48,3 +48,6 @@ touched.
 - 2026-08-16T23:30:05Z: Recurred during the Phase C provider-mutation full
   gate. Worker tests, both production bundles, and release security scan
   completed successfully; only the optional external debug log was denied.
+- 2026-08-16T23:48:56Z: Recurred during the Phase C mutation-route focused
+  Worker gate. All five route tests passed; only the optional external debug
+  log was denied.

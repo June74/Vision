@@ -27,6 +27,22 @@ reload or a provider-uncertain response.
 Sends `{ confirmation: "UNDO ONE-OFF EVENT" }`; event ID, calendar ID, and
 provider version remain server-side ledger fields.
 
+## `previewCalendarEventMutation`
+
+POSTs only `{ action, eventId, after }` with the existing session cookie and
+CSRF token. The server derives the connected calendar, provider event, and
+version before encrypting the proposal.
+
+## `confirmCalendarEventMutation`
+
+POSTs the opaque operation handle and an action-derived fixed phrase. It never
+accepts browser-supplied provider identity or version fields.
+
+## `readCalendarEventMutationStatus`
+
+GETs owner-scoped mutation state for pending/reload recovery without retrying
+the provider operation.
+
 ## `readWriteResponse`
 
 Maps non-2xx responses and malformed payloads to `CalendarWriteApiError` with a
@@ -35,6 +51,35 @@ status and optional safe code. Provider bodies and response URLs are discarded.
 ## `isCalendarWriteResponse`
 
 Validates the bounded public envelope and the closed operation-status union.
+
+## `readMutationResponse`
+
+Parses the bounded mutation response and maps non-2xx or malformed responses to
+`CalendarWriteApiError` without echoing response data.
+
+## `isCalendarMutationResponse`
+
+Requires an opaque operation ID, one allowlisted action, a finite lifecycle
+status, and a boolean undo flag.
+
+## `isCalendarMutationPreview`
+
+Requires a complete before snapshot and either a complete after snapshot or an
+explicit null deletion outcome.
+
+## `isCalendarMutationEvent`
+
+Rejects provider-only fields and admits only attendee-free, recurrence-free,
+notification-free event facts.
+
+## `isCalendarWriteStatus`
+
+Centralizes lifecycle status validation for both write surfaces.
+
+## `mutationConfirmationPhrase`
+
+Keeps browser confirmation text synchronized with the server's action
+allowlist.
 
 ## `isCalendarWritePreview`
 

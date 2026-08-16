@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, type JSX } from "react";
 import { SignIn, type SignInState } from "./auth/SignIn";
 import { EventList } from "./calendar/EventList";
 import { OneOffEventComposer } from "./calendar/OneOffEventComposer";
+import type { CalendarMutationEvent } from "./calendar/writes/api";
 import { CalendarSetup } from "./setup/CalendarSetup";
 import {
   readCalendarSetup,
@@ -175,6 +176,21 @@ function FoundationDesk({
           }
         : event));
   }, [session]);
+  /** Applies only the verified event facts to the local chronology; provider state remains authoritative. */
+  const applyMutation = useCallback((eventId: string, preview: CalendarMutationEvent | null): void => {
+    setEvents((current) => preview === null
+      ? current.filter((event) => event.id !== eventId)
+      : current.map((event) => event.id === eventId
+        ? {
+            ...event,
+            title: preview.title,
+            startsAt: preview.startsAt,
+            endsAt: preview.endsAt,
+            timeZone: preview.timeZone,
+            status: preview.status,
+          }
+        : event));
+  }, []);
   return (
     <div className="desk-layout">
       <section className="desk-surface" aria-label="Vision synchronized calendar">
@@ -184,7 +200,12 @@ function FoundationDesk({
           <p>Read-only events from your connected Vision calendar. Categories are private to Vision.</p>
         </div>
         <OneOffEventComposer session={session} />
-        <EventList events={events} onCategoryChange={changeCategory} />
+        <EventList
+          events={events}
+          session={session}
+          onCategoryChange={changeCategory}
+          onMutationVerified={applyMutation}
+        />
       </section>
       <aside className="desk-signal-rail" aria-label="Calendar foundation status">
         <FoundationStatus status={snapshot.status} />

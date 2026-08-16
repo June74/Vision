@@ -1625,6 +1625,8 @@ const APPROVED_MUTATING_ROUTES = new Map<
       { method: "POST", route: "/api/calendar/writes/preview" },
       { method: "POST", route: "/api/calendar/writes/:operationId/confirm" },
       { method: "POST", route: "/api/calendar/writes/:operationId/undo" },
+      { method: "POST", route: "/api/calendar/mutations/preview" },
+      { method: "POST", route: "/api/calendar/mutations/:operationId/confirm" },
     ],
   ],
   [

@@ -69,6 +69,27 @@ Checks opaque bounded text.
 
 Returns only operation status, safe preview, and undo availability.
 
+## `toMutationEventInput`
+
+Copies the server-read provider event into the strict mutation preview shape.
+
+## `mergeMutationEventInput`
+
+Applies only explicitly requested patch fields to the server-read event.
+
+## `requireMutationProvider`
+
+Requires the reviewed update, move, and cancellation provider methods.
+
+## `mutationConfirmationPhrase`
+
+Returns the exact action-specific mutation confirmation phrase.
+
+## `mutationWriteResponse`
+
+Returns mutation status and the safe before/after preview without provider
+details.
+
 ## `noStore`
 
 Prevents caching of operation state.

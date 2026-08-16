@@ -1,17 +1,24 @@
 /** Presents synchronized events as a bounded, read-only editorial chronology. */
 import type { JSX } from "react";
+import type { BrowserSession } from "../setup/api";
 import type { FoundationEvent } from "../status/api";
 import { CategoryControl } from "./CategoryControl";
+import { EventMutationControls } from "./EventMutationControls";
+import type { CalendarMutationEvent } from "./writes/api";
 
 type ConcreteDomain = "school" | "work" | "personal";
 
 /** Renders authorized event titles and times with category provenance marginalia. */
 export function EventList({
   events,
+  session,
   onCategoryChange,
+  onMutationVerified,
 }: {
   readonly events: readonly FoundationEvent[];
+  readonly session: BrowserSession;
   readonly onCategoryChange: (eventId: string, domain: ConcreteDomain) => Promise<void>;
+  readonly onMutationVerified: (eventId: string, preview: CalendarMutationEvent | null) => void;
 }): JSX.Element {
   if (events.length === 0) {
     return (
@@ -37,10 +44,17 @@ export function EventList({
             <p className="event-entry__title">{event.title?.trim() || "Untitled event"}</p>
             <p className="event-entry__timezone">{event.timeZone} · {formatEventStatus(event.status)}</p>
           </div>
-          <CategoryControl
-            event={event}
-            onChange={(domain) => onCategoryChange(event.id, domain)}
-          />
+          <div className="event-entry__actions">
+            <CategoryControl
+              event={event}
+              onChange={(domain) => onCategoryChange(event.id, domain)}
+            />
+            <EventMutationControls
+              event={event}
+              session={session}
+              onVerified={onMutationVerified}
+            />
+          </div>
         </li>
       ))}
     </ul>
