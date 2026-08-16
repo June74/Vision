@@ -272,6 +272,28 @@ describe("Phase C one-off calendar-create executor", () => {
     });
   });
 
+  it("keeps audit history distinct when a pending create later verifies", async () => {
+    const dependencies = harness({
+      createError: new CalendarWriteProviderError("uncertain"),
+      markerMatches: [],
+    });
+    const proposal = confirmedProposal();
+
+    await expect(
+      executeConfirmedCalendarCreate(proposal, { ...dependencies, now: () => NOW }),
+    ).resolves.toMatchObject({ status: "verification_pending" });
+
+    vi.mocked(dependencies.provider.findByOperationId).mockResolvedValue([
+      providerEvent(),
+    ]);
+    await expect(
+      executeConfirmedCalendarCreate(proposal, { ...dependencies, now: () => NOW }),
+    ).resolves.toMatchObject({ status: "verified" });
+
+    expect(dependencies.audits).toHaveLength(2);
+    expect(dependencies.audits[0]?.id).not.toBe(dependencies.audits[1]?.id);
+  });
+
   it("does not claim success when read-back differs from the approved preview", async () => {
     const dependencies = harness({
       readResult: providerEvent("op-phase-c-002", { title: "Changed title" }),

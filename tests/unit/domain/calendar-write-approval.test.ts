@@ -55,6 +55,21 @@ describe("calendar write approval contract", () => {
     expect(Object.isFrozen(proposal.preview.after)).toBe(true);
   });
 
+  it("accepts provider-shaped calendar IDs and quoted calendar ETags", () => {
+    const proposal = createCalendarWriteProposal({
+      ...validInput(),
+      target: {
+        calendarId: "c_vision-123@group.calendar.google.com",
+        version: '"etag-001"',
+      },
+    });
+
+    expect(proposal.target).toEqual({
+      calendarId: "c_vision-123@group.calendar.google.com",
+      version: '"etag-001"',
+    });
+  });
+
   it("rejects non-empty attendees with a stable reason code", () => {
     expect(() =>
       createCalendarWriteProposal({

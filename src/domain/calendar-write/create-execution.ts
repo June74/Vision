@@ -333,6 +333,7 @@ export async function undoVerifiedCalendarCreate(
   return { ...request, status: "undone" };
 }
 
+/** Reconciles an owner-scoped ledger record without issuing a duplicate insert. */
 async function reconcileExisting(
   proposal: CalendarWriteProposal,
   record: CalendarWriteLedgerRecord,
@@ -346,6 +347,7 @@ async function reconcileExisting(
   return reconcileUncertain(withProposalStatus(proposal, "writing"), dependencies);
 }
 
+/** Resolves an ambiguous create only through the private operation marker. */
 async function reconcileUncertain(
   proposal: CalendarWriteProposal,
   dependencies: CalendarWriteExecutionDependencies,
@@ -365,6 +367,7 @@ async function reconcileUncertain(
   return verifyCreated(proposal, matches[0]!, dependencies);
 }
 
+/** Reads one provider event back and verifies every approved field before success. */
 async function verifyCreated(
   proposal: CalendarWriteProposal,
   created: CalendarWriteProviderEvent,
@@ -409,6 +412,7 @@ async function verifyCreated(
   });
 }
 
+/** Records a conservative pending result when provider state is not proven. */
 async function pendingResult(
   proposal: CalendarWriteProposal,
   dependencies: CalendarWriteExecutionDependencies,
@@ -425,6 +429,7 @@ async function pendingResult(
   );
 }
 
+/** Compares normalized provider state with the immutable approved preview. */
 function matchesPreview(
   proposal: CalendarWriteProposal,
   event: CalendarWriteProviderEvent,
@@ -445,6 +450,7 @@ function matchesPreview(
   );
 }
 
+/** Builds a safe execution result and optional opaque undo metadata. */
 function resultFor(
   proposal: CalendarWriteProposal,
   status: CalendarWriteExecutionResult["status"],
@@ -472,6 +478,7 @@ function resultFor(
   };
 }
 
+/** Copies a proposal into a new lifecycle status without mutating the input. */
 function withProposalStatus(
   proposal: CalendarWriteProposal,
   status: CalendarWriteProposal["status"],
@@ -485,6 +492,7 @@ function withProposalStatus(
   });
 }
 
+/** Recognizes only the closed provider outcome that is safe to mark failed. */
 function isDefiniteProviderFailure(error: unknown): boolean {
   return (
     error instanceof CalendarWriteProviderError &&
@@ -492,6 +500,7 @@ function isDefiniteProviderFailure(error: unknown): boolean {
   );
 }
 
+/** Best-effort ledger transition that never upgrades an unknown provider result. */
 async function markPendingSafely(
   dependencies: CalendarWriteExecutionDependencies,
   proposal: Pick<CalendarWriteProposal, "ownerId" | "operationId">,
@@ -503,6 +512,7 @@ async function markPendingSafely(
   }
 }
 
+/** Best-effort failed ledger transition after a definite provider rejection. */
 async function markFailedSafely(
   dependencies: CalendarWriteExecutionDependencies,
   proposal: Pick<CalendarWriteProposal, "ownerId" | "operationId">,
@@ -514,6 +524,7 @@ async function markFailedSafely(
   }
 }
 
+/** Best-effort ledger transition after provider absence is verified. */
 async function markUndoneSafely(
   dependencies: CalendarWriteExecutionDependencies,
   request: CalendarWriteUndoRequest,
@@ -525,6 +536,7 @@ async function markUndoneSafely(
   }
 }
 
+/** Sends only closed audit facts while preserving the execution outcome on sink failure. */
 async function writeAuditSafely(
   dependencies: CalendarWriteExecutionDependencies,
   event: SafeAuditEvent,
@@ -536,6 +548,7 @@ async function writeAuditSafely(
   }
 }
 
+/** Creates one privacy-safe audit fact for the calendar-create lifecycle. */
 function auditForCreate(
   proposal: Pick<CalendarWriteProposal, "ownerId" | "operationId">,
   outcome: SafeAuditEvent["outcome"],
@@ -543,7 +556,7 @@ function auditForCreate(
   errorCategory?: string,
 ): SafeAuditEvent {
   return {
-    id: auditId(proposal.operationId, "create"),
+    id: auditId(proposal.operationId, "create", outcome, occurredAt, errorCategory),
     ownerId: auditOwnerId(proposal.ownerId),
     action: "calendar.event.create",
     actorType: "user",
@@ -554,6 +567,7 @@ function auditForCreate(
   };
 }
 
+/** Creates one privacy-safe audit fact for the compensating undo lifecycle. */
 function auditForUndo(
   request: CalendarWriteUndoRequest,
   outcome: SafeAuditEvent["outcome"],
@@ -561,7 +575,7 @@ function auditForUndo(
   errorCategory?: string,
 ): SafeAuditEvent {
   return {
-    id: auditId(request.operationId, "undo"),
+    id: auditId(request.operationId, "undo", outcome, occurredAt, errorCategory),
     ownerId: auditOwnerId(request.ownerId),
     action: "calendar.event.undo",
     actorType: "user",
@@ -572,11 +586,29 @@ function auditForUndo(
   };
 }
 
-function auditId(operationId: string, suffix: string): string {
+/** Builds a bounded audit identity that distinguishes lifecycle observations. */
+function auditId(
+  operationId: string,
+  suffix: string,
+  outcome: SafeAuditEvent["outcome"],
+  occurredAt: string,
+  errorCategory?: string,
+): string {
   const safe = operationId.toLowerCase().replace(/[^a-z0-9_-]/gu, "-");
-  return `${safe.slice(0, 110)}-${suffix}`;
+  const safeCategory = (errorCategory ?? "ok")
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/gu, "-")
+    .slice(0, 64);
+  const safeTime = occurredAt
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, "-")
+    .replace(/^-+|-+$/gu, "");
+  const suffixText = `${suffix}-${outcome}-${safeCategory}-${safeTime}`;
+  const operationBudget = Math.max(1, 127 - suffixText.length);
+  return `${safe.slice(0, operationBudget)}-${suffixText}`;
 }
 
+/** Converts an owner identity to the audit contract's opaque identifier form. */
 function auditOwnerId(ownerId: string): string {
   return ownerId.toLowerCase().replace(/[^a-z0-9_-]/gu, "-").slice(0, 128);
 }

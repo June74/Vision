@@ -8,6 +8,16 @@ const opaqueId = z
   .min(1)
   .max(128)
   .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/u);
+const providerCalendarId = z
+  .string()
+  .min(1)
+  .max(2_048)
+  .regex(/^[^\u0000-\u001F\u007F]+$/u);
+const providerVersion = z
+  .string()
+  .min(1)
+  .max(1_024)
+  .regex(/^[^\u0000-\u001F\u007F]+$/u);
 const boundedTitle = z.string().min(1).max(1_024);
 const nullableDescription = z.string().max(8_192).nullable();
 const timestamp = z.string().datetime({ offset: true });
@@ -16,8 +26,8 @@ const concreteDomain = z.enum(["school", "work", "personal"]);
 
 const targetSchema = z
   .object({
-    calendarId: opaqueId,
-    version: opaqueId,
+    calendarId: providerCalendarId,
+    version: providerVersion,
   })
   .strict();
 
