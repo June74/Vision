@@ -1,7 +1,8 @@
 # `src/domain/calendar-write`
 
-This folder owns the provider-neutral Phase C write contract. It validates
-immutable proposals, produces exact before/after previews, and enforces the
-approval transition graph. It contains no Worker, provider, database, crypto,
-or browser boundary; later integrations must consume these values rather than
+This folder owns the provider-neutral Phase C write contract and execution
+ports. It validates immutable proposals, produces exact before/after previews,
+enforces the approval transition graph, and verifies provider state through
+injected interfaces. It contains no Worker, provider, database, crypto, or
+browser boundary; composition layers must consume these values rather than
 reimplement their policy.

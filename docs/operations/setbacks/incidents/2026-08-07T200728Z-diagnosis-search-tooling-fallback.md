@@ -2,7 +2,7 @@
 
 - **Status:** contained
 - **First observed:** 2026-08-07T20:06:50Z
-- **Last observed:** 2026-08-16T19:26:31.1110554Z
+- **Last observed:** 2026-08-16T19:44:09.9474513Z
 - **Phase/task:** Phase B Cloudflare-side deployment diagnosis
 - **Environment:** Windows PowerShell, linked Phase B worktree
 - **Version/commit:** Current reviewed Phase B checkout; no tracked implementation change
@@ -175,3 +175,20 @@ Do not use raw formatted JSON lines as semantic equality values.
 - 2026-08-16T19:26:31.1110554Z: A skill lookup used the wrong catalog root and
   failed before reading the file. The correct `.agents/skills` path was then
   used; no repository, provider, deployment, secret, or runtime state changed.
+- 2026-08-16T19:44:09.9474513Z: A bounded PowerShell source search used the
+  unsupported `-Recurse` parameter on `Select-String` and failed before
+  reading the requested paths. The explicit `Get-ChildItem -Recurse |
+  Select-String` fallback completed; no repository, provider, deployment,
+  secret, or runtime state changed.
+- 2026-08-16T19:45:36.0034462Z: A bounded inspection used a nonexistent
+  domain directory in a multi-path `Select-String` invocation and failed
+  before reading. The exact existing integration paths were then enumerated;
+  no repository, provider, deployment, secret, or runtime state changed.
+- 2026-08-16T19:47:57.5066229Z: A guessed `typecheck:source` package script
+  returned a nonzero status without running a compiler because this checkout
+  exposes one combined `typecheck` script. The package manifest was inspected
+  and the documented script will be used; no source or runtime state changed.
+- 2026-08-16T19:51:10.7175494Z: A documentation-comment patch used stale
+  surrounding adapter text and was rejected before writing. The exact current
+  context was inspected and smaller hunks are being used; no source or runtime
+  state changed.

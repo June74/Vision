@@ -37,7 +37,7 @@ keys.
 ## Phase C entry decision
 
 - Decision: proceed with Phase C in acceptance-backed increments. The first
-  provider-neutral contract increment is now implemented from this handoff.
+  two backend-core increments are now implemented from this handoff.
 - Approved boundary: build the authenticated, approval-based, verified
   calendar-event write pipeline while preserving Phase B read-sync and
   recovery behavior.
@@ -62,9 +62,11 @@ keys.
   actions remain confirmation-based in Version 1; AI may interpret and
   explain but cannot grant permission or perform the write; every accepted
   change has audit history and an undo or compensating path.
-- Open risks for the next provider-facing increment: the exact first write
-  operation, one-operation retry and reconciliation boundaries, recurrence and
-  attendee semantics, and the live acceptance fixture/cleanup contract.
+- Open risks for the next server-composition increment: durable ledger schema
+  and transactions, authenticated route composition, browser confirmation and
+  undo controls, and the live acceptance fixture/cleanup contract. Recurrence,
+  attendees, and notification semantics remain explicitly out of this one-off
+  increment.
 
 ## Phase C increment 1 — provider-neutral write contract
 
@@ -89,6 +91,34 @@ operation, call Google Calendar, create an event, or enable a browser write
 control. The next increment consumes this contract for one-off event creation
 through provider idempotency, read-back, audit, and compensating undo.
 
+## Phase C increment 2 — verified one-off create execution
+
+Increment 2 is implemented and locally verified on the Phase C branch. Its
+design is recorded in
+[the one-off create execution design](../superpowers/specs/2026-08-16-phase-c-one-off-create-execution-design.md)
+and its execution plan is recorded in
+[the one-off create execution plan](../superpowers/plans/2026-08-16-phase-c-one-off-create-execution.md).
+
+It now provides:
+
+- a provider-neutral executor that starts only from a confirmed proposal;
+- immediate target-calendar version revalidation and stale invalidation;
+- owner-scoped idempotency and exactly-one create behavior;
+- private operation-marker reconciliation after an uncertain provider result;
+- exact provider read-back before reporting `verified`;
+- privacy-safe create and undo audit facts with distinct lifecycle identities;
+- a compensating delete that reports `undone` only after provider absence; and
+- a bounded Google adapter for calendar-version reads, one-off insert, marker
+  lookup, read-back, and version-guarded delete.
+
+The provider adapter accepts Google-shaped calendar identifiers and quoted ETags
+while rejecting control characters before URL or header use. Focused executor,
+approval, and adapter tests plus both TypeScript boundaries are green. This
+increment intentionally does not register an HTTP route, compose a durable
+ledger implementation, add a browser confirmation control, call a live Google
+account, deploy, or enable user-facing connected writes. The next increment
+must wire those boundaries and earn fresh browser and live-preview acceptance.
+
 ## Phase C product scope to divide into increments
 
 Phase C also begins the secretary MVP. It must be divided into acceptance-
@@ -97,7 +127,9 @@ backed increments rather than implemented as one batch:
 1. Write-pipeline contracts and deterministic approval state machine, with no
    provider mutation.
 2. One-off event creation through preview, confirmation, version check,
-   idempotent write, verified read-back, audit, and compensating undo.
+   idempotent write, verified read-back, audit, and compensating undo. The
+   backend core and bounded Google adapter are implemented; server composition
+   and live acceptance remain next.
 3. One-off event update, move, cancel, and delete through the same shared
    pipeline, each with its own conflict and live acceptance cases.
 4. Recurring-event scope plus attendee and notification behavior, with

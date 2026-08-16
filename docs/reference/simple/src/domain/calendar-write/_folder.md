@@ -1,5 +1,5 @@
 # `src/domain/calendar-write`
 
-This folder prepares calendar changes safely. It shows what would change and
-requires the target calendar to still be the same before a later provider
-adapter can write anything.
+This folder prepares and executes calendar changes safely. It shows what would
+change, requires confirmation and a fresh target version, and keeps uncertain
+provider results pending until an exact read-back proves the event state.
