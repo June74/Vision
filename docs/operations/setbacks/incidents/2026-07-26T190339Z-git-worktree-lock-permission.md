@@ -1,8 +1,8 @@
 # SB-20260726-190339-git-worktree-lock-permission: Git worktree lock creation was denied
 
-- **Status:** closed
+- **Status:** contained
 - **First observed:** 2026-07-26T19:03:39.626332Z
-- **Last observed:** 2026-07-29T03:45:00Z
+- **Last observed:** 2026-08-16T14:47:11.9028445Z
 - **Phase/task:** Phase B acceptance instrumentation Task 5 staging
 - **Environment:** Local linked worktree under the managed sandbox
 - **Version/commit:** `f7778b8`
@@ -124,3 +124,8 @@ metadata boundary. Earlier related work produced commit `f7778b8`.
   tests, references, report, and setback records. Git stopped before creating
   the linked-worktree index lock; no file was staged. The same explicit path
   set requires the established scoped metadata-permission boundary.
+- 2026-08-16T14:47:11.9028445Z: Recurred while creating the isolated Phase C
+  worktree from the reconciled Phase B commit. Git could not create the named
+  branch reference lock under the shared repository metadata directory; no
+  branch, worktree, file, provider, secret, or database state changed. Retry
+  only through the established scoped metadata-permission boundary.
