@@ -69,3 +69,9 @@ retention and restore fixture declarations. The runtime project passed.
   environment declaration. Focused runtime assertions passed, but test-project
   type checking reported the duplicate and missing property. The field is
   moved to the per-environment shape before typecheck is rerun.
+- 2026-08-16T23:01:31Z: Recurred during the Phase C mutation-contract TDD
+  increment when a new test fixture inferred literal domain, privacy, status,
+  and notification values as broad strings. Runtime assertions passed, but
+  test-project type checking reported seven fixture-only assignability errors.
+  The fixture now declares the shared event input type and the test-project
+  compiler exited zero; no production or external state was affected.

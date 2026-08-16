@@ -29,3 +29,11 @@ When adding exported or validator-discovered helpers, include their required JSD
 ## Resolution
 
 The controller correlation factory received its missing JSDoc, and each newly discovered correlation and rollback helper received accurate simple and technical reference headings. `docs:check` then passed. On the final integrated state, the focused suite passed 196/196, both TypeScript projects passed, documentation coverage passed, the release security scan passed, and strict pre-cleanup evidence failed only the three intentionally frozen residue inventories while the other 13 cleanup assertions passed.
+
+## Recurrence - 2026-08-16
+
+The new Phase C mutation module initially grouped helper descriptions in its
+simple reference instead of providing one required heading per validator-
+discovered function. `docs:check` reported 14 missing simple headings before
+any release or provider action. The reference was expanded with exact headings
+for every helper, and the same documentation check passed at 2026-08-16T23:01:31Z.
