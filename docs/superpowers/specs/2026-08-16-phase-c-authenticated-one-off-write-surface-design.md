@@ -283,6 +283,8 @@ This table stores the server-owned approval envelope and its lifecycle:
 - `owner_id` non-empty opaque owner identity;
 - `provider` controlled provider code;
 - `calendar_id` bounded provider calendar identity;
+- `proposal_domain` controlled concrete domain used only to select the
+  per-owner/per-domain encryption key;
 - `status` constrained to `proposed`, `confirmed`, or `invalidated`;
 - `requested_at` timezone-aware timestamp;
 - `expires_at` timezone-aware timestamp;
@@ -292,8 +294,9 @@ This table stores the server-owned approval envelope and its lifecycle:
 
 The proposal envelope is encrypted through the existing wrapped-key and
 protected-fields boundary. Its authenticated context uses the owner ID,
-operation ID, and proposal domain. The plaintext proposal is never sent to
-SQL as a normal text column.
+operation ID, and the controlled `proposal_domain` key partition. The domain
+column contains no event content; the plaintext proposal is never sent to SQL
+as a normal text column.
 
 The approval repository exposes only these operations:
 
