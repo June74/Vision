@@ -2,7 +2,7 @@
 
 - **Status:** contained
 - **First observed:** 2026-07-31T01:44:32.928658Z
-- **Last observed:** 2026-08-03T00:09:39.7937338Z
+- **Last observed:** 2026-08-16T14:50:51.3286786Z
 - **Phase/task:** Phase B Task 3 isolated controller verification and OAuth reconnect Task 5 artifact installation
 - **Environment:** Isolated Windows Git worktree using pnpm offline mode
 - **Version/commit:** 2bfbc23f13c44e60b01bbffcecc9748d322765b5
@@ -97,3 +97,15 @@ passed 32 tests in one file without an install or network request.
   Git, provider, credential, or key change. The previously classified
   correction remains one ordinary frozen-lockfile install followed by exact
   artifact and lockfile immutability checks.
+- 2026-08-16T14:49:09.3881013Z: Recurred while preparing the isolated Phase C
+  worktree. The frozen offline install stopped because the lockfile-selected
+  Neon package archive was absent from the local pnpm store; no network retry,
+  source, lockfile, Git metadata, provider, credential, key, or deployment
+  state changed. Reuse the verified local dependency tree or request the
+  minimum online install permission before proceeding.
+- 2026-08-16T14:50:51.3286786Z: The first baseline typecheck through the
+  junctioned dependency tree caused pnpm to attempt a noninteractive modules
+  repair and metadata fetch, then exit before TypeScript started. The junction
+  and preserved partial-install residue remain intact; no source, lockfile,
+  provider, credential, key, or deployment state changed. Use the explicit
+  local compiler and test binaries instead of pnpm for this worktree.

@@ -36,8 +36,8 @@ keys.
 
 ## Phase C entry decision
 
-- Decision: proceed to Phase C design review; do not begin application
-  implementation from this handoff.
+- Decision: proceed with Phase C in acceptance-backed increments. The first
+  provider-neutral contract increment is now implemented from this handoff.
 - Approved boundary: build the authenticated, approval-based, verified
   calendar-event write pipeline while preserving Phase B read-sync and
   recovery behavior.
@@ -62,10 +62,32 @@ keys.
   actions remain confirmation-based in Version 1; AI may interpret and
   explain but cannot grant permission or perform the write; every accepted
   change has audit history and an undo or compensating path.
-- Open risks for the design review: the exact first write operation, the
-  provider-neutral approval/operation state model, one-operation retry and
-  reconciliation boundaries, recurrence and attendee semantics, and the
-  live acceptance fixture/cleanup contract.
+- Open risks for the next provider-facing increment: the exact first write
+  operation, one-operation retry and reconciliation boundaries, recurrence and
+  attendee semantics, and the live acceptance fixture/cleanup contract.
+
+## Phase C increment 1 — provider-neutral write contract
+
+Increment 1 is implemented and locally verified on the Phase C branch. The
+design is recorded in
+[the write-pipeline contract design](../superpowers/specs/2026-08-16-phase-c-write-pipeline-contracts-design.md),
+and the implementation is `src/domain/calendar-write/approval.ts` with
+focused tests and mirrored simple/technical references.
+
+It now provides:
+
+- strict one-off create proposal validation;
+- an immutable exact before/after preview with attendee, recurrence, and
+  notification effects represented explicitly;
+- stable rejection codes for unsupported effects and invalid input;
+- exact target-calendar version approval and stale-state invalidation; and
+- pure `proposed` → `confirmed` → `writing` → verified, pending, or failed
+  transitions.
+
+This increment intentionally does not register an HTTP route, persist an
+operation, call Google Calendar, create an event, or enable a browser write
+control. The next increment consumes this contract for one-off event creation
+through provider idempotency, read-back, audit, and compensating undo.
 
 ## Phase C product scope to divide into increments
 

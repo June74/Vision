@@ -2,7 +2,7 @@
 
 This page explains Phase B progress in concise, plain language. It is updated after each reviewed task.
 
-## Current accepted milestone — 2026-08-12
+## Current milestone — accepted 2026-08-12
 
 Phase B is complete and live-accepted. The final normal preview deployment,
 calendar-maintenance observer, and live health check passed, and the accepted

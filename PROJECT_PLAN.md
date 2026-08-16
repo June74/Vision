@@ -2,11 +2,11 @@
 
 This file is the project's editable source of truth. It records the agreed direction, current phase, open decisions, and completion gates. Update it whenever a decision changes or a phase is completed.
 
-**Status:** Phase B complete — Phase C next
+**Status:** Phase C increment 1 in progress — provider-neutral write contract
 
-**Last updated:** 2026-08-12
+**Last updated:** 2026-08-16
 
-**Current deliverable:** Review the bounded Phase C scope and approve an acceptance-backed implementation plan; Phase C application writes have not started.
+**Current deliverable:** Verify the provider-neutral Phase C approval contract; one-off Google event creation remains the next separately accepted increment.
 
 ## Product vision
 
@@ -66,7 +66,7 @@ flowchart TD
 |---|---|---|
 | A. Plan the product | Approved product contract and scope | **Completed** |
 | B. Build the data foundation | Trusted, read-only unified data model accepted in live preview | **Completed** |
-| C. Build the core MVP | First complete secretary loop and verified calendar-event writes | **Next** |
+| C. Build the core MVP | First complete secretary loop and verified calendar-event writes | **In progress — increment 1 contract foundation** |
 | D. Add recommendations | Explainable next-action recommendations | Not started |
 | E. Add safe autonomy | Guarded, reversible automatic actions | Not started |
 | F. Test and improve | Validated safety, accuracy, and reliability | Not started |
@@ -507,8 +507,10 @@ Phase B is complete and live-accepted. The final application verification,
 normal preview deployment, calendar-maintenance observer, and health evidence
 are summarized in [Phase B completion evidence](docs/operations/phase-b-evidence.md)
 and the privacy-safe [Phase C handoff](docs/operations/phase-c-handoff.md).
-Phase C design is the next deliverable; no event-level Google write pipeline
-has been enabled by this documentation reconciliation.
+Phase C increment 1 is now implemented as a provider-neutral approval
+contract and immutable state machine. No event-level Google write pipeline has
+been enabled; one-off event creation is the next separately accepted
+increment.
 
 ### Approved foundation
 

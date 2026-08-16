@@ -1,8 +1,8 @@
 # SB-20260812-123803 — Diagnostic helpers initially missed reference headings
 
-- **Status:** contained
+- **Status:** closed
 - **Detected:** 2026-08-12T12:38:03Z
-- **Last observed:** 2026-08-12T18:20:31Z
+- **Last observed:** 2026-08-16T15:03:48.9450749Z
 - **Area:** Phase B CI tail-supervisor diagnosis
 - **Evidence:** Documentation coverage correctly rejected the two new production helpers because each lacked the required simple and technical reference headings.
 - **Impact:** No provider, deployment, credential, database, or key state changed; the diagnostic code was not published from this state.
@@ -21,3 +21,10 @@ The same gate recurred at 2026-08-12T19:58:46Z after adding the maintenance
 timestamp normalizer. It correctly required both reference headings for the new
 production helper; no provider, deployment, credential, database, or key state
 changed. Add the headings before rerunning the gate.
+
+## Recurrence - 2026-08-16
+
+The first Phase C approval module was missing reference headings for six
+private helpers and simple/technical folder guides. Documentation coverage
+stopped before any build or provider action. Add the mirrored helper headings
+and both folder guides, then rerun the same direct local coverage command.
