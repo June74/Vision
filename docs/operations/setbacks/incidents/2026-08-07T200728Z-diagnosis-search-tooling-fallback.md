@@ -1,8 +1,8 @@
 # SB-20260807-200728-diagnosis-search-tooling-fallback: Read-only diagnosis tooling fallback
 
-- **Status:** closed
+- **Status:** contained
 - **First observed:** 2026-08-07T20:06:50Z
-- **Last observed:** 2026-08-12T18:48:16Z
+- **Last observed:** 2026-08-16T19:26:31.1110554Z
 - **Phase/task:** Phase B Cloudflare-side deployment diagnosis
 - **Environment:** Windows PowerShell, linked Phase B worktree
 - **Version/commit:** Current reviewed Phase B checkout; no tracked implementation change
@@ -172,3 +172,6 @@ Do not use raw formatted JSON lines as semantic equality values.
 - 2026-08-12T20:27:38.844Z: An append patch used a stale exact-text anchor and
   was rejected before writing. No repository or provider state changed; inspect
   the current tail before appending incident evidence.
+- 2026-08-16T19:26:31.1110554Z: A skill lookup used the wrong catalog root and
+  failed before reading the file. The correct `.agents/skills` path was then
+  used; no repository, provider, deployment, secret, or runtime state changed.
