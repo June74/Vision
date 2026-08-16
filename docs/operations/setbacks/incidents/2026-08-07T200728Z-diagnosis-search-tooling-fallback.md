@@ -2,8 +2,8 @@
 
 - **Status:** contained
 - **First observed:** 2026-08-07T20:06:50Z
-- **Last observed:** 2026-08-16T19:44:09.9474513Z
-- **Phase/task:** Phase B Cloudflare-side deployment diagnosis
+- **Last observed:** 2026-08-16T21:39:20.5427025Z
+- **Phase/task:** Phase C authenticated one-off write surface Task 3 repository RED diagnostics
 - **Environment:** Windows PowerShell, linked Phase B worktree
 - **Version/commit:** Current reviewed Phase B checkout; no tracked implementation change
 
@@ -52,6 +52,13 @@ Use an explicit result array for PowerShell loops instead of piping directly
 from a closing `foreach` block.
 Handle symbolic revision labels separately from full commit hashes.
 Do not use raw formatted JSON lines as semantic equality values.
+
+- 2026-08-16T21:39:20.5427025Z: A read-only Node SQL-object inspection was
+  passed through PowerShell with an unescaped JavaScript template literal, so
+  PowerShell removed the backticks before Node parsed the command. No project,
+  provider, deployment, secret, or runtime state changed; use a file-based
+  inspection or a PowerShell-safe argument form when JavaScript template
+  literals are required.
 
 ## Recurrence history
 
