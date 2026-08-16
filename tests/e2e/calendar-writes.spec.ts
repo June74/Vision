@@ -164,11 +164,11 @@ test("previews and confirms a one-off event, reconciles pending state, and undoe
 
   await page.goto("/");
   await page.getByRole("button", { name: "Add one-off event" }).click();
-  await page.getByLabel("Title").fill("Study session");
-  await page.getByLabel("Start").fill("2026-08-20T19:00");
-  await page.getByLabel("End").fill("2026-08-20T20:00");
-  await page.getByLabel("Time zone").fill("America/Chicago");
-  await page.getByLabel("Domain").selectOption("school");
+  await page.getByLabel("Title", { exact: true }).fill("Study session");
+  await page.getByLabel("Start", { exact: true }).fill("2026-08-20T19:00");
+  await page.getByLabel("End", { exact: true }).fill("2026-08-20T20:00");
+  await page.getByLabel("Time zone", { exact: true }).fill("America/Chicago");
+  await page.getByRole("combobox", { name: "Domain", exact: true }).selectOption("school");
   await page.getByRole("button", { name: "Preview event" }).click();
 
   await expect(page.getByText("Review before changing Google Calendar")).toBeVisible();
@@ -176,16 +176,47 @@ test("previews and confirms a one-off event, reconciles pending state, and undoe
   await expect(page.getByRole("button", { name: "Confirm one-off event" })).toBeEnabled();
   await page.getByRole("button", { name: "Confirm one-off event" }).click();
 
-  await expect(page.getByText("Verification pending")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Verification pending" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Check status" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Undo this event" })).toHaveCount(0);
   await page.getByRole("button", { name: "Check status" }).click();
 
-  await expect(page.getByText("Verified")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Verified" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Undo this event" })).toBeVisible();
   await page.getByRole("button", { name: "Undo this event" }).click();
-  await expect(page.getByText("Undone")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Undone" })).toBeVisible();
   expect(statusReads).toBe(1);
+});
+
+test("recovers one-off event status after reload using only an opaque operation handle", async ({ page }) => {
+  await mockConnectedShell(page);
+  await page.route("**/api/calendar/writes/preview", (route) => fulfillJson(route, PREVIEW));
+  await page.route("**/api/calendar/writes/op-browser-write-1", (route) => fulfillJson(route, {
+    operationId: PREVIEW.operationId,
+    status: "verified",
+    expiresAt: PREVIEW.expiresAt,
+    preview: PREVIEW.preview,
+    undoAvailable: true,
+  }));
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Add one-off event" }).click();
+  await page.getByLabel("Title", { exact: true }).fill("Study session");
+  await page.getByLabel("Start", { exact: true }).fill("2026-08-20T19:00");
+  await page.getByLabel("End", { exact: true }).fill("2026-08-20T20:00");
+  await page.getByRole("combobox", { name: "Domain", exact: true }).selectOption("school");
+  await page.getByRole("button", { name: "Preview event" }).click();
+  await expect(page.getByRole("heading", { name: "Review this one-off event" })).toBeVisible();
+
+  await expect.poll(async () => page.evaluate(() => window.sessionStorage.getItem("vision.calendar-write.active-operation"))).toBe(
+    JSON.stringify({ operationId: PREVIEW.operationId, status: "proposed" }),
+  );
+  await page.reload();
+
+  await expect(page.getByRole("heading", { name: "Verified" })).toBeVisible();
+  const stored = await page.evaluate(() => window.sessionStorage.getItem("vision.calendar-write.active-operation"));
+  expect(stored).toBe(JSON.stringify({ operationId: PREVIEW.operationId, status: "verified" }));
+  expect(stored).not.toContain("Study session");
 });
 
 test("does not render one-off event controls when the session is signed out", async ({ page }) => {

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState, type JSX } from "react";
 import { SignIn, type SignInState } from "./auth/SignIn";
 import { EventList } from "./calendar/EventList";
+import { OneOffEventComposer } from "./calendar/OneOffEventComposer";
 import { CalendarSetup } from "./setup/CalendarSetup";
 import {
   readCalendarSetup,
@@ -182,6 +183,7 @@ function FoundationDesk({
           <h2>Your calendar, at a glance</h2>
           <p>Read-only events from your connected Vision calendar. Categories are private to Vision.</p>
         </div>
+        <OneOffEventComposer session={session} />
         <EventList events={events} onCategoryChange={changeCategory} />
       </section>
       <aside className="desk-signal-rail" aria-label="Calendar foundation status">
