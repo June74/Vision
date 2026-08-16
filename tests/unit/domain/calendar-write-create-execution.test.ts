@@ -74,10 +74,10 @@ class MemoryLedger implements CalendarWriteLedger {
     return this.records.get(`${ownerId}:${operationId}`);
   }
 
-  async claim(ownerId: string, operationId: string): Promise<"claimed" | "existing"> {
+  async claim(ownerId: string, operationId: string, calendarId: string): Promise<"claimed" | "existing"> {
     const key = `${ownerId}:${operationId}`;
     if (this.records.has(key)) return "existing";
-    this.records.set(key, { ownerId, operationId, status: "writing" });
+    this.records.set(key, { ownerId, operationId, calendarId, status: "writing" });
     return "claimed";
   }
 
@@ -91,6 +91,7 @@ class MemoryLedger implements CalendarWriteLedger {
   async markVerified(
     ownerId: string,
     operationId: string,
+    calendarId: string,
     eventId: string,
     eventVersion: string,
   ): Promise<void> {
@@ -215,6 +216,7 @@ describe("Phase C one-off calendar-create executor", () => {
     dependencies.ledger.records.set("owner-phase-c:op-phase-c-002", {
       ownerId: "owner-phase-c",
       operationId: "op-phase-c-002",
+      calendarId: "calendar-vision",
       status: "verified",
       eventId: "event-previous",
       eventVersion: "etag-previous",
@@ -292,6 +294,7 @@ describe("Phase C one-off calendar-create executor", () => {
     dependencies.ledger.records.set("owner-phase-c:op-phase-c-002", {
       ownerId: "owner-phase-c",
       operationId: "op-phase-c-002",
+      calendarId: "calendar-vision",
       status: "verified",
       eventId: "event-001",
       eventVersion: "etag-event-001",
@@ -321,6 +324,7 @@ describe("Phase C one-off calendar-create executor", () => {
     dependencies.ledger.records.set("owner-phase-c:op-phase-c-002", {
       ownerId: "owner-phase-c",
       operationId: "op-phase-c-002",
+      calendarId: "calendar-vision",
       status: "verified",
       eventId: "event-001",
       eventVersion: "etag-event-001",
