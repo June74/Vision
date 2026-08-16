@@ -49,7 +49,7 @@
 
 Files: Create tests/contract/data/calendar-write-schema.contract.test.ts; create the not-yet-created schema and migration files.
 
-- [ ] Step 1: Write the migration contract test first. Read migrations/0010_phase_c_calendar_write_surface.sql and assert the exact table names, encrypted proposal column, owner/provider/calendar columns, proposal_domain, status checks, expiry ordering check, paired provider event identity check, and additive-only behavior.
+- [x] Step 1: Write the migration contract test first. Read migrations/0010_phase_c_calendar_write_surface.sql and assert the exact table names, encrypted proposal column, owner/provider/calendar columns, proposal_domain, status checks, expiry ordering check, paired provider event identity check, and additive-only behavior.
 
 ~~~ts
 it("defines additive owner-scoped approval and execution tables", () => {
@@ -64,9 +64,9 @@ it("defines additive owner-scoped approval and execution tables", () => {
 });
 ~~~
 
-- [ ] Step 2: Add the Drizzle manifest assertions. Use the existing extractDrizzleTablesManifest helper and import both new tables. Assert that approvals include operation_id, owner_id, provider, calendar_id, proposal_domain, status, requested_at, expires_at, and proposal_envelope; assert that operations include operation_id, owner_id, provider, calendar_id, status, provider_event_id, provider_event_version, requested_at, and completed_at.
+- [x] Step 2: Add the Drizzle manifest assertions. Use the existing extractDrizzleTablesManifest helper and import both new tables. Assert that approvals include operation_id, owner_id, provider, calendar_id, proposal_domain, status, requested_at, expires_at, and proposal_envelope; assert that operations include operation_id, owner_id, provider, calendar_id, status, provider_event_id, provider_event_version, requested_at, and completed_at.
 
-- [ ] Step 3: Run the schema RED check.
+- [x] Step 3: Run the schema RED check.
 
 ~~~powershell
 .\node_modules\.bin\vitest.cmd run tests\contract\data\calendar-write-schema.contract.test.ts
@@ -74,7 +74,7 @@ it("defines additive owner-scoped approval and execution tables", () => {
 
 Expected result: failure because the migration and Drizzle table module do not exist. Correct only test-harness errors until that is the observed missing-artifact failure.
 
-- [ ] Step 4: Commit the RED test only.
+- [x] Step 4: Commit the RED test only.
 
 ~~~powershell
 git add -- tests/contract/data/calendar-write-schema.contract.test.ts
@@ -85,15 +85,15 @@ git commit -m "test: define Phase C write schema contract"
 
 Files: Create src/data/schema/calendar-write.ts and migrations/0010_phase_c_calendar_write_surface.sql; modify src/data/schema/index.ts.
 
-- [ ] Step 1: Implement the Drizzle approval table with operation_id primary key, owner_id, provider, calendar_id, proposal_domain, status, requested_at, expires_at, and non-null proposal_envelope ciphertext. Add unique owner/operation identity and checks for non-empty owner/calendar, provider google, concrete proposal domain, the three approval statuses, and expiry after request.
+- [x] Step 1: Implement the Drizzle approval table with operation_id primary key, owner_id, provider, calendar_id, proposal_domain, status, requested_at, expires_at, and non-null proposal_envelope ciphertext. Add unique owner/operation identity and checks for non-empty owner/calendar, provider google, concrete proposal domain, the three approval statuses, and expiry after request.
 
-- [ ] Step 2: Implement the Drizzle execution table with operation_id primary key, owner/provider/calendar identity, the five executor statuses, nullable paired provider_event_id/provider_event_version, requested_at, completed_at, owner/provider/operation uniqueness, and checks requiring provider identity/version together and requiring both for verified or undone rows.
+- [x] Step 2: Implement the Drizzle execution table with operation_id primary key, owner/provider/calendar identity, the five executor statuses, nullable paired provider_event_id/provider_event_version, requested_at, completed_at, owner/provider/operation uniqueness, and checks requiring provider identity/version together and requiring both for verified or undone rows.
 
-- [ ] Step 3: Export the new tables from src/data/schema/index.ts without changing existing exports.
+- [x] Step 3: Export the new tables from src/data/schema/index.ts without changing existing exports.
 
-- [ ] Step 4: Create migrations/0010_phase_c_calendar_write_surface.sql with create table statements matching Drizzle exactly. The migration is additive and must not alter, drop, or recreate any Phase B table.
+- [x] Step 4: Create migrations/0010_phase_c_calendar_write_surface.sql with create table statements matching Drizzle exactly. The migration is additive and must not alter, drop, or recreate any Phase B table.
 
-- [ ] Step 5: Run the schema GREEN checks.
+- [x] Step 5: Run the schema GREEN checks.
 
 ~~~powershell
 .\node_modules\.bin\vitest.cmd run tests\contract\data\calendar-write-schema.contract.test.ts
@@ -102,7 +102,7 @@ Files: Create src/data/schema/calendar-write.ts and migrations/0010_phase_c_cale
 
 Expected result: all schema assertions and source TypeScript checks pass.
 
-- [ ] Step 6: Commit the schema.
+- [x] Step 6: Commit the schema.
 
 ~~~powershell
 git add -- src/data/schema/calendar-write.ts src/data/schema/index.ts migrations/0010_phase_c_calendar_write_surface.sql tests/contract/data/calendar-write-schema.contract.test.ts
@@ -113,17 +113,17 @@ git commit -m "feat: add Phase C write persistence schema"
 
 Files: Create tests/unit/data/calendar-write-repository.test.ts; create the not-yet-created repository module.
 
-- [ ] Step 1: Add a fake database with recorded parameterized calls. It implements only execute, returns scripted rows, and records SQL parameters without printing proposal content. Add a deterministic in-memory KeyProvider whose getDataKey returns a Web Crypto AES-GCM key and key version 1.
+- [x] Step 1: Add a fake database with recorded parameterized calls. It implements only execute, returns scripted rows, and records SQL parameters without printing proposal content. Add a deterministic in-memory KeyProvider whose getDataKey returns a Web Crypto AES-GCM key and key version 1.
 
-- [ ] Step 2: Test encrypted approval creation and loading. Build a valid CalendarWriteProposal, call the wished-for createApproval, assert the inserted envelope bytes do not contain the title or description, script the same row for loadProposal, and assert the decrypted proposal equals the original immutable proposal.
+- [x] Step 2: Test encrypted approval creation and loading. Build a valid CalendarWriteProposal, call the wished-for createApproval, assert the inserted envelope bytes do not contain the title or description, script the same row for loadProposal, and assert the decrypted proposal equals the original immutable proposal.
 
-- [ ] Step 3: Test approval compare-and-set and owner scope. Assert that confirming an unexpired proposed row returns confirmed, a second confirmation returns already_confirmed, an expired row returns expired, and a different owner returns missing without updating a row.
+- [x] Step 3: Test approval compare-and-set and owner scope. Assert that confirming an unexpired proposed row returns confirmed, a second confirmation returns already_confirmed, an expired row returns expired, and a different owner returns missing without updating a row.
 
-- [ ] Step 4: Test exactly-one durable ledger claim. Assert that the first claim(ownerId, operationId, calendarId) returns claimed, a conflict returns existing, and the second caller cannot change the stored owner or calendar scope.
+- [x] Step 4: Test exactly-one durable ledger claim. Assert that the first claim(ownerId, operationId, calendarId) returns claimed, a conflict returns existing, and the second caller cannot change the stored owner or calendar scope.
 
-- [ ] Step 5: Test ledger transitions and strict decoding. Cover markPending, markVerified, markFailed, and markUndone, including paired event ID/version validation and rejection of unknown status, empty identity, invalid timestamp, and cross-owner rows.
+- [x] Step 5: Test ledger transitions and strict decoding. Cover markPending, markVerified, markFailed, and markUndone, including paired event ID/version validation and rejection of unknown status, empty identity, invalid timestamp, and cross-owner rows.
 
-- [ ] Step 6: Run the repository RED check.
+- [x] Step 6: Run the repository RED check.
 
 ~~~powershell
 .\node_modules\.bin\vitest.cmd run tests\unit\data\calendar-write-repository.test.ts
@@ -131,7 +131,7 @@ Files: Create tests/unit/data/calendar-write-repository.test.ts; create the not-
 
 Expected result: failure because the repository module and exported ports do not exist. Correct test-harness errors until the missing-module failure is observed.
 
-- [ ] Step 7: Commit the RED tests only.
+- [x] Step 7: Commit the RED tests only.
 
 ~~~powershell
 git add -- tests/unit/data/calendar-write-repository.test.ts
@@ -142,7 +142,7 @@ git commit -m "test: define Phase C approval and ledger repository contract"
 
 Files: Create src/data/repositories/calendar-write-repository.ts.
 
-- [ ] Step 1: Export the repository ports and records. Use these exact public shapes:
+- [x] Step 1: Export the repository ports and records. Use these exact public shapes:
 
 ~~~ts
 export interface CalendarWriteApprovalStore {
@@ -171,15 +171,15 @@ export interface CalendarWriteApprovalRecord {
 
 Implement CalendarWriteLedger from src/domain/calendar-write/create-execution.ts with its existing signatures: find, claim, markPending, markVerified, markFailed, and markUndone.
 
-- [ ] Step 2: Implement envelope encoding and decoding. Serialize the proposal as bounded JSON, encrypt it with encryptProtectedFields under owner ID, operation ID, and the proposal domain, encode the resulting CipherEnvelope with the existing envelope serializer, and store only UTF-8 bytes. On load, use proposal_domain to select the exact key partition, decrypt, parse JSON, and pass the result through createCalendarWriteProposal before returning it.
+- [x] Step 2: Implement envelope encoding and decoding. Serialize the proposal as bounded JSON, encrypt it with encryptProtectedFields under owner ID, operation ID, and the proposal domain, encode the resulting CipherEnvelope with the existing envelope serializer, and store only UTF-8 bytes. On load, use proposal_domain to select the exact key partition, decrypt, parse JSON, and pass the result through createCalendarWriteProposal before returning it.
 
-- [ ] Step 3: Implement strict database decoders. Accept only finite intrinsic Date values or timezone-aware timestamp strings, bounded nonempty identities, controlled provider google, exact status unions, and paired provider event fields. Throw one constant repository error without including row values or SQL details.
+- [x] Step 3: Implement strict database decoders. Accept only finite intrinsic Date values or timezone-aware timestamp strings, bounded nonempty identities, controlled provider google, exact status unions, and paired provider event fields. Throw one constant repository error without including row values or SQL details.
 
-- [ ] Step 4: Implement atomic approval mutations. Use parameterized SQL with owner and operation predicates. confirmApproval updates only proposed rows whose expires_at is after now, returns already_confirmed for the same owner's confirmed row, returns expired for an expired proposed row after invalidating it, and returns missing for an absent or foreign row.
+- [x] Step 4: Implement atomic approval mutations. Use parameterized SQL with owner and operation predicates. confirmApproval updates only proposed rows whose expires_at is after now, returns already_confirmed for the same owner's confirmed row, returns expired for an expired proposed row after invalidating it, and returns missing for an absent or foreign row.
 
-- [ ] Step 5: Implement the durable ledger port. claim inserts a writing row with on conflict do nothing and returns claimed only when the inserted owner/operation matches. markPending updates only an existing writing or verified row to verification_pending and never creates a missing row; this preserves the executor's conservative result for uncertain create or undo calls. markVerified updates only a matching owner row in writing or verification_pending and requires both provider event fields. markFailed updates only writing. markUndone updates only a verified row while retaining the provider event identity/version for replay safety.
+- [x] Step 5: Implement the durable ledger port. claim inserts a writing row with on conflict do nothing and returns claimed only when the inserted owner/operation matches. markPending updates only an existing writing or verified row to verification_pending and never creates a missing row; this preserves the executor's conservative result for uncertain create or undo calls. markVerified updates only a matching owner row in writing or verification_pending and requires both provider event fields. markFailed updates only writing. markUndone updates only a verified row while retaining the provider event identity/version for replay safety.
 
-- [ ] Step 6: Run repository tests GREEN.
+- [x] Step 6: Run repository tests GREEN.
 
 ~~~powershell
 .\node_modules\.bin\vitest.cmd run tests\unit\data\calendar-write-repository.test.ts
@@ -189,7 +189,7 @@ Implement CalendarWriteLedger from src/domain/calendar-write/create-execution.ts
 
 Expected result: repository and both TypeScript boundaries pass.
 
-- [ ] Step 7: Commit the repository.
+- [x] Step 7: Commit the repository.
 
 ~~~powershell
 git add -- src/data/repositories/calendar-write-repository.ts tests/unit/data/calendar-write-repository.test.ts
@@ -200,9 +200,9 @@ git commit -m "feat: add encrypted Phase C write repository"
 
 Files: Create tests/worker/calendar-write.test.ts; create the not-yet-created route module.
 
-- [ ] Step 1: Build the injected route harness. Reuse existing Worker-test constants and createApp patterns. Inject sessions, tokens, a connected-calendar resolver, a fake provider, fake approval store, fake CalendarWriteLedger, fake audit writer, and deterministic operation ID generation. The fake provider records target reads, creates, marker lookups, read-backs, and deletes.
+- [x] Step 1: Build the injected route harness. Reuse existing Worker-test constants and createApp patterns. Inject sessions, tokens, a connected-calendar resolver, a fake provider, fake approval store, fake CalendarWriteLedger, fake audit writer, and deterministic operation ID generation. The fake provider records target reads, creates, marker lookups, read-backs, and deletes.
 
-- [ ] Step 2: Write the first route behavior test. Assert that an authenticated CSRF-protected preview returns a server-generated operation ID and exact preview, uses the server owner and connected calendar, calls readCalendarVersion once, stores one approval, and does not call createOneOffEvent.
+- [x] Step 2: Write the first route behavior test. Assert that an authenticated CSRF-protected preview returns a server-generated operation ID and exact preview, uses the server owner and connected calendar, calls readCalendarVersion once, stores one approval, and does not call createOneOffEvent.
 
 ~~~ts
 it("previews a server-owned one-off write without mutating the provider", async () => {
@@ -221,17 +221,17 @@ it("previews a server-owned one-off write without mutating the provider", async 
 });
 ~~~
 
-- [ ] Step 3: Add authentication and strict-input tests. Test missing/invalid session, missing/wrong CSRF, wrong content type, oversized body, unknown keys, unsupported attendees/recurrence/notifications, and malformed date ranges. Assert provider and store calls remain zero when admission fails.
+- [x] Step 3: Add authentication and strict-input tests. Test missing/invalid session, missing/wrong CSRF, wrong content type, oversized body, unknown keys, unsupported attendees/recurrence/notifications, and malformed date ranges. Assert provider and store calls remain zero when admission fails.
 
-- [ ] Step 4: Add server-authority tests. Send forged ownerId, googleSubject, calendarId, provider version, event ID, and access-token fields. Assert extra keys are rejected and the provider receives only the session-bound owner, connected calendar, and token.
+- [x] Step 4: Add server-authority tests. Send forged ownerId, googleSubject, calendarId, provider version, event ID, and access-token fields. Assert extra keys are rejected and the provider receives only the session-bound owner, connected calendar, and token.
 
-- [ ] Step 5: Add confirmation and replay tests. Test exact confirmation phrase, missing/expired/foreign approval, stale target invalidation, verified create, double confirmation, and concurrent confirmation. Assert exactly one provider create and exactly one ledger claim.
+- [x] Step 5: Add confirmation and replay tests. Test exact confirmation phrase, missing/expired/foreign approval, stale target invalidation, verified create, double confirmation, and concurrent confirmation. Assert exactly one provider create and exactly one ledger claim.
 
-- [ ] Step 6: Add uncertain/pending/status tests. Test uncertain provider create with zero marker matches returns HTTP 202, status GET returns verification_pending, a later exact marker/read-back becomes verified, and mismatched read-back never becomes verified.
+- [x] Step 6: Add uncertain/pending/status tests. Test uncertain provider create with zero marker matches returns HTTP 202, status GET returns verification_pending, a later exact marker/read-back becomes verified, and mismatched read-back never becomes verified.
 
-- [ ] Step 7: Add undo tests. Test that unverified operations cannot undo, a verified operation deletes once with stored calendar/event/version, not-found becomes undone, uncertain deletion returns 202, and an undone replay performs no second delete. Add owner-isolation assertions for status and undo.
+- [x] Step 7: Add undo tests. Test that unverified operations cannot undo, a verified operation deletes once with stored calendar/event/version, not-found becomes undone, uncertain deletion returns 202, and an undone replay performs no second delete. Add owner-isolation assertions for status and undo.
 
-- [ ] Step 8: Run route RED.
+- [x] Step 8: Run route RED.
 
 ~~~powershell
 .\node_modules\.bin\vitest.cmd run tests\worker\calendar-write.test.ts
@@ -239,7 +239,7 @@ it("previews a server-owned one-off write without mutating the provider", async 
 
 Expected result: failure because the route module and route dependency types do not exist. Correct only harness errors until that is the observed missing-module failure.
 
-- [ ] Step 9: Commit the route RED tests only.
+- [x] Step 9: Commit the route RED tests only.
 
 ~~~powershell
 git add -- tests/worker/calendar-write.test.ts
@@ -250,21 +250,21 @@ git commit -m "test: define authenticated Phase C write routes"
 
 Files: Create src/server/api/calendar-write-routes.ts.
 
-- [ ] Step 1: Export CalendarWriteRouteDependencies with now, createOperationId, session lookup, token lookup, owner/subject-bound connected-calendar lookup, provider factory, approval store, ledger, and audit writer. No route body accepts owner or calendar authority.
+- [x] Step 1: Export CalendarWriteRouteDependencies with now, createOperationId, session lookup, token lookup, owner/subject-bound connected-calendar lookup, provider factory, approval store, ledger, and audit writer. No route body accepts owner or calendar authority.
 
-- [ ] Step 2: Implement authentication and request readers. Resolve vision_session before body parsing, use findSession(sessionId, now), set authenticatedSession, verify CSRF for preview/confirm/undo, enforce JSON content type, enforce a fixed byte limit, parse fatal UTF-8, and map parser failures to INVALID_CALENDAR_WRITE_REQUEST.
+- [x] Step 2: Implement authentication and request readers. Resolve vision_session before body parsing, use findSession(sessionId, now), set authenticatedSession, verify CSRF for preview/confirm/undo, enforce JSON content type, enforce a fixed byte limit, parse fatal UTF-8, and map parser failures to INVALID_CALENDAR_WRITE_REQUEST.
 
-- [ ] Step 3: Implement preview. Validate strict one-off input, resolve the session-bound connection and current token, read the provider calendar version, call createCalendarWriteProposal with server owner and generated operation ID, persist a ten-minute approval, and serialize only operation ID, expiry, and immutable preview.
+- [x] Step 3: Implement preview. Validate strict one-off input, resolve the session-bound connection and current token, read the provider calendar version, call createCalendarWriteProposal with server owner and generated operation ID, persist a ten-minute approval, and serialize only operation ID, expiry, and immutable preview.
 
-- [ ] Step 4: Implement status. Validate the opaque path operation ID, load only the authenticated owner's approval and ledger records, prefer execution status when an execution row exists, otherwise project approval status, and return undoAvailable only for verified ledger records with both provider fields.
+- [x] Step 4: Implement status. Validate the opaque path operation ID, load only the authenticated owner's approval and ledger records, prefer execution status when an execution row exists, otherwise project approval status, and return undoAvailable only for verified ledger records with both provider fields.
 
-- [ ] Step 5: Implement confirmation. Require { confirmation: "CONFIRM ONE-OFF EVENT" }, confirm or replay the approval, load the stored proposal, create the provider and execution dependencies, call executeConfirmedCalendarCreate, invalidate the approval on stale target, and map verified/pending/invalidated/failed results to the approved status codes.
+- [x] Step 5: Implement confirmation. Require { confirmation: "CONFIRM ONE-OFF EVENT" }, confirm or replay the approval, load the stored proposal, create the provider and execution dependencies, call executeConfirmedCalendarCreate, invalidate the approval on stale target, and map verified/pending/invalidated/failed results to the approved status codes.
 
-- [ ] Step 6: Implement undo. Require { confirmation: "UNDO ONE-OFF EVENT" }, create the session-bound provider, call undoVerifiedCalendarCreate with only owner and operation ID, and map its result without accepting client event/calendar/version values.
+- [x] Step 6: Implement undo. Require { confirmation: "UNDO ONE-OFF EVENT" }, create the session-bound provider, call undoVerifiedCalendarCreate with only owner and operation ID, and map its result without accepting client event/calendar/version values.
 
-- [ ] Step 7: Implement production dependency resolution. Build the existing database, wrapped key provider, CalendarRepository connection lookup, encrypted DrizzleCalendarWriteRepository, createAuditWriter, token repository, and createGoogleEventWriteClient. Keep the adapter fixed-origin and bounded.
+- [x] Step 7: Implement production dependency resolution. Build the existing database, wrapped key provider, CalendarRepository connection lookup, encrypted DrizzleCalendarWriteRepository, createAuditWriter, token repository, and createGoogleEventWriteClient. Keep the adapter fixed-origin and bounded.
 
-- [ ] Step 8: Run route tests GREEN.
+- [x] Step 8: Run route tests GREEN.
 
 ~~~powershell
 .\node_modules\.bin\vitest.cmd run tests\worker\calendar-write.test.ts
@@ -274,7 +274,7 @@ Files: Create src/server/api/calendar-write-routes.ts.
 
 Expected result: all route safety and type checks pass.
 
-- [ ] Step 9: Commit route composition.
+- [x] Step 9: Commit route composition.
 
 ~~~powershell
 git add -- src/server/api/calendar-write-routes.ts tests/worker/calendar-write.test.ts
@@ -285,13 +285,13 @@ git commit -m "feat: compose authenticated Phase C write routes"
 
 Files: Modify src/worker.ts, tests/worker/calendar-write.test.ts, scripts/scan-release.ts, and tests/security/google-write-surface.test.ts.
 
-- [ ] Step 1: Add the optional calendarWrite dependency resolver beside existing setup, AI, diagnostic, and webhook dependencies. Register calendar-write routes before the generic API fallback.
+- [x] Step 1: Add the optional calendarWrite dependency resolver beside existing setup, AI, diagnostic, and webhook dependencies. Register calendar-write routes before the generic API fallback.
 
-- [ ] Step 2: Assert that an injected route is reachable through createApp, that the calendar-write paths no longer return generic API NOT_FOUND, and that existing route behavior remains unchanged.
+- [x] Step 2: Assert that an injected route is reachable through createApp, that the calendar-write paths no longer return generic API NOT_FOUND, and that existing route behavior remains unchanged.
 
-- [ ] Step 3: Update the source allowlist narrowly. Add only the route module and existing bounded event-write adapter operations. Do not allow arbitrary fetch, arbitrary URL construction, provider SDK expansion, or route bypasses.
+- [x] Step 3: Update the source allowlist narrowly. Add only the route module and existing bounded event-write adapter operations. Do not allow arbitrary fetch, arbitrary URL construction, provider SDK expansion, or route bypasses.
 
-- [ ] Step 4: Run Worker and security checks.
+- [x] Step 4: Run Worker and security checks.
 
 ~~~powershell
 .\node_modules\.bin\vitest.cmd run --project worker
@@ -301,7 +301,7 @@ Files: Modify src/worker.ts, tests/worker/calendar-write.test.ts, scripts/scan-r
 
 Expected result: all Worker tests and the release surface scan pass.
 
-- [ ] Step 5: Commit Worker registration.
+- [x] Step 5: Commit Worker registration.
 
 ~~~powershell
 git add -- src/worker.ts scripts/scan-release.ts tests/security/google-write-surface.test.ts tests/worker/calendar-write.test.ts
@@ -312,13 +312,13 @@ git commit -m "feat: register bounded Phase C write surface"
 
 Files: Create tests/e2e/calendar-write.spec.ts; create the not-yet-created browser API and composer modules.
 
-- [ ] Step 1: Add provider-free browser fixtures. Mock session, connected foundation/status, and the four calendar-write routes. Use one synthetic owner-safe preview with no provider identifiers exposed to the UI.
+- [x] Step 1: Add provider-free browser fixtures. Mock session, connected foundation/status, and the four calendar-write routes. Use one synthetic owner-safe preview with no provider identifiers exposed to the UI.
 
-- [ ] Step 2: Write the first browser RED test. Navigate to the connected desk, assert the composer is visible, fill supported fields, click Preview event, and expect the exact preview heading and a disabled-until-preview Confirm one-off event control. The expected failure is that the composer is not rendered.
+- [x] Step 2: Write the first browser RED test. Navigate to the connected desk, assert the composer is visible, fill supported fields, click Preview event, and expect the exact preview heading and a disabled-until-preview Confirm one-off event control. The expected failure is that the composer is not rendered.
 
-- [ ] Step 3: Add browser safety tests. Cover signed-out absence of write controls, exact preview rendering, confirmation request with one operation ID and CSRF, truthful HTTP 202 pending copy, reload recovery using only the opaque operation ID, verified undo, invalidated preview requiring a new preview, and narrow viewport layout.
+- [x] Step 3: Add browser safety tests. Cover signed-out absence of write controls, exact preview rendering, confirmation request with one operation ID and CSRF, truthful HTTP 202 pending copy, reload recovery using only the opaque operation ID, verified undo, invalidated preview requiring a new preview, and narrow viewport layout.
 
-- [ ] Step 4: Run browser RED.
+- [x] Step 4: Run browser RED.
 
 ~~~powershell
 .\node_modules\.bin\tsx.cmd scripts\run-e2e.ts --grep "one-off event"
@@ -326,7 +326,7 @@ Files: Create tests/e2e/calendar-write.spec.ts; create the not-yet-created brows
 
 Expected result: failure because the browser composer and route client do not exist. Correct fixture/test syntax errors until the missing UI failure is observed.
 
-- [ ] Step 5: Commit the browser RED tests only.
+- [x] Step 5: Commit the browser RED tests only.
 
 ~~~powershell
 git add -- tests/e2e/calendar-write.spec.ts
@@ -337,19 +337,19 @@ git commit -m "test: define Phase C browser write loop"
 
 Files: Create src/client/calendar/writes/api.ts and src/client/calendar/OneOffEventComposer.tsx; modify src/client/App.tsx and src/client/styles.css.
 
-- [ ] Step 1: Implement the browser API parser. Export typed previewOneOffEvent, readOneOffWriteStatus, confirmOneOffEvent, and undoOneOffEvent. Send same-origin credentials, attach the session CSRF token to mutations, retain only operation ID in session storage, parse only the public response shape, and collapse malformed/non-OK responses to safe constant errors.
+- [x] Step 1: Implement the browser API parser. Export typed previewOneOffEvent, readOneOffWriteStatus, confirmOneOffEvent, and undoOneOffEvent. Send same-origin credentials, attach the session CSRF token to mutations, retain only operation ID in session storage, parse only the public response shape, and collapse malformed/non-OK responses to safe constant errors.
 
-- [ ] Step 2: Implement form state. Collect only title, description, timestamps, timezone, domain, and privacy. Submit fixed attendees empty array, recurrence null, and notifications none. Never render or store owner, Google subject, calendar ID, provider event ID, provider version, or access token.
+- [x] Step 2: Implement form state. Collect only title, description, timestamps, timezone, domain, and privacy. Submit fixed attendees empty array, recurrence null, and notifications none. Never render or store owner, Google subject, calendar ID, provider event ID, provider version, or access token.
 
-- [ ] Step 3: Implement preview and confirmation states. Render the exact server preview, disable confirmation until preview exists, send the exact confirmation body, and show Verifying calendar state while the request is in flight. A 202 response renders Verification pending and only a status-check action.
+- [x] Step 3: Implement preview and confirmation states. Render the exact server preview, disable confirmation until preview exists, send the exact confirmation body, and show Verifying calendar state while the request is in flight. A 202 response renders Verification pending and only a status-check action.
 
-- [ ] Step 4: Implement verified undo and recovery. Show undo only for verified status, send the exact undo confirmation body, render Undone only after the server response, and on reload call status using the retained opaque operation ID. Invalidated, expired, and failed states clear the active operation and require a new preview.
+- [x] Step 4: Implement verified undo and recovery. Show undo only for verified status, send the exact undo confirmation body, render Undone only after the server response, and on reload call status using the retained opaque operation ID. Invalidated, expired, and failed states clear the active operation and require a new preview.
 
-- [ ] Step 5: Compose the component into the connected desk beside EventList; keep setup, signed-out, unavailable, and read-only event paths unchanged.
+- [x] Step 5: Compose the component into the connected desk beside EventList; keep setup, signed-out, unavailable, and read-only event paths unchanged.
 
-- [ ] Step 6: Add responsive styling using existing button, surface, focus, and status tokens. Keep a single-column narrow-viewport layout for form and preview without changing the setup signal rail.
+- [x] Step 6: Add responsive styling using existing button, surface, focus, and status tokens. Keep a single-column narrow-viewport layout for form and preview without changing the setup signal rail.
 
-- [ ] Step 7: Run browser tests GREEN.
+- [x] Step 7: Run browser tests GREEN.
 
 ~~~powershell
 .\node_modules\.bin\tsx.cmd scripts\run-e2e.ts --grep "one-off event"
@@ -359,7 +359,7 @@ Files: Create src/client/calendar/writes/api.ts and src/client/calendar/OneOffEv
 
 Expected result: all targeted browser and TypeScript checks pass.
 
-- [ ] Step 8: Commit the browser surface.
+- [x] Step 8: Commit the browser surface.
 
 ~~~powershell
 git add -- src/client/calendar/writes/api.ts src/client/calendar/OneOffEventComposer.tsx src/client/App.tsx src/client/styles.css tests/e2e/calendar-write.spec.ts
@@ -370,15 +370,15 @@ git commit -m "feat: add Phase C one-off event browser loop"
 
 Files: Create the six reference files in the file map; modify related _folder.md guides, docs/operations/phase-c-handoff.md, and PROJECT_PLAN.md.
 
-- [ ] Step 1: Document the repository. Explain approval encryption, proposal_domain key partition, owner-scoped compare-and-set, exactly-one ledger claim, paired provider identity/version, and safe decoder failures in simple and technical references.
+- [x] Step 1: Document the repository. Explain approval encryption, proposal_domain key partition, owner-scoped compare-and-set, exactly-one ledger claim, paired provider identity/version, and safe decoder failures in simple and technical references.
 
-- [ ] Step 2: Document the routes. Explain preview, status, confirmation, undo, CSRF, server-derived authority, HTTP 200/202/409/503 mapping, and truthful pending behavior without provider credentials or private test data.
+- [x] Step 2: Document the routes. Explain preview, status, confirmation, undo, CSRF, server-derived authority, HTTP 200/202/409/503 mapping, and truthful pending behavior without provider credentials or private test data.
 
-- [ ] Step 3: Document the browser composer. Define preview as a proposed change, confirmation as deliberate approval, verification pending as unknown provider state, and undo as verified absence.
+- [x] Step 3: Document the browser composer. Define preview as a proposed change, confirmation as deliberate approval, verification pending as unknown provider state, and undo as verified absence.
 
-- [ ] Step 4: Update the handoff and project plan only after implementation tests pass. Record the authenticated local write surface and durable ledger as locally implemented and verified, state that live Google acceptance and deployment remain gated, preserve explicit Phase C non-goals, and record the hardline no more than 20 agents at once.
+- [x] Step 4: Update the handoff and project plan only after implementation tests pass. Record the authenticated local write surface and durable ledger as locally implemented and verified, state that live Google acceptance and deployment remain gated, preserve explicit Phase C non-goals, and record the hardline no more than 20 agents at once.
 
-- [ ] Step 5: Run documentation coverage.
+- [x] Step 5: Run documentation coverage.
 
 ~~~powershell
 .\node_modules\.bin\tsx.cmd scripts\validate-doc-coverage.ts
@@ -386,7 +386,7 @@ Files: Create the six reference files in the file map; modify related _folder.md
 
 Expected result: exit 0 with every new production module covered.
 
-- [ ] Step 6: Commit documentation.
+- [x] Step 6: Commit documentation.
 
 ~~~powershell
 git add -- docs/reference docs/operations/phase-c-handoff.md PROJECT_PLAN.md
@@ -397,9 +397,9 @@ git commit -m "docs: record authenticated Phase C write surface"
 
 Files: No new production files; update tests or docs only when a failing verification identifies a real contract mismatch.
 
-- [ ] Step 1: Run focused schema, repository, Worker route, adapter contract, and browser commands from Tasks 1–9. Record counts and any known Wrangler linked-worktree log warning without treating it as a test failure.
+- [x] Step 1: Run focused schema, repository, Worker route, adapter contract, and browser commands from Tasks 1–9. Record counts and any known Wrangler linked-worktree log warning without treating it as a test failure.
 
-- [ ] Step 2: Run the complete local suites.
+- [x] Step 2: Run the complete local suites.
 
 ~~~powershell
 .\node_modules\.bin\vitest.cmd run --project unit
@@ -409,7 +409,7 @@ Files: No new production files; update tests or docs only when a failing verific
 
 Expected result: zero failing tests and no changed Phase B behavior.
 
-- [ ] Step 3: Run TypeScript and build checks.
+- [x] Step 3: Run TypeScript and build checks.
 
 ~~~powershell
 .\node_modules\.bin\tsc.cmd --noEmit
@@ -420,7 +420,7 @@ Expected result: zero failing tests and no changed Phase B behavior.
 
 Expected result: all commands exit 0. The known Wrangler optional user-log EPERM warning may remain contained and must not be mistaken for an application failure.
 
-- [ ] Step 4: Run release and diff checks.
+- [x] Step 4: Run release and diff checks.
 
 ~~~powershell
 .\node_modules\.bin\tsx.cmd scripts\capture-release-evidence.ts
@@ -430,11 +430,11 @@ git diff --check
 
 Expected result: fresh release evidence, a passing narrow release scan, and no whitespace errors.
 
-- [ ] Step 5: Verify no external mutation occurred. Confirm the command log contains no live Google create/delete call, no deployment, no push, and no production database migration. This increment is locally verified only.
+- [x] Step 5: Verify no external mutation occurred. Confirm the command log contains no live Google create/delete call, no deployment, no push, and no production database migration. This increment is locally verified only.
 
-- [ ] Step 6: Complete any final test-only correction through a new RED/GREEN cycle and commit it with the narrowest relevant message. Do not fold unrelated cleanup into the final commit.
+- [x] Step 6: Complete any final test-only correction through a new RED/GREEN cycle and commit it with the narrowest relevant message. Do not fold unrelated cleanup into the final commit.
 
-- [ ] Step 7: Verify the branch.
+- [x] Step 7: Verify the branch.
 
 ~~~powershell
 git status --short
