@@ -77,7 +77,7 @@ function proposal(): CalendarWriteProposal {
 async function createRepository(database: ScriptedDatabase) {
   const key = await crypto.subtle.generateKey(
     { name: "AES-GCM", length: 256 },
-    true,
+    false,
     ["encrypt", "decrypt"],
   );
   const keyProvider = new MemoryKeyProvider(key);
@@ -118,7 +118,10 @@ function containsPlaintext(value: unknown, needle: string, seen = new Set<object
   return false;
 }
 
-function approvalRow(envelope: Uint8Array, overrides: Partial<DatabaseRow> = {}): DatabaseRow {
+function approvalRow(
+  envelope: Uint8Array | string,
+  overrides: Partial<DatabaseRow> = {},
+): DatabaseRow {
   return {
     operationId: OPERATION_ID,
     ownerId: OWNER_ID,
@@ -133,12 +136,20 @@ function approvalRow(envelope: Uint8Array, overrides: Partial<DatabaseRow> = {})
   };
 }
 
+function postgresBytea(bytes: Uint8Array): string {
+  return (
+    String.fromCharCode(92) +
+    "x" +
+    Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")
+  );
+}
+
 describe("DrizzleCalendarWriteRepository", () => {
   it("round-trips an encrypted proposal without placing plaintext in the query", async () => {
     const database = new ScriptedDatabase();
     const { repository } = await createRepository(database);
     const value = proposal();
-    database.results.push({ rows: [] });
+    database.results.push({ rows: [{ operationId: OPERATION_ID }] });
 
     await repository.createApproval({
       proposal: value,
@@ -157,6 +168,16 @@ describe("DrizzleCalendarWriteRepository", () => {
     const value = proposal();
     const envelope = await encryptedProposalEnvelope(keyProvider, value);
     database.results.push({ rows: [approvalRow(envelope)] });
+
+    await expect(repository.loadProposal(OWNER_ID, OPERATION_ID)).resolves.toEqual(value);
+  });
+
+  it("accepts the canonical PostgreSQL bytea text returned by Neon", async () => {
+    const database = new ScriptedDatabase();
+    const { keyProvider, repository } = await createRepository(database);
+    const value = proposal();
+    const envelope = await encryptedProposalEnvelope(keyProvider, value);
+    database.results.push({ rows: [approvalRow(postgresBytea(envelope))] });
 
     await expect(repository.loadProposal(OWNER_ID, OPERATION_ID)).resolves.toEqual(value);
   });
@@ -214,6 +235,72 @@ describe("DrizzleCalendarWriteRepository", () => {
       "Calendar write persistence failed.",
     );
     assert.equal(database.queries.length, 1);
+  });
+
+  it("rejects a ledger row that crosses the requested owner boundary", async () => {
+    const database = new ScriptedDatabase();
+    const { repository } = await createRepository(database);
+    database.results.push({
+      rows: [{
+        operationId: OPERATION_ID,
+        ownerId: OTHER_OWNER_ID,
+        provider: "google",
+        calendarId: CALENDAR_ID,
+        status: "writing",
+        providerEventId: null,
+        providerEventVersion: null,
+        requestedAt: NOW,
+        completedAt: null,
+      }],
+    });
+
+    await expect(repository.find(OWNER_ID, OPERATION_ID)).rejects.toThrow(
+      "Calendar write persistence failed.",
+    );
+  });
+
+  it("rejects a ledger row with an invalid database timestamp", async () => {
+    const database = new ScriptedDatabase();
+    const { repository } = await createRepository(database);
+    database.results.push({
+      rows: [{
+        operationId: OPERATION_ID,
+        ownerId: OWNER_ID,
+        provider: "google",
+        calendarId: CALENDAR_ID,
+        status: "writing",
+        providerEventId: null,
+        providerEventVersion: null,
+        requestedAt: "not-a-timestamp",
+        completedAt: null,
+      }],
+    });
+
+    await expect(repository.find(OWNER_ID, OPERATION_ID)).rejects.toThrow(
+      "Calendar write persistence failed.",
+    );
+  });
+
+  it("rejects an unpaired provider event identity", async () => {
+    const database = new ScriptedDatabase();
+    const { repository } = await createRepository(database);
+    database.results.push({
+      rows: [{
+        operationId: OPERATION_ID,
+        ownerId: OWNER_ID,
+        provider: "google",
+        calendarId: CALENDAR_ID,
+        status: "writing",
+        eventId: "event-1",
+        eventVersion: null,
+        requestedAt: NOW,
+        completedAt: null,
+      }],
+    });
+
+    await expect(repository.find(OWNER_ID, OPERATION_ID)).rejects.toThrow(
+      "Calendar write persistence failed.",
+    );
   });
 
   it("persists pending, verified, failed, and undone transitions through the ledger port", async () => {

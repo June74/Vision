@@ -229,6 +229,88 @@ export function createCalendarWriteProposal(
   });
 }
 
+/** Rehydrates a persisted proposed value through the same strict constructor used at admission. */
+export function restoreCalendarWriteProposal(
+  input: unknown,
+): CalendarWriteProposal {
+  const root = readPlainRecord(input);
+  assertExactKeys(root, [
+    "action",
+    "operationId",
+    "ownerId",
+    "preview",
+    "requestedAt",
+    "status",
+    "target",
+  ]);
+  if (root.action !== "create" || root.status !== "proposed") {
+    throw invalidProposal();
+  }
+
+  const target = readPlainRecord(root.target);
+  assertExactKeys(target, ["calendarId", "version"]);
+
+  const preview = readPlainRecord(root.preview);
+  assertExactKeys(preview, ["after", "before"]);
+  if (preview.before !== null) throw invalidProposal();
+
+  const after = readPlainRecord(preview.after);
+  assertExactKeys(after, [
+    "attendees",
+    "description",
+    "domain",
+    "endsAt",
+    "notifications",
+    "privacy",
+    "recurrence",
+    "startsAt",
+    "timeZone",
+    "title",
+  ]);
+
+  const attendees = readPlainRecord(after.attendees);
+  assertExactKeys(attendees, ["addresses", "count", "mode"]);
+  if (attendees.mode !== "none" || attendees.count !== 0) {
+    throw invalidProposal();
+  }
+  const addresses = readPlainAttendees(attendees.addresses);
+  if (addresses.length !== 0) throw invalidProposal();
+
+  const recurrence = readPlainRecord(after.recurrence);
+  assertExactKeys(recurrence, ["rules", "scope"]);
+  if (recurrence.scope !== "one-off") throw invalidProposal();
+  const rules = readPlainAttendees(recurrence.rules);
+  if (rules.length !== 0) throw invalidProposal();
+
+  const notifications = readPlainRecord(after.notifications);
+  assertExactKeys(notifications, ["policy", "willNotify"]);
+  if (notifications.policy !== "none" || notifications.willNotify !== false) {
+    throw invalidProposal();
+  }
+
+  return createCalendarWriteProposal({
+    operationId: root.operationId,
+    ownerId: root.ownerId,
+    target: {
+      calendarId: target.calendarId,
+      version: target.version,
+    },
+    requestedAt: root.requestedAt,
+    event: {
+      title: after.title,
+      description: after.description,
+      startsAt: after.startsAt,
+      endsAt: after.endsAt,
+      timeZone: after.timeZone,
+      domain: after.domain,
+      privacy: after.privacy,
+      attendees: addresses,
+      recurrence: null,
+      notifications: "none",
+    },
+  });
+}
+
 /** Applies one explicitly allowed transition and returns a new immutable value. */
 export function transitionCalendarWrite(
   operation: CalendarWriteProposal,
@@ -302,6 +384,15 @@ function readPlainRecord(value: unknown): Record<string, unknown> {
     });
   }
   return output;
+}
+
+/** Rejects unknown or missing fields in a persisted canonical value. */
+function assertExactKeys(
+  value: Record<string, unknown>,
+  expected: readonly string[],
+): void {
+  const actual = Object.keys(value).sort().join(",");
+  if (actual !== [...expected].sort().join(",")) throw invalidProposal();
 }
 
 /** Copies an attendee array after rejecting sparse, accessor, or extra data shapes. */
