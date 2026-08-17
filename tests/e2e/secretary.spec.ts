@@ -92,3 +92,76 @@ test("shows the local secretary capture flow without offering implicit calendar 
   await expect(page.getByText("No calendar change was confirmed.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /confirm calendar/i })).toHaveCount(0);
 });
+
+test("creates a local task, completes it, and saves a protected note", async ({ page }) => {
+  await mockConnectedShell(page);
+  await page.route("**/api/secretary/tasks**", async (route) => {
+    expect(route.request().headers()["x-vision-csrf"]).toBe(SESSION.csrfToken);
+    const url = route.request().url();
+    if (url.endsWith("/complete")) {
+      await fulfillJson(route, {
+        task: {
+          id: "task-1",
+          title: "Review agenda",
+          dueAt: null,
+          timeZone: "America/Chicago",
+          status: "completed",
+          createdAt: "2026-08-20T14:00:00.000Z",
+          completedAt: "2026-08-20T14:05:00.000Z",
+        },
+      });
+      return;
+    }
+    expect(route.request().method()).toBe("POST");
+    expect(JSON.parse(route.request().postData() ?? "{}")).toMatchObject({
+      title: "Review agenda",
+      dueAt: null,
+    });
+    expect(JSON.parse(route.request().postData() ?? "{}").timeZone).toEqual(expect.any(String));
+    await fulfillJson(route, {
+      task: {
+        id: "task-1",
+        title: "Review agenda",
+        dueAt: null,
+        timeZone: "America/Chicago",
+        status: "open",
+        createdAt: "2026-08-20T14:00:00.000Z",
+        completedAt: null,
+      },
+    }, 201);
+  });
+  await page.route("**/api/secretary/notes", async (route) => {
+    expect(route.request().method()).toBe("POST");
+    expect(route.request().headers()["x-vision-csrf"]).toBe(SESSION.csrfToken);
+    expect(JSON.parse(route.request().postData() ?? "{}")).toEqual({
+      title: "Private note",
+      body: "Keep this in Vision.",
+    });
+    await fulfillJson(route, {
+      note: {
+        id: "note-1",
+        title: "Private note",
+        body: "Keep this in Vision.",
+        status: "active",
+        createdAt: "2026-08-20T14:00:00.000Z",
+        updatedAt: "2026-08-20T14:00:00.000Z",
+      },
+    }, 201);
+  });
+
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Your local Today" })).toBeVisible();
+  await page.getByLabel("Task title").fill("Review agenda");
+  await page.getByRole("button", { name: "Add task" }).click();
+  await expect(page.getByText("Task saved locally", { exact: true })).toBeVisible();
+  await expect(page.getByText("Review agenda", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Complete" }).click();
+  await expect(page.getByRole("button", { name: "Undo" })).toBeVisible();
+
+  await page.getByLabel("Note title").fill("Private note");
+  await page.getByLabel("Note body").fill("Keep this in Vision.");
+  await page.getByRole("button", { name: "Save note" }).click();
+  await expect(page.getByText("Note saved locally", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Recent notes").getByText("Private note", { exact: true })).toBeVisible();
+  await expect(page.getByText("Keep this in Vision.", { exact: true })).toBeVisible();
+});

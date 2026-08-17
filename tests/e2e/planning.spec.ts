@@ -98,3 +98,62 @@ test("shows deterministic planning and keeps calendar confirmation outside the p
   await expect(page.getByLabel("Scheduling proposal").getByText("Calendar approval required", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /confirm calendar/i })).toHaveCount(0);
 });
+
+test("creates and completes a local follow-up while keeping the briefing deterministic", async ({ page }) => {
+  await mockConnectedShell(page);
+  await page.route("**/api/planning/follow-ups**", async (route) => {
+    const url = route.request().url();
+    if (route.request().method() === "GET") {
+      await fulfillJson(route, { followUps: [] });
+      return;
+    }
+    expect(route.request().headers()["x-vision-csrf"]).toBe(SESSION.csrfToken);
+    if (url.endsWith("/complete")) {
+      await fulfillJson(route, {
+        followUp: {
+          id: "follow-up-1",
+          title: "Send the recap",
+          dueAt: null,
+          timeZone: "America/Chicago",
+          sourceFactIds: [],
+          status: "completed",
+          createdAt: "2026-08-20T14:00:00.000Z",
+          updatedAt: "2026-08-20T14:05:00.000Z",
+          snoozedUntil: null,
+          completedAt: "2026-08-20T14:05:00.000Z",
+        },
+      });
+      return;
+    }
+    expect(route.request().method()).toBe("POST");
+    expect(JSON.parse(route.request().postData() ?? "{}")).toMatchObject({
+      title: "Send the recap",
+      dueAt: null,
+      sourceFactIds: [],
+    });
+    expect(JSON.parse(route.request().postData() ?? "{}").timeZone).toEqual(expect.any(String));
+    await fulfillJson(route, {
+      followUp: {
+        id: "follow-up-1",
+        title: "Send the recap",
+        dueAt: null,
+        timeZone: "America/Chicago",
+        sourceFactIds: [],
+        status: "open",
+        createdAt: "2026-08-20T14:00:00.000Z",
+        updatedAt: "2026-08-20T14:00:00.000Z",
+        snoozedUntil: null,
+        completedAt: null,
+      },
+    }, 201);
+  });
+
+  await page.goto("/");
+  await expect(page.getByText("AI is disabled for this planning surface.", { exact: true })).toBeVisible();
+  await page.getByLabel("Follow-up title").fill("Send the recap");
+  await page.getByRole("button", { name: "Save follow-up" }).click();
+  await expect(page.getByText("Follow-up saved locally", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Local follow-ups").getByText("Send the recap", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Complete" }).click();
+  await expect(page.getByRole("button", { name: "Reopen" })).toBeVisible();
+});
