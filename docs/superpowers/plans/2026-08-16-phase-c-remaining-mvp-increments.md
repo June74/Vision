@@ -334,22 +334,50 @@ Commit with `feat: add Phase C planning and follow-up flows`.
 - Modify: mirrored `docs/reference/simple/**` and `docs/reference/technical/**` files for every new production file/function
 - Test: all repository verification commands
 
-- [ ] **Step 1: Run the complete local verification**
+- [x] **Step 1: Run the complete local verification**
 
 Run `pnpm.cmd check`, `pnpm.cmd test:e2e`, `pnpm.cmd typecheck`, `pnpm.cmd docs:check`, `pnpm.cmd build`, `pnpm.cmd security:scan`, and `git diff --check`. Capture fresh exit codes and counts.
 
-- [ ] **Step 2: Verify the user-facing paths**
+Fresh evidence is green: `pnpm.cmd check` passed with 1,876 unit tests
+passed and 6 skipped, 199 contract tests passed, 144 Worker tests passed,
+documentation coverage, build, and release security scan; `pnpm.cmd test:e2e`
+passed 47/47; and the TypeScript, documentation, and diff checks passed. The
+known linked-worktree filesystem and Wrangler log-file warnings are
+environment-only and did not fail assertions.
+
+- [x] **Step 2: Verify the user-facing paths**
 
 Exercise one confirmed and one pending/recovered calendar mutation, one recurrence/attendee/notification preview, Today/task/note flow, scheduling proposal, briefing, and follow-up in the actual local browser path. Do not rely only on imports or unit tests.
 
-- [ ] **Step 3: Run or explicitly classify each live preview gate**
+The full browser suite exercises the confirmed and pending/recovered calendar
+paths, recurrence/attendee/notification preview, local capture, Today/task
+completion, protected note, scheduling proposal, deterministic briefing, and
+follow-up completion. The suite passed 47/47.
+
+- [x] **Step 3: Run or explicitly classify each live preview gate**
 
 For every connected-write action, prove temporary fixture absence and privacy-safe evidence. If an external target or migration authority is unavailable, record the exact pending gate rather than claiming Phase C live completion.
 
-- [ ] **Step 4: Update the handoff and project status**
+The live/private-pilot audit is explicitly classified in
+`docs/operations/phase-c-live-acceptance.md`: preview health and local preview
+artifact validation pass, while the deployed current revision, disposable
+database target, migration application, authenticated live reads, and the
+create/read-back/replay/undo/absence/cleanup sequence remain pending. No live
+mutation or deployment was made during this audit.
+
+- [x] **Step 4: Update the handoff and project status**
 
 Mark only evidence-backed increments complete, distinguish local and live status, preserve the Phase D boundary, and retain the exact hardline text.
 
-- [ ] **Step 5: Commit the final handoff**
+`PROJECT_PLAN.md`, `docs/operations/phase-c-handoff.md`, and the live
+acceptance record now mark local Phase C increments 1–6 complete, live
+acceptance pending, and Phase D not started. The exact hardline text remains
+present.
+
+- [x] **Step 5: Commit the final handoff**
 
 Commit documentation only after all required verification evidence is fresh and the worktree is clean.
+
+The browser coverage was committed as `fed4ec2`; the status, handoff, live
+acceptance record, and this plan update are ready for the final documentation
+commit.

@@ -40,7 +40,7 @@ keys.
 ## Phase C entry decision
 
 - Decision: proceed with Phase C in acceptance-backed increments. The first
-  three local implementation increments are now implemented from this handoff;
+  six local implementation increments are now implemented from this handoff;
   live connected-write acceptance remains pending.
 - Approved boundary: build the authenticated, approval-based, verified
   calendar-event write pipeline while preserving Phase B read-sync and
@@ -66,10 +66,11 @@ keys.
   actions remain confirmation-based in Version 1; AI may interpret and
   explain but cannot grant permission or perform the write; every accepted
   change has audit history and an undo or compensating path.
-- Remaining risks for the next acceptance gate: live disposable-fixture
-  cleanup, provider-side evidence, deployment admission, and production
-  database migration review. Recurrence, attendees, and notification semantics
-  remain explicitly out of this one-off increment.
+- Remaining risks for the next acceptance gate: independent disposable-fixture
+  identification, migration application, provider-side evidence, deployment
+  admission, exact cleanup proof, and production database migration review.
+  The recurrence, secretary, and planning surfaces are locally implemented but
+  have not been accepted as live connected-write behavior.
 
 ## Phase C increment 1 — provider-neutral write contract
 
@@ -154,6 +155,27 @@ Live acceptance must use an explicitly approved disposable/private-pilot
 fixture and prove preview, one confirmed create, exact read-back, replay safety,
 verified undo, absence, and privacy-safe logs/audit before release.
 
+## Phase C local continuation — increments 4–6
+
+The remaining local MVP increments are implemented and locally verified on the
+Phase C branch:
+
+- Recurrence scope, attendee redaction, and notification intent are explicit in
+  the browser preview; no attendee address is returned to the browser.
+- Vision-local capture, Today, tasks, protected notes, completion, undo, and
+  pending calendar candidates are available without implicit provider writes.
+- Deterministic scheduling proposals, conflict alternatives, template-backed
+  briefings, and owner-scoped follow-ups are available without a calendar
+  confirmation operation.
+- Fresh local evidence is green: `pnpm.cmd check` passed with 1,876 unit tests
+  passed and 6 skipped, 199 contract tests passed, 144 Worker tests passed,
+  documentation coverage, build, and release security scan passed; the full
+  browser suite passed 47/47.
+
+This local completion does not close the live gate. The detailed evidence and
+pending prerequisites are recorded in the
+[Phase C live/private-pilot acceptance record](phase-c-live-acceptance.md).
+
 ## Phase C continuation authorization and readiness
 
 - Authorization: approved on 2026-08-16 for the remaining Phase C increments
@@ -161,9 +183,11 @@ verified undo, absence, and privacy-safe logs/audit before release.
 - Current preview read-only readiness: the existing preview health contract
   returned HTTP 200 and read-only Wrangler access was available.
 - Live mutation gate: pending independent confirmation of the disposable
-  database target, reviewed migration `0010`, and preview deployment admission.
-  No live event mutation is claimed until those prerequisites and the exact
-  create/read-back/replay/undo/absence sequence are recorded.
+  database target, migration application for the Phase C schema, and reviewed
+  preview deployment admission. No live event mutation is claimed until those
+  prerequisites and the exact create/read-back/replay/undo/absence sequence
+  are recorded.
+- Detailed record: [Phase C live/private-pilot acceptance](phase-c-live-acceptance.md).
 - Continuation design: [remaining Phase C MVP design](../superpowers/specs/2026-08-16-phase-c-remaining-mvp-increments-design.md).
 - Continuation plan: [remaining Phase C MVP plan](../superpowers/plans/2026-08-16-phase-c-remaining-mvp-increments.md).
 

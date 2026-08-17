@@ -2,11 +2,11 @@
 
 This file is the project's editable source of truth. It records the agreed direction, current phase, open decisions, and completion gates. Update it whenever a decision changes or a phase is completed.
 
-**Status:** Phase C continuation authorized — one-off write surface locally verified; live acceptance and remaining MVP increments in progress
+**Status:** Phase C local increments 1–6 verified — live/private-pilot acceptance pending; Phase D not started
 
 **Last updated:** 2026-08-16
 
-**Current deliverable:** Execute the acceptance-backed Phase C continuation plan: live/private-pilot one-off acceptance, verified mutation parity, recurrence/attendee/notification policy, Vision-local secretary flows, and deterministic planning surfaces. Production deployment and migration remain separately gated.
+**Current deliverable:** Close the documented Phase C live/private-pilot gate against an independently identified disposable database and reviewed preview deployment, or retain the explicit pending boundary. Production deployment, production migration, and Phase D remain out of scope.
 
 ## Product vision
 
@@ -511,17 +511,19 @@ Phase C increment 1 is implemented as a provider-neutral approval contract and
 immutable state machine. Increment 2 adds the provider-neutral verified one-off
 create executor and bounded Google event-write adapter, including version
 revalidation, idempotent marker reconciliation, exact read-back, safe audit,
-and compensating undo. Increment 3 now composes the local authenticated
+and compensating undo. Increment 3 composes the local authenticated
 preview/status/confirm/undo routes, encrypted approval store, durable execution
 ledger, browser composer, and exact release allowlist. The user authorized the
 remaining Phase C continuation on 2026-08-16, including live/private-pilot
-acceptance using a disposable fixture. The continuation design and plan are
-recorded in [the remaining MVP design](docs/superpowers/specs/2026-08-16-phase-c-remaining-mvp-increments-design.md)
+acceptance using a disposable fixture. The local continuation increments for
+recurrence/attendee/notification policy, Vision-local secretary flows, and
+deterministic planning/follow-ups are now implemented and locally verified.
+The continuation design and plan are recorded in [the remaining MVP design](docs/superpowers/specs/2026-08-16-phase-c-remaining-mvp-increments-design.md)
 and [the remaining MVP plan](docs/superpowers/plans/2026-08-16-phase-c-remaining-mvp-increments.md).
-The current preview health read returned HTTP 200 and read-only Wrangler access
-was available; live mutation remains pending independent disposable-database
-migration and preview deployment admission. Production state remains outside
-this authorization.
+Fresh local evidence is recorded in [the Phase C live acceptance record](docs/operations/phase-c-live-acceptance.md);
+live mutation remains pending independent disposable-database identification,
+migration application, and reviewed preview deployment admission. Production
+state remains outside this authorization, and Phase D has not started.
 
 ### Approved foundation
 
@@ -570,6 +572,30 @@ an approval-backed local boundary:
 - The release scanner allowlists only the exact Phase C route module and keeps
   unapproved mutating routes fail-closed.
 
+### Local continuation completion boundary
+
+The remaining Phase C MVP increments are implemented locally and have their own
+browser or Worker boundaries:
+
+- [x] Recurrence scope, attendee redaction, and notification intent remain
+  explicit in the preview; attendee addresses are not exposed in the browser
+  response.
+- [x] Conversational capture, Today, local tasks, protected notes, completion,
+  undo, and calendar-candidate approval boundaries are available in Vision.
+- [x] Deterministic scheduling proposals, conflict alternatives,
+  template-backed briefings, and owner-scoped follow-ups are available in
+  Vision without direct calendar confirmation authority.
+- [x] Fresh local evidence: `pnpm.cmd check` passed with 1,876 unit tests
+  passed and 6 skipped, 199 contract tests passed, 144 Worker tests passed,
+  documentation coverage, build, and release security scan passed; the full
+  browser suite passed 47/47.
+
+This is local completion only. The exact live/private-pilot evidence boundary
+and the unrun connected-write sequence are recorded in
+[the Phase C live acceptance record](docs/operations/phase-c-live-acceptance.md).
+Phase D remains not started until the Phase C live gate is closed or an
+explicit decision changes that boundary.
+
 ### Explicit Phase C non-goals for this increment
 
 - No update, move, cancellation, direct-delete, recurrence, attendees, or
@@ -593,6 +619,7 @@ replay safety, and privacy-safe logs/audit before any connected-write release.
 
 | Date | Decision | Reason | Status |
 |---|---|---|---|
+| 2026-08-16 | Mark the remaining Phase C local increments complete while keeping live/private-pilot acceptance as a separate gate. | The recurrence, secretary, and planning surfaces have fresh type, unit, contract, Worker, browser, documentation, build, and security evidence; no disposable database target or migration application was independently verified. | Local complete; live acceptance pending |
 | 2026-08-16 | Authorize the remaining Phase C implementation and live/private-pilot acceptance using a disposable fixture, while retaining the production deployment and migration gate. | Continue the secretary MVP through acceptance-backed increments without treating local mocks or a healthy endpoint as proof of a live connected write. | Approved; continuation in progress |
 | 2026-08-12 | Accept Phase B after the final normal preview deployment, maintenance observer, live health check, and closure documentation completed. | The trusted read-only foundation and its live operational evidence meet the Phase B boundary; verified event writes remain a separate Phase C approval gate. | Accepted; Phase C next |
 | 2026-07-22 | Execute Phase B with fresh implementation subagents, independent task reviews, test-first development, and two synchronized documentation layers for every production file and named function. | Isolated task context and review gates improve implementation reliability, while separate concise and technical references keep the code understandable at two depths. | Approved and in progress |
