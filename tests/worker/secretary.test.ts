@@ -4,10 +4,12 @@ import type { Env } from "../../src/server/env";
 import type { EncryptedSessionRepository } from "../../src/data/repositories/session-repository";
 import type {
   SecretaryCapture,
+  FollowUp,
   SecretaryRepository,
   SecretaryTask,
   SecretaryTodaySource,
 } from "../../src/data/repositories/secretary-repository";
+import type { PlanningSourceSnapshot } from "../../src/domain/scheduling/proposal";
 import type { SecretaryRouteDependencies } from "../../src/server/api/secretary-routes";
 
 const NOW = new Date("2026-08-16T18:00:00.000Z");
@@ -18,10 +20,15 @@ const OWNER_ID = "usr_private_pilot";
 class MemorySecretaryRepository implements SecretaryRepository {
   readonly captures: SecretaryCapture[] = [];
   readonly tasks: SecretaryTask[] = [];
+  readonly followUps: FollowUp[] = [];
   readonly notes = [];
 
   async readToday(): Promise<SecretaryTodaySource> {
     return { captures: this.captures, tasks: this.tasks, notes: this.notes, events: [] };
+  }
+
+  async readPlanning(): Promise<PlanningSourceSnapshot> {
+    return { events: [], tasks: [], followUps: this.followUps, sourceFacts: [] };
   }
 
   async createCapture(_ownerId: string, capture: SecretaryCapture): Promise<SecretaryCapture> {
@@ -48,6 +55,15 @@ class MemorySecretaryRepository implements SecretaryRepository {
 
   async createNote(_ownerId: string, note: never): Promise<never> {
     return note;
+  }
+
+  async createFollowUp(_ownerId: string, followUp: FollowUp): Promise<FollowUp> {
+    this.followUps.push(followUp);
+    return followUp;
+  }
+
+  async transitionFollowUp(): Promise<FollowUp | undefined> {
+    return undefined;
   }
 }
 

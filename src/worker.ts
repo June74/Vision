@@ -40,6 +40,11 @@ import {
   registerSecretaryRoutes,
   type SecretaryRouteDependencies,
 } from "./server/api/secretary-routes";
+import {
+  createProductionPlanningDependencies,
+  registerPlanningRoutes,
+  type PlanningRouteDependencies,
+} from "./server/api/planning-routes";
 import { consumer } from "./jobs/queue-consumer";
 import type { CalendarSyncMessage } from "./jobs/queue-message";
 import { scheduled } from "./jobs/scheduled";
@@ -54,6 +59,7 @@ export interface AppDependencies {
   aiCategoryProposal?: AiCategoryProposalRouteDependencies;
   diagnostic?: DiagnosticRouteDependencies;
   secretary?: SecretaryRouteDependencies;
+  planning?: PlanningRouteDependencies;
   googleCalendarWebhook?: GoogleCalendarWebhookDependencies;
 }
 
@@ -117,6 +123,11 @@ export function createApp(dependencies: AppDependencies = {}) {
     app,
     dependencies.secretary ??
       ((environment) => createProductionSecretaryDependencies(environment, logger)),
+  );
+  registerPlanningRoutes(
+    app,
+    dependencies.planning ??
+      ((environment) => createProductionPlanningDependencies(environment, logger)),
   );
   registerGoogleCalendarWebhook(
     app,

@@ -18,11 +18,21 @@ import {
 import type { SecretaryNote } from "../../domain/secretary/note";
 import type { SecretaryTask } from "../../domain/secretary/task";
 import type { SecretaryTodayEventInput } from "../../domain/secretary/today";
+import {
+  createFollowUp,
+  transitionFollowUp,
+  type FollowUp,
+} from "../../domain/follow-ups/follow-up";
+import type {
+  PlanningSourceSnapshot,
+  PlanningTaskFact,
+} from "../../domain/scheduling/proposal";
 import type { VisionDatabase } from "../db";
 
 export type { SecretaryCapture } from "../../domain/secretary/capture";
 export type { SecretaryNote } from "../../domain/secretary/note";
 export type { SecretaryTask } from "../../domain/secretary/task";
+export type { FollowUp } from "../../domain/follow-ups/follow-up";
 
 const MAX_OWNER_ID_CHARS = 128;
 const MAX_ID_CHARS = 128;
@@ -38,7 +48,20 @@ export interface SecretaryTodaySource {
 }
 
 /** Owner-scoped repository port used by production routes and deterministic Worker tests. */
-export interface SecretaryRepository {
+/** Owner-scoped repository surface required by the deterministic planning routes. */
+export interface PlanningRepositoryPort {
+  readPlanning(ownerId: string, now: Date, timeZone: string): Promise<PlanningSourceSnapshot>;
+  createFollowUp(ownerId: string, followUp: FollowUp): Promise<FollowUp>;
+  transitionFollowUp(
+    ownerId: string,
+    followUpId: string,
+    action: "complete" | "reopen" | "snooze",
+    at: Date,
+    snoozedUntil?: string,
+  ): Promise<FollowUp | undefined>;
+}
+
+export interface SecretaryRepository extends PlanningRepositoryPort {
   readToday(ownerId: string, now: Date, timeZone: string): Promise<SecretaryTodaySource>;
   createCapture(ownerId: string, capture: SecretaryCapture): Promise<SecretaryCapture>;
   createTask(ownerId: string, task: SecretaryTask): Promise<SecretaryTask>;
@@ -105,6 +128,57 @@ export class DrizzleSecretaryRepository implements SecretaryRepository {
         notes: await Promise.all(noteRows.rows.map((row) => this.readNote(ownerId, row))),
         events: [],
       };
+    } catch (error) {
+      throw normalizeSecretaryError(error);
+    }
+  }
+
+  /** Reads planning-safe calendar timing plus owner-scoped local facts for proposals and briefings. */
+  async readPlanning(ownerId: string, now: Date, timeZone: string): Promise<PlanningSourceSnapshot> {
+    try {
+      assertOwnerId(ownerId);
+      assertDate(now);
+      assertTimeZone(timeZone);
+      const today = await this.readToday(ownerId, now, timeZone);
+      const [eventRows, followUpRows] = await Promise.all([
+        this.database.execute<Record<string, unknown>>(sql`
+          select node_id as "id", starts_at as "startsAt", ends_at as "endsAt",
+                 time_zone as "timeZone", busy, status
+          from events
+          where owner_id = ${ownerId}
+            and ends_at >= ${now}
+            and starts_at <= ${new Date(now.getTime() + 31 * 24 * 60 * 60 * 1_000)}
+          order by starts_at, node_id
+          limit 500
+        `),
+        this.database.execute<Record<string, unknown>>(sql`
+          select id, title_envelope as "titleEnvelope",
+                 source_fact_ids_envelope as "sourceFactIdsEnvelope",
+                 due_at as "dueAt", time_zone as "timeZone", status,
+                 snoozed_until as "snoozedUntil", created_at as "createdAt",
+                 updated_at as "updatedAt", completed_at as "completedAt"
+          from secretary_follow_ups
+          where owner_id = ${ownerId}
+          order by due_at nulls last, id
+          limit 200
+        `),
+      ]);
+      const events = eventRows.rows.map((row) => planningEventFromRow(row));
+      const followUps = await Promise.all(followUpRows.rows.map((row) => this.readFollowUp(ownerId, row)));
+      const sourceFacts = [
+        ...events.map((event) => ({ id: event.sourceFactId, kind: "calendar_event" as const, label: "Calendar event" })),
+        ...today.tasks.map((task) => ({ id: `task:${task.id}`, kind: "secretary_task" as const, label: task.title })),
+        ...followUps.map((followUp) => ({ id: `follow-up:${followUp.id}`, kind: "follow_up" as const, label: followUp.title })),
+      ];
+      const tasks: PlanningTaskFact[] = today.tasks.map((task) => ({
+        id: task.id,
+        title: task.title,
+        dueAt: task.dueAt,
+        timeZone: task.timeZone,
+        status: task.status,
+        sourceFactId: `task:${task.id}`,
+      }));
+      return { events, tasks, followUps, sourceFacts };
     } catch (error) {
       throw normalizeSecretaryError(error);
     }
@@ -233,6 +307,89 @@ export class DrizzleSecretaryRepository implements SecretaryRepository {
     }
   }
 
+  /** Encrypts and inserts one open follow-up with queryable due and lifecycle metadata. */
+  async createFollowUp(ownerId: string, followUp: FollowUp): Promise<FollowUp> {
+    try {
+      assertOwnerId(ownerId);
+      const validated = createFollowUp({
+        id: followUp.id,
+        title: followUp.title,
+        dueAt: followUp.dueAt,
+        timeZone: followUp.timeZone,
+        sourceFactIds: followUp.sourceFactIds,
+        createdAt: parseDate(followUp.createdAt),
+      });
+      if (validated.status !== followUp.status || validated.updatedAt !== followUp.updatedAt) {
+        throw secretaryFailure();
+      }
+      const encrypted = await encryptProtectedFields(
+        this.keyProvider,
+        { ownerId, nodeId: followUp.id, domain: PERSONAL_DOMAIN },
+        { title: followUp.title, sourceFactIds: JSON.stringify(followUp.sourceFactIds) },
+      );
+      const result = await this.database.execute<Record<string, unknown>>(sql`
+        insert into secretary_follow_ups (
+          id, owner_id, title_envelope, source_fact_ids_envelope, due_at,
+          time_zone, status, snoozed_until, created_at, updated_at, completed_at
+        ) values (
+          ${followUp.id}, ${ownerId}, ${encodeEnvelope(encrypted.title)}::bytea,
+          ${encodeEnvelope(encrypted.sourceFactIds)}::bytea,
+          ${followUp.dueAt === null ? null : parseDate(followUp.dueAt)}, ${followUp.timeZone},
+          'open', null, ${parseDate(followUp.createdAt)}, ${parseDate(followUp.updatedAt)}, null
+        )
+        on conflict (id) do nothing
+        returning id
+      `);
+      if (result.rows[0]?.id !== followUp.id) throw secretaryFailure();
+      return followUp;
+    } catch (error) {
+      throw normalizeSecretaryError(error);
+    }
+  }
+
+  /** Applies one owner-scoped compare-and-set follow-up transition. */
+  async transitionFollowUp(
+    ownerId: string,
+    followUpId: string,
+    action: "complete" | "reopen" | "snooze",
+    at: Date,
+    snoozedUntil?: string,
+  ): Promise<FollowUp | undefined> {
+    try {
+      assertOwnerId(ownerId);
+      assertId(followUpId);
+      assertDate(at);
+      const currentResult = await this.database.execute<Record<string, unknown>>(sql`
+        select id, title_envelope as "titleEnvelope",
+               source_fact_ids_envelope as "sourceFactIdsEnvelope",
+               due_at as "dueAt", time_zone as "timeZone", status,
+               snoozed_until as "snoozedUntil", created_at as "createdAt",
+               updated_at as "updatedAt", completed_at as "completedAt"
+        from secretary_follow_ups
+        where owner_id = ${ownerId} and id = ${followUpId}
+        limit 1
+      `);
+      const currentRow = currentResult.rows[0];
+      if (!currentRow) return undefined;
+      const current = await this.readFollowUp(ownerId, currentRow);
+      const next = transitionFollowUp(current, { action, at, snoozedUntil });
+      const result = await this.database.execute<Record<string, unknown>>(sql`
+        update secretary_follow_ups
+        set status = ${next.status}, snoozed_until = ${next.snoozedUntil === null ? null : parseDate(next.snoozedUntil)},
+            updated_at = ${parseDate(next.updatedAt)}, completed_at = ${next.completedAt === null ? null : parseDate(next.completedAt)}
+        where owner_id = ${ownerId} and id = ${followUpId} and status = ${current.status}
+        returning id, title_envelope as "titleEnvelope",
+                  source_fact_ids_envelope as "sourceFactIdsEnvelope",
+                  due_at as "dueAt", time_zone as "timeZone", status,
+                  snoozed_until as "snoozedUntil", created_at as "createdAt",
+                  updated_at as "updatedAt", completed_at as "completedAt"
+      `);
+      return result.rows[0] ? await this.readFollowUp(ownerId, result.rows[0]) : undefined;
+    } catch (error) {
+      throw normalizeSecretaryError(error);
+    }
+  }
+
   /** Decrypts one capture row only after its owner-scoped SQL lookup. */
   private async readCapture(ownerId: string, row: Record<string, unknown>): Promise<SecretaryCapture> {
     const id = readId(row.id);
@@ -291,6 +448,45 @@ export class DrizzleSecretaryRepository implements SecretaryRepository {
       status: "active",
       createdAt: parseDate(row.createdAt).toISOString(),
       updatedAt: parseDate(row.updatedAt).toISOString(),
+    };
+  }
+
+  /** Decrypts one follow-up after its owner-scoped SQL lookup and validates lifecycle metadata. */
+  private async readFollowUp(ownerId: string, row: Record<string, unknown>): Promise<FollowUp> {
+    const id = readId(row.id);
+    const decrypted = await decryptProtectedFields(
+      this.keyProvider,
+      { ownerId, nodeId: id, domain: PERSONAL_DOMAIN },
+      {
+        title: parseEnvelope(readDatabaseBytes(row.titleEnvelope)),
+        sourceFactIds: parseEnvelope(readDatabaseBytes(row.sourceFactIdsEnvelope)),
+      },
+    );
+    if (typeof decrypted.title !== "string" || typeof decrypted.sourceFactIds !== "string") throw secretaryFailure();
+    let sourceFactIds: unknown;
+    try { sourceFactIds = JSON.parse(decrypted.sourceFactIds); } catch { throw secretaryFailure(); }
+    if (!Array.isArray(sourceFactIds) || !sourceFactIds.every((value) => typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(value))) {
+      throw secretaryFailure();
+    }
+    const status = row.status === "open" || row.status === "snoozed" || row.status === "completed" ? row.status : undefined;
+    if (!status || typeof row.timeZone !== "string") throw secretaryFailure();
+    const dueAt = row.dueAt === null || row.dueAt === undefined ? null : parseDate(row.dueAt).toISOString();
+    const snoozedUntil = row.snoozedUntil === null || row.snoozedUntil === undefined ? null : parseDate(row.snoozedUntil).toISOString();
+    const completedAt = row.completedAt === null || row.completedAt === undefined ? null : parseDate(row.completedAt).toISOString();
+    const createdAt = parseDate(row.createdAt).toISOString();
+    const updatedAt = parseDate(row.updatedAt).toISOString();
+    if ((status === "completed") !== (completedAt !== null) || (status === "snoozed") !== (snoozedUntil !== null)) throw secretaryFailure();
+    return {
+      id,
+      title: decrypted.title,
+      dueAt,
+      timeZone: row.timeZone,
+      sourceFactIds,
+      status,
+      createdAt,
+      updatedAt,
+      snoozedUntil,
+      completedAt,
     };
   }
 }
@@ -376,4 +572,23 @@ function parseEnvelope(value: string): CipherEnvelope {
 function encodeEnvelope(envelope: CipherEnvelope | null): string {
   if (envelope === null) throw secretaryFailure();
   return serializeCipherEnvelope(envelope);
+}
+
+/** Converts a planning-only event row into the provider-neutral scheduling block. */
+function planningEventFromRow(row: Record<string, unknown>) {
+  const id = readId(row.id);
+  const startsAt = parseDate(row.startsAt).toISOString();
+  const endsAt = parseDate(row.endsAt).toISOString();
+  const status = row.status === "confirmed" || row.status === "tentative" || row.status === "cancelled" ? row.status : undefined;
+  if (endsAt <= startsAt || typeof row.timeZone !== "string" || typeof row.busy !== "boolean" || !status) throw secretaryFailure();
+  return {
+    id,
+    title: "Calendar event",
+    startsAt,
+    endsAt,
+    timeZone: row.timeZone,
+    busy: row.busy,
+    status,
+    sourceFactId: `event:${id}`,
+  } as const;
 }

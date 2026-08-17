@@ -66,3 +66,31 @@ export const secretaryNotes = pgTable(
     check("secretary_notes_status_valid", sql`${table.status} = 'active'`),
   ],
 );
+
+/** Stores protected follow-up text with queryable local lifecycle metadata. */
+export const secretaryFollowUps = pgTable(
+  "secretary_follow_ups",
+  {
+    id: text("id").primaryKey(),
+    ownerId: text("owner_id").notNull(),
+    titleEnvelope: ciphertext("title_envelope").notNull(),
+    sourceFactIdsEnvelope: ciphertext("source_fact_ids_envelope").notNull(),
+    dueAt: timestamp("due_at", { withTimezone: true, mode: "date" }),
+    timeZone: text("time_zone").notNull(),
+    status: text("status").notNull(),
+    snoozedUntil: timestamp("snoozed_until", { withTimezone: true, mode: "date" }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+  },
+  (table) => [
+    unique("secretary_follow_ups_owner_id_unique").on(table.ownerId, table.id),
+    index("secretary_follow_ups_owner_due_idx").on(table.ownerId, table.dueAt),
+    check("secretary_follow_ups_owner_non_empty", sql`${table.ownerId} <> ''`),
+    check("secretary_follow_ups_time_zone_non_empty", sql`${table.timeZone} <> ''`),
+    check("secretary_follow_ups_status_valid", sql`${table.status} in ('open', 'snoozed', 'completed')`),
+    check("secretary_follow_ups_completion_consistent", sql`(${table.status} = 'completed') = (${table.completedAt} is not null)`),
+    check("secretary_follow_ups_snooze_consistent", sql`(${table.status} = 'snoozed') = (${table.snoozedUntil} is not null)`),
+    check("secretary_follow_ups_updated_after_created", sql`${table.updatedAt} >= ${table.createdAt}`),
+  ],
+);

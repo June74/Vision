@@ -1,7 +1,7 @@
 # `src/data/repositories/secretary-repository.ts`
 
-`DrizzleSecretaryRepository` implements the local-secretary port over the
-existing Neon/Drizzle database and wrapped data-key provider. Every SQL query
+`DrizzleSecretaryRepository` implements the local-secretary and planning ports
+over the existing Neon/Drizzle database and wrapped data-key provider. Every SQL query
 contains `owner_id`; protected text is encrypted with domain `personal` and
 never becomes a query parameter. Task transitions are conditional updates.
 
@@ -24,6 +24,36 @@ Binds the SQL and protected-field boundaries.
 Runs bounded owner-scoped capture/task/note reads, decrypts each envelope under
 the exact owner/record/personal context, and returns no provider events by
 itself.
+
+## `readPlanning`
+
+**Signature:** `(ownerId, now, timeZone) => Promise<PlanningSourceSnapshot>`
+
+Reads only owner-scoped event timing, local tasks, and encrypted follow-ups for
+planning. Provider tokens and protected envelopes never appear in the result.
+
+## `createFollowUp`
+
+**Signature:** `(ownerId, followUp) => Promise<FollowUp>`
+
+Encrypts title/source-ID content with the owner's personal key while keeping
+safe due, timezone, and lifecycle metadata queryable.
+
+## `transitionFollowUp`
+
+**Signature:** `(ownerId, id, action, at, snoozedUntil?) => Promise<FollowUp | undefined>`
+
+Reads/decrypts the owner row, applies the pure lifecycle transition, and uses a
+status compare-and-set update before returning the re-read row.
+
+## `readFollowUp`
+
+Decrypts title/source IDs and verifies lifecycle/timestamp consistency.
+
+## `planningEventFromRow`
+
+Maps only node identity, timing, timezone, busy/status, and an opaque source
+fact; provider versions and protected envelopes remain absent.
 
 ## `createCapture`
 

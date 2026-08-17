@@ -16,6 +16,26 @@ Implements encrypted local capture, task, note, and task-transition storage.
 
 Reads owner-local records for the Today projection.
 
+## `readPlanning`
+
+Reads planning-safe event timing and local task/follow-up facts for one owner.
+
+## `createFollowUp`
+
+Stores one encrypted local follow-up.
+
+## `transitionFollowUp`
+
+Applies one complete, reopen, or snooze transition within owner scope.
+
+## `readFollowUp`
+
+Decrypts and validates one follow-up row.
+
+## `planningEventFromRow`
+
+Converts one planning-only event row into safe timing metadata.
+
 ## `createCapture`
 
 Encrypts capture content before insertion.

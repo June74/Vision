@@ -3,6 +3,7 @@ import type { VisionDatabase } from "../../../src/data/db";
 import type { KeyProvider, VersionedDataKey } from "../../../src/crypto/key-provider";
 import { createSecretaryNote } from "../../../src/domain/secretary/note";
 import { createSecretaryTask } from "../../../src/domain/secretary/task";
+import { createFollowUp } from "../../../src/domain/follow-ups/follow-up";
 import { DrizzleSecretaryRepository } from "../../../src/data/repositories/secretary-repository";
 
 const OWNER_ID = "usr_private_pilot";
@@ -88,5 +89,26 @@ describe("DrizzleSecretaryRepository", () => {
     database.results.push({ rows: [] });
     await expect(repository.transitionTask(OWNER_ID, "task-other", "complete", NOW)).resolves.toBeUndefined();
     expect(database.queries).toHaveLength(1);
+  });
+
+  it("encrypts follow-up title and source identifiers before the owner-scoped insert", async () => {
+    const database = new ScriptedDatabase();
+    const repository = await createRepository(database);
+    const followUp = createFollowUp({
+      id: "follow-up-1",
+      title: "Keep this protected too",
+      dueAt: "2026-08-21T14:00:00.000Z",
+      timeZone: "America/Chicago",
+      sourceFactIds: ["source:conversation-1"],
+      createdAt: NOW,
+    });
+    database.results.push({ rows: [{ id: followUp.id }] });
+
+    await repository.createFollowUp(OWNER_ID, followUp);
+
+    expect(database.queries).toHaveLength(1);
+    expect(containsPlaintext(database.queries[0], followUp.title)).toBe(false);
+    expect(containsPlaintext(database.queries[0], "source:conversation-1")).toBe(false);
+    expect(containsPlaintext(database.queries[0], OWNER_ID)).toBe(true);
   });
 });

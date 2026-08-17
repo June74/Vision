@@ -14,6 +14,7 @@ import {
 import { CostStatus } from "./status/CostStatus";
 import { FoundationStatus } from "./status/FoundationStatus";
 import { SecretaryDesk } from "./secretary/SecretaryDesk";
+import { PlanningDesk } from "./planning/PlanningDesk";
 import {
   correctEventCategory,
   readFoundationSnapshot,
@@ -202,6 +203,7 @@ function FoundationDesk({
         </div>
         <OneOffEventComposer session={session} />
         <SecretaryDesk session={session} />
+        <PlanningDesk session={session} />
         <EventList
           events={events}
           session={session}

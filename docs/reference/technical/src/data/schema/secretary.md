@@ -1,7 +1,7 @@
 # `src/data/schema/secretary.ts`
 
-Drizzle schema for migration `0012_phase_c_secretary_local.sql`. The three
-tables are additive and owner-scoped. User-authored content uses the existing
+Drizzle schema for migrations `0012_phase_c_secretary_local.sql` and
+`0013_phase_c_planning_follow_ups.sql`. The four tables are additive and owner-scoped. User-authored content uses the existing
 `ciphertext` custom type; only safe classification/lifecycle/time metadata is
 queryable.
 
@@ -25,3 +25,10 @@ status/completion consistency.
 
 Requires encrypted title/body, active status, owner scope, and monotonic
 timestamps.
+
+## `secretaryFollowUps`
+
+**Table:** `secretary_follow_ups`
+
+Requires encrypted title/source IDs, owner/timezone scope, and consistent
+open/snoozed/completed metadata.

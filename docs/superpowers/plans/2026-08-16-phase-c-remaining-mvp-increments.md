@@ -288,29 +288,38 @@ Commit with `feat: add Vision local secretary flows`.
 - Create: `src/domain/scheduling/proposal.ts`
 - Create: `src/domain/briefings/briefing.ts`
 - Create: `src/domain/follow-ups/follow-up.ts`
+- Create: `migrations/0013_phase_c_planning_follow_ups.sql`
+- Modify: `src/data/schema/secretary.ts`
+- Modify: `src/data/repositories/secretary-repository.ts`
 - Create: `src/server/api/planning-routes.ts`
 - Create: `src/client/planning/PlanningDesk.tsx`
+- Create: `src/client/planning/api.ts`
 - Create: `tests/unit/domain/scheduling-proposal.test.ts`
 - Create: `tests/unit/domain/briefing.test.ts`
 - Create: `tests/unit/domain/follow-up.test.ts`
+- Modify: `tests/unit/data/secretary-repository.test.ts`
 - Create: `tests/worker/planning.test.ts`
 - Create: `tests/e2e/planning.spec.ts`
 
-- [ ] **Step 1: Write deterministic planning RED tests**
+- [x] **Step 1: Write deterministic planning RED tests**
 
 Cover hard conflicts, timezone conversions, source-fact citations, unresolved ambiguity, feasible alternatives, briefing windows, follow-up lifecycle, AI-disabled behavior, and refusal to write without a calendar approval operation.
 
-- [ ] **Step 2: Run RED checks**
+- [x] **Step 2: Run RED checks**
 
 Run the focused domain, Worker, and browser tests and confirm the expected missing behavior.
 
-- [ ] **Step 3: Implement deterministic proposals and templates**
+- [x] **Step 3: Implement deterministic proposals and templates**
 
 Build source-supported scheduling proposals and template-backed briefings/follow-ups. Keep AI optional and pass all content through existing privacy, budget, and policy boundaries.
 
-- [ ] **Step 4: Run GREEN and full verification**
+Focused GREEN evidence is complete: scheduling, briefing, and follow-up domain tests (7 passed), planning Worker routes (3 passed), secretary/repository regression tests (12 passed), and the real browser planning path (1 passed). Follow-ups use an additive encrypted owner-scoped table/migration; proposals and briefings remain deterministic with no direct calendar operation.
+
+- [x] **Step 4: Run GREEN and full verification**
 
 Run all focused tests plus `pnpm.cmd check` and `pnpm.cmd test:e2e`. Verify that no new mutating route bypasses the shared calendar-write pipeline.
+
+Final local evidence is green: `pnpm.cmd check` passed with 1,876 unit tests passed and 6 skipped, 199 contract tests passed, 144 Worker tests passed, typecheck, docs coverage, build, and release security scan; `pnpm.cmd test:e2e` passed 45/45. The planning route allowlist contains only local proposal/follow-up mutations; no route confirms a calendar change.
 
 - [ ] **Step 5: Commit planning surfaces**
 

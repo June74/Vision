@@ -15,3 +15,7 @@ Stores encrypted task titles with due time, timezone, and reversible status.
 ## `secretaryNotes`
 
 Stores encrypted note title/body with active status and timestamps.
+
+## `secretaryFollowUps`
+
+Stores encrypted follow-up content with due time, timezone, and lifecycle metadata.

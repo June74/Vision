@@ -1639,6 +1639,14 @@ const APPROVED_MUTATING_ROUTES = new Map<
     ],
   ],
   [
+    "src/server/api/planning-routes.ts",
+    [
+      { method: "POST", route: "/api/planning/proposals" },
+      { method: "POST", route: "/api/planning/follow-ups" },
+      { method: "POST", route: "/api/planning/follow-ups/:followUpId/:action" },
+    ],
+  ],
+  [
     "src/server/auth/oauth-routes.ts",
     [{ method: "POST", route: "/api/auth/logout" }],
   ],
