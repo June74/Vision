@@ -2,6 +2,7 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
+| [SB-20260817-151749-phase-c-target-role-guidance](incidents/2026-08-17T151749Z-phase-c-target-role-guidance.md) | contained | 2026-08-17T15:17:49Z | Phase C live/private-pilot target handoff | Disposable target guidance conflated owner SQL access with application-role acceptance |
 | [SB-20260816-193818-phase-c-executor-ledger-signature-mismatch](incidents/2026-08-16T193818Z-phase-c-executor-ledger-signature-mismatch.md) | contained | 2026-08-16T19:38:18.1939857Z | Phase C create executor TDD | Ledger calendar identity was added without updating every related TypeScript signature |
 | [SB-20260816-194923-phase-c-adapter-typecheck](incidents/2026-08-16T194923Z-phase-c-adapter-typecheck.md) | closed | 2026-08-16T19:49:59.2810361Z | Phase C Google event-write adapter verification | Provider normalization widened an empty tuple during TypeScript checking; corrected and both compiler checks passed |
 | [SB-20260816-220006-phase-c-route-green-compile-contract](incidents/2026-08-16T220006Z-phase-c-route-green-compile-contract.md) | closed | 2026-08-16T22:02:42.834Z | Phase C authenticated one-off write surface Task 6 route GREEN verification | Route import and fake-provider scope contracts were corrected; compiler and 49-test Phase C set passed |

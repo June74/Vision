@@ -14,6 +14,8 @@ authorization codes, tokens, database URLs, or encryption keys.
   undo, or cleanup mutation was performed in this audit.
 - User authorization: live/private-pilot acceptance and a disposable fixture
   were approved on 2026-08-16.
+- Target metadata: the user supplied a disposable branch and database label;
+  independent connection and migration-baseline verification is still pending.
 
 **No more than 20 agents at once. This is a hard line.** This run used 0
 active agents.
@@ -46,8 +48,9 @@ build passed; they are not acceptance failures.
 | Current preview revision | The latest successful preview workflow runs on 2026-08-12 used an older commit; the current Phase C implementation revision was not proven deployed. | Pending |
 | Local preview artifact | `CLOUDFLARE_ENV=preview pnpm.cmd build` and `pnpm.cmd deploy:check:preview` passed. | Pass, local only |
 | Preview deployment admission | The workflow is manually dispatched and has no repository migration step. The preview environment has deployment secrets for Cloudflare only; no database target was identified. | Pending |
-| Disposable database target | No independently verified disposable database identity, owner, branch, absence proof, or cleanup target is available in the repository or preview environment metadata. | Pending |
-| Phase C migrations | The repository contains migrations `0010` through `0013`, but no migration-application command or workflow was found in the audited deployment surfaces. Live application was not attempted. | Pending |
+| Disposable database target | User supplied a disposable branch/database target. Codex has not independently verified the branch, parent, absence proof, or cleanup target through the same process that will run migrations. | Pending |
+| Database role and connection | The SQL Editor reported an owner role. The application requires a direct, non-pooled `vision_app` connection; the Codex process did not inherit a database URL. | Pending |
+| Phase C migrations | No migration table was visible in the reported SQL Editor result, so the starting version is unknown. The repository contains migrations `0001` through `0013`; no live application was attempted. | Pending |
 | Authenticated live reads | Not run in this audit; the health endpoint is not a substitute for an authenticated owner read. | Pending |
 | Connected-write sequence | Not run: preview, confirmed create, exact read-back, replay safety, verified undo, provider absence, privacy-safe audit, and cleanup proof remain unrecorded. | Pending |
 
@@ -58,13 +61,11 @@ read.
 
 ## Safe next admission sequence
 
-1. Independently identify and record the disposable database target, its owner,
+1. In the same Codex terminal, verify the disposable target identity, owner,
    allowed branch/environment, current migration version, and cleanup method.
-2. Apply only the reviewed Phase C migrations required by that target, including
-   `0010_phase_c_calendar_write_surface.sql`,
-   `0011_phase_c_event_mutations.sql`,
-   `0012_phase_c_secretary_local.sql`, and
-   `0013_phase_c_planning_follow_ups.sql` when the target is at `0009`.
+2. Verify a direct, non-pooled `vision_app` URL without exposing it. Apply only
+   the reviewed migrations required by the target's actual baseline; do not
+   assume the target starts at `0009`.
 3. Admit the exact reviewed commit to the preview deployment workflow and prove
    the deployed revision. Do not deploy this branch to production.
 4. Use an authenticated private-pilot session to perform one disposable create,
