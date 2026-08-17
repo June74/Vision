@@ -260,21 +260,23 @@ Commit with `feat: add Phase C recurrence and attendee policy`.
 - Test: `tests/worker/secretary.test.ts`
 - Test: `tests/e2e/secretary.spec.ts`
 
-- [ ] **Step 1: Write domain, storage, Worker, and browser RED tests**
+- [x] **Step 1: Write domain, storage, Worker, and browser RED tests**
 
 Cover owner isolation, exact date/timezone handling, protected note encryption, task completion and undo, capture ambiguity, Today ordering, no implicit calendar authority, and signed-out absence.
 
-- [ ] **Step 2: Run RED checks**
+- [x] **Step 2: Run RED checks**
 
 Run the focused unit, repository, Worker, and browser commands and confirm failures are due to missing local secretary behavior.
 
-- [ ] **Step 3: Implement the minimal typed local flows**
+- [x] **Step 3: Implement the minimal typed local flows**
 
 Use additive tables, encrypted protected content, deterministic Today projection, explicit task transitions, and capture records that can create a separate calendar proposal but cannot confirm one.
 
-- [ ] **Step 4: Run GREEN, full local checks, and documentation coverage**
+- [x] **Step 4: Run GREEN, full local checks, and documentation coverage**
 
 Run `pnpm.cmd typecheck`, the complete unit/contract/Worker/browser suites, `pnpm.cmd docs:check`, `pnpm.cmd build`, and `pnpm.cmd security:scan`.
+
+Local evidence is green: focused secretary unit/repository tests (12 passed), Worker tests (3 passed), full unit suite (1,868 passed, 6 skipped), full contract suite (199 passed), full Worker suite (141 passed), full browser suite (44 passed), typecheck, documentation coverage, build, security scan, and `git diff --check`. Migration `0012_phase_c_secretary_local.sql` is additive and not yet live-applied; live/private-pilot acceptance remains gated by an independently verified disposable database target and preview deployment admission.
 
 - [ ] **Step 5: Commit the local secretary flows**
 

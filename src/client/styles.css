@@ -832,6 +832,139 @@ input {
   padding-top: 1rem;
 }
 
+.secretary-desk {
+  border: 1px solid #c6ccc2;
+  border-radius: 0.75rem;
+  display: grid;
+  gap: 1.25rem;
+  margin: 2rem 0;
+  padding: clamp(1rem, 2.5vw, 1.75rem);
+}
+
+.secretary-desk__intro h2,
+.secretary-desk h3 {
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 500;
+  margin: 0.2rem 0 0;
+}
+
+.secretary-desk__intro p:last-child,
+.secretary-desk__quiet {
+  color: var(--slate);
+  line-height: 1.5;
+  margin: 0.55rem 0 0;
+}
+
+.secretary-desk__columns {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.secretary-form {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.secretary-form label {
+  color: var(--slate);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.secretary-form input,
+.secretary-form textarea {
+  background: #fffdf7;
+  border: 1px solid #9aaca8;
+  border-radius: 0.35rem;
+  color: var(--ink);
+  font: inherit;
+  padding: 0.7rem;
+  width: 100%;
+}
+
+.secretary-form textarea {
+  min-height: 4.5rem;
+  resize: vertical;
+}
+
+.secretary-form .button {
+  justify-self: start;
+  margin-top: 0.35rem;
+}
+
+.secretary-form--note {
+  border-top: 1px solid #c6ccc2;
+  padding-top: 1.25rem;
+}
+
+.secretary-desk__message,
+.secretary-desk__error {
+  border-left: 0.15rem solid var(--aqua);
+  color: var(--ink);
+  margin: 0;
+  padding-left: 0.65rem;
+}
+
+.secretary-desk__error {
+  border-color: #a85d4e;
+}
+
+.secretary-list,
+.secretary-ledger ul {
+  display: grid;
+  gap: 0.65rem;
+  list-style: none;
+  margin: 0.8rem 0 0;
+  padding: 0;
+}
+
+.secretary-list li,
+.secretary-ledger li {
+  align-items: center;
+  border-bottom: 1px solid #d7ddd4;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  padding-bottom: 0.65rem;
+}
+
+.secretary-list .button {
+  margin-top: 0;
+  min-height: 2.25rem;
+}
+
+.secretary-list__done {
+  color: var(--slate-light);
+  text-decoration: line-through;
+}
+
+.secretary-ledger {
+  border-top: 1px solid #c6ccc2;
+  padding-top: 1rem;
+}
+
+.secretary-ledger li {
+  align-items: start;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.secretary-ledger small {
+  color: var(--slate);
+}
+
+.secretary-ledger strong {
+  color: #82510f;
+}
+
+@media (max-width: 48rem) {
+  .secretary-desk__columns {
+    grid-template-columns: 1fr;
+  }
+}
+
 .foundation-status__facts div {
   display: flex;
   gap: 0.5rem;

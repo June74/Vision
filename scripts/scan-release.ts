@@ -1630,6 +1630,15 @@ const APPROVED_MUTATING_ROUTES = new Map<
     ],
   ],
   [
+    "src/server/api/secretary-routes.ts",
+    [
+      { method: "POST", route: "/api/secretary/captures" },
+      { method: "POST", route: "/api/secretary/tasks" },
+      { method: "POST", route: "/api/secretary/tasks/:taskId/:action" },
+      { method: "POST", route: "/api/secretary/notes" },
+    ],
+  ],
+  [
     "src/server/auth/oauth-routes.ts",
     [{ method: "POST", route: "/api/auth/logout" }],
   ],

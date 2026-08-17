@@ -7,3 +7,4 @@ export * from "./edges";
 export * from "./events";
 export * from "./nodes";
 export * from "./sync";
+export * from "./secretary";

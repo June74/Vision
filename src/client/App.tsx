@@ -13,6 +13,7 @@ import {
 } from "./setup/api";
 import { CostStatus } from "./status/CostStatus";
 import { FoundationStatus } from "./status/FoundationStatus";
+import { SecretaryDesk } from "./secretary/SecretaryDesk";
 import {
   correctEventCategory,
   readFoundationSnapshot,
@@ -200,6 +201,7 @@ function FoundationDesk({
           <p>Read-only events from your connected Vision calendar. Categories are private to Vision.</p>
         </div>
         <OneOffEventComposer session={session} />
+        <SecretaryDesk session={session} />
         <EventList
           events={events}
           session={session}
