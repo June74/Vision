@@ -3,6 +3,10 @@ import { z } from "zod";
 import { type Domain } from "../categorization/category";
 import { PrivacyLevelSchema, type PrivacyLevel } from "../privacy/privacy";
 import { CalendarWriteContractError } from "./approval";
+import type {
+  CalendarWriteNotificationPolicy,
+  CalendarWriteRecurrence,
+} from "./create-execution";
 
 export { CalendarWriteContractError } from "./approval";
 
@@ -19,6 +23,13 @@ const providerIdentity = z
 const timestamp = z.string().datetime({ offset: true });
 const concreteDomain = z.enum(["school", "work", "personal"]);
 const eventStatus = z.enum(["confirmed", "tentative", "cancelled"]);
+const attendeeEmail = z.string().email().max(320);
+const recurrenceSchema = z
+  .object({
+    scope: z.enum(["one-off", "occurrence", "series"]),
+    rules: z.array(z.string().min(1).max(1_024)).max(20),
+  })
+  .strict();
 const eventInputSchema = z
   .object({
     title: z.string().min(1).max(1_024),
@@ -29,9 +40,9 @@ const eventInputSchema = z
     domain: concreteDomain,
     privacy: PrivacyLevelSchema,
     status: eventStatus,
-    attendees: z.array(z.string().min(1).max(320)).max(50),
-    recurrence: z.null(),
-    notifications: z.literal("none"),
+    attendees: z.array(attendeeEmail).max(50),
+    recurrence: z.union([z.null(), recurrenceSchema]),
+    notifications: z.enum(["none", "provider-default"]),
   })
   .strict();
 const targetInputSchema = z
@@ -57,8 +68,8 @@ const mutationInputSchema = z
 /** The supported one-off event mutation actions. */
 export type CalendarWriteMutationAction = "update" | "move" | "cancel" | "delete";
 
-/** The only scope available before the recurrence increment is accepted. */
-export type CalendarWriteMutationScope = "single";
+/** A single occurrence/event or an explicitly selected recurring series. */
+export type CalendarWriteMutationScope = "single" | "series";
 
 /** A provider-normalized event snapshot accepted by the mutation contract. */
 export type CalendarWriteMutationEventInput = {
@@ -71,8 +82,8 @@ export type CalendarWriteMutationEventInput = {
   readonly privacy: PrivacyLevel;
   readonly status: "confirmed" | "tentative" | "cancelled";
   readonly attendees: readonly string[];
-  readonly recurrence: null;
-  readonly notifications: "none";
+  readonly recurrence: CalendarWriteRecurrence | null;
+  readonly notifications: CalendarWriteNotificationPolicy;
 };
 
 /** Input accepted only after strict shape, scope, and action checks. */
@@ -102,17 +113,18 @@ export interface CalendarWriteMutationEvent {
   readonly privacy: PrivacyLevel;
   readonly status: "confirmed" | "tentative" | "cancelled";
   readonly attendees: {
-    readonly mode: "none";
-    readonly count: 0;
-    readonly addresses: readonly [];
+    readonly mode: "none" | "count";
+    readonly count: number;
+    /** Internal encrypted proposal content; route responses redact this array. */
+    readonly addresses: readonly string[];
   };
   readonly recurrence: {
-    readonly scope: "one-off";
-    readonly rules: readonly [];
+    readonly scope: "one-off" | "occurrence" | "series";
+    readonly rules: readonly string[];
   };
   readonly notifications: {
-    readonly policy: "none";
-    readonly willNotify: false;
+    readonly policy: CalendarWriteNotificationPolicy;
+    readonly willNotify: boolean;
   };
 }
 
@@ -171,7 +183,7 @@ export function createCalendarWriteMutationProposal(
   if (!parsed.success) {
     throw mutationError("INVALID_MUTATION_INPUT");
   }
-  if (parsed.data.target.scope !== "single") {
+  if (parsed.data.target.scope !== "single" && parsed.data.target.scope !== "series") {
     throw mutationError("UNSUPPORTED_MUTATION_SCOPE");
   }
   if (Date.parse(parsed.data.before.endsAt) <= Date.parse(parsed.data.before.startsAt)) {
@@ -183,7 +195,16 @@ export function createCalendarWriteMutationProposal(
   ) {
     throw mutationError("INVALID_MUTATION_PREVIEW");
   }
-  validateActionShape(parsed.data.action, parsed.data.before, parsed.data.after);
+  validateRecurrenceAndNotificationPolicy(
+    parsed.data.target.scope,
+    parsed.data.before,
+    parsed.data.after,
+  );
+  validateActionShape(
+    parsed.data.action,
+    parsed.data.before,
+    parsed.data.after,
+  );
 
   return freezeValue({
     operationId: parsed.data.operationId,
@@ -194,7 +215,7 @@ export function createCalendarWriteMutationProposal(
       calendarId: parsed.data.target.calendarId,
       eventId: parsed.data.target.eventId,
       version: parsed.data.target.version,
-      scope: "single" as const,
+      scope: parsed.data.target.scope,
     },
     preview: {
       before: toPreviewEvent(parsed.data.before),
@@ -230,7 +251,7 @@ export function restoreCalendarWriteMutationProposal(
 
   const target = readPlainRecord(root.target);
   assertExactKeys(target, ["calendarId", "eventId", "scope", "version"]);
-  if (target.scope !== "single") {
+  if (target.scope !== "single" && target.scope !== "series") {
     throw mutationError("INVALID_MUTATION_INPUT");
   }
 
@@ -248,7 +269,7 @@ export function restoreCalendarWriteMutationProposal(
       calendarId: target.calendarId,
       eventId: target.eventId,
       version: target.version,
-      scope: "single",
+      scope: target.scope,
     },
     requestedAt: root.requestedAt,
     before,
@@ -280,6 +301,66 @@ export function transitionCalendarWriteMutation(
 
   if (proposal.status !== "writing") throw invalidTransition();
   return freezeValue({ ...proposal, status: transition.kind });
+}
+
+/** Validates recurrence scope, bounded rules, attendee normalization, and notification policy. */
+function validateRecurrenceAndNotificationPolicy(
+  targetScope: CalendarWriteMutationScope,
+  before: z.infer<typeof eventInputSchema>,
+  after: z.infer<typeof eventInputSchema> | null,
+): void {
+  validateRecurrenceValue(before.recurrence);
+  if (after !== null) validateRecurrenceValue(after.recurrence);
+
+  const beforeScope = recurrenceScope(before.recurrence);
+  const afterScope = after === null ? beforeScope : recurrenceScope(after.recurrence);
+  if (beforeScope !== afterScope) throw mutationError("INVALID_MUTATION_PREVIEW");
+  if (targetScope === "series" && beforeScope !== "series") {
+    throw mutationError("UNSUPPORTED_MUTATION_SCOPE");
+  }
+  if (targetScope === "single" && beforeScope === "series") {
+    throw mutationError("UNSUPPORTED_MUTATION_SCOPE");
+  }
+
+  const beforeAttendees = canonicalizeAttendees(before.attendees);
+  if (beforeAttendees.length !== before.attendees.length) {
+    throw mutationError("INVALID_MUTATION_PREVIEW");
+  }
+  if (after !== null) {
+    const afterAttendees = canonicalizeAttendees(after.attendees);
+    if (afterAttendees.length !== after.attendees.length) {
+      throw mutationError("INVALID_MUTATION_PREVIEW");
+    }
+  }
+}
+
+/** Validates the deliberately small recurrence grammar before persistence. */
+function validateRecurrenceValue(
+  recurrence: z.infer<typeof recurrenceSchema> | null,
+): void {
+  if (recurrence === null) return;
+  if (recurrence.scope !== "series" && recurrence.rules.length !== 0) {
+    throw mutationError("INVALID_MUTATION_PREVIEW");
+  }
+  if (recurrence.scope === "series" && recurrence.rules.length === 0) {
+    throw mutationError("INVALID_MUTATION_PREVIEW");
+  }
+  if (!recurrence.rules.every((rule) => /^(?:RRULE|EXDATE|RDATE):[^\u0000-\u001F\u007F]+$/u.test(rule))) {
+    throw mutationError("INVALID_MUTATION_PREVIEW");
+  }
+}
+
+/** Maps the nullable internal recurrence to the stable public scope labels. */
+function recurrenceScope(
+  recurrence: z.infer<typeof recurrenceSchema> | null,
+): "one-off" | "occurrence" | "series" {
+  return recurrence?.scope ?? "one-off";
+}
+
+/** Canonicalizes attendee addresses for exact read-back and duplicate rejection. */
+function canonicalizeAttendees(attendees: readonly string[]): readonly string[] {
+  const canonical = attendees.map((address) => address.trim().toLowerCase());
+  return [...new Set(canonical)].sort();
 }
 
 /** Validates that an action's immutable before/after shape matches its meaning. */
@@ -326,8 +407,8 @@ function sameNonStatusFields(
     before.timeZone === after.timeZone &&
     before.domain === after.domain &&
     before.privacy === after.privacy &&
-    JSON.stringify(before.attendees) === JSON.stringify(after.attendees) &&
-    before.recurrence === after.recurrence &&
+    JSON.stringify(canonicalizeAttendees(before.attendees)) === JSON.stringify(canonicalizeAttendees(after.attendees)) &&
+    sameRecurrence(before.recurrence, after.recurrence) &&
     before.notifications === after.notifications
   );
 }
@@ -343,8 +424,8 @@ function sameNonTimeFields(
     before.domain === after.domain &&
     before.privacy === after.privacy &&
     before.status === after.status &&
-    JSON.stringify(before.attendees) === JSON.stringify(after.attendees) &&
-    before.recurrence === after.recurrence &&
+    JSON.stringify(canonicalizeAttendees(before.attendees)) === JSON.stringify(canonicalizeAttendees(after.attendees)) &&
+    sameRecurrence(before.recurrence, after.recurrence) &&
     before.notifications === after.notifications
   );
 }
@@ -361,10 +442,22 @@ function sameTimeFields(
   );
 }
 
+/** Compares recurrence scope and rules without relying on object identity. */
+function sameRecurrence(
+  left: z.infer<typeof recurrenceSchema> | null,
+  right: z.infer<typeof recurrenceSchema> | null,
+): boolean {
+  if (left === null || right === null) return left === right;
+  return left.scope === right.scope &&
+    JSON.stringify(left.rules) === JSON.stringify(right.rules);
+}
+
 /** Converts a strict input event into the public preview shape. */
 function toPreviewEvent(
   event: z.infer<typeof eventInputSchema>,
 ): CalendarWriteMutationEvent {
+  const attendees = canonicalizeAttendees(event.attendees);
+  const recurrence = event.recurrence ?? { scope: "one-off" as const, rules: [] as const };
   return {
     title: event.title,
     description: event.description,
@@ -374,9 +467,16 @@ function toPreviewEvent(
     domain: event.domain,
     privacy: event.privacy,
     status: event.status,
-    attendees: { mode: "none", count: 0, addresses: [] },
-    recurrence: { scope: "one-off", rules: [] },
-    notifications: { policy: "none", willNotify: false },
+    attendees: {
+      mode: attendees.length === 0 ? "none" as const : "count" as const,
+      count: attendees.length,
+      addresses: attendees,
+    },
+    recurrence,
+    notifications: {
+      policy: event.notifications,
+      willNotify: event.notifications !== "none",
+    },
   };
 }
 
@@ -442,23 +542,33 @@ function readPersistedPreviewEvent(value: unknown): CalendarWriteMutationEventIn
 
   const attendees = readPlainRecord(event.attendees);
   assertExactKeys(attendees, ["addresses", "count", "mode"]);
-  if (attendees.mode !== "none" || attendees.count !== 0) {
+  if (attendees.mode !== "none" && attendees.mode !== "count") {
     throw mutationError("INVALID_MUTATION_INPUT");
   }
-  const addresses = readPlainAttendees(attendees.addresses);
-  if (addresses.length !== 0) {
+  const addresses = readPlainAttendees(attendees.addresses) as string[];
+  if (attendees.count !== addresses.length ||
+      (attendees.mode === "none" && addresses.length !== 0) ||
+      (attendees.mode === "count" && addresses.length === 0) ||
+      !addresses.every((address) => attendeeEmail.safeParse(address).success)) {
     throw mutationError("INVALID_MUTATION_INPUT");
   }
 
   const recurrence = readPlainRecord(event.recurrence);
   assertExactKeys(recurrence, ["rules", "scope"]);
-  if (recurrence.scope !== "one-off" || readPlainAttendees(recurrence.rules).length !== 0) {
+  const recurrenceRules = readPlainAttendees(recurrence.rules) as string[];
+  if (
+    (recurrence.scope !== "one-off" && recurrence.scope !== "occurrence" && recurrence.scope !== "series") ||
+    !recurrenceRules.every((rule) => typeof rule === "string")
+  ) {
     throw mutationError("INVALID_MUTATION_INPUT");
   }
 
   const notifications = readPlainRecord(event.notifications);
   assertExactKeys(notifications, ["policy", "willNotify"]);
-  if (notifications.policy !== "none" || notifications.willNotify !== false) {
+  if (
+    (notifications.policy !== "none" && notifications.policy !== "provider-default") ||
+    notifications.willNotify !== (notifications.policy !== "none")
+  ) {
     throw mutationError("INVALID_MUTATION_INPUT");
   }
 
@@ -471,9 +581,14 @@ function readPersistedPreviewEvent(value: unknown): CalendarWriteMutationEventIn
     domain: event.domain as Exclude<Domain, "unresolved">,
     privacy: event.privacy as PrivacyLevel,
     status: event.status as "confirmed" | "tentative" | "cancelled",
-    attendees: [],
-    recurrence: null,
-    notifications: "none",
+    attendees: addresses,
+    recurrence: recurrence.scope === "one-off"
+      ? null
+      : {
+          scope: recurrence.scope as "occurrence" | "series",
+          rules: recurrenceRules,
+        },
+    notifications: notifications.policy as CalendarWriteNotificationPolicy,
   };
 }
 

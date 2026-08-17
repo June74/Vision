@@ -1,6 +1,7 @@
 # Browser calendar-write API
 
-The module is the browser-side adapter for the four authenticated routes:
+The module is the browser-side adapter for the authenticated calendar-write
+routes:
 `POST /api/calendar/writes/preview`, `GET /api/calendar/writes/:operationId`,
 `POST .../confirm`, and `POST .../undo`. Mutations use same-origin credentials
 and `x-vision-csrf`; status reads use credentials without CSRF. The parser
@@ -29,9 +30,10 @@ provider version remain server-side ledger fields.
 
 ## `previewCalendarEventMutation`
 
-POSTs only `{ action, eventId, after }` with the existing session cookie and
+POSTs `{ action, eventId, scope?, after }` with the existing session cookie and
 CSRF token. The server derives the connected calendar, provider event, and
-version before encrypting the proposal.
+version before encrypting the proposal; attendee addresses are accepted only
+on the request and are redacted from the returned preview.
 
 ## `confirmCalendarEventMutation`
 
@@ -69,8 +71,8 @@ explicit null deletion outcome.
 
 ## `isCalendarMutationEvent`
 
-Rejects provider-only fields and admits only attendee-free, recurrence-free,
-notification-free event facts.
+Rejects provider-only fields and admits only bounded attendee descriptors,
+one-off/occurrence/series recurrence, and the controlled notification policy.
 
 ## `isCalendarWriteStatus`
 
@@ -83,8 +85,8 @@ allowlist.
 
 ## `isCalendarWritePreview`
 
-Requires `before: null`, controlled domain/privacy, empty attendee and recurrence
-lists, and `notifications.willNotify === false`.
+Requires `before: null`, controlled domain/privacy, and the create preview's
+empty attendee/recurrence and no-notification policy.
 
 ## `isRecord`
 

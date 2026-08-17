@@ -14,10 +14,11 @@ Inserts with a conflict fence and requires the returned operation ID to match.
 
 ## `createMutationApproval`
 
-Requires a proposed, single-scope mutation with paired event ID/version for
-the update, move, cancel, or delete action. It binds owner, operation, domain,
-and encrypted preview through the existing protected-fields boundary and uses
-the same insert conflict fence.
+Requires a proposed single-event or whole-series mutation with paired event
+ID/version for the update, move, cancel, or delete action. It binds owner,
+operation, domain, and encrypted preview—including bounded attendee,
+recurrence, and notification facts—through the existing protected-fields
+boundary and uses the same insert conflict fence.
 
 ## `findApproval`
 
@@ -93,14 +94,15 @@ and terminal rows without both provider fields.
 
 ## `assertProposalForApproval`
 
-Requires proposed status, bounded owner/operation/calendar values, zero
-attendees, one-off recurrence, and no notifications.
+Requires proposed status, bounded owner/operation/calendar values, and the
+closed create-event policy.
 
 ## `assertMutationProposalForApproval`
 
 Requires proposed status, bounded owner/operation/calendar/event identity,
-paired event version, single scope, zero attendees, one-off recurrence, no
-notifications, and an action-consistent before/after preview.
+paired event version, single or series scope, bounded attendee and recurrence
+facts, a controlled notification policy, and an action-consistent before/after
+preview.
 
 ## `assertOwnerAndOperation`
 

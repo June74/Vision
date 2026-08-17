@@ -15,8 +15,9 @@ Registers exactly:
 - `POST /api/calendar/writes/:operationId/undo`
 
 All responses set `Cache-Control: no-store`. Authentication precedes body
-parsing and provider-token resolution. The strict preview body admits only the
-one-off fields and fixed no-attendee/no-recurrence/no-notification effects.
+parsing and provider-token resolution. The strict preview body admits only
+bounded event patches, explicit single/series scope, attendee addresses,
+recurrence rules, and the controlled notification policy.
 
 ## `createProductionCalendarWriteDependencies`
 
@@ -92,14 +93,15 @@ provider body, token, subject, calendar authority, and audit details.
 ## `toMutationEventInput`
 
 Normalizes a provider read into the immutable mutation preview descriptor. It
-sets the Phase C one-off policy explicitly: zero attendees, no recurrence, and
-no notifications.
+preserves recurrence and notification intent while the public response
+redacts attendee addresses to count-only metadata.
 
 ## `mergeMutationEventInput`
 
 Merges the narrow browser patch into the authenticated provider read. This
 prevents the browser from supplying hidden before-state, calendar, owner, or
-version authority.
+version authority, and requires an explicit scope when selecting a recurring
+series.
 
 ## `requireMutationProvider`
 
@@ -141,3 +143,11 @@ or provider availability failures.
 The normal result mapping is 200 for verified/undone, 202 for
 `verification_pending`, 409 for invalidated/failed/not-verified, and 503 for
 availability failures. A pending result is never presented as provider success.
+
+## `publicMutationPreview`
+
+**Signature:** `(preview: CalendarWriteMutationPreview) => CalendarWriteMutationPreview`
+
+Copies the preview envelope while replacing protected attendee addresses with
+an empty address list and preserving only the public attendee count, recurrence
+descriptor, and notification descriptor.

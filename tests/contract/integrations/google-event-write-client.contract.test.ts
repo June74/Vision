@@ -199,6 +199,31 @@ describe("Google one-off event write adapter contract", () => {
     });
   });
 
+  it("patches attendee and series recurrence facts with an explicit notification policy", async () => {
+    const { client, fetcher } = clientFor(jsonResponse(eventPayload({
+      attendees: [{ email: "alice@example.com" }, { email: "carol@example.com" }],
+      recurrence: ["RRULE:FREQ=WEEKLY;COUNT=4"],
+    })));
+
+    await expect(client.updateEvent(mutationInput({
+      attendees: ["alice@example.com", "carol@example.com"],
+      recurrence: { scope: "series", rules: ["RRULE:FREQ=WEEKLY;COUNT=4"] },
+      notifications: "provider-default",
+    }))).resolves.toMatchObject({
+      attendees: ["alice@example.com", "carol@example.com"],
+      recurrence: { scope: "series", rules: ["RRULE:FREQ=WEEKLY;COUNT=4"] },
+      notifications: "provider-default",
+    });
+
+    const [input, init] = fetcher.mock.calls[0]!;
+    const url = new URL(String(input));
+    expect(url.searchParams.get("sendUpdates")).toBe("all");
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      attendees: [{ email: "alice@example.com" }, { email: "carol@example.com" }],
+      recurrence: ["RRULE:FREQ=WEEKLY;COUNT=4"],
+    });
+  });
+
   it("patches a move with only the disclosed time fields", async () => {
     const { client, fetcher } = clientFor(jsonResponse(eventPayload({
       start: { dateTime: "2026-08-17T16:00:00.000Z", timeZone: "America/Chicago" },

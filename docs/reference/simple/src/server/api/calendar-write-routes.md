@@ -1,9 +1,10 @@
 # Calendar-write routes
 
-These authenticated routes let the owner review one narrow one-off event,
-confirm it deliberately, check an uncertain result, and undo it only after
-verified creation. The server supplies owner, connected calendar, provider
-token, event ID, and version.
+These authenticated routes let the owner review one narrow event mutation,
+including explicit whole-series scope, recurrence, attendees, and notification
+intent; confirm it deliberately, check an uncertain result, and recover only
+after provider verification. The server supplies owner, connected calendar,
+provider token, event ID, and version.
 
 ## `registerCalendarWriteRoutes`
 
@@ -71,11 +72,13 @@ Returns only operation status, safe preview, and undo availability.
 
 ## `toMutationEventInput`
 
-Copies the server-read provider event into the strict mutation preview shape.
+Copies the server-read provider event into the strict mutation preview shape,
+including recurrence, attendee count, and notification policy.
 
 ## `mergeMutationEventInput`
 
-Applies only explicitly requested patch fields to the server-read event.
+Applies only explicitly requested patch fields to the server-read event,
+including a required explicit scope for recurring events.
 
 ## `requireMutationProvider`
 
@@ -109,3 +112,8 @@ Returns the safe 409 stale/invalid-state error.
 ## `calendarWriteUnavailable`
 
 Returns the safe 503 persistence/provider error.
+
+## `publicMutationPreview`
+
+Redacts attendee addresses from a mutation response while retaining count,
+recurrence, and notification intent.

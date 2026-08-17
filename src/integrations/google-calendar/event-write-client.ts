@@ -4,6 +4,8 @@ import {
   CalendarWriteProviderError,
   type CalendarWriteMutationProvider,
   type CalendarWriteMutationProviderInput,
+  type CalendarWriteNotificationPolicy,
+  type CalendarWriteRecurrence,
   type CalendarWriteProvider,
   type CalendarWriteProviderEvent,
 } from "../../domain/calendar-write/create-execution";
@@ -18,6 +20,9 @@ const MAX_LIST_RESULTS = 2_500;
 const NOT_FOUND = Symbol("google-event-not-found");
 
 const text = z.string().min(1).max(8_192);
+const attendeeSchema = z
+  .object({ email: z.string().email().max(320) })
+  .passthrough();
 const eventResponseSchema = z
   .object({
     id: z.string().min(1).max(1_024),
@@ -37,8 +42,9 @@ const eventResponseSchema = z
         timeZone: z.string().min(1).max(255),
       })
       .strict(),
-    attendees: z.array(z.unknown()).max(50).optional(),
+    attendees: z.array(attendeeSchema).max(50).optional(),
     recurrence: z.array(z.string().max(1_024)).max(20).optional(),
+    recurringEventId: z.string().min(1).max(1_024).optional(),
     extendedProperties: z
       .object({
         private: z.record(z.string().max(128), z.string().max(1_024)),
@@ -138,7 +144,7 @@ export function createGoogleEventWriteClient(
       const payload = await requestJson(
         buildEventsUrl(input.calendarId, {
           eventId: input.eventId,
-          sendUpdates: "none",
+          sendUpdates: sendUpdatesValue(input.notifications),
         }),
         {
           method: "PATCH",
@@ -158,6 +164,8 @@ export function createGoogleEventWriteClient(
                 "vision.privacy": input.privacy,
               },
             },
+            attendees: input.attendees.map((email) => ({ email })),
+            ...(input.recurrence === null ? {} : { recurrence: input.recurrence.rules }),
           }),
         },
         true,
@@ -167,7 +175,7 @@ export function createGoogleEventWriteClient(
         maxBodyBytes,
         accessToken,
       );
-      return normalizeEvent(payload, input.operationId);
+      return normalizeEvent(payload, input.operationId, input.notifications);
     },
 
     /** Patches only the disclosed time fields for an explicitly previewed move. */
@@ -176,7 +184,7 @@ export function createGoogleEventWriteClient(
       const payload = await requestJson(
         buildEventsUrl(input.calendarId, {
           eventId: input.eventId,
-          sendUpdates: "none",
+          sendUpdates: sendUpdatesValue(input.notifications),
         }),
         {
           method: "PATCH",
@@ -193,7 +201,7 @@ export function createGoogleEventWriteClient(
         maxBodyBytes,
         accessToken,
       );
-      return normalizeEvent(payload, input.operationId);
+      return normalizeEvent(payload, input.operationId, input.notifications);
     },
 
     /** Patches provider status to cancelled; cancellation remains distinct from deletion. */
@@ -205,7 +213,7 @@ export function createGoogleEventWriteClient(
       const payload = await requestJson(
         buildEventsUrl(input.calendarId, {
           eventId: input.eventId,
-          sendUpdates: "none",
+          sendUpdates: sendUpdatesValue(input.notifications),
         }),
         {
           method: "PATCH",
@@ -219,7 +227,7 @@ export function createGoogleEventWriteClient(
         maxBodyBytes,
         accessToken,
       );
-      return normalizeEvent(payload, input.operationId);
+      return normalizeEvent(payload, input.operationId, input.notifications);
     },
 
     /** Finds candidate events through the private operation marker for reconciliation. */
@@ -264,7 +272,11 @@ export function createGoogleEventWriteClient(
         accessToken,
       );
       if (payload === NOT_FOUND) return undefined;
-      return normalizeEvent(payload);
+      return normalizeEvent(
+        payload,
+        undefined,
+        input.expectedNotificationPolicy ?? "none",
+      );
     },
 
     /** Deletes one event with an expected provider version and no notifications. */
@@ -329,6 +341,11 @@ function validateCreateInput(input: Parameters<CalendarWriteProvider["createOneO
   }
 }
 
+/** Maps the explicit Vision notification policy to Google's bounded sendUpdates choice. */
+function sendUpdatesValue(policy: CalendarWriteNotificationPolicy): "none" | "all" {
+  return policy === "none" ? "none" : "all";
+}
+
 /** Validates the closed one-off mutation payload before a PATCH reaches Google. */
 function validateMutationInput(input: CalendarWriteMutationProviderInput): void {
   assertProviderText(input.calendarId, 2_048);
@@ -344,9 +361,13 @@ function validateMutationInput(input: CalendarWriteMutationProviderInput): void 
     (input.status !== "confirmed" &&
       input.status !== "tentative" &&
       input.status !== "cancelled") ||
-    input.attendees.length !== 0 ||
-    input.recurrence !== null ||
-    input.notifications !== "none" ||
+    input.attendees.length > 50 ||
+    input.attendees.some((email) => !isBoundedText(email, 320) || !email.includes("@")) ||
+    (input.recurrence !== null &&
+      (input.recurrence.rules.length === 0 ||
+        input.recurrence.rules.length > 20 ||
+        input.recurrence.rules.some((rule) => !isBoundedText(rule, 1_024)))) ||
+    (input.notifications !== "none" && input.notifications !== "provider-default") ||
     Date.parse(input.endsAt) <= Date.parse(input.startsAt)
   ) {
     throw new CalendarWriteProviderError("definite_failure");
@@ -357,6 +378,7 @@ function validateMutationInput(input: CalendarWriteMutationProviderInput): void 
 function normalizeEvent(
   value: unknown,
   expectedOperationId?: string,
+  notificationPolicy: CalendarWriteNotificationPolicy = "none",
 ): CalendarWriteProviderEvent {
   const parsed = eventResponseSchema.safeParse(value);
   if (!parsed.success) throw new CalendarWriteProviderError("uncertain");
@@ -371,8 +393,9 @@ function normalizeEvent(
     (expectedOperationId !== undefined && operationId !== expectedOperationId) ||
     (domain !== "school" && domain !== "work" && domain !== "personal") ||
     (privacy !== "planning" && privacy !== "private" && privacy !== "restricted") ||
-    (parsed.data.attendees?.length ?? 0) !== 0 ||
-    (parsed.data.recurrence?.length ?? 0) !== 0 ||
+    (parsed.data.attendees?.length ?? 0) > 50 ||
+    (parsed.data.recurrence?.length ?? 0) > 20 ||
+    (parsed.data.recurrence ?? []).some((rule) => !/^(?:RRULE|EXDATE|RDATE):[^\u0000-\u001F\u007F]+$/u.test(rule)) ||
     parsed.data.start.timeZone !== parsed.data.end.timeZone ||
     Date.parse(parsed.data.end.dateTime) <= Date.parse(parsed.data.start.dateTime)
   ) {
@@ -393,9 +416,18 @@ function normalizeEvent(
     domain,
     privacy,
     status: parsed.data.status,
-    attendees: [] as const,
-    recurrence: null,
-    notifications: "none",
+    attendees: (parsed.data.attendees ?? [])
+      .map((attendee) => attendee.email.toLowerCase())
+      .sort(),
+    recurrence: parsed.data.recurrence && parsed.data.recurrence.length > 0
+      ? { scope: "series" as const, rules: [...parsed.data.recurrence] }
+      : parsed.data.recurringEventId
+        ? { scope: "occurrence" as const, rules: [] as const }
+        : null,
+    notifications: notificationPolicy,
+    ...(parsed.data.recurringEventId
+      ? { recurringEventId: parsed.data.recurringEventId }
+      : {}),
   });
 }
 

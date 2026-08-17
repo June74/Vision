@@ -97,6 +97,13 @@ const undoSchema = z
   .object({ confirmation: z.literal("UNDO ONE-OFF EVENT") })
   .strict();
 const mutationActionSchema = z.enum(["update", "move", "cancel", "delete"]);
+const mutationScopeSchema = z.enum(["single", "series"]);
+const mutationRecurrencePatchSchema = z
+  .object({
+    scope: z.enum(["occurrence", "series"]),
+    rules: z.array(z.string().min(1).max(1_024)).max(20),
+  })
+  .strict();
 const mutationEventPatchSchema = z
   .object({
     title: z.string().min(1).max(1_024).optional(),
@@ -107,12 +114,16 @@ const mutationEventPatchSchema = z
     domain: z.enum(["school", "work", "personal"]).optional(),
     privacy: z.enum(["planning", "private", "restricted"]).optional(),
     status: z.enum(["confirmed", "tentative", "cancelled"]).optional(),
+    attendees: z.array(z.string().email().max(320)).max(50).optional(),
+    recurrence: mutationRecurrencePatchSchema.nullable().optional(),
+    notifications: z.enum(["none", "provider-default"]).optional(),
   })
   .strict();
 const mutationPreviewSchema = z
   .object({
     action: mutationActionSchema,
     eventId: operationIdSchema,
+    scope: mutationScopeSchema.optional(),
     after: mutationEventPatchSchema.nullable(),
   })
   .strict();
@@ -188,6 +199,31 @@ export function registerCalendarWriteRoutes(
       throw calendarWriteConflict();
     }
 
+    let targetScope = input.data.scope;
+    if (targetScope === undefined) {
+      if (current.recurrence !== null) throw invalidCalendarWriteRequest();
+      targetScope = "single";
+    }
+    if (targetScope === "series") {
+      if (current.recurrence?.scope === "occurrence") {
+        if (!current.recurringEventId) throw invalidCalendarWriteRequest();
+        try {
+          current = await provider.readEvent({
+            calendarId: connection.calendarId,
+            eventId: current.recurringEventId,
+          });
+        } catch {
+          throw calendarWriteUnavailable();
+        }
+      }
+      if (!current || current.recurrence?.scope !== "series") {
+        throw invalidCalendarWriteRequest();
+      }
+    }
+    if (targetScope === "single" && current.recurrence?.scope === "series") {
+      throw invalidCalendarWriteRequest();
+    }
+
     let proposal: CalendarWriteMutationProposal;
     try {
       const requestedAt = readDate(dependencies.now());
@@ -199,7 +235,7 @@ export function registerCalendarWriteRoutes(
           calendarId: connection.calendarId,
           eventId: current.eventId,
           version: current.version,
-          scope: "single",
+          scope: targetScope,
         },
         requestedAt: requestedAt.toISOString(),
         before: toMutationEventInput(current),
@@ -222,7 +258,7 @@ export function registerCalendarWriteRoutes(
         operationId: proposal.operationId,
         action: proposal.action,
         expiresAt: expiresAt.toISOString(),
-        preview: proposal.preview,
+        preview: publicMutationPreview(proposal.preview),
         undoAvailable: false,
       });
     } catch (error) {
@@ -284,7 +320,7 @@ export function registerCalendarWriteRoutes(
         : {}),
       status: projectedStatus,
       ...(approval ? { expiresAt: approval.expiresAt.toISOString() } : {}),
-      ...(proposal ? { preview: proposal.preview } : {}),
+      ...(proposal ? { preview: publicMutationPreview(proposal.preview) } : {}),
       undoAvailable: false,
     });
   });
@@ -298,10 +334,7 @@ export function registerCalendarWriteRoutes(
     const session = await authenticateRequest(context, dependencies);
     await requireCsrf(context, session);
     const operationId = readOperationId(context.req.param("operationId"));
-    if (
-      !dependencies.approvals.loadMutationProposal ||
-      !dependencies.approvals.createMutationApproval
-    ) {
+    if (!dependencies.approvals.loadMutationProposal) {
       throw calendarWriteUnavailable();
     }
 
@@ -907,9 +940,9 @@ function toMutationEventInput(
   readonly domain: "school" | "work" | "personal";
   readonly privacy: "planning" | "private" | "restricted";
   readonly status: "confirmed" | "tentative" | "cancelled";
-  readonly attendees: readonly [];
-  readonly recurrence: null;
-  readonly notifications: "none";
+  readonly attendees: readonly string[];
+  readonly recurrence: CalendarWriteProviderEvent["recurrence"];
+  readonly notifications: CalendarWriteProviderEvent["notifications"];
 } {
   return {
     title: event.title,
@@ -920,9 +953,11 @@ function toMutationEventInput(
     domain: event.domain,
     privacy: event.privacy,
     status: event.status ?? "confirmed",
-    attendees: [],
-    recurrence: null,
-    notifications: "none",
+    attendees: [...event.attendees],
+    recurrence: event.recurrence === null
+      ? null
+      : { scope: event.recurrence.scope, rules: [...event.recurrence.rules] },
+    notifications: event.notifications,
   };
 }
 
@@ -942,6 +977,9 @@ function mergeMutationEventInput(
     domain: patch.domain === undefined ? base.domain : patch.domain,
     privacy: patch.privacy === undefined ? base.privacy : patch.privacy,
     status: patch.status === undefined ? base.status : patch.status,
+    attendees: patch.attendees === undefined ? base.attendees : patch.attendees,
+    recurrence: patch.recurrence === undefined ? base.recurrence : patch.recurrence,
+    notifications: patch.notifications === undefined ? base.notifications : patch.notifications,
   };
 }
 
@@ -977,8 +1015,34 @@ function mutationWriteResponse(
     operationId: result.operationId,
     action: result.proposal.action,
     status: result.status,
-    preview: result.proposal.preview,
+    preview: publicMutationPreview(result.proposal.preview),
     undoAvailable: false,
+  };
+}
+
+/** Redacts protected attendee addresses before any mutation response reaches the browser. */
+function publicMutationPreview(
+  preview: CalendarWriteMutationProposal["preview"],
+): CalendarWriteMutationProposal["preview"] {
+  return {
+    before: {
+      ...preview.before,
+      attendees: {
+        mode: preview.before.attendees.count === 0 ? "none" : "count",
+        count: preview.before.attendees.count,
+        addresses: [],
+      },
+    },
+    after: preview.after === null
+      ? null
+      : {
+          ...preview.after,
+          attendees: {
+            mode: preview.after.attendees.count === 0 ? "none" : "count",
+            count: preview.after.attendees.count,
+            addresses: [],
+          },
+        },
   };
 }
 

@@ -1,6 +1,7 @@
 # `src/domain/calendar-write/mutation-execution.ts`
 
-This module runs one confirmed update, move, cancellation, or direct delete.
+This module runs one confirmed update, move, cancellation, or direct delete,
+including reviewed recurrence, attendee, and notification effects.
 It checks the exact provider event version before claiming the operation,
 calls the selected provider method at most once, and reports verified only
 after the disclosed after-state—or provider absence for delete—is read back.
@@ -32,8 +33,8 @@ action.
 
 ## `matchesTargetAndSnapshot`
 
-Compares event identity, provider version, operation marker, all disclosed
-event facts, and the supported empty attendee/recurrence/notification effects.
+Compares event identity, provider version, all disclosed event facts, and the
+approved attendee/recurrence/notification effects.
 
 ## `staleMutation`
 
@@ -83,3 +84,11 @@ Converts an owner identity into the safe audit identifier form.
 ## `isDefiniteProviderFailure`
 
 Recognizes only the closed provider outcome that may be recorded as failed.
+
+## `sameAttendees`
+
+Compares normalized attendee addresses for exact read-back verification.
+
+## `sameRecurrence`
+
+Compares recurrence scope and rules for exact read-back verification.

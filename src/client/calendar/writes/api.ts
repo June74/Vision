@@ -72,6 +72,12 @@ export interface CalendarMutationEventPatch {
   readonly domain?: CalendarWriteDomain;
   readonly privacy?: CalendarWritePrivacy;
   readonly status?: "confirmed" | "tentative" | "cancelled";
+  readonly attendees?: readonly string[];
+  readonly recurrence?: {
+    readonly scope: "occurrence" | "series";
+    readonly rules: readonly string[];
+  } | null;
+  readonly notifications?: "none" | "provider-default";
 }
 
 /** Immutable before/after event facts returned by the mutation preview. */
@@ -85,17 +91,17 @@ export interface CalendarMutationEvent {
   readonly privacy: CalendarWritePrivacy;
   readonly status: "confirmed" | "tentative" | "cancelled";
   readonly attendees: {
-    readonly mode: "none";
-    readonly count: 0;
+    readonly mode: "none" | "count";
+    readonly count: number;
     readonly addresses: readonly [];
   };
   readonly recurrence: {
-    readonly scope: "one-off";
-    readonly rules: readonly [];
+    readonly scope: "one-off" | "occurrence" | "series";
+    readonly rules: readonly string[];
   };
   readonly notifications: {
-    readonly policy: "none";
-    readonly willNotify: false;
+    readonly policy: "none" | "provider-default";
+    readonly willNotify: boolean;
   };
 }
 
@@ -201,6 +207,7 @@ export async function previewCalendarEventMutation(
   input: {
     readonly action: CalendarMutationAction;
     readonly eventId: string;
+    readonly scope?: "single" | "series";
     readonly after: CalendarMutationEventPatch | null;
   },
 ): Promise<CalendarMutationResponse> {
@@ -321,15 +328,19 @@ function isCalendarMutationEvent(value: unknown): value is CalendarMutationEvent
     isOneOf(value.domain, ["school", "work", "personal"]) &&
     isOneOf(value.privacy, ["planning", "private", "restricted"]) &&
     isOneOf(value.status, ["confirmed", "tentative", "cancelled"]) &&
-    attendees?.mode === "none" &&
-    attendees.count === 0 &&
+    (attendees?.mode === "none" || attendees?.mode === "count") &&
+    typeof attendees.count === "number" &&
+    Number.isSafeInteger(attendees.count) &&
+    attendees.count >= 0 &&
+    attendees.mode === (attendees.count === 0 ? "none" : "count") &&
     Array.isArray(attendees.addresses) &&
     attendees.addresses.length === 0 &&
-    recurrence?.scope === "one-off" &&
+    isOneOf(recurrence?.scope, ["one-off", "occurrence", "series"]) &&
     Array.isArray(recurrence.rules) &&
-    recurrence.rules.length === 0 &&
-    notifications?.policy === "none" &&
-    notifications.willNotify === false;
+    recurrence.rules.length <= 20 &&
+    recurrence.rules.every((rule) => typeof rule === "string" && rule.length > 0 && rule.length <= 1_024) &&
+    isOneOf(notifications?.policy, ["none", "provider-default"]) &&
+    notifications.willNotify === (notifications.policy !== "none");
 }
 
 /** Keeps status parsing identical across create and mutation browser responses. */

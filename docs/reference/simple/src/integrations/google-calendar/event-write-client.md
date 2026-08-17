@@ -1,9 +1,10 @@
 # `src/integrations/google-calendar/event-write-client.ts`
 
-This is the narrow Google Calendar adapter used by the Phase C create
-executor. It talks only to the fixed Google Calendar API origin, sends no
-attendees or notifications, marks each event with an opaque operation ID, and
-turns uncertain provider state into a safe pending outcome.
+This is the narrow Google Calendar adapter used by the Phase C write
+executors. It talks only to the fixed Google Calendar API origin, sends only
+reviewed attendee/recurrence/notification intent, marks each event with an
+opaque operation ID, and turns uncertain provider state into a safe pending
+outcome.
 
 ## `createGoogleEventWriteClient`
 
@@ -21,13 +22,14 @@ recurrence, and private operation, domain, and privacy markers.
 
 ## `updateEvent`
 
-Patches the disclosed event fields with the expected provider version and
-`sendUpdates=none`, then returns a normalized event for read-back.
+Patches the disclosed event fields with the expected provider version and maps
+`none` to `sendUpdates=none` or `provider-default` to `sendUpdates=all`, then
+returns a normalized event for read-back.
 
 ## `moveEvent`
 
 Patches only the disclosed start, end, and timezone values with the expected
-provider version and no notifications.
+provider version; it does not silently alter attendees or recurrence.
 
 ## `cancelEvent`
 
@@ -59,12 +61,13 @@ Checks the closed one-off event shape before any provider request.
 
 ## `validateMutationInput`
 
-Checks bounded event identity/version, preview fields, status, timing, and the
-currently supported empty attendee, recurrence, and notification policy.
+Checks bounded event identity/version, preview fields, status, timing, bounded
+attendees, recurrence rules, and the controlled notification policy.
 
 ## `normalizeEvent`
 
-Converts a validated Google response into the provider-neutral event shape.
+Converts a validated Google response into the provider-neutral event shape,
+including attendee count, recurrence scope/rules, and notification policy.
 
 ## `requestJson`
 
@@ -99,3 +102,7 @@ Checks a nonempty bounded string used by the adapter.
 ## `readPositiveBound`
 
 Keeps configured deadlines and body limits within reviewed ceilings.
+
+## `sendUpdatesValue`
+
+Maps the reviewed notification policy to Google's `none` or `all` query value.

@@ -10,6 +10,15 @@ import {
 type ConcreteDomain = Exclude<Domain, "unresolved">;
 type Privacy = "planning" | "private" | "restricted";
 
+/** Provider-neutral recurrence facts supported by the Phase C mutation port. */
+export interface CalendarWriteRecurrence {
+  readonly scope: "occurrence" | "series";
+  readonly rules: readonly string[];
+}
+
+/** Explicit notification choices accepted by the reviewed mutation adapter. */
+export type CalendarWriteNotificationPolicy = "none" | "provider-default";
+
 /** Safe provider outcome categories used to distinguish retryable uncertainty. */
 export type CalendarWriteProviderOutcome = "definite_failure" | "uncertain";
 
@@ -34,9 +43,10 @@ export interface CalendarWriteProviderEvent {
   readonly domain: ConcreteDomain;
   readonly privacy: Privacy;
   readonly status?: "confirmed" | "tentative" | "cancelled";
-  readonly attendees: readonly [];
-  readonly recurrence: null;
-  readonly notifications: "none";
+  readonly attendees: readonly string[];
+  readonly recurrence: CalendarWriteRecurrence | null;
+  readonly notifications: CalendarWriteNotificationPolicy;
+  readonly recurringEventId?: string;
 }
 
 /** Provider-neutral event facts sent by an approved one-off mutation. */
@@ -53,9 +63,9 @@ export interface CalendarWriteMutationProviderInput {
   readonly domain: ConcreteDomain;
   readonly privacy: Privacy;
   readonly status: "confirmed" | "tentative" | "cancelled";
-  readonly attendees: readonly [];
-  readonly recurrence: null;
-  readonly notifications: "none";
+  readonly attendees: readonly string[];
+  readonly recurrence: CalendarWriteRecurrence | null;
+  readonly notifications: CalendarWriteNotificationPolicy;
 }
 
 /** Provider methods required by the verified one-off create pipeline. */
@@ -84,6 +94,7 @@ export interface CalendarWriteProvider {
   readEvent(input: {
     readonly calendarId: string;
     readonly eventId: string;
+    readonly expectedNotificationPolicy?: CalendarWriteNotificationPolicy;
   }): Promise<CalendarWriteProviderEvent | undefined>;
   deleteEvent(input: {
     readonly calendarId: string;

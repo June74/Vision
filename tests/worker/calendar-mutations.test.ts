@@ -392,6 +392,49 @@ describe("Phase C calendar mutation routes", () => {
     expect(harness.provider[method]).toHaveBeenCalledTimes(1);
   });
 
+  it("requires explicit series scope and redacts attendee addresses from browser previews", async () => {
+    const harness = createHarness();
+    harness.provider.readEvent = vi.fn(async () => providerEvent({
+      attendees: ["alice@example.com", "bob@example.com"],
+      recurrence: { scope: "series", rules: ["RRULE:FREQ=WEEKLY;COUNT=4"] },
+      notifications: "provider-default",
+    }));
+
+    const response = await request(harness.app, "/api/calendar/mutations/preview", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "update",
+        eventId: EVENT_ID,
+        scope: "series",
+        after: {
+          title: "Weekly focus — revised",
+          attendees: ["alice@example.com", "carol@example.com"],
+          notifications: "provider-default",
+          recurrence: { scope: "series", rules: ["RRULE:FREQ=WEEKLY;COUNT=4"] },
+        },
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = await response.text();
+    expect(body).not.toContain("alice@example.com");
+    expect(body).not.toContain("bob@example.com");
+    expect(body).not.toContain("carol@example.com");
+    expect(JSON.parse(body)).toMatchObject({
+      preview: {
+        before: {
+          attendees: { mode: "count", count: 2, addresses: [] },
+          recurrence: { scope: "series", rules: ["RRULE:FREQ=WEEKLY;COUNT=4"] },
+          notifications: { policy: "provider-default", willNotify: true },
+        },
+        after: {
+          attendees: { mode: "count", count: 2, addresses: [] },
+        },
+      },
+    });
+  });
+
   it("requires authentication before parsing a mutation body", async () => {
     const harness = createHarness();
     const response = await harness.app.fetch(new Request("https://vision.test/api/calendar/mutations/preview", {

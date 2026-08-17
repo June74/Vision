@@ -16,8 +16,9 @@ be quoted. Control characters are rejected before URL or `If-Match` use.
 
 Snapshots a nonempty access token, validates the deadline and response byte
 limit, and returns the calendar read, create, update, move, cancel, reconcile,
-event-read, and delete methods. The adapter fixes the currently supported
-mutation policy to no attendees, no recurrence, and `sendUpdates=none`.
+event-read, and delete methods. Create remains a one-off no-attendee operation;
+reviewed mutations support bounded attendees, recurrence rules, and `none` or
+`provider-default` notification policy.
 
 ## `readCalendarVersion`
 
@@ -42,17 +43,17 @@ operation marker. A 5xx, timeout, transport error, or malformed success is
 
 **Signature:** `(input: CalendarWriteMutationProviderInput) => Promise<CalendarWriteProviderEvent>`
 
-PATCHes the encoded event path with `If-Match`, `sendUpdates=none`, all
-disclosed content/time fields, and the private Vision operation markers. It
-normalizes the response through the same bounded event decoder.
+PATCHes the encoded event path with `If-Match`, maps notification policy to
+`sendUpdates=none|all`, sends all disclosed content/time/effect fields, and
+includes the private Vision operation markers. It normalizes the response
+through the same bounded event decoder.
 
 ## `moveEvent`
 
 **Signature:** `(input: CalendarWriteMutationProviderInput) => Promise<CalendarWriteProviderEvent>`
 
-PATCHes only the disclosed timed start/end fields with `If-Match` and
-`sendUpdates=none`; it does not silently change title, attendees, recurrence,
-or notification policy.
+PATCHes only the disclosed timed start/end fields with `If-Match`; it does not
+silently change title, attendees, recurrence, or notification policy.
 
 ## `cancelEvent`
 
@@ -107,8 +108,9 @@ chronological time, and the closed Phase C effects. Invalid input raises only
 **Signature:** `(input: CalendarWriteMutationProviderInput) => void`
 
 Bounds calendar/event/operation identities and expected version, validates the
-disclosed event fields and chronological interval, and rejects attendees,
-recurrence, and notifications until their separate contract is accepted.
+disclosed event fields and chronological interval, and accepts only bounded
+attendee addresses, prefixed recurrence rules, and the controlled notification
+policy.
 
 ## `normalizeEvent`
 
@@ -116,8 +118,9 @@ recurrence, and notifications until their separate contract is accepted.
 
 Validates the bounded Google response with Zod, accepts the controlled
 confirmed/tentative/cancelled status set, requires all three private markers,
-rejects attendees and recurrence, requires matching start/end time zones, and
-returns only the provider-neutral fields used by exact read-back.
+normalizes attendee addresses and recurrence metadata, preserves the expected
+notification policy, requires matching start/end time zones, and returns only
+the provider-neutral fields used by exact read-back.
 
 ## `requestJson`
 
@@ -174,3 +177,11 @@ Checks nonempty bounded strings without formatting the rejected value.
 
 Accepts only safe positive integers at or below the reviewed ceiling for
 deadlines and response limits.
+
+## `sendUpdatesValue`
+
+**Signature:** `(policy: CalendarWriteNotificationPolicy) => "none" | "all"`
+
+Maps `none` to `sendUpdates=none` and `provider-default` to
+`sendUpdates=all` without allowing a caller to supply an arbitrary provider
+query value.

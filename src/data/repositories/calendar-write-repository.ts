@@ -727,7 +727,7 @@ function assertProposalForApproval(
   }
 }
 
-/** Rejects mutation proposals outside the approved one-off persistence scope. */
+/** Rejects mutation proposals outside the approved Phase C scope and bounds. */
 function assertMutationProposalForApproval(
   proposal: CalendarWriteMutationProposal,
 ): void {
@@ -739,14 +739,9 @@ function assertMutationProposalForApproval(
     !isBoundedIdentity(proposal.target.calendarId, MAX_PROVIDER_ID_CHARS) ||
     !isBoundedIdentity(proposal.target.eventId, MAX_PROVIDER_ID_CHARS) ||
     !isBoundedIdentity(proposal.target.version, MAX_PROVIDER_ID_CHARS) ||
-    proposal.target.scope !== "single" ||
-    (after !== null &&
-      (after.attendees.count !== 0 ||
-        after.recurrence.scope !== "one-off" ||
-        after.notifications.policy !== "none")) ||
-    proposal.preview.before.attendees.count !== 0 ||
-    proposal.preview.before.recurrence.scope !== "one-off" ||
-    proposal.preview.before.notifications.policy !== "none"
+    (proposal.target.scope !== "single" && proposal.target.scope !== "series") ||
+    proposal.preview.before.attendees.count !== proposal.preview.before.attendees.addresses.length ||
+    (after !== null && after.attendees.count !== after.attendees.addresses.length)
   ) {
     throw persistenceFailure();
   }

@@ -11,7 +11,8 @@ Encrypts the immutable proposal and inserts one proposed approval.
 
 ## `createMutationApproval`
 
-Encrypts a one-off update, move, cancel, or delete preview and inserts its
+Encrypts an update, move, cancel, or delete preview—including explicit
+recurrence scope, attendee intent, and notification policy—and inserts its
 owner-scoped event identity/version. Protected event text never becomes query
 text.
 
@@ -83,8 +84,7 @@ Rejects proposals that are not valid one-off approvals.
 
 ## `assertMutationProposalForApproval`
 
-Rejects mutation proposals outside the current single-event, no-attendee,
-one-off, no-notification persistence boundary.
+Rejects mutation proposals outside the owner-scoped bounded event contract.
 
 ## `assertOwnerAndOperation`
 

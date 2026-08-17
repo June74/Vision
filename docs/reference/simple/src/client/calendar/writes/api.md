@@ -1,9 +1,9 @@
 # Browser calendar-write API
 
 These helpers let the connected desk ask Vision to prepare, confirm, check, or
-undo one narrow one-off event. They send the existing session cookie and CSRF
+undo one narrow event mutation. They send the existing session cookie and CSRF
 token where required. The browser receives a safe preview, never a Google token
-or calendar authority.
+or calendar authority; attendee addresses are redacted to count-only metadata.
 
 ## `previewOneOffEvent`
 
@@ -26,7 +26,8 @@ Requests the fixed compensating-undo phrase for a verified operation.
 ## `previewCalendarEventMutation`
 
 Creates a server-derived before/after preview for one event update, move,
-cancellation, or deletion.
+cancellation, or deletion, with optional single/series scope and reviewed
+attendee, recurrence, and notification intent.
 
 ## `confirmCalendarEventMutation`
 
@@ -60,7 +61,8 @@ after-state.
 
 ## `isCalendarMutationEvent`
 
-Checks the safe one-off event descriptors used by mutation previews.
+Checks the safe event descriptors used by mutation previews, including bounded
+attendee counts, recurrence metadata, and notification policy.
 
 ## `isCalendarWriteStatus`
 
@@ -72,7 +74,8 @@ Returns the fixed action-specific confirmation phrase.
 
 ## `isCalendarWritePreview`
 
-Checks that the preview is one-off, attendee-free, and notification-free.
+Checks that the create preview is one-off, attendee-free, and
+notification-free; mutation previews use the broader reviewed event contract.
 
 ## `isRecord`
 

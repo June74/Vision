@@ -1,7 +1,7 @@
 # `src/domain/calendar-write/mutation-execution.ts`
 
-This module is the provider-neutral execution boundary for the one-off
-mutation contract. It imports only the safe audit type, existing provider and
+This module is the provider-neutral execution boundary for the event mutation
+contract. It imports only the safe audit type, existing provider and
 ledger ports, and the immutable mutation value object. It does not make HTTP,
 database, crypto, Worker, or browser calls directly.
 
@@ -29,8 +29,9 @@ mutation. Writing or pending records enter one read-back reconciliation.
 **Signature:** `(proposal, dependencies, pendingCategory) => Promise<CalendarWriteMutationExecutionResult>`
 
 Reads the event exactly once after the attempt. Non-delete actions require
-matching target identity/version, operation marker, status, protected event
-facts, and empty supported effects. Delete requires `undefined` absence.
+matching target identity/version, status, protected event facts, and approved
+attendee, recurrence, and notification effects. Delete requires `undefined`
+absence.
 
 ## `mutationInput`
 
@@ -51,9 +52,8 @@ action union. No dynamic provider method or retry path is introduced.
 
 **Signature:** `(proposal, event, snapshot) => boolean`
 
-Compares provider event ID/version, private operation marker, title,
-description, timing, timezone, domain, privacy, status, and the bounded empty
-attendee/recurrence/notification policy.
+Compares provider event ID/version, title, description, timing, timezone,
+domain, privacy, status, attendees, recurrence, and notification policy.
 
 ## `staleMutation`
 
@@ -129,3 +129,16 @@ Converts the validated owner identity to the lowercase audit alphabet.
 
 Narrows only `CalendarWriteProviderError("definite_failure")`; all other
 errors remain conservative uncertainty.
+
+## `sameAttendees`
+
+**Signature:** `(left, right) => boolean`
+
+Compares lowercased sorted attendee addresses so provider ordering does not
+create a false verification failure.
+
+## `sameRecurrence`
+
+**Signature:** `(left, right) => boolean`
+
+Requires equal recurrence scope and equal rule sequence for exact read-back.

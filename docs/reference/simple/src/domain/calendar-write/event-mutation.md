@@ -1,21 +1,23 @@
 # `src/domain/calendar-write/event-mutation.ts`
 
-This module describes one-off event changes before they reach Google Calendar.
-It preserves the exact event identity and version, shows immutable before and
-after facts, and rejects recurrence scope until that behavior has its own
-acceptance contract.
+This module describes event changes before they reach Google Calendar. It
+preserves the exact event identity and version, shows immutable before and
+after facts, and keeps recurrence scope, attendees, and notification intent in
+the reviewed proposal.
 
 ## `createCalendarWriteMutationProposal`
 
 Builds an immutable update, move, cancellation, or direct-delete proposal.
 Update and move show both snapshots; cancellation changes only status; delete
-has no after snapshot. Unknown keys, unsupported attendees/recurrence/
-notifications, and series scope fail with constant reason codes.
+has no after snapshot. Single-event and whole-series scope are explicit.
+Attendees, bounded recurrence rules, and `none` or `provider-default`
+notifications are validated together with the action.
 
 ## `restoreCalendarWriteMutationProposal`
 
-Rehydrates only the exact persisted proposed shape and sends its normalized
-facts back through the same strict mutation constructor.
+Rehydrates only the exact persisted proposed shape, including attendee counts,
+recurrence rules, and notification policy, and sends its normalized facts back
+through the same strict mutation constructor.
 
 ## `transitionCalendarWriteMutation`
 
@@ -29,11 +31,13 @@ Checks that each action's before/after meaning is honest.
 
 ## `sameNonStatusFields`
 
-Compares the supported event fields except lifecycle status for cancellation.
+Compares the supported event fields and reviewed effects except lifecycle status
+for cancellation.
 
 ## `sameNonTimeFields`
 
-Compares the supported event fields except time fields for a move.
+Compares the supported event fields and reviewed effects except time fields for
+a move.
 
 ## `sameTimeFields`
 
@@ -53,11 +57,13 @@ Inspects the root mutation shape without invoking caller accessors.
 
 ## `readEventInput`
 
-Inspects one event snapshot and its bounded attendee array.
+Inspects one event snapshot, its bounded attendee array, recurrence rules, and
+notification policy.
 
 ## `readPersistedPreviewEvent`
 
-Inspects the canonical nested before/after preview shape from encrypted JSON.
+Inspects the canonical nested before/after preview shape from encrypted JSON,
+including count-only attendee descriptors and recurrence metadata.
 
 ## `readPlainAttendees`
 
@@ -82,3 +88,27 @@ Produces the stable invalid-lifecycle-transition error.
 ## `freezeValue`
 
 Prevents callers from mutating an approved proposal graph.
+
+## `validateRecurrenceAndNotificationPolicy`
+
+Checks that target scope, recurrence scope, attendee addresses, and notification
+policy agree before a proposal is accepted.
+
+## `validateRecurrenceValue`
+
+Checks bounded RRULE, EXDATE, and RDATE values against the selected recurrence
+scope.
+
+## `recurrenceScope`
+
+Maps the internal recurrence value to its public one-off, occurrence, or series
+descriptor.
+
+## `canonicalizeAttendees`
+
+Normalizes attendee addresses for comparison while keeping them inside the
+protected proposal boundary.
+
+## `sameRecurrence`
+
+Compares recurrence scope and ordered rules without provider-specific fields.

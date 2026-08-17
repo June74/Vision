@@ -65,6 +65,7 @@ export async function executeConfirmedCalendarMutation(
     current = await dependencies.provider.readEvent({
       calendarId: proposal.target.calendarId,
       eventId: proposal.target.eventId,
+      expectedNotificationPolicy: proposal.preview.before.notifications.policy,
     });
   } catch {
     return pendingMutation(
@@ -162,6 +163,7 @@ async function reconcileMutation(
     current = await dependencies.provider.readEvent({
       calendarId: proposal.target.calendarId,
       eventId: proposal.target.eventId,
+      expectedNotificationPolicy: proposal.preview.after?.notifications.policy,
     });
   } catch {
     return pendingMutation(proposal, dependencies, pendingCategory, true);
@@ -223,9 +225,14 @@ function mutationInput(
     domain: after.domain,
     privacy: after.privacy,
     status: after.status,
-    attendees: [],
-    recurrence: null,
-    notifications: "none",
+    attendees: after.attendees.addresses,
+    recurrence: after.recurrence.scope === "one-off"
+      ? null
+      : {
+          scope: after.recurrence.scope,
+          rules: after.recurrence.rules,
+        },
+    notifications: after.notifications.policy,
   };
 }
 
@@ -253,7 +260,6 @@ function matchesTargetAndSnapshot(
     (snapshot === "before"
       ? event.version !== proposal.target.version
       : event.version.length === 0) ||
-    (snapshot === "after" && event.operationId !== proposal.operationId) ||
     event.title !== expected.title ||
     event.description !== expected.description ||
     event.startsAt !== expected.startsAt ||
@@ -262,13 +268,33 @@ function matchesTargetAndSnapshot(
     event.domain !== expected.domain ||
     event.privacy !== expected.privacy ||
     event.status !== expected.status ||
-    event.attendees.length !== 0 ||
-    event.recurrence !== null ||
-    event.notifications !== "none"
+    !sameAttendees(event.attendees, expected.attendees.addresses) ||
+    !sameRecurrence(event.recurrence, expected.recurrence) ||
+    event.notifications !== expected.notifications.policy
   ) {
     return false;
   }
   return true;
+}
+
+/** Compares provider-normalized attendees without exposing their addresses. */
+function sameAttendees(
+  actual: readonly string[],
+  expected: readonly string[],
+): boolean {
+  return JSON.stringify([...actual].map((value) => value.toLowerCase()).sort()) ===
+    JSON.stringify([...expected].map((value) => value.toLowerCase()).sort());
+}
+
+/** Compares provider recurrence to the immutable public preview descriptor. */
+function sameRecurrence(
+  actual: CalendarWriteProviderEvent["recurrence"],
+  expected: CalendarWriteMutationEvent["recurrence"],
+): boolean {
+  if (expected.scope === "one-off") return actual === null;
+  return actual !== null &&
+    actual.scope === expected.scope &&
+    JSON.stringify(actual.rules) === JSON.stringify(expected.rules);
 }
 
 /** Returns the constant stale-target mutation value without invoking a provider mutation. */

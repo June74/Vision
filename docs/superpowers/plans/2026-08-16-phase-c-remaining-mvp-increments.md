@@ -201,7 +201,10 @@ Run `git diff --check` and commit with `feat: compose Phase C mutation controls`
 
 - [ ] **Step 6: Run a fresh disposable preview acceptance for mutation parity**
 
-Use one temporary event fixture per action, verify exact read-back and cleanup, and record only safe counts/categories. Do not proceed to recurrence until the action-specific acceptance is green or explicitly recorded as pending.
+Use one temporary event fixture per action, verify exact read-back and cleanup,
+and record only safe counts/categories. Local action-specific route/browser
+acceptance is green; the live fixture remains pending for the same independently
+verified disposable database and deployment-admission gate.
 
 ### Task 7: Add recurrence, attendees, and notifications
 
@@ -215,21 +218,25 @@ Use one temporary event fixture per action, verify exact read-back and cleanup, 
 - Modify: `tests/worker/calendar-write.test.ts`
 - Create: `tests/e2e/calendar-recurrence.spec.ts`
 
-- [ ] **Step 1: Write recurrence/attendee/notification RED tests**
+- [x] **Step 1: Write recurrence/attendee/notification RED tests**
 
 Cover one occurrence versus the whole series, recurrence rule bounds, stale series versions, attendee add/remove preview counts without leaking addresses, explicit notification policy, unsupported combinations, uncertain provider responses, and cleanup of a disposable series.
 
-- [ ] **Step 2: Run the focused tests RED**
+- [x] **Step 2: Run the focused tests RED**
 
 Run the new unit/contract/Worker/browser tests and confirm the missing scope and policy behavior fails for the expected reason.
 
-- [ ] **Step 3: Implement the strict recurrence and notification contracts**
+- [x] **Step 3: Implement the strict recurrence and notification contracts**
 
 Normalize only supported Google fields, require explicit scope, retain attendee content encrypted, and never claim notification suppression without provider evidence.
 
 - [ ] **Step 4: Run GREEN and fresh preview acceptance**
 
-Run focused tests, full local checks, then one disposable occurrence/series acceptance with exact cleanup and safe evidence.
+Run focused tests and full local checks, then one disposable occurrence/series
+acceptance with exact cleanup and safe evidence. Local GREEN evidence is
+complete; live acceptance remains pending until a disposable target database,
+the required migration, and preview deployment admission are independently
+verified. Do not substitute mocks or the health endpoint for this gate.
 
 - [ ] **Step 5: Commit the recurrence surface**
 
