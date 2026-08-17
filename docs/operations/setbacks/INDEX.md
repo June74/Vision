@@ -624,6 +624,7 @@
 | [SB-20260812-202208-normal-deploy-baseline-closure-failure](incidents/2026-08-12T202208Z-normal-deploy-baseline-closure-failure.md) | contained | 2026-08-12T20:27:38.844Z | Phase B normal preview release admission | Baseline admission incorrectly inspected retained candidate artifacts; workflow now skips that lookup for baseline while preserving numeric candidate validation |
 | [SB-20260812-141750-generic-consumer-repeat](incidents/2026-08-12T141750Z-generic-consumer-repeat.md) | closed | 2026-08-12T20:47:32.118Z | Phase B permanent maintenance baseline / GitHub observer | Timestamp normalization was deployed and the fresh 20:45Z calendar-maintenance uniqueness observer completed successfully |
 | [SB-20260817-155057-preflight-shell-quoting](incidents/2026-08-17T155057Z-preflight-shell-quoting.md) | contained | 2026-08-17T15:50:57Z | Phase C disposable target read-only preflight | Inline JavaScript template-literal quoting failed locally before the database request; no provider request or database state change occurred |
+| [SB-20260817-161223-owner-clipboard-instructions](incidents/2026-08-17T161223Z-owner-clipboard-instructions.md) | contained | 2026-08-17T16:12:23Z | Phase C owner URL handoff | The temporary owner file contained copied PowerShell instructions instead of a URL; local URL validation stopped before any provider request |
 
 ## Legacy history
 
