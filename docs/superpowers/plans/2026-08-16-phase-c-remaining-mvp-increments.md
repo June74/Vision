@@ -278,7 +278,7 @@ Run `pnpm.cmd typecheck`, the complete unit/contract/Worker/browser suites, `pnp
 
 Local evidence is green: focused secretary unit/repository tests (12 passed), Worker tests (3 passed), full unit suite (1,868 passed, 6 skipped), full contract suite (199 passed), full Worker suite (141 passed), full browser suite (44 passed), typecheck, documentation coverage, build, security scan, and `git diff --check`. Migration `0012_phase_c_secretary_local.sql` is additive and not yet live-applied; live/private-pilot acceptance remains gated by an independently verified disposable database target and preview deployment admission.
 
-- [ ] **Step 5: Commit the local secretary flows**
+- [x] **Step 5: Commit the local secretary flows**
 
 Commit with `feat: add Vision local secretary flows`.
 
