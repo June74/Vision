@@ -321,7 +321,7 @@ Run all focused tests plus `pnpm.cmd check` and `pnpm.cmd test:e2e`. Verify that
 
 Final local evidence is green: `pnpm.cmd check` passed with 1,876 unit tests passed and 6 skipped, 199 contract tests passed, 144 Worker tests passed, typecheck, docs coverage, build, and release security scan; `pnpm.cmd test:e2e` passed 45/45. The planning route allowlist contains only local proposal/follow-up mutations; no route confirms a calendar change.
 
-- [ ] **Step 5: Commit planning surfaces**
+- [x] **Step 5: Commit planning surfaces**
 
 Commit with `feat: add Phase C planning and follow-up flows`.
 
