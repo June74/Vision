@@ -629,6 +629,7 @@
 | [SB-20260818-170037-phase-c-delete-privilege-hypothesis](incidents/2026-08-18T170037Z-phase-c-delete-privilege-hypothesis.md) | contained | 2026-08-18T17:00:37Z | Phase C privilege acceptance | Initial review treated direct DELETE privilege as unexpected; the authoritative Phase B privilege manifest confirms the same DML grant shape, so no database change was made |
 | [SB-20260818-170456-github-cli-preview-admission-auth](incidents/2026-08-18T170456Z-github-cli-preview-admission-auth.md) | contained | 2026-08-18T17:04:56Z | Phase C preview deployment admission | The local GitHub CLI credential is invalid, so branch push and preview workflow dispatch could not begin; no repository or deployment state changed |
 | [SB-20260818-171543-preview-admission-selection-failure](incidents/2026-08-18T171543Z-preview-admission-selection-failure.md) | contained | 2026-08-18T17:20:00Z | Phase C preview deployment admission | Windows PowerShell 5.1 strips embedded JSON quotes from the native `gh --raw-field` context argument; the local context validator passes when JSON is intact, and the corrected `--json` stdin dispatch is pending |
+| [SB-20260818-173826-preview-dispatch-command-portability](incidents/2026-08-18T173826Z-preview-dispatch-command-portability.md) | contained | 2026-08-18T17:38:26Z | Phase C preview workflow dispatch command | Windows PowerShell 5.1 lacks the static RNG Fill method, and gh JSON inputs must be strings; the failed wrapper stopped before a new workflow dispatch was created |
 
 ## Legacy history
 
