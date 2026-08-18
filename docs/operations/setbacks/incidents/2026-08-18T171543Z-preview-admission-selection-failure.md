@@ -1,6 +1,6 @@
 # SB-20260818-171543 — Phase C preview admission selection failure
 
-- Status: open
+- Status: contained
 - Detected at: 2026-08-18T17:15:43Z
 - Last observed at: 2026-08-18T17:15:43Z
 - Scope: Phase C disposable preview deployment admission
@@ -19,7 +19,9 @@ The admission boundary failed before the normal preview deployment could be acce
 
 - The workflow defines `Admit one preview operation` as the `selection` job.
 - Its validation step is `Verify exact acceptance operation`, which validates the operation, canonical context, dispatch SHA, and checked-out SHA.
-- The local terminal cannot currently retrieve the run: `gh auth status` reports the stored GitHub CLI credential as invalid, and the sandbox blocks direct GitHub API access.
+- The local validator accepts the canonical context when the JSON reaches it intact.
+- A direct Windows PowerShell 5.1 argument-vector probe showed that passing the JSON through `--raw-field "acceptance_context=..."` strips the embedded JSON quotes before a native executable receives the argument. The resulting `{version:...,kind:none,...}` value is not JSON and produces this exact validator failure.
+- The failed run's shell version was not recorded, so the shell-transport cause is confirmed for Windows PowerShell 5.1 and is the leading explanation for this run.
 - The user has not yet supplied the run ID or the failed-step log.
 
 ## Attempts and outcomes
@@ -30,25 +32,24 @@ The admission boundary failed before the normal preview deployment could be acce
 
 ## Confirmed cause
 
-The run concluded unsuccessfully at or within the admission job. The underlying cause is not confirmed until the failed step's safe log message is captured.
+The admission context was rejected before deployment. The context schema and validator pass when the JSON is intact. Windows PowerShell 5.1 strips embedded JSON quotes when the context is passed as a native `gh --raw-field` argument, which makes the context invalid before GitHub receives it. This matches the observed failure message exactly if the dispatch was run from Windows PowerShell 5.1.
 
 ## Hypotheses
 
-- The canonical `acceptance_context` may not have matched the reviewed commit or exact key contract.
-- The workflow may have checked out a SHA different from the context's `reviewedCommit`.
+- If the dispatch was run from PowerShell 7 or another shell with intact native argument passing, the remaining hypothesis is a reviewed-commit mismatch.
 - A dependency installation or runner-level step in the admission job may have failed before validation.
 
 ## Rejected hypotheses
 
-- No code defect has been established.
+- The canonical `none` context schema is not defective; the same shape passed the local validator with matching dispatch and checkout SHAs.
 - No database privilege or migration defect has been established; the admission job precedes application runtime proof.
 
 ## Correction and prevention
 
-Do not rerun the operation yet. Retrieve the run's job and failed-step log first, then test one root-cause hypothesis at a time. Keep the preview-only boundary and the hardline of no more than 20 agents at once; no production operation is permitted.
+The correction is to send the complete workflow input object through `gh workflow run --json` on standard input, or to run the command in PowerShell 7. Do not pass the JSON context as a Windows PowerShell 5.1 native `--raw-field` argument. Keep the preview-only boundary and the hardline of no more than 20 agents at once; no production operation is permitted.
 
 ## Owner and next diagnostic step
 
 Owner: Codex with the user providing the GitHub run evidence.
 
-Next step: open the failed run in GitHub, or run `gh run view <run-id> --log-failed` after authenticating GitHub CLI, and provide the safe failure message from `Verify exact acceptance operation` or the step that actually failed. Do not paste tokens, cookies, database URLs, or full private request payloads.
+Next step: push the documentation-only current branch tip, dispatch a fresh normal preview using the `--json` standard-input form, and verify that `Admit one preview operation` passes before looking at deployment. Do not paste tokens, cookies, database URLs, or full private request payloads.
