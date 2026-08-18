@@ -15,7 +15,9 @@ authorization codes, tokens, database URLs, or encryption keys.
 - User authorization: live/private-pilot acceptance and a disposable fixture
   were approved on 2026-08-16.
 - Target metadata: the user supplied the disposable branch `vision-restore-temp`
-  (`br-lucky-mountain-avykjgk7`) and database `neondb`.
+  (`br-lucky-mountain-avykjgk7`) and database `neondb`. The owner-side
+  attestation identifies the stable restore/cleanup target as
+  `vision_restore_temp_20260811_v2`.
 
 **No more than 20 agents at once. This is a hard line.** This run used 0
 active agents.
@@ -48,9 +50,9 @@ build passed; they are not acceptance failures.
 | Current preview revision | The latest successful preview workflow runs on 2026-08-12 used an older commit; the current Phase C implementation revision was not proven deployed. | Pending |
 | Local preview artifact | `CLOUDFLARE_ENV=preview pnpm.cmd build` and `pnpm.cmd deploy:check:preview` passed. | Pass, local only |
 | Preview deployment admission | The workflow is manually dispatched and has no repository migration step. The preview environment has deployment secrets for Cloudflare only; no database target was identified. | Pending |
-| Disposable database target | User supplied branch `vision-restore-temp`, branch ID `br-lucky-mountain-avykjgk7`, database `neondb`, and parent label `neoendb`. The direct URL reached `neondb`, but branch identity, attestation row, and cleanup target still need owner-side verification. | Partial, pending owner verification |
-| Database role and connection | A read-only preflight through the stored URL reached `neondb` with both `current_user` and `session_user` equal to `vision_app`; the host was direct/non-pooled. `vision_app` has `USAGE` on `public` but no `CREATE` privilege, which is the expected least-privilege boundary. | Pass for app URL; owner URL pending |
-| Phase C migrations | The target has 31 visible public tables: the 29 table set expected through reviewed migration `0009`, plus the restore attestation table and an extra `playing_with_neon` table. No Drizzle migration journal was present, and no Phase C tables from `0010`–`0013` were present. This is schema-equivalent evidence for a `0009` baseline, not a migration-history proof. | Baseline probable; owner attestation pending |
+| Disposable database target | User supplied branch `vision-restore-temp`, branch ID `br-lucky-mountain-avykjgk7`, database `neondb`, and parent label `neoendb`. Owner-side SQL Editor verification returned exactly one `preview`/`disposable` attestation row with target ID `vision_restore_temp_20260811_v2` and schema version `9`. | Pass for disposable attestation |
+| Database role and connection | A read-only preflight through the stored URL reached `neondb` with both `current_user` and `session_user` equal to `vision_app`; the host was direct/non-pooled. `vision_app` has `USAGE` on `public` but no `CREATE` privilege. Owner-side SQL Editor verification returned `neondb_owner` with `public CREATE = 1`. | Pass |
+| Phase C migrations | The target has 31 visible public tables: the 29 table set expected through reviewed migration `0009`, plus the restore attestation table and an extra `playing_with_neon` table. No Drizzle migration journal was present, and no Phase C tables from `0010`–`0013` were present. The schema-version-9 attestation closes the baseline gate. | Ready for `0010`–`0013` |
 | Authenticated live reads | Not run in this audit; the health endpoint is not a substitute for an authenticated owner read. | Pending |
 | Connected-write sequence | Not run: preview, confirmed create, exact read-back, replay safety, verified undo, provider absence, privacy-safe audit, and cleanup proof remain unrecorded. | Pending |
 
