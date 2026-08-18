@@ -626,6 +626,7 @@
 | [SB-20260817-155057-preflight-shell-quoting](incidents/2026-08-17T155057Z-preflight-shell-quoting.md) | contained | 2026-08-17T15:50:57Z | Phase C disposable target read-only preflight | Inline JavaScript template-literal quoting failed locally before the database request; no provider request or database state change occurred |
 | [SB-20260817-161223-owner-clipboard-instructions](incidents/2026-08-17T161223Z-owner-clipboard-instructions.md) | contained | 2026-08-17T16:12:23Z | Phase C owner URL handoff | The temporary owner file contained copied PowerShell instructions instead of a URL; local URL validation stopped before any provider request |
 | [SB-20260817-171154-owner-handoff-loop](incidents/2026-08-17T171154Z-owner-handoff-loop.md) | contained | 2026-08-17T17:11:54Z | Phase C owner authority handoff | Repeated clipboard-based URL requests prolonged a local handoff failure even though the database was reachable; no provider mutation occurred |
+| [SB-20260818-170037-phase-c-delete-privilege-hypothesis](incidents/2026-08-18T170037Z-phase-c-delete-privilege-hypothesis.md) | contained | 2026-08-18T17:00:37Z | Phase C privilege acceptance | Initial review treated direct DELETE privilege as unexpected; the authoritative Phase B privilege manifest confirms the same DML grant shape, so no database change was made |
 
 ## Legacy history
 
