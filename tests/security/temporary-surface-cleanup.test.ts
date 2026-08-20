@@ -12,6 +12,8 @@ import {
   RETAIN_HISTORICAL_PATHS,
   RETAIN_PERMANENT_PATHS,
   UNWIND_SHARED_PATHS as EXPECTED_SHARED_RESIDUE_PATHS,
+  classificationDigestContract,
+  renderRefreshedDigests,
   runCleanupInventoryCli,
   task9ChangedPathManifest,
   validateReviewedPhaseBAcceptanceClassification,
@@ -22,8 +24,8 @@ const STRICT_CLEANUP =
 
 const REVIEWED_CLASSIFICATION_CONTRACT = {
   all: {
-    count: 185,
-    sha256: "271e8c03cc79a192dd291ac328624f946162fd534794d5865b565a2f211737ad",
+    count: 186,
+    sha256: "cbe3feeb6fc46e45c8095b37daad69f61f6632c46b5f2c345d21341356ec13b5",
   },
   delete_dedicated: {
     count: 98,
@@ -34,8 +36,8 @@ const REVIEWED_CLASSIFICATION_CONTRACT = {
     sha256: "7e3a80971a2f8aff85a758ff8f48e43b694f89238ff77f76d3c4792b3f72b229",
   },
   retain_permanent: {
-    count: 23,
-    sha256: "d0b0177caaa6561ef51ab83e5ffb524e3502da5fc7511f7731b8f571fb72f20e",
+    count: 24,
+    sha256: "c6c6b0ccf77abd5f6e047c25054dfa88377f60413f5040ddd5ad83a64b4adbc9",
   },
   retain_historical: {
     count: 13,
@@ -543,6 +545,7 @@ const PERMANENT_OPERATIONS_REFERENCE_PATHS = [
   "docs/operations/github-action-pins.md",
   "docs/operations/google-oauth-setup.md",
   "docs/operations/phase-c-handoff.md",
+  "docs/operations/phase-c-live-acceptance.md",
 ] as const;
 
 const ACTIVE_OPERATIONS_PATHS = [
@@ -1179,7 +1182,7 @@ describe("post-acceptance temporary surface cleanup", () => {
     }).toEqual({
       delete_dedicated: 98,
       unwind_shared: 51,
-      retain_permanent: 23,
+      retain_permanent: 24,
       retain_historical: 13,
     });
 
@@ -1221,10 +1224,36 @@ describe("post-acceptance temporary surface cleanup", () => {
     expect(writes).toEqual([`${task9ChangedPathManifest().join("\n")}\n`]);
   });
 
+  it("recomputes every frozen digest the reviewed contract pins", () => {
+    expect(
+      classificationDigestContract(PHASE_B_ACCEPTANCE_PATH_CLASSIFICATION),
+    ).toEqual(REVIEWED_CLASSIFICATION_CONTRACT);
+  });
+
+  it("refreshes both frozen digest sites from one CLI mode", () => {
+    const writes: string[] = [];
+
+    expect(
+      runCleanupInventoryCli(["--refresh-digests"], (value) =>
+        writes.push(value),
+      ),
+    ).toBe(true);
+    expect(writes).toEqual([
+      renderRefreshedDigests(REVIEWED_CLASSIFICATION_CONTRACT),
+    ]);
+    expect(writes[0]).toContain(
+      `const REVIEWED_CLASSIFICATION_COUNT = ${REVIEWED_CLASSIFICATION_CONTRACT.all.count};`,
+    );
+    expect(writes[0]).toContain(
+      `sha256: "${REVIEWED_CLASSIFICATION_CONTRACT.retain_permanent.sha256}",`,
+    );
+  });
+
   it.each([
     { args: [] },
     { args: ["--unknown"] },
     { args: ["--print-task-9-paths", "extra"] },
+    { args: ["--refresh-digests", "extra"] },
   ])(
     "rejects noncanonical CLI arguments without diagnostics: $args",
     ({ args }) => {
@@ -1448,8 +1477,8 @@ describe("post-acceptance temporary surface cleanup", () => {
     );
     expect(ACTIVE_OPERATIONS_SHARED_PATHS).toHaveLength(4);
     expect(RETAINED_HISTORICAL_OPERATIONS_PATHS).toHaveLength(9);
-    expect(PERMANENT_OPERATIONS_REFERENCE_PATHS).toHaveLength(4);
-    expect(ACTIVE_OPERATIONS_PATHS).toHaveLength(8);
+    expect(PERMANENT_OPERATIONS_REFERENCE_PATHS).toHaveLength(5);
+    expect(ACTIVE_OPERATIONS_PATHS).toHaveLength(9);
     expect(ACTIVE_OPERATIONS_PORTABLE_RESIDUE_PATTERNS).toHaveLength(16);
     expect(
       new Set(

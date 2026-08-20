@@ -184,6 +184,7 @@ const LITERAL_PHASE_B_ACCEPTANCE_PATH_MAP = [
   ["tests/security/live-acceptance-closure.test.ts", "retain_permanent"],
   ["tests/security/temporary-surface-cleanup.test.ts", "retain_permanent"],
   ["docs/operations/phase-c-handoff.md", "retain_permanent"],
+  ["docs/operations/phase-c-live-acceptance.md", "retain_permanent"],
   ["tests/unit/ci/workflow-yaml.test.ts", "retain_permanent"],
   ["src/jobs/calendar-maintenance-evidence.ts", "retain_permanent"],
   ["tests/unit/jobs/calendar-maintenance-evidence.test.ts", "retain_permanent"],
@@ -225,28 +226,101 @@ export const UNWIND_SHARED_PATHS = pathsFor("unwind_shared");
 export const RETAIN_PERMANENT_PATHS = pathsFor("retain_permanent");
 export const RETAIN_HISTORICAL_PATHS = pathsFor("retain_historical");
 
-const REVIEWED_CLASSIFICATION_COUNT = 185;
+const REVIEWED_CLASSIFICATION_COUNT = 186;
 const REVIEWED_CLASSIFICATION_SHA256 =
-  "271e8c03cc79a192dd291ac328624f946162fd534794d5865b565a2f211737ad";
+  "cbe3feeb6fc46e45c8095b37daad69f61f6632c46b5f2c345d21341356ec13b5";
+
+const REVIEWED_DISPOSITIONS = [
+  "delete_dedicated",
+  "unwind_shared",
+  "retain_permanent",
+  "retain_historical",
+] as const satisfies readonly PhaseBAcceptancePathDisposition[];
+
+export interface ClassificationDigest {
+  readonly count: number;
+  readonly sha256: string;
+}
+
+export type ClassificationDigestContract = Readonly<
+  Record<"all" | PhaseBAcceptancePathDisposition, ClassificationDigest>
+>;
+
+/** Counts and SHA-256 fingerprints one newline-joined canonical line set. */
+function digestOf(lines: readonly string[]): ClassificationDigest {
+  return Object.freeze({
+    count: lines.length,
+    sha256: createHash("sha256").update(lines.join("\n")).digest("hex"),
+  });
+}
+
+/** Projects one disposition's ordinal-sorted paths from sorted classification rows. */
+function sortedPathsFor(
+  rows: readonly PhaseBAcceptancePathClassification[],
+  disposition: PhaseBAcceptancePathDisposition,
+): readonly string[] {
+  return rows.filter((entry) => entry.disposition === disposition).map(({ path }) => path);
+}
+
+/**
+ * Recomputes every frozen digest the reviewed contract pins, so a reviewed
+ * inventory change is refreshed from the literal map instead of by hand.
+ */
+export function classificationDigestContract(
+  candidate: readonly PhaseBAcceptancePathClassification[],
+): ClassificationDigestContract {
+  const rows = [...candidate].sort((left, right) =>
+    left.path < right.path ? -1 : left.path > right.path ? 1 : 0,
+  );
+  return Object.freeze({
+    all: digestOf(rows.map(({ path, disposition }) => `${path}\0${disposition}`)),
+    delete_dedicated: digestOf(sortedPathsFor(rows, "delete_dedicated")),
+    unwind_shared: digestOf(sortedPathsFor(rows, "unwind_shared")),
+    retain_permanent: digestOf(sortedPathsFor(rows, "retain_permanent")),
+    retain_historical: digestOf(sortedPathsFor(rows, "retain_historical")),
+  });
+}
+
+/** Renders both frozen digest sites as paste-ready TypeScript constants. */
+export function renderRefreshedDigests(
+  contract: ClassificationDigestContract,
+): string {
+  return [
+    "// scripts/preview-acceptance-cleanup-inventory.ts",
+    `const REVIEWED_CLASSIFICATION_COUNT = ${contract.all.count};`,
+    "const REVIEWED_CLASSIFICATION_SHA256 =",
+    `  "${contract.all.sha256}";`,
+    "",
+    "// tests/security/temporary-surface-cleanup.test.ts",
+    "const REVIEWED_CLASSIFICATION_CONTRACT = {",
+    "  all: {",
+    `    count: ${contract.all.count},`,
+    `    sha256: "${contract.all.sha256}",`,
+    "  },",
+    ...REVIEWED_DISPOSITIONS.flatMap((disposition) => [
+      `  ${disposition}: {`,
+      `    count: ${contract[disposition].count},`,
+      `    sha256: "${contract[disposition].sha256}",`,
+      "  },",
+    ]),
+    "} as const;",
+    "",
+  ].join("\n");
+}
 
 /** Proves a candidate is the exact reviewed Task 1-8 path universe. */
 export function validateReviewedPhaseBAcceptanceClassification(
   candidate: readonly PhaseBAcceptancePathClassification[],
 ): boolean {
-  if (candidate.length !== REVIEWED_CLASSIFICATION_COUNT) {
-    return false;
-  }
   const paths = candidate.map(({ path }) => path);
   if (new Set(paths).size !== paths.length) {
     return false;
   }
-  const rows = [...candidate].sort((left, right) =>
-    left.path < right.path ? -1 : left.path > right.path ? 1 : 0,
+  const { all } = classificationDigestContract(candidate);
+  return (
+    all.count === REVIEWED_CLASSIFICATION_COUNT &&
+    all.sha256 === REVIEWED_CLASSIFICATION_SHA256
   );
-  const digest = createHash("sha256")
-    .update(rows.map(({ path, disposition }) => `${path}\0${disposition}`).join("\n"))
-    .digest("hex");
-  return digest === REVIEWED_CLASSIFICATION_SHA256;
 }
 
 /** Returns the exact sorted paths Task 9 may delete or surgically unwind. */
@@ -258,16 +332,27 @@ export function task9ChangedPathManifest(): readonly string[] {
   );
 }
 
-/** Writes the Task 9 path manifest only for the single approved CLI mode. */
+/** Writes the Task 9 manifest or the refreshed digests for the approved CLI modes. */
 export function runCleanupInventoryCli(
   args: readonly string[],
   write: (value: string) => void,
 ): boolean {
-  if (args.length !== 1 || args[0] !== "--print-task-9-paths") {
+  if (args.length !== 1) {
     return false;
   }
-  write(`${task9ChangedPathManifest().join("\n")}\n`);
-  return true;
+  if (args[0] === "--print-task-9-paths") {
+    write(`${task9ChangedPathManifest().join("\n")}\n`);
+    return true;
+  }
+  if (args[0] === "--refresh-digests") {
+    write(
+      renderRefreshedDigests(
+        classificationDigestContract(PHASE_B_ACCEPTANCE_PATH_CLASSIFICATION),
+      ),
+    );
+    return true;
+  }
+  return false;
 }
 
 const isDirectExecution =
