@@ -11,6 +11,25 @@ import {
   writeFixtureFile,
 } from "./release-test-fixture";
 
+/**
+ * The whole-repository R2 contract is the one test here that parses the entire
+ * production surface: 172 TypeScript files and 2.1 MB into a single in-memory
+ * program with parent pointers and a type checker. Measured on an idle
+ * developer machine: 1.1s cold in a bare process, 2.3s under Vitest in
+ * isolation, and 3.2s inside the full unit suite at `maxWorkers: 4`. That last
+ * figure is 65% of the default 5s per-test budget before any CI contention,
+ * which is why a hosted run exceeded it (SB-20260818-175012). The default is a
+ * unit-test budget; this is a whole-repository analysis.
+ *
+ * Reducing the scan scope was measured and rejected rather than assumed:
+ * pruning to the import closure of every file that can own deletion capability
+ * still retains 93 of 172 files and 72% of the scanned bytes, because the
+ * largest sources legitimately own or reach that capability. It cannot buy a
+ * budget this contract does not already need, and narrowing further would
+ * weaken a security boundary to save roughly 0.2s.
+ */
+const R2_PRODUCTION_SURFACE_SCAN_TIMEOUT_MS = 15_000;
+
 const fixtureRoots: string[] = [];
 
 afterEach(async () => {
@@ -171,7 +190,7 @@ describe("R2 deletion capability boundary", () => {
     expect(scanR2DeletionCapabilities(await currentProductionSources())).toEqual(
       EXPECTED_CAPABILITIES,
     );
-  });
+  }, R2_PRODUCTION_SURFACE_SCAN_TIMEOUT_MS);
 
   it("accepts canonical synthetic same-invocation and retention lifecycles", () => {
     const createSource = sameInvocationCleanupSource(`
