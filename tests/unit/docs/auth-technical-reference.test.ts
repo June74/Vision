@@ -8,6 +8,7 @@ const references = [
   "docs/reference/technical/src/integrations/google/oauth-client.md",
   "docs/reference/technical/src/server/auth/admission.md",
   "docs/reference/technical/src/server/auth/csrf.md",
+  "docs/reference/technical/src/server/auth/diagnostics.md",
   "docs/reference/technical/src/server/auth/oauth-routes.md",
   "docs/reference/technical/src/server/auth/session.md",
   "docs/reference/technical/src/server/env.md",

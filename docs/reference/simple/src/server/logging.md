@@ -4,7 +4,7 @@ This module only permits a small, structured set of audit details. It rejects hi
 
 ## `SafeLogEventSchema`
 
-`SafeLogEventSchema` lists the permitted audit fields: request ID, action, outcome, error category, duration, provider, retry count, and opaque UUID entity IDs.
+`SafeLogEventSchema` lists the permitted audit fields: request ID, action, outcome, error category, the temporary preview-only sign-in failure category, duration, provider, retry count, and opaque UUID entity IDs.
 
 ## `SafeLogEvent`
 

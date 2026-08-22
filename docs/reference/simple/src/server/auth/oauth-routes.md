@@ -61,3 +61,15 @@ Returns the same generic wait response when the sign-in start bound is reached.
 ## `deriveOwnerId`
 
 Hashes the allowlisted Google subject into an opaque Vision owner ID.
+
+## `readDiagnosticEnvironment`
+
+Reads which deployment is running, even when configuration failed to load.
+
+## `applyPreviewDiagnosticHeader`
+
+Adds the failure-category response header on preview only.
+
+## `previewDiagnosticMarkup`
+
+Adds one line naming the failure category to preview failure pages only.

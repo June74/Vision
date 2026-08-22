@@ -32,6 +32,14 @@ import { throwVisionError, VisionError } from "../errors";
 import { logEvent, type SafeLogger } from "../logging";
 import { verifyCsrfToken } from "./csrf";
 import {
+  AUTH_DIAGNOSTIC_HEADER,
+  readAuthDiagnosticStage,
+  readAuthFailureCause,
+  readPreviewDiagnosticStage,
+  runAuthStage,
+  type AuthDiagnosticStage,
+} from "./diagnostics";
+import {
   createAuthAdmissionKeyFactory,
   type AuthAdmissionKeyFactory,
 } from "./admission";
@@ -82,22 +90,32 @@ export function registerOAuthRoutes(
   app.get("/api/auth/google/start", async (context) => {
     let resolved: AuthRouteDependencies | undefined;
     try {
-      const dependencies = await resolveDependencies(context.env);
+      const dependencies = await runAuthStage(
+        "start_dependencies_unavailable",
+        () => resolveDependencies(context.env),
+      );
       resolved = dependencies;
       const createdAt = dependencies.now();
-      const admissionKey = await dependencies.admissionKey(context.req.raw);
-      const state = readGeneratedProtocolValue(dependencies.randomToken("state"));
-      const pkceVerifier = readGeneratedProtocolValue(dependencies.randomToken("pkceVerifier"));
-      const nonce = readGeneratedProtocolValue(dependencies.randomToken("nonce"));
+      const admissionKey = await runAuthStage("start_admission_key_failed", () =>
+        dependencies.admissionKey(context.req.raw),
+      );
+      const protocolValues = await runAuthStage("start_protocol_values_failed", () => ({
+        state: readGeneratedProtocolValue(dependencies.randomToken("state")),
+        pkceVerifier: readGeneratedProtocolValue(dependencies.randomToken("pkceVerifier")),
+        nonce: readGeneratedProtocolValue(dependencies.randomToken("nonce")),
+      }));
+      const { state, pkceVerifier, nonce } = protocolValues;
       const expiresAt = new Date(createdAt.getTime() + OAUTH_TRANSACTION_LIFETIME_MS);
-      const admitted = await dependencies.sessions.createOAuthTransaction({
-        state,
-        admissionKey,
-        pkceVerifier,
-        nonce,
-        createdAt,
-        expiresAt,
-      });
+      const admitted = await runAuthStage("start_transaction_write_failed", () =>
+        dependencies.sessions.createOAuthTransaction({
+          state,
+          admissionKey,
+          pkceVerifier,
+          nonce,
+          createdAt,
+          expiresAt,
+        }),
+      );
       if (!admitted) {
         logAuthEventSafely(
           dependencies.logger,
@@ -105,25 +123,42 @@ export function registerOAuthRoutes(
           "denied",
           "auth.start",
           "authentication_failed",
+          "start_transaction_rejected",
         );
-        return authStartLimited(context);
+        return authStartLimited(
+          context,
+          readPreviewDiagnosticStage(dependencies.environment, "start_transaction_rejected"),
+        );
       }
-      const requestConsent = !(await dependencies.tokens.hasRefreshToken(
-        dependencies.identityAllowlist.sub,
+      const requestConsent = !(await runAuthStage("start_refresh_lookup_failed", () =>
+        dependencies.tokens.hasRefreshToken(dependencies.identityAllowlist.sub),
       ));
-      const authorizationUrl = dependencies.oauthClient.createAuthorizationUrl({
-        state,
-        nonce,
-        codeChallenge: await createPkceChallenge(pkceVerifier),
-        requestConsent,
-      });
+      const codeChallenge = await runAuthStage("start_authorization_url_failed", () =>
+        createPkceChallenge(pkceVerifier),
+      );
+      const authorizationUrl = await runAuthStage("start_authorization_url_failed", () =>
+        dependencies.oauthClient.createAuthorizationUrl({
+          state,
+          nonce,
+          codeChallenge,
+          requestConsent,
+        }),
+      );
       logAuthEventSafely(dependencies.logger, context.get("requestId"), "succeeded");
       return context.redirect(authorizationUrl, 302);
-    } catch {
+    } catch (error) {
+      const stage = readAuthDiagnosticStage(error);
       logAuthEventSafely(
         resolved?.logger ?? (() => {}),
         context.get("requestId"),
         "failed",
+        "auth.start",
+        undefined,
+        stage,
+      );
+      applyPreviewDiagnosticHeader(
+        context,
+        readPreviewDiagnosticStage(readDiagnosticEnvironment(context, resolved), stage),
       );
       throwVisionError(
         new VisionError("AUTHENTICATION_FAILED", 503, "Authentication is temporarily unavailable."),
@@ -135,88 +170,102 @@ export function registerOAuthRoutes(
     const requestId = context.get("requestId");
     let dependencies: AuthRouteDependencies | undefined;
     try {
-      dependencies = await resolveDependencies(context.env);
-      const query = readCallbackQuery(context.req.raw);
-      const transaction = await dependencies.sessions.consumeOAuthTransaction(
-        query.state,
-        dependencies.now(),
+      const resolved = await runAuthStage(
+        "callback_dependencies_unavailable",
+        () => resolveDependencies(context.env),
+      );
+      dependencies = resolved;
+      const query = await runAuthStage("callback_query_invalid", () =>
+        readCallbackQuery(context.req.raw),
+      );
+      const transaction = await runAuthStage("callback_state_not_found", () =>
+        resolved.sessions.consumeOAuthTransaction(query.state, resolved.now()),
       );
       if (!transaction) {
         logAuthEventSafely(
-          dependencies.logger,
+          resolved.logger,
           requestId,
           "failed",
           "auth.callback",
           "authentication_failed",
+          "callback_state_not_found",
         );
-        return authenticationFailurePage(context, 400);
+        return authenticationFailurePage(
+          context,
+          400,
+          readPreviewDiagnosticStage(resolved.environment, "callback_state_not_found"),
+        );
       }
-      const tokenSet = await dependencies.oauthClient.exchangeCode(
-        query.code,
-        transaction.pkceVerifier,
+      const tokenSet = await runAuthStage("callback_code_exchange_failed", () =>
+        resolved.oauthClient.exchangeCode(query.code, transaction.pkceVerifier),
       );
-      validateGrantedScopes(tokenSet.scopes);
-      const payload = await dependencies.oauthClient.verifyIdToken(tokenSet.idToken);
-      const claims = await readVerifiedClaims(
-        payload,
-        transaction.nonce,
-        dependencies.now(),
+      await runAuthStage("callback_scope_rejected", () => validateGrantedScopes(tokenSet.scopes));
+      const payload = await runAuthStage("callback_id_token_invalid", () =>
+        resolved.oauthClient.verifyIdToken(tokenSet.idToken),
       );
-      const identity = authorizeIdentity(
-        claims,
-        dependencies.identityAllowlist,
-        dependencies.now(),
+      const claims = await runAuthStage("callback_claims_invalid", () =>
+        readVerifiedClaims(payload, transaction.nonce, resolved.now()),
       );
-      const issuedAt = dependencies.now();
-      await dependencies.tokens.saveGoogleTokens({
-        googleSubject: identity.subject,
-        ...(tokenSet.refreshToken
-          ? { refreshToken: tokenSet.refreshToken }
-          : {}),
-        accessToken: tokenSet.accessToken,
-        accessExpiresAt: new Date(
-          issuedAt.getTime() + tokenSet.expiresInSeconds * 1_000,
-        ),
-        grantedScopes: tokenSet.scopes,
-        updatedAt: issuedAt,
-      });
+      const identity = await runAuthStage("callback_account_not_allowed", () =>
+        authorizeIdentity(claims, resolved.identityAllowlist, resolved.now()),
+      );
+      const issuedAt = resolved.now();
+      await runAuthStage("callback_token_persist_failed", () =>
+        resolved.tokens.saveGoogleTokens({
+          googleSubject: identity.subject,
+          ...(tokenSet.refreshToken
+            ? { refreshToken: tokenSet.refreshToken }
+            : {}),
+          accessToken: tokenSet.accessToken,
+          accessExpiresAt: new Date(
+            issuedAt.getTime() + tokenSet.expiresInSeconds * 1_000,
+          ),
+          grantedScopes: tokenSet.scopes,
+          updatedAt: issuedAt,
+        }),
+      );
 
       const previousSessionId = readSessionCookie(context.req.raw);
       if (previousSessionId) {
         // Successful authentication always rotates any presented session bearer.
-        await dependencies.sessions.revokeSession(previousSessionId, issuedAt);
+        await runAuthStage("callback_session_rotation_failed", () =>
+          resolved.sessions.revokeSession(previousSessionId, issuedAt),
+        );
       }
-      const sessionId = readGeneratedProtocolValue(
-        dependencies.randomToken("sessionId"),
-      );
-      const csrfToken = readGeneratedProtocolValue(
-        dependencies.randomToken("csrfToken"),
-      );
-      const expiresAt = new Date(issuedAt.getTime() + SESSION_LIFETIME_MS);
-      await dependencies.sessions.createSession({
-        sessionId,
-        ownerId: dependencies.ownerId,
-        googleSubject: identity.subject,
-        email: identity.email,
-        csrfToken,
-        createdAt: issuedAt,
-        expiresAt,
-      });
-      logAuthEventSafely(dependencies.logger, requestId, "succeeded", "auth.callback");
-      context.header(
-        "Set-Cookie",
-        createSessionCookie(
+      await runAuthStage("callback_session_create_failed", async () => {
+        const sessionId = readGeneratedProtocolValue(resolved.randomToken("sessionId"));
+        const csrfToken = readGeneratedProtocolValue(resolved.randomToken("csrfToken"));
+        const expiresAt = new Date(issuedAt.getTime() + SESSION_LIFETIME_MS);
+        await resolved.sessions.createSession({
           sessionId,
-          dependencies.environment,
-          SESSION_LIFETIME_MS / 1_000,
-        ),
-      );
+          ownerId: resolved.ownerId,
+          googleSubject: identity.subject,
+          email: identity.email,
+          csrfToken,
+          createdAt: issuedAt,
+          expiresAt,
+        });
+        context.header(
+          "Set-Cookie",
+          createSessionCookie(
+            sessionId,
+            resolved.environment,
+            SESSION_LIFETIME_MS / 1_000,
+          ),
+        );
+      });
+      logAuthEventSafely(resolved.logger, requestId, "succeeded", "auth.callback");
       context.header("Cache-Control", "no-store");
       return context.redirect("/", 302);
     } catch (error) {
+      const stage = readAuthDiagnosticStage(error);
+      const previewStage = readPreviewDiagnosticStage(
+        readDiagnosticEnvironment(context, dependencies),
+        stage,
+      );
       if (
         dependencies !== undefined &&
-        error instanceof IdentityAuthorizationError
+        readAuthFailureCause(error) instanceof IdentityAuthorizationError
       ) {
         logAuthEventSafely(
           dependencies.logger,
@@ -224,8 +273,9 @@ export function registerOAuthRoutes(
           "denied",
           "auth.callback",
           "account_not_allowed",
+          "callback_account_not_allowed",
         );
-        return accessDeniedPage(context);
+        return accessDeniedPage(context, previewStage);
       }
       logAuthEventSafely(
         dependencies?.logger ?? (() => {}),
@@ -233,8 +283,9 @@ export function registerOAuthRoutes(
         "failed",
         "auth.callback",
         "authentication_failed",
+        stage,
       );
-      return authenticationFailurePage(context, 400);
+      return authenticationFailurePage(context, 400, previewStage);
     }
   });
 
@@ -401,6 +452,7 @@ function logAuthEventSafely(
   outcome: "succeeded" | "failed" | "denied",
   action = "auth.start",
   errorCategory?: "account_not_allowed" | "authentication_failed",
+  diagnosticStage?: AuthDiagnosticStage,
 ): void {
   try {
     logEvent(logger, {
@@ -409,10 +461,38 @@ function logAuthEventSafely(
       outcome,
       provider: "google",
       ...(errorCategory ? { errorCategory } : {}),
+      ...(diagnosticStage ? { diagnosticStage } : {}),
     });
   } catch {
     // Auth behavior must not depend on the availability of the safe operational log sink.
   }
+}
+
+/**
+ * Reads the deployment environment for the temporary diagnostic, falling back to the raw binding when
+ * dependency construction itself failed and no validated environment exists yet.
+ */
+function readDiagnosticEnvironment(
+  context: Context<{ Bindings: Env; Variables: AuthRequestVariables }>,
+  dependencies: AuthRouteDependencies | undefined,
+): string | undefined {
+  if (dependencies) return dependencies.environment;
+  const binding = (context.env as { VISION_ENV?: unknown } | undefined)?.VISION_ENV;
+  return typeof binding === "string" ? binding : undefined;
+}
+
+/** Attaches the constant failure category to a preview response and leaves every other build untouched. */
+function applyPreviewDiagnosticHeader(
+  context: Context<{ Bindings: Env; Variables: AuthRequestVariables }>,
+  previewStage: AuthDiagnosticStage | undefined,
+): void {
+  if (!previewStage) return;
+  context.header(AUTH_DIAGNOSTIC_HEADER, previewStage);
+}
+
+/** Renders the preview-only failure category as one constant HTML line, or nothing outside preview. */
+function previewDiagnosticMarkup(previewStage: AuthDiagnosticStage | undefined): string {
+  return previewStage ? `<p>Diagnostic stage: ${previewStage}</p>` : "";
 }
 
 /** Reads exact single callback parameters and rejects duplicates, errors, and oversized values. */
@@ -534,10 +614,12 @@ function validateGrantedScopes(scopes: readonly string[]): void {
 /** Returns one constant wrong-account page without any claim or allowlist detail. */
 function accessDeniedPage(
   context: Context<{ Bindings: Env; Variables: AuthRequestVariables }>,
+  previewStage?: AuthDiagnosticStage,
 ) {
   context.header("Cache-Control", "no-store");
+  applyPreviewDiagnosticHeader(context, previewStage);
   return context.html(
-    "<!doctype html><html><body><h1>Access denied</h1><p>This account cannot use Vision.</p></body></html>",
+    `<!doctype html><html><body><h1>Access denied</h1><p>This account cannot use Vision.</p>${previewDiagnosticMarkup(previewStage)}</body></html>`,
     403,
   );
 }
@@ -546,10 +628,12 @@ function accessDeniedPage(
 function authenticationFailurePage(
   context: Context<{ Bindings: Env; Variables: AuthRequestVariables }>,
   status: 400,
+  previewStage?: AuthDiagnosticStage,
 ) {
   context.header("Cache-Control", "no-store");
+  applyPreviewDiagnosticHeader(context, previewStage);
   return context.html(
-    "<!doctype html><html><body><h1>Authentication failed</h1><p>Please try again.</p></body></html>",
+    `<!doctype html><html><body><h1>Authentication failed</h1><p>Please try again.</p>${previewDiagnosticMarkup(previewStage)}</body></html>`,
     status,
   );
 }
@@ -557,9 +641,11 @@ function authenticationFailurePage(
 /** Returns one fixed rate-limit response without an admission key, IP, session, or OAuth value. */
 function authStartLimited(
   context: Context<{ Bindings: Env; Variables: AuthRequestVariables }>,
+  previewStage?: AuthDiagnosticStage,
 ) {
   context.header("Cache-Control", "no-store");
   context.header("Retry-After", "600");
+  applyPreviewDiagnosticHeader(context, previewStage);
   return context.json(
     {
       error: {
