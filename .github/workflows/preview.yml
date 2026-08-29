@@ -86,8 +86,11 @@ jobs:
           cache: pnpm
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
+      - name: Build deployable Worker bundle
+        if: ${{ steps.preview-token.outputs.deploy == 'true' }}
+        run: pnpm build
       - name: Deploy isolated preview Worker
         if: ${{ steps.preview-token.outputs.deploy == 'true' }}
-        run: pnpm exec wrangler deploy --name vision-preview --var VISION_ENV:preview --var GOOGLE_REDIRECT_URI:https://vision-preview.june74.workers.dev/api/auth/google/callback
+        run: pnpm exec wrangler deploy -c dist/vision/wrangler.json --name vision-preview --var VISION_ENV:preview --var GOOGLE_REDIRECT_URI:https://vision-preview.june74.workers.dev/api/auth/google/callback
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_PREVIEW }}

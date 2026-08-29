@@ -28,7 +28,7 @@ Start derives admission identity from trusted edge/shared context before any ses
 
 ## Failure behavior
 
-Configuration/provider/storage/claim/scope failures use constant pages or safe error envelopes. Admission denial is a no-store 429 with `Retry-After: 600`. Safe log sink failures never change route outcomes.
+Configuration/provider/storage/claim/scope failures use constant pages or safe error envelopes. Each stage is wrapped by `runAuthStage`, so a failure additionally records one closed-set category (`src/server/auth/diagnostics.ts`) in the safe log event; on preview only, that category is also returned as the `X-Vision-Auth-Diagnostic` header and one HTML line. Statuses, bodies outside preview, and the audit contract are unchanged. Admission denial is a no-store 429 with `Retry-After: 600`. Safe log sink failures never change route outcomes.
 
 ## Privacy and authorization
 
@@ -36,7 +36,7 @@ Session creation requires signed claims, exact issuer/scalar audience/nonce/expi
 
 ## Covering tests
 
-`tests/worker/auth.test.ts` covers every route, claims, replay, cookies, CSRF, safe 429, rotation, and raw/log privacy. `tests/unit/server/auth/admission.test.ts` covers admission trust.
+`tests/worker/auth.test.ts` covers every route, claims, replay, cookies, CSRF, safe 429, rotation, raw/log privacy, per-stage preview categories, and byte-identical production and local failure pages. `tests/unit/server/auth/admission.test.ts` covers admission trust.
 
 ## `registerOAuthRoutes`
 
@@ -64,7 +64,19 @@ Uses `crypto.getRandomValues` for 32 bytes and encodes unpadded base64url.
 
 ## `logAuthEventSafely`
 
-Emits only controlled action, outcome, provider, error category, and request ID fields; logger failure cannot change auth behavior.
+Emits only controlled action, outcome, provider, error category, request ID, and closed-set diagnostic stage fields; logger failure cannot change auth behavior.
+
+## `readDiagnosticEnvironment`
+
+Prefers the validated environment from resolved dependencies and falls back to the raw `VISION_ENV` binding when dependency construction itself failed, so an unconfigured deployment can still be classified. It returns `undefined` rather than guessing.
+
+## `applyPreviewDiagnosticHeader`
+
+Sets `X-Vision-Auth-Diagnostic` to one closed-set stage code, and does nothing when `readPreviewDiagnosticStage` withheld a stage. Local and production responses are therefore unchanged.
+
+## `previewDiagnosticMarkup`
+
+Returns one constant HTML line naming the stage on preview and an empty string everywhere else. The interpolated value is always a member of the closed stage set, so no request-derived text can reach the page.
 
 ## `readCallbackQuery`
 

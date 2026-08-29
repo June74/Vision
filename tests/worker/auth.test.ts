@@ -714,4 +714,153 @@ describe("Vision Worker Google authentication", () => {
     expect(sessionStore.sessionRows).toHaveLength(0);
     expect(tokenStore.rows).toHaveLength(0);
   });
+  it("names the failing callback stage on preview without exposing any request or account value", async () => {
+    const { app, logger } = await createHarness({ environment: "preview" });
+
+    const response = await app.fetch(
+      new Request(
+        "https://vision.example.test/api/auth/google/callback?code=authorization-code&state=MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM",
+      ),
+      {} as Env,
+    );
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get("x-vision-auth-diagnostic")).toBe(
+      "callback_state_not_found",
+    );
+    const body = await response.text();
+    expect(body).toContain("callback_state_not_found");
+    expect(logger).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "auth.callback",
+        diagnosticStage: "callback_state_not_found",
+        errorCategory: "authentication_failed",
+        outcome: "failed",
+      }),
+    );
+    const output = `${body}${JSON.stringify(logger.mock.calls)}`;
+    expect(output).not.toContain("MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM");
+    expect(output).not.toContain("authorization-code");
+    expect(output).not.toContain("allowed@example.test");
+    expect(output).not.toContain("google-subject");
+  });
+
+  it("separates provider, scope, and allowlist stages while never leaving preview categories generic", async () => {
+    const scopeHarness = await createHarness({
+      environment: "preview",
+      tokenResponse: {
+        access_token: "ACCESS_TOKEN_SENTINEL",
+        expires_in: 3_600,
+        id_token: "SIGNED_ID_TOKEN_SENTINEL",
+        refresh_token: "REFRESH_TOKEN_SENTINEL",
+        scope: `${GOOGLE_OAUTH_SCOPES.join(" ")} https://www.googleapis.com/auth/drive.readonly`,
+        token_type: "Bearer",
+      },
+    });
+    await scopeHarness.app.fetch(
+      new Request("https://vision.example.test/api/auth/google/start"),
+      {} as Env,
+    );
+    const scopeResponse = await scopeHarness.app.fetch(
+      new Request(
+        `https://vision.example.test/api/auth/google/callback?code=authorization-code&state=${state}`,
+      ),
+      {} as Env,
+    );
+    expect(scopeResponse.status).toBe(400);
+    expect(scopeResponse.headers.get("x-vision-auth-diagnostic")).toBe(
+      "callback_scope_rejected",
+    );
+
+    const exchangeHarness = await createHarness({ environment: "preview" });
+    exchangeHarness.fetcher.mockResolvedValue(
+      new Response("{}", { status: 400, headers: { "content-type": "application/json" } }),
+    );
+    await exchangeHarness.app.fetch(
+      new Request("https://vision.example.test/api/auth/google/start"),
+      {} as Env,
+    );
+    const exchangeResponse = await exchangeHarness.app.fetch(
+      new Request(
+        `https://vision.example.test/api/auth/google/callback?code=authorization-code&state=${state}`,
+      ),
+      {} as Env,
+    );
+    expect(exchangeResponse.status).toBe(400);
+    expect(exchangeResponse.headers.get("x-vision-auth-diagnostic")).toBe(
+      "callback_code_exchange_failed",
+    );
+
+    const deniedHarness = await createHarness({
+      environment: "preview",
+      claims: {
+        aud: "client-id.apps.googleusercontent.com",
+        email: "other@example.test",
+        email_verified: true,
+        exp: Math.floor(now.getTime() / 1_000) + 3_600,
+        iss: "https://accounts.google.com",
+        nonce,
+        sub: "google-subject",
+      },
+    });
+    await deniedHarness.app.fetch(
+      new Request("https://vision.example.test/api/auth/google/start"),
+      {} as Env,
+    );
+    const deniedResponse = await deniedHarness.app.fetch(
+      new Request(
+        `https://vision.example.test/api/auth/google/callback?code=authorization-code&state=${state}`,
+      ),
+      {} as Env,
+    );
+    expect(deniedResponse.status).toBe(403);
+    expect(deniedResponse.headers.get("x-vision-auth-diagnostic")).toBe(
+      "callback_account_not_allowed",
+    );
+    const deniedOutput = `${await deniedResponse.text()}${JSON.stringify(
+      deniedHarness.logger.mock.calls,
+    )}`;
+    expect(deniedOutput).not.toContain("other@example.test");
+  });
+
+  it("keeps production and local callback failures byte-identical to the constant page", async () => {
+    for (const environment of ["production", "local"] as const) {
+      const { app } = await createHarness({ environment });
+
+      const response = await app.fetch(
+        new Request(
+          "https://vision.example.test/api/auth/google/callback?code=authorization-code&state=MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM",
+        ),
+        {} as Env,
+      );
+
+      expect(response.status).toBe(400);
+      expect(response.headers.get("x-vision-auth-diagnostic")).toBeNull();
+      await expect(response.text()).resolves.toBe(
+        "<!doctype html><html><body><h1>Authentication failed</h1><p>Please try again.</p></body></html>",
+      );
+    }
+  });
+
+  it("names the failing start stage on preview when server bindings cannot be resolved", async () => {
+    const logger = vi.fn();
+    const app = createApp({
+      auth: () => {
+        throw new Error("BINDING_SENTINEL");
+      },
+      createRequestId: () => "req_auth",
+      logger,
+    });
+
+    const response = await app.fetch(
+      new Request("https://vision.example.test/api/auth/google/start"),
+      { VISION_ENV: "preview" } as Env,
+    );
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("x-vision-auth-diagnostic")).toBe(
+      "start_dependencies_unavailable",
+    );
+    expect(JSON.stringify(logger.mock.calls)).not.toContain("BINDING_SENTINEL");
+  });
 });

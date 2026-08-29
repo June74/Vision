@@ -4,7 +4,7 @@ This module owns the audit-event boundary. It validates an unknown input with Zo
 
 ## `SafeLogEventSchema`
 
-`SafeLogEventSchema` is a strict Zod object containing only `requestId`, `action`, `outcome`, optional `errorCategory`, `durationMs`, `provider`, `retryCount`, `entityId`, and `entityIds`. `entityId` and every `entityIds` member must be UUIDs, preventing names and descriptions from entering the sink.
+`SafeLogEventSchema` is a strict Zod object containing only `requestId`, `action`, `outcome`, optional `errorCategory`, optional `diagnosticStage`, `durationMs`, `provider`, `retryCount`, `entityId`, and `entityIds`. `entityId` and every `entityIds` member must be UUIDs, preventing names and descriptions from entering the sink. `diagnosticStage` is the temporary preview-only authentication failure category and is a `z.enum` over the closed `AUTH_DIAGNOSTIC_STAGES` set, so it can only ever carry a literal authored in `src/server/auth/diagnostics.ts`.
 
 ## `SafeLogEvent`
 
