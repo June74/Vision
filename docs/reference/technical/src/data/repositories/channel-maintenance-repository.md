@@ -20,6 +20,13 @@ Increments the calendar-level durable failure counter for the exact lease and ex
 Atomically writes a typed scheduler credential disposition only from connected state or an exact version/category/timestamp scheduler marker, so Task 3 retry state cannot be adopted.
 ## `recoverAuthorizationAfterReconnect`
 Locks the exact owner token, setup, canonical connection, checkpoint, and maintenance rows in one SQL statement. It requires exact token metadata plus a complete older `disconnected / authorization` scheduler marker, clears checkpoint and marker together, advances timestamps without moving maintenance time backward, and forces statement rollback if the two guarded updates do not both affect one row.
+
+An already-connected checkpoint with all three credential marker fields null also
+admits an older maintenance checkpoint snapshot as `not_needed`, without changing
+any row. This accounts for sync commits advancing independently of maintenance.
+Exact owner/subject/calendar/setup and token version/time guards remain mandatory;
+ahead-of-checkpoint maintenance, any marker, and non-connected lag remain conflicts.
+Actual authorization recovery still requires equal checkpoint versions.
 ## `clearCredentialRetry`
 Returns only an exact scheduler-marked transient or database retry to connected after credential resolution succeeds.
 ## `markCleanupRequired`

@@ -2,6 +2,12 @@
 
 **Status:** Owner-reviewed written specification
 
+**2026-09-04 amendment:** The owner approved a no-mutation `not_needed` exception
+for an already-connected, completely unmarked checkpoint with an older maintenance
+snapshot. The [connected-checkpoint lag design](2026-09-04-connected-checkpoint-lag-design.md)
+supersedes only the version-inconsistency classification for that case. The strict
+disconnected authorization recovery requirements below remain unchanged.
+
 **Phase:** B — authentication and synchronization live-acceptance prerequisite
 
 **Execution:** Test-first implementation, independent review, exact preview

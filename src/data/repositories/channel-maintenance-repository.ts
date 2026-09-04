@@ -636,7 +636,7 @@ export class ChannelMaintenanceRepository
     return result.rows.length === 1;
   }
 
-  /** Recovers only an exact older scheduler authorization marker after reconnect. */
+  /** Recovers exact scheduler markers; connected unmarked snapshot lag needs no write. */
   async recoverAuthorizationAfterReconnect(
     input: AuthorizationReconnectInput,
   ): Promise<AuthorizationRecoveryOutcome> {
@@ -726,7 +726,16 @@ export class ChannelMaintenanceRepository
          and maintenance.provider = checkpoint.provider
          and maintenance.provider_calendar_id = checkpoint.provider_calendar_id
          and maintenance.connection_version = setup.setup_version
-         and maintenance.checkpoint_version = checkpoint.version
+         and (
+           maintenance.checkpoint_version = checkpoint.version
+           or (
+             maintenance.checkpoint_version < checkpoint.version
+             and checkpoint.status = 'connected'
+             and maintenance.credential_failure_checkpoint_version is null
+             and maintenance.credential_failure_category is null
+             and maintenance.credential_failure_recorded_at is null
+           )
+         )
       ),
       decision as materialized (
         select case

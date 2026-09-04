@@ -494,6 +494,14 @@ describe("Google OAuth adapter", () => {
       expect(rendered).toContain(fragment);
     }
     expect(rendered).not.toContain("owner_reconnect_contract");
+    expect(rendered).toContain([
+      "and ( maintenance.checkpoint_version = checkpoint.version or (",
+      "maintenance.checkpoint_version < checkpoint.version",
+      "and checkpoint.status = 'connected'",
+      "and maintenance.credential_failure_checkpoint_version is null",
+      "and maintenance.credential_failure_category is null",
+      "and maintenance.credential_failure_recorded_at is null ) )",
+    ].join(" "));
     expect(rendered).not.toContain("subject_reconnect_contract");
     expect(compiled.params).toContain("owner_reconnect_contract");
     expect(compiled.params).toContain("subject_reconnect_contract");

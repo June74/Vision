@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { KeyProvider } from "../../../src/crypto/key-provider";
 import { createTestKeyProvider } from "../../../src/crypto/test-key-provider";
 import { createEventRepository } from "../../../src/data/repositories/event-repository";
+import { createChannelMaintenanceRepository } from "../../../src/data/repositories/channel-maintenance-repository";
 import { createSyncRepository } from "../../../src/data/repositories/sync-repository";
 import type { VisionDatabase } from "../../../src/data/db";
 import type { ProviderEventChange } from "../../../src/domain/sync/change";
@@ -149,6 +150,77 @@ async function run(
 }
 
 describe("encrypted atomic synchronization repository", () => {
+  it("keeps reconnect admissible after successive normal syncs leave maintenance behind", async () => {
+    const tokenUpdatedAt = new Date("2026-07-24T16:00:00.000Z");
+    await pglite.query(
+      `insert into calendar_setup_states (
+         owner_id, google_subject, setup_version, status, updated_at
+       ) values ($1, 'subject-1', 4, 'connected', $2)`,
+      [ownerId, tokenUpdatedAt.toISOString()],
+    );
+    await pglite.query(
+      `insert into vision_calendar_connections (
+         owner_id, google_subject, provider_calendar_id, summary,
+         ownership_access_role, time_zone, provider_etag, verified_at, connection_kind
+       ) values ($1, 'subject-1', $2, 'Vision', 'owner', 'America/Chicago',
+         'synthetic-etag', $3, 'existing')`,
+      [ownerId, calendarId, tokenUpdatedAt.toISOString()],
+    );
+    await pglite.query(
+      `insert into google_oauth_tokens (
+         owner_id, google_subject, refresh_token_envelope, refresh_token_digest,
+         access_expires_at, granted_scopes, token_version, updated_at
+       ) values ($1, 'subject-1', $2, $3, $4, 'synthetic-scope', 2, $4)`,
+      [ownerId, new Uint8Array([1]), "D".repeat(43), tokenUpdatedAt.toISOString()],
+    );
+    const maintenance = createChannelMaintenanceRepository(database, ownerId);
+    await maintenance.bootstrapConnectedCalendars(tokenUpdatedAt);
+    const syncRepository = await repository();
+    const input = { googleSubject: "subject-1", tokenVersion: 2, tokenUpdatedAt };
+    await expect(maintenance.recoverAuthorizationAfterReconnect(input))
+      .resolves.toBe("not_needed");
+
+    for (const checkpointVersion of [1, 2]) {
+      await expect(run(client({
+        changes: [],
+        calendarTimeZone: "America/Chicago",
+        nextSyncToken: `synthetic-sync-${checkpointVersion}`,
+      }), syncRepository, `sync-before-reconnect-${checkpointVersion}`))
+        .resolves.toMatchObject({ checkpointVersion });
+      expect((await pglite.query(
+        `select checkpoint.version, checkpoint.status,
+                maintenance.checkpoint_version,
+                maintenance.credential_failure_recorded_at
+         from sync_checkpoints checkpoint
+         join calendar_sync_maintenance maintenance
+           on maintenance.owner_id = checkpoint.owner_id
+          and maintenance.provider = checkpoint.provider
+          and maintenance.provider_calendar_id = checkpoint.provider_calendar_id`,
+      )).rows).toEqual([{
+        version: checkpointVersion,
+        status: "connected",
+        checkpoint_version: 0,
+        credential_failure_recorded_at: null,
+      }]);
+      const snapshotSql = `select jsonb_build_object(
+        'checkpoint', (select jsonb_agg(p) from sync_checkpoints p),
+        'maintenance', (select jsonb_agg(m) from calendar_sync_maintenance m),
+        'setup', (select jsonb_agg(s) from calendar_setup_states s),
+        'connection', (select jsonb_agg(c) from vision_calendar_connections c),
+        'tokens', (select jsonb_agg(t) from google_oauth_tokens t),
+        'jobs', (select jsonb_agg(j) from calendar_sync_jobs j),
+        'channels', (select jsonb_agg(c) from sync_channels c),
+        'runs', (select jsonb_agg(r) from sync_runs r)
+      ) as snapshot`;
+      const before = (await pglite.query(snapshotSql)).rows;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        await expect(maintenance.recoverAuthorizationAfterReconnect(input))
+          .resolves.toBe("not_needed");
+        expect((await pglite.query(snapshotSql)).rows).toEqual(before);
+      }
+    }
+  });
+
   it("commits an event, complete protected payload, safe run metrics, and encrypted token together", async () => {
     await expect(
       run(

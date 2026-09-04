@@ -1,13 +1,16 @@
 # SB-20260729-200952-setback-note-patch-context
 
 - **Status:** closed
-- **Last observed:** 2026-08-02T22:30:21.2575983Z
+- **Last observed:** 2026-09-04
 - **Phase/task:** Phase B acceptance instrumentation Task 7 through OAuth reconnect Task 5 artifact verification closeout
 - **Title:** Setback-note patch used stale prevention wording
 - **Impact:** Six patches were rejected before making changes: one documentation-only patch, one production workflow patch, and four incident closeout patches.
 - **Cause:** The first two assumed trailing context that differed from the current files, two omitted a file header, one assumed status fields were adjacent, and one ordered index hunks backwards.
 - **Resolution:** Used safe structural reads, narrow replacements, and explicit file boundaries for every subsequent patch.
 - **Recurrence:** Recurred five times during the implementation pass.
+- **Recurrence 2026-09-04:** An incident update used an incomplete wrapped-line
+  anchor. The patch was rejected atomically without changing files. Re-reading
+  the current incident and applying exact single-file hunks resolved the edit.
 - **Recurrence:** A wave-4 multi-file recurrence update assumed two setback
   index rows were adjacent. The patch was rejected atomically before mutation;
   the correction uses one exact hunk per current row.

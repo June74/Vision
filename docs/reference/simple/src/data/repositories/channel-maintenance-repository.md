@@ -20,6 +20,12 @@ Records safe counters and Action required.
 Records a safe scheduler credential state only for a connected checkpoint or Vision's exact existing scheduler marker.
 ## `recoverAuthorizationAfterReconnect`
 After a successful reconnect, clears only an older complete scheduler-owned authorization marker. It returns `not_needed` for ordinary first login or unrelated health, and `conflict` for ambiguous or newer state.
+
+Normal synchronization can move ahead of the maintenance record. If the calendar
+is already connected and has no saved credential-failure marker, that older
+maintenance version does not block login and nothing is rewritten. Account,
+calendar, setup, and fresh-token checks still apply. A maintenance version ahead
+of the checkpoint, a saved marker, or a disconnected calendar does not qualify.
 ## `clearCredentialRetry`
 Reconnects only a retry that the scheduler marked after a credential problem.
 ## `markCleanupRequired`

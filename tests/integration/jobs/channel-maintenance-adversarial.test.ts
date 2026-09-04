@@ -174,6 +174,35 @@ async function readRecoveryFacts(): Promise<readonly Record<string, unknown>[]> 
   ).rows;
 }
 
+async function seedConnectedMaintenanceLag() {
+  await seedCanonicalConnection();
+  await seedCheckpoint();
+  await seedGoogleToken();
+  const repository = createChannelMaintenanceRepository(database, OWNER);
+  await repository.bootstrapConnectedCalendars(NOW);
+  await postgres.query(
+    `update calendar_sync_maintenance
+     set checkpoint_version = 0, renewal_generation = 6, renewal_failures = 3,
+         renewal_lease_id = 'lease-preserved', renewal_lease_expires_at = $1,
+         current_channel_row_id = 'channel-preserved'
+     where owner_id = $2`,
+    [new Date(RECONNECT_TOKEN_AT.getTime() + 60_000).toISOString(), OWNER],
+  );
+  return repository;
+}
+
+async function readCompleteRecoverySnapshot() {
+  return (await postgres.query(`select jsonb_build_object(
+    'checkpoint', (select jsonb_agg(p) from sync_checkpoints p),
+    'maintenance', (select jsonb_agg(m) from calendar_sync_maintenance m),
+    'setup', (select jsonb_agg(s) from calendar_setup_states s),
+    'connection', (select jsonb_agg(c) from vision_calendar_connections c),
+    'tokens', (select jsonb_agg(t) from google_oauth_tokens t),
+    'jobs', (select jsonb_agg(j) from calendar_sync_jobs j),
+    'channels', (select jsonb_agg(c) from sync_channels c)
+  ) as snapshot`)).rows;
+}
+
 function renewalDependencies(
   repository: ReturnType<typeof createChannelMaintenanceRepository>,
   watch: ChannelLifecycleDependencies["provider"]["watch"],
@@ -958,6 +987,49 @@ describe("adversarial calendar maintenance", () => {
         tokenUpdatedAt: RECONNECT_TOKEN_AT,
       }),
     ).resolves.toBe("not_needed");
+  });
+
+  it.each([0, 1])("admits connected unmarked maintenance version %s without changing any rows", async (version) => {
+    const repository = await seedConnectedMaintenanceLag();
+    await postgres.query(
+      `update calendar_sync_maintenance set checkpoint_version = $1`, [version],
+    );
+    const before = await readCompleteRecoverySnapshot();
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await expect(repository.recoverAuthorizationAfterReconnect({
+        googleSubject: "subject-1", tokenVersion: 2, tokenUpdatedAt: RECONNECT_TOKEN_AT,
+      })).resolves.toBe("not_needed");
+      expect(await readCompleteRecoverySnapshot()).toEqual(before);
+    }
+  });
+
+  it.each([
+    ["ahead maintenance", `update calendar_sync_maintenance set checkpoint_version = 2`],
+    ["setup version mismatch", `update calendar_sync_maintenance set connection_version = 5`],
+    ["setup subject mismatch", `update calendar_setup_states set google_subject = 'other-subject'`],
+    ["connection subject mismatch", `update vision_calendar_connections set google_subject = 'other-subject'`],
+    ["missing connection", `delete from vision_calendar_connections`],
+    ["missing checkpoint", `delete from sync_checkpoints`],
+    ["missing maintenance", `delete from calendar_sync_maintenance`],
+    ["checkpoint calendar mismatch", `update sync_checkpoints set provider_calendar_id = 'other-calendar'`],
+    ["maintenance calendar mismatch", `update calendar_sync_maintenance set provider_calendar_id = 'other-calendar'`],
+    ["different token owner", `update google_oauth_tokens set owner_id = 'other-owner'`],
+    ["different token subject", `update google_oauth_tokens set google_subject = 'other-subject'`],
+    ["newer token version", `update google_oauth_tokens set token_version = 3`],
+    ["newer token timestamp", `update google_oauth_tokens set updated_at = updated_at + interval '1 millisecond'`],
+    ["authorization marker", `update calendar_sync_maintenance set credential_failure_checkpoint_version = 1, credential_failure_category = 'authorization', credential_failure_recorded_at = updated_at`],
+    ["non-authorization marker", `update calendar_sync_maintenance set credential_failure_checkpoint_version = 0, credential_failure_category = 'transient', credential_failure_recorded_at = updated_at`],
+    ["unmarked authorization disconnect", `update sync_checkpoints set status = 'disconnected', last_error_category = 'authorization'`],
+    ["retry checkpoint", `update sync_checkpoints set status = 'retry_scheduled', last_error_category = 'transient'`],
+    ["action-required checkpoint", `update sync_checkpoints set status = 'action_required', last_error_category = 'provider'`],
+  ] as const)("does not admit connected maintenance lag with %s", async (_name, mutation) => {
+    const repository = await seedConnectedMaintenanceLag();
+    await postgres.exec(mutation);
+    const before = await readCompleteRecoverySnapshot();
+    await expect(repository.recoverAuthorizationAfterReconnect({
+      googleSubject: "subject-1", tokenVersion: 2, tokenUpdatedAt: RECONNECT_TOKEN_AT,
+    })).resolves.toBe("conflict");
+    expect(await readCompleteRecoverySnapshot()).toEqual(before);
   });
 
   it("never moves a newer maintenance timestamp backward", async () => {
