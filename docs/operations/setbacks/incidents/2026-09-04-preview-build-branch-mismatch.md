@@ -1,6 +1,6 @@
 # SB-20260904-preview-build-branch-mismatch: Stale preview candidate omitted the Phase C runtime
 
-- **Status:** contained
+- **Status:** closed
 - **First observed:** 2026-08-29
 - **Last observed:** 2026-09-04
 - **Phase/task:** Phase C preview sign-in diagnostics and deployment
@@ -49,7 +49,7 @@ Passing checks on the old source tree did not prove compatibility with the exist
 - **Prevention:** Check commit ancestry and real Worker handlers before deployment; retain
   generated-config validation and test authentication contracts, not just compilation.
 - **Owner:** Codex and project owner.
-- **Next diagnostic step:** Complete release checks, deploy preview, then inspect the safe live stage.
+- **Next diagnostic step:** Owner completes a fresh Google login to diagnose the separate sign-in issue.
 - Keep the diagnostic until successful preview sign-in is confirmed. Never record callback URLs.
 
 ## Verification and related work
@@ -59,4 +59,15 @@ Passing checks on the old source tree did not prove compatibility with the exist
 - Browser tests: 47 passed after installing the missing locked Chromium test runtime.
 - Explicit preview build, generated-config validation, and Wrangler dry run passed. The generated
   artifact contains the real queue/R2 bindings and the two permanent schedules.
-- Live deployment and real sign-in remain pending. Phase C live acceptance is not complete.
+- GitHub Actions [run 33927962462](https://github.com/June74/Vision/actions/runs/33927962462)
+  completed successfully on application commit `e980307c54b291bc2d1e418532399adfa4b45d2b`.
+  Admission, application/browser verification, preview build/config validation, upload, and
+  trigger deployment all passed.
+- Deployed preview Worker version: `1aff66ee-ceec-468e-ae75-86704435e3a4`.
+- Live checks: health 200; unauthenticated session 401; deliberately invalid callback 400 with
+  `callback_query_invalid` in the header and page; OAuth start 302 to Google's origin.
+  The deliberately invalid callback only proves diagnostic emission, not the original login cause.
+- Browser verification: refreshed preview renders sign-in; its real sign-in control reaches Google.
+  Google requires owner authentication. No credentials were entered or requested.
+- Independent read-only review found no blocking regression. Production and main were not changed.
+- Deployment incident closed. Real sign-in and remaining Phase C live acceptance are still pending.

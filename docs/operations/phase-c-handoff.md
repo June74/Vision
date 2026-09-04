@@ -11,6 +11,18 @@ keys.
 
 ## Phase B completion state
 
+Current preview update (2026-09-04): application commit
+`e980307c54b291bc2d1e418532399adfa4b45d2b` is deployed from
+`codex/phase-c-write-pipeline`. The existing PR #3 OAuth diagnostic was ported onto
+the complete Phase C runtime without changing its permanent queue, schedules, or
+deployment bindings. [Preview run 33927962462](https://github.com/June74/Vision/actions/runs/33927962462)
+passed all checks and deployment. Live health, signed-out session handling,
+diagnostic emission, and the browser-to-Google sign-in path were verified.
+Completed owner sign-in and the remaining Phase C live acceptance are not yet
+confirmed. Keep the diagnostic until sign-in works. The old main/PR #3 trees must
+not be deployed over this preview. See the
+[deployment incident closure](setbacks/incidents/2026-09-04-preview-build-branch-mismatch.md).
+
 - Status: complete and live-accepted.
 - Accepted application commit: `5ec2887392d935751b591cc36248101b58071ee1`.
 - Acceptance-closure documentation commit: `0a1454144e55ffa3b303fcac9e4d2835a2ba6535`.
