@@ -7,6 +7,7 @@ import { createRequestContextMiddleware, type RequestIdFactory } from "./server/
 import {
   createProductionAuthDependencies,
   registerOAuthRoutes,
+  type AuthDependencyResolver,
   type AuthRouteDependencies,
 } from "./server/auth/oauth-routes";
 import type { AuthRequestVariables } from "./server/auth/session";
@@ -53,7 +54,7 @@ import { scheduled } from "./jobs/scheduled";
 export interface AppDependencies {
   logger?: SafeLogger;
   createRequestId?: RequestIdFactory;
-  auth?: AuthRouteDependencies;
+  auth?: AuthRouteDependencies | AuthDependencyResolver;
   calendarSetup?: CalendarSetupRouteDependencies;
   calendarWrite?: CalendarWriteRouteDependencies;
   aiCategoryProposal?: AiCategoryProposalRouteDependencies;

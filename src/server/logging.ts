@@ -1,5 +1,6 @@
 /** Validates and emits the minimal structured audit events that Vision is allowed to retain. */
 import { z } from "zod";
+import { AUTH_DIAGNOSTIC_STAGES } from "./auth/diagnostics";
 
 /** Describes the allowlisted fields in a privacy-safe audit event. */
 export const SafeLogEventSchema = z
@@ -8,6 +9,7 @@ export const SafeLogEventSchema = z
     action: z.string().min(1),
     outcome: z.string().min(1),
     errorCategory: z.string().min(1).optional(),
+    diagnosticStage: z.enum(AUTH_DIAGNOSTIC_STAGES).optional(),
     durationMs: z.number().finite().nonnegative().optional(),
     provider: z.string().min(1).optional(),
     retryCount: z.number().int().nonnegative().optional(),

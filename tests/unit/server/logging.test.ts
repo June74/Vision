@@ -1,7 +1,26 @@
 import { describe, expect, it, vi } from "vitest";
 import { logEvent } from "../../../src/server/logging";
+import { AUTH_DIAGNOSTIC_STAGES } from "../../../src/server/auth/diagnostics";
 
 describe("logEvent", () => {
+  it.each(AUTH_DIAGNOSTIC_STAGES)("accepts only the authored diagnostic stage %s", (diagnosticStage) => {
+    const logger = vi.fn();
+    const event = { requestId: "req_1", action: "auth.callback", outcome: "failed", diagnosticStage };
+    logEvent(logger, event);
+    expect(logger).toHaveBeenCalledExactlyOnceWith(event);
+  });
+
+  it.each(["PRIVATE_PROVIDER_DETAIL", "<script>private</script>", "", null, {}])(
+    "rejects a non-category diagnostic value before emission: %j",
+    (diagnosticStage) => {
+      const logger = vi.fn();
+      expect(() => logEvent(logger, {
+        requestId: "req_1", action: "auth.callback", outcome: "failed", diagnosticStage,
+      })).toThrow();
+      expect(logger).not.toHaveBeenCalled();
+    },
+  );
+
   it("rejects sensitive fields before calling the logger", () => {
     const logger = vi.fn();
 

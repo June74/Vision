@@ -2,6 +2,8 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
+| [SB-20260904-browser-runtime-missing](incidents/2026-09-04-browser-runtime-missing.md) | closed | 2026-09-04 | Phase C browser verification | Missing locked Chromium runtime installed; unchanged suite passed all 47 browser tests |
+| [SB-20260904-preview-build-branch-mismatch](incidents/2026-09-04-preview-build-branch-mismatch.md) | contained | 2026-09-04 | Phase C preview deployment | Stale candidate omitted the Phase C queue handler; integrate the existing diagnostic on the complete runtime |
 | [SB-20260818-175012-phase-c-application-checks-r2-cleanup](incidents/2026-08-18T175012Z-phase-c-application-checks-r2-cleanup.md) | contained | 2026-08-18T17:50:12Z | Phase C application-check CI diagnosis | R2 capability scan exceeded its focused timeout and cleanup inventory omitted the live-acceptance document |
 | [SB-20260817-151749-phase-c-target-role-guidance](incidents/2026-08-17T151749Z-phase-c-target-role-guidance.md) | contained | 2026-08-17T15:17:49Z | Phase C live/private-pilot target handoff | Disposable target guidance conflated owner SQL access with application-role acceptance |
 | [SB-20260816-193818-phase-c-executor-ledger-signature-mismatch](incidents/2026-08-16T193818Z-phase-c-executor-ledger-signature-mismatch.md) | contained | 2026-08-16T19:38:18.1939857Z | Phase C create executor TDD | Ledger calendar identity was added without updating every related TypeScript signature |
