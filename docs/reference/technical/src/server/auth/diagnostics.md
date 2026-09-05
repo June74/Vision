@@ -50,9 +50,14 @@ is the single gate that keeps categories out of local and production responses.
 `tests/worker/auth.test.ts` covers preview stage naming for missing state, provider exchange failure,
 rejected scopes, a denied account, and unresolved bindings, plus byte-identical production and local
 failure pages and the absence of state, code, email, subject, and binding text in every output.
-It also covers Phase C recovery conflicts and thrown failures using the constant
-`callback_authorization_recovery_failed`, while retaining the original audit error category
-and refusing session issuance. `tests/unit/server/logging.test.ts` verifies the closed log enum.
+It covers explicit recovery conflicts with
+`callback_authorization_recovery_conflict`, and thrown failures or invalid results
+with `callback_authorization_recovery_failed`. All three environments retain the
+original audit error category and refuse session issuance or rotation on failure.
+Only preview exposes the stage in the header and page; local/production failure
+HTML remains exact. Actual response bodies, headers, and logs are checked for
+private fixture sentinels. `tests/unit/server/logging.test.ts` verifies the closed
+log enum, including the new literal and rejection of arbitrary strings.
 
 ## `runAuthStage`
 

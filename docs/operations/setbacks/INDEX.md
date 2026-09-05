@@ -2,7 +2,7 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
-| [SB-20260904-callback-recovery-failure](incidents/2026-09-04-callback-recovery-failure.md) | contained | 2026-09-04 | Phase C live sign-in | Guarded connected-lag fix deployed by successful preview run 33931354751; owner sign-in confirmation pending |
+| [SB-20260904-callback-recovery-failure](incidents/2026-09-04-callback-recovery-failure.md) | open | 2026-09-04 | Phase C live sign-in | Live counts confirm older connected-unmarked maintenance; callback conflict versus execution failure still needs a narrower diagnostic |
 | [SB-20260904-browser-runtime-missing](incidents/2026-09-04-browser-runtime-missing.md) | closed | 2026-09-04 | Phase C browser verification | Missing locked Chromium runtime installed; unchanged suite passed all 47 browser tests |
 | [SB-20260904-preview-build-branch-mismatch](incidents/2026-09-04-preview-build-branch-mismatch.md) | closed | 2026-09-04 | Phase C preview deployment | Existing diagnostic integrated on complete Phase C runtime; GitHub deployment and live diagnostic verification passed |
 | [SB-20260818-175012-phase-c-application-checks-r2-cleanup](incidents/2026-08-18T175012Z-phase-c-application-checks-r2-cleanup.md) | contained | 2026-08-18T17:50:12Z | Phase C application-check CI diagnosis | R2 capability scan exceeded its focused timeout and cleanup inventory omitted the live-acceptance document |
@@ -288,7 +288,7 @@
 | [SB-20260727-173757-safe-tail-log-framing-mismatch](incidents/2026-07-27T173757Z-safe-tail-log-framing-mismatch.md) | contained | 2026-07-27T17:37:57Z | Phase B restore Task 4 | Restore evidence was missing from safe-tail |
 | [SB-20260727-173951-normal-restore-baseline-misidentified](incidents/2026-07-27T173951Z-normal-restore-baseline-misidentified.md) | closed | 2026-07-27T17:42:12Z | Phase B restore Task 4 fail-closed rollback | Normal restore baseline was misidentified |
 | [SB-20260727-205420-guessed-source-search-path](incidents/2026-07-27T205420Z-guessed-source-search-path.md) | closed | 2026-07-30T18:29:01.6004342Z | Phase B live-acceptance implementation planning | Source search included a nonexistent path |
-| [SB-20260727-211305-git-worktree-ownership-rejected](incidents/2026-07-27T211305Z-git-worktree-ownership-rejected.md) | closed | 2026-08-10T23:25:36Z | Phase B acceptance instrumentation Task 7 final-fix wave | Git rejected linked-worktree ownership |
+| [SB-20260727-211305-git-worktree-ownership-rejected](incidents/2026-07-27T211305Z-git-worktree-ownership-rejected.md) | closed | 2026-09-04 | Phase C diagnostic preview release | Cross-worktree read rejected under sandbox identity; approved owning-user read succeeded without Git safety changes |
 | [SB-20260727-211305-tool-result-shape-assumption](incidents/2026-07-27T211305Z-tool-result-shape-assumption.md) | closed | 2026-08-02T02:15:47.9672991Z | Phase B Task 7 reviewed-candidate publication | Tool-result wrapper was assumed incorrectly |
 | [SB-20260727-234430-provider-project-row-button-not-navigation](incidents/2026-07-27T234430Z-provider-project-row-button-not-navigation.md) | closed | 2026-07-27T23:45:55.6630209Z | Listener-first restore retry Task 2 | Provider project row button was not navigation |
 | [SB-20260728-184312-ripgrep-file-association-failed](incidents/2026-07-28T184312Z-ripgrep-file-association-failed.md) | closed | 2026-08-02T01:47:32.0350764Z | Phase B live-acceptance planning and status verification | Ripgrep file association failed |

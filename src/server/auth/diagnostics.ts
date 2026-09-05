@@ -26,6 +26,7 @@ export const AUTH_DIAGNOSTIC_STAGES = [
   "callback_account_not_allowed",
   "callback_token_persist_failed",
   "callback_authorization_recovery_failed",
+  "callback_authorization_recovery_conflict",
   "callback_session_rotation_failed",
   "callback_session_create_failed",
   "unclassified",

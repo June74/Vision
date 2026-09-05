@@ -88,3 +88,7 @@ configuration was changed.
   candidate worktree. Plain Git reads stopped at the ownership check; no
   configuration or repository state changed. Future candidate reads use the
   command-scoped `safe.directory` override only.
+- 2026-09-04: Recurred during a read-only check of the Projects Phase C
+  worktree from the offline sandbox identity. The approved elevated execution
+  under the owning user returned a clean status and the expected revision.
+  No safe-directory exception or persistent Git configuration was added.

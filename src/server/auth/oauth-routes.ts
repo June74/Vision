@@ -37,6 +37,7 @@ import { logEvent, type SafeLogger } from "../logging";
 import { verifyCsrfToken } from "./csrf";
 import {
   AUTH_DIAGNOSTIC_HEADER,
+  AuthStageError,
   readAuthDiagnosticStage,
   readAuthFailureCause,
   readPreviewDiagnosticStage,
@@ -282,6 +283,9 @@ export function registerOAuthRoutes(
           tokenVersion: retainedTokens.tokenVersion,
           tokenUpdatedAt: retainedTokens.updatedAt,
         });
+        if (recoveryOutcome === "conflict") {
+          throw new AuthStageError("callback_authorization_recovery_conflict");
+        }
         if (recoveryOutcome !== "recovered" && recoveryOutcome !== "not_needed") {
           throw new Error("Authorization recovery did not admit session creation.");
         }

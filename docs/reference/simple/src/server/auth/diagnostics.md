@@ -4,6 +4,11 @@ Names which step of Google sign-in failed, using a fixed list of category codes.
 show the category so a live failure can be located; local and production responses stay unchanged.
 Safe logs can include a fixed category in any environment.
 
+`callback_authorization_recovery_conflict` means the recovery check explicitly
+refused sign-in. `callback_authorization_recovery_failed` means the recovery call
+threw an error or returned an invalid result. Neither category reveals private
+data, changes the login rules, or identifies the exact database problem.
+
 ## `runAuthStage`
 
 Runs one sign-in step and labels any failure with that step's category code.

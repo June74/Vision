@@ -77,7 +77,8 @@ What each category means:
 | `callback_claims_invalid` | Issuer, audience, `email_verified`, expiry, or nonce did not match. |
 | `callback_account_not_allowed` | The signed-in account is not `GOOGLE_ALLOWED_EMAIL` / `GOOGLE_ALLOWED_SUB` (the 403 page). |
 | `callback_token_persist_failed` | Token encryption or the Neon token write failed. |
-| `callback_authorization_recovery_failed` | Phase C reconnect recovery failed or returned a conflict; no session is issued. Existing audit category `authorization_recovery_failed` is preserved. |
+| `callback_authorization_recovery_failed` | Phase C reconnect recovery threw or returned an invalid outcome; no session is issued. This does not identify a precise SQL error. Existing audit category `authorization_recovery_failed` is preserved. |
+| `callback_authorization_recovery_conflict` | The recovery call returned exactly `conflict`; session creation was refused by the existing guard. This does not identify which token/topology/marker check conflicted. Existing audit category `authorization_recovery_failed` is preserved. |
 | `callback_session_rotation_failed` | Revoking the previously presented session failed. |
 | `callback_session_create_failed` | Session creation or cookie issuance failed. |
 | `unclassified` | Failure outside a tagged operation. Do not infer a provider or database cause. |
@@ -86,6 +87,11 @@ Only the response header/page are preview-gated; safe structured logs may contai
 stage in other environments too. Google's benign `profile` identity scopes remain accepted;
 missing required or broader application scopes still fail closed. A scope failure is a hypothesis
 until the live category confirms it. Never share callback URLs, codes, state, or secrets.
+
+The conflict distinction was added after the connected-lag repair. Earlier
+deployments used `callback_authorization_recovery_failed` for both outcomes;
+check the deployed commit before interpreting a previously recorded category.
+This diagnostic-only change does not alter recovery SQL or session admission.
 
 Deploy the integrated Phase C branch, not the historical PR #3 tree or the old `main` tree.
 The Phase C preview workflow builds with `CLOUDFLARE_ENV=preview`, validates

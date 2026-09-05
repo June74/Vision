@@ -1,6 +1,6 @@
 # SB-20260904-callback-recovery-failure: Live sign-in reaches synchronization recovery and fails
 
-- **Status:** contained; repair deployed, owner sign-in confirmation pending
+- **Status:** open; owner sign-in failed after the connected-lag repair deployment
 - **First/last observed:** 2026-09-04
 - **Phase/task:** Phase C private-pilot sign-in acceptance
 - **Environment/version:** Preview application e980307; deployment run 33927962462
@@ -128,3 +128,76 @@ Preview deployment completed; owner acceptance remains pending.
   no-write evidence, not a new committed trigger regression or concurrency test.
 - Main, production, secrets, and live database records were not manually changed.
   The existing diagnostic remains pending successful owner sign-in.
+
+## Recurrence after the connected-lag repair
+
+The owner retried Google sign-in and again received only
+`callback_authorization_recovery_failed`. Read-only GitHub verification confirms
+run `33931354751` is the latest preview workflow run and succeeded for `b68f213`.
+This proves the intended release workflow completed, not which Worker version
+handled the owner's particular callback. Live sign-in remains unsuccessful.
+
+The earlier database screenshot establishes unequal checkpoint versions, not
+whether maintenance was older or newer. The existing category also combines
+repository exceptions with a returned conflict. The reproduced older-snapshot
+bug and its regression fix remain valid, but are not a complete diagnosis of
+this recurring live failure. Next checks must distinguish those causes without
+resetting secrets, modifying live rows, or weakening authentication guards.
+
+The new ignored `auth-recovery-version-direction.sql` reports aggregate counts
+for older/equal/newer maintenance snapshots and connected, unmarked checkpoints.
+Five synthetic scenarios using actual migrations passed, including marked and
+unmatched rows; all three version-direction cases ran in read-only transactions.
+No external database request occurred. Documentation coverage and diff whitespace
+checks passed. Existing Wrangler login and local database credentials are absent,
+so the owner must execute this new counts-only query on the preview database.
+No application code or deployment was changed during this recurrence check.
+
+The owner returned the version-direction query: matched calendars 1, maintenance
+older 1, equal 0, newer 0, connected and unmarked 1. This rejects the hypothesis
+that an ahead-of-checkpoint maintenance snapshot explains the observed database
+state. Those predicates meet the repaired lag alternative, but this separate
+snapshot does not prove the exact callback token metadata, all other topology
+guards, runtime database target, or successful query execution. The current
+diagnostic and its Worker tests explicitly group repository throws and returned
+conflicts under the same stage; more precise callback-boundary evidence is needed.
+
+Proposed bounded next step before owner approval: reuse the existing diagnostic
+and add one authored constant for an explicit recovery `conflict`. Preserve the
+existing generic stage for execution failures, invalid outcomes, and unknown
+causes. Do not alter the repository query, accepted outcomes, session ordering,
+audit category, secret configuration, or live database records. Tests must prove
+the new distinction, unchanged local/production failure bodies, no session/cookie
+creation on either failure, and no raw error or credential disclosure. This
+captures the actual callback boundary; another standalone SQL snapshot cannot
+establish the exact token metadata present during that callback. Design approval
+was requested before implementation or a new preview deployment.
+
+## Approved diagnostic distinction: local verification
+
+The owner approved implementing, testing, and deploying the diagnostic-only
+change. The existing closed tuple now includes
+`callback_authorization_recovery_conflict`, emitted by an inner `AuthStageError`
+only after the port returns exactly `conflict`. The old generic stage remains for
+execution exceptions and invalid outcomes. No repository, logger-schema
+structure, authentication admission rule, or live database record was changed.
+
+The baseline passed 23 authentication and 31 logging tests. Test-first expansion
+failed exactly three expected conflict-category assertions with 42 passing.
+The minimal five-line production diff then passed all 45 authentication tests,
+32 logging tests, and both TypeScript configurations. The actual Worker response
+body, headers, logs, token persistence, old session preservation, and lack of
+new sessions/cookies are checked across all three environments, with explicit
+invalid returns and error-shaped throws. Both accepted outcomes are covered in
+each environment. Private fixture sentinels remain absent from actual outputs.
+
+Full `pnpm check` passed: 1,927 unit/integration/security tests (6 existing skips),
+199 contract tests, and 171 Worker tests. All 47 Chromium tests passed, for 2,344
+passing tests total. Documentation coverage, build, release security scan,
+preview configuration validation, and no-upload Wrangler dry run passed.
+Browser tooling emitted only existing terminal-color warnings. Independent
+review found no critical or important issues and approved the runtime change for
+preview. Its minor note about historical approval/status wording is addressed
+by this explicit current-status section. The exact preview deployment is the
+remaining release gate; real owner sign-in still fails on the preceding
+deployment and is not claimed fixed.

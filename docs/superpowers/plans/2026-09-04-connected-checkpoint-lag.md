@@ -71,4 +71,4 @@ and the existing callback recovery incident and index.
 - [x] Dispatch `preview.yml` with operation `none`, budget configuration `false`, reviewed full commit SHA, and validated canonical version-2 acceptance context. Use the exact returned run ID; do not repeat dispatch. Run: `33931354751`.
 - [x] Verify GitHub admission, candidate verification, and deploy jobs all succeed for that SHA. Preserve existing secrets, queues, schedules, and the diagnostic. Worker version: `c615956e-5b69-4a96-aeab-33f972d10296`.
 - [x] Check live root/health 200, unauthenticated session 401, and OAuth start 302 to Google without exposing cookies or redirect query values.
-- [ ] Owner completes a fresh Google sign-in from the preview root; record only success or the safe diagnostic stage. Keep live acceptance pending until that result arrives.
+- [ ] Owner completes a successful fresh Google sign-in from the preview root. The post-deployment attempt returned `callback_authorization_recovery_failed`; acceptance remains incomplete and the existing incident is reopened for targeted diagnosis.

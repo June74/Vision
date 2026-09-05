@@ -647,13 +647,17 @@ describe("Vision Worker Google authentication", () => {
     }
   });
 
-  it.each(["recovered", "not_needed"] as const)(
-    "continues secure callback after authorization recovery returns %s",
-    async (outcome) => {
+  it.each(
+    (["local", "preview", "production"] as const).flatMap((environment) =>
+      (["recovered", "not_needed"] as const).map((outcome) => ({ environment, outcome })),
+    ),
+  )(
+    "continues secure callback after $outcome in $environment",
+    async ({ environment, outcome }) => {
       const authorizationRecovery: AuthorizationRecoveryPort = {
         recoverAfterReconnect: vi.fn(async () => outcome),
       };
-      const { app, sessionStore } = await createHarness({ authorizationRecovery });
+      const { app, sessionStore } = await createHarness({ authorizationRecovery, environment });
       await app.fetch(new Request("https://vision.example.test/api/auth/google/start"), {} as Env);
       const response = await app.fetch(
         new Request(
@@ -662,6 +666,8 @@ describe("Vision Worker Google authentication", () => {
         {} as Env,
       );
       expect(response.status).toBe(302);
+      expect(response.headers.get("location")).toBe("/");
+      expect(response.headers.get("x-vision-auth-diagnostic")).toBeNull();
       expect(sessionStore.sessionRows).toHaveLength(1);
       expect(authorizationRecovery.recoverAfterReconnect).toHaveBeenCalledWith({
         googleSubject: "google-subject",
@@ -708,66 +714,88 @@ describe("Vision Worker Google authentication", () => {
     expect(revoke.mock.invocationCallOrder[0]).toBeLessThan(create.mock.invocationCallOrder[0]!);
   });
 
-  it.each([
-    ["conflict", { recoverAfterReconnect: vi.fn(async () => "conflict" as const) }],
-    ["throw", { recoverAfterReconnect: vi.fn(async () => {
-      throw new Error("RECOVERY_DATABASE_DETAIL_SENTINEL");
-    }) }],
-    ["identity-shaped throw", { recoverAfterReconnect: vi.fn(async () => {
-      throw new IdentityAuthorizationError();
-    }) }],
-  ] as const)("fails safely when reconnect recovery returns %s", async (_case, authorizationRecovery) => {
-    const { app, logger, sessionStore, sessions, tokenStore } = await createHarness({
-      authorizationRecovery,
+  describe.each(["local", "preview", "production"] as const)("recovery failure in %s", (environment) => {
+    it.each([
+      ["conflict", { recoverAfterReconnect: vi.fn(async () => "conflict" as const) }],
+      ["throw", { recoverAfterReconnect: vi.fn(async () => {
+        throw new Error("RECOVERY_DATABASE_DETAIL_SENTINEL");
+      }) }],
+      ["identity-shaped throw", { recoverAfterReconnect: vi.fn(async () => {
+        throw new IdentityAuthorizationError();
+      }) }],
+      ["invalid string", { recoverAfterReconnect: vi.fn(async () => "RECOVERY_INVALID_OUTCOME_SENTINEL" as never) }],
+      ["undefined outcome", { recoverAfterReconnect: vi.fn(async () => undefined as never) }],
+      ["null outcome", { recoverAfterReconnect: vi.fn(async () => null as never) }],
+      ["object outcome", { recoverAfterReconnect: vi.fn(async () => ({ outcome: "conflict", detail: "RECOVERY_INVALID_OUTCOME_SENTINEL" }) as never) }],
+    ] as const)("fails safely when reconnect recovery returns %s", async (_case, authorizationRecovery) => {
+      const { app, logger, sessionStore, sessions, tokenStore } = await createHarness({
+        authorizationRecovery,
+        environment,
+      });
+      const oldSessionId = "OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO";
+      await sessions.createSession({
+        sessionId: oldSessionId,
+        ownerId: "usr_private_pilot",
+        googleSubject: "google-subject",
+        email: "allowed@example.test",
+        csrfToken: "PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP",
+        createdAt: now,
+        expiresAt: new Date(now.getTime() + 60_000),
+      });
+      await app.fetch(new Request("https://vision.example.test/api/auth/google/start"), {} as Env);
+      const response = await app.fetch(
+        new Request(
+          `https://vision.example.test/api/auth/google/callback?code=authorization-code&state=${state}`,
+          { headers: { cookie: `vision_session=${oldSessionId}` } },
+        ),
+        {} as Env,
+      );
+      const expectedStage = _case === "conflict"
+        ? "callback_authorization_recovery_conflict"
+        : "callback_authorization_recovery_failed";
+      const body = await response.text();
+      expect(response.status).toBe(400);
+      expect(body).toBe(
+        environment === "preview"
+          ? `<!doctype html><html><body><h1>Authentication failed</h1><p>Please try again.</p><p>Diagnostic stage: ${expectedStage}</p></body></html>`
+          : "<!doctype html><html><body><h1>Authentication failed</h1><p>Please try again.</p></body></html>",
+      );
+      expect(response.headers.get("x-vision-auth-diagnostic")).toBe(
+        environment === "preview" ? expectedStage : null,
+      );
+      expect(response.headers.get("set-cookie")).toBeNull();
+      expect(response.headers.get("location")).toBeNull();
+      expect(tokenStore.rows).toHaveLength(1);
+      expect(sessionStore.sessionRows).toHaveLength(1);
+      expect(sessionStore.sessionRows[0]?.revokedAt).toBeNull();
+      expect(logger).toHaveBeenCalledWith(expect.objectContaining({
+        action: "auth.callback",
+        errorCategory: "authorization_recovery_failed",
+        diagnosticStage: expectedStage,
+        outcome: "failed",
+      }));
+      const observable = JSON.stringify({
+        body,
+        headers: [...response.headers],
+        logs: logger.mock.calls,
+      });
+      for (const forbidden of [
+        "RECOVERY_DATABASE_DETAIL_SENTINEL",
+        "RECOVERY_INVALID_OUTCOME_SENTINEL",
+        "REFRESH_TOKEN_SENTINEL",
+        "ACCESS_TOKEN_SENTINEL",
+        "CLIENT_SECRET_SENTINEL",
+        "authorization-code",
+        state,
+        verifier,
+        nonce,
+        oldSessionId,
+        "google-subject",
+        "allowed@example.test",
+      ]) {
+        expect(observable).not.toContain(forbidden);
+      }
     });
-    const oldSessionId = "OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO";
-    await sessions.createSession({
-      sessionId: oldSessionId,
-      ownerId: "usr_private_pilot",
-      googleSubject: "google-subject",
-      email: "allowed@example.test",
-      csrfToken: "PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP",
-      createdAt: now,
-      expiresAt: new Date(now.getTime() + 60_000),
-    });
-    await app.fetch(new Request("https://vision.example.test/api/auth/google/start"), {} as Env);
-    const response = await app.fetch(
-      new Request(
-        `https://vision.example.test/api/auth/google/callback?code=authorization-code&state=${state}`,
-        { headers: { cookie: `vision_session=${oldSessionId}` } },
-      ),
-      {} as Env,
-    );
-    expect(response.status).toBe(400);
-    expect(await response.text()).toBe(
-      "<!doctype html><html><body><h1>Authentication failed</h1><p>Please try again.</p><p>Diagnostic stage: callback_authorization_recovery_failed</p></body></html>",
-    );
-    expect(response.headers.get("x-vision-auth-diagnostic")).toBe(
-      "callback_authorization_recovery_failed",
-    );
-    expect(response.headers.get("set-cookie")).toBeNull();
-    expect(tokenStore.rows).toHaveLength(1);
-    expect(sessionStore.sessionRows).toHaveLength(1);
-    expect(sessionStore.sessionRows[0]?.revokedAt).toBeNull();
-    expect(logger).toHaveBeenCalledWith(expect.objectContaining({
-      action: "auth.callback",
-      errorCategory: "authorization_recovery_failed",
-      diagnosticStage: "callback_authorization_recovery_failed",
-      outcome: "failed",
-    }));
-    const observable = JSON.stringify({
-      body: "Authentication failed. Please try again.",
-      logs: logger.mock.calls,
-    });
-    for (const forbidden of [
-      "RECOVERY_DATABASE_DETAIL_SENTINEL",
-      "REFRESH_TOKEN_SENTINEL",
-      "ACCESS_TOKEN_SENTINEL",
-      "google-subject",
-      "allowed@example.test",
-    ]) {
-      expect(observable).not.toContain(forbidden);
-    }
   });
 
   it("accepts Google's benign profile identity scopes", async () => {
