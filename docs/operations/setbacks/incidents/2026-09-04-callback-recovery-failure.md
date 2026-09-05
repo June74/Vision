@@ -313,3 +313,21 @@ before application code, so it provides no additional runtime acceptance claim.
 All agents are closed before release; the peak was two concurrent subagents,
 below the hard limit of no more than 20 agents at once. Exact deployment and the
 owner's new callback result remain pending.
+
+## Predicate diagnostic: verified preview release
+
+- Application commit: `9069a67c6123f2f5187fe24b708bf9ce8ead10f5`.
+- GitHub run `33944335059` succeeded for that exact commit: admission 18 seconds,
+  candidate application/browser verification 5 minutes 15 seconds, and normal
+  preview deployment 24 seconds.
+- Worker version: `9708b13d-3f26-45a2-9d6d-70aa236afbb2`; deployment log timestamp
+  2026-09-05T04:27:44Z (2026-09-04 local).
+- Live root and health returned 200, health reported ok, and the unauthenticated
+  session endpoint returned 401. No credentials, cookies, or callback requests.
+- Existing Node action deprecation warnings did not fail any required job. No
+  workflow, dependency, secret, production, or manual database change was needed.
+- The verified-clean Projects Phase C worktree was fast-forwarded to the release.
+- Owner was asked to open the preview root, refresh, start Google sign-in, and
+  return only success or the diagnostic stage. This live callback result remains
+  pending. The diagnostic is deployed, but authentication and Phase C acceptance
+  are not claimed complete. Keep the temporary diagnostic until sign-in succeeds.

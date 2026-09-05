@@ -144,16 +144,16 @@ export function readAuthorizationRecoveryDiagnosticStage(
 - [x] Run `pnpm.cmd check`, then `pnpm.cmd test:e2e`; require exit zero.
 - [x] Build with `CLOUDFLARE_ENV=preview`, run `pnpm.cmd deploy:check:preview`,
   restore previous override, then `wrangler.cmd deploy --dry-run --config dist/vision/wrangler.json --name vision-preview`.
-- [ ] Run `git diff --check`, docs check, and inspect only expected changed paths.
+- [x] Run `git diff --check`, docs check, and inspect only expected changed paths.
   Stage only reviewed source/tests/docs, excluding ignored synthetic probes.
-- [ ] Commit, then fast-forward push `HEAD:refs/heads/codex/phase-c-write-pipeline`.
+- [x] Commit, then fast-forward push `HEAD:refs/heads/codex/phase-c-write-pipeline`.
   Never force push or deploy main.
-- [ ] Dispatch existing `preview.yml` with operation none, configure_ai_budget false,
+- [x] Dispatch existing `preview.yml` with operation none, configure_ai_budget false,
   full reviewed SHA and existing canonical v2 acceptance-context parser. Use Node
   randomBytes for correlation and GitHub CLI JSON stdin; do not disclose the context.
-- [ ] Confirm admission, candidate verification, and preview deployment for exact SHA.
+- [x] Confirm admission, candidate verification, and preview deployment for exact SHA.
   Record only run ID, SHA, Worker version and safe validation counts.
-- [ ] Read root/health and signed-out session without credentials or callback queries.
+- [x] Read root/health and signed-out session without credentials or callback queries.
   Ask owner to open preview root, refresh, Sign in with Google, and return only the
   safe category or success. Do not claim authentication or Phase C complete.
 
@@ -178,3 +178,24 @@ PostgreSQL skips), 177 Worker auth tests, docs coverage, and diff checks. The
 quality reviewer verified source/SQL equivalence and test coverage but did not
 rerun full suites; its optional probe stopped in local test-tool startup before
 application execution. Parent verification remains the source for full totals.
+
+## Exact preview release
+
+- Reviewed application commit: `9069a67c6123f2f5187fe24b708bf9ce8ead10f5`.
+- Normal-preview workflow: `33944335059`, dispatched once with the existing
+  validated canonical context; budget configuration false and operation none.
+- Admission succeeded in 18 seconds, candidate verification in 5 minutes 15 seconds,
+  and normal-preview deployment in 24 seconds, all for the reviewed application SHA.
+- Worker version: `9708b13d-3f26-45a2-9d6d-70aa236afbb2`; deployment log timestamp
+  2026-09-05T04:27:44Z (2026-09-04 local).
+- Public post-deploy checks passed: root 200, health 200/ok, signed-out session 401.
+  No cookies, credentials, or OAuth callback parameters were sent.
+- The clean Projects Phase C worktree was fast-forwarded to the same application
+  commit. Main, OneDrive, production, credentials, and live database rows untouched.
+- One documentation EOF blank line stopped the pre-commit gate; corrected staged
+  whitespace and docs checks passed before commit. No code workaround was needed.
+
+- [ ] Receive the owner's fresh safe category or confirmed successful sign-in.
+  The owner was asked to refresh the preview root and start Google sign-in.
+  Diagnostic deployment is complete; authentication and Phase C live acceptance
+  are not yet confirmed. Keep this temporary diagnostic until sign-in works.

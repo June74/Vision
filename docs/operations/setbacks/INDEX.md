@@ -2,7 +2,7 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
-| [SB-20260904-callback-recovery-failure](incidents/2026-09-04-callback-recovery-failure.md) | open | 2026-09-04 | Phase C live sign-in | Same-statement predicate diagnostic passed 2554 tests and both independent reviews; exact preview release and new owner category pending |
+| [SB-20260904-callback-recovery-failure](incidents/2026-09-04-callback-recovery-failure.md) | open | 2026-09-04 | Phase C live sign-in | Predicate diagnostic deployed in successful run 33944335059; public checks pass, new owner callback result pending |
 | [SB-20260904-recovery-diagnostic-test-fixture](incidents/2026-09-04-recovery-diagnostic-test-fixture.md) | closed | 2026-09-04 | Phase C recovery predicate diagnostic tests | Object-wrapped Vitest fixtures verified; 112 regressions and 16 OAuth contracts passed with 5 existing external skips |
 | [SB-20260904-browser-runtime-missing](incidents/2026-09-04-browser-runtime-missing.md) | closed | 2026-09-04 | Phase C browser verification | Missing locked Chromium runtime installed; unchanged suite passed all 47 browser tests |
 | [SB-20260904-preview-build-branch-mismatch](incidents/2026-09-04-preview-build-branch-mismatch.md) | closed | 2026-09-04 | Phase C preview deployment | Existing diagnostic integrated on complete Phase C runtime; GitHub deployment and live diagnostic verification passed |
