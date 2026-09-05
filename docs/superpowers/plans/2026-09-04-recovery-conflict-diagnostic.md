@@ -76,14 +76,18 @@ and the existing callback recovery incident/index.
 - [x] Build with `CLOUDFLARE_ENV=preview`, validate with
   `pnpm.cmd deploy:check:preview`, restore the prior environment override, then
   run `wrangler.cmd deploy --dry-run --config dist/vision/wrangler.json --name vision-preview`.
-- [ ] Run `git diff --check`, stage only reviewed source/tests/docs, commit,
+- [x] Run `git diff --check`, stage only reviewed source/tests/docs, commit,
   and fast-forward push `HEAD:refs/heads/codex/phase-c-write-pipeline`.
-- [ ] Dispatch `preview.yml` on that branch using operation `none`, budget
+  Application commit: `ed96c81d33f61f412708d3b4fe64ded8bc65351a`.
+- [x] Dispatch `preview.yml` on that branch using operation `none`, budget
   configuration `false`, the full reviewed commit, and the existing parser's
   validated canonical v2 acceptance context. Use Node crypto for correlation and
   JSON stdin to GitHub CLI; do not print the context or redispatch blindly.
-- [ ] Verify admission, candidate verification, and normal preview deployment
+- [x] Verify admission, candidate verification, and normal preview deployment
   success for that exact SHA; record run ID and Worker version only.
-- [ ] Check live root/health and unauthenticated session without logging cookies
-  or redirect query values. Ask the owner to start one fresh sign-in from the
-  preview root and return only its diagnostic category. Do not claim auth fixed.
+  Run `33941790470` succeeded; Worker `e1d87284-25b7-401e-bae2-903b090f9ebf`.
+- [x] Check live root/health and unauthenticated session without logging cookies
+  or redirect query values. Observed root 200, health 200/ok, signed-out session 401.
+- [ ] Receive the owner's fresh sign-in result from the preview root, containing
+  only success or the safe category. Diagnostic deployment is complete, but
+  actual authenticated acceptance is not; do not claim authentication fixed.

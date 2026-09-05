@@ -201,3 +201,21 @@ preview. Its minor note about historical approval/status wording is addressed
 by this explicit current-status section. The exact preview deployment is the
 remaining release gate; real owner sign-in still fails on the preceding
 deployment and is not claimed fixed.
+
+## Diagnostic-only preview release
+
+- Application commit: `ed96c81d33f61f412708d3b4fe64ded8bc65351a`.
+- GitHub run `33941790470`: admission succeeded in 14 seconds, candidate
+  application/browser verification succeeded in 5 minutes 11 seconds, and normal
+  preview deployment succeeded in 32 seconds for that exact Phase C commit.
+- Worker version: `e1d87284-25b7-401e-bae2-903b090f9ebf`; deploy log timestamp
+  2026-09-05T03:31:47Z (2026-09-04 local).
+- Public root and health returned 200, health reported `ok`, and the signed-out
+  session endpoint returned 401. No cookies, tokens, or credentials were sent.
+- The clean Projects Phase C worktree was fast-forwarded to the release. Main,
+  production, secrets, recovery SQL, and manual database state remain unchanged.
+- Owner must begin one fresh sign-in from the preview root and return only the
+  safe diagnostic category. The new conflict category proves an explicit port
+  conflict; the existing generic category covers throws/invalid outcomes. Neither
+  establishes a precise SQL predicate or database error. Real sign-in and Phase C
+  live acceptance remain incomplete. Preserve the diagnostic until sign-in works.
