@@ -1,6 +1,6 @@
 # SB-20260904-callback-recovery-failure: Live sign-in reaches synchronization recovery and fails
 
-- **Status:** open
+- **Status:** contained; repair deployed, owner sign-in confirmation pending
 - **First/last observed:** 2026-09-04
 - **Phase/task:** Phase C private-pilot sign-in acceptance
 - **Environment/version:** Preview application e980307; deployment run 33927962462
@@ -105,4 +105,26 @@ The opt-in PostgreSQL multi-session fixture is not configured, so no live
 interleaving evidence is claimed. Independent review found no critical or
 important issues and approved the existing changes for preview. It confirmed
 unchanged SQL locking dependencies without claiming newly proven concurrency.
-Preview deployment and owner acceptance remain pending.
+Preview deployment completed; owner acceptance remains pending.
+
+## Preview release evidence
+
+- Reviewed application commit: `b68f2139c298ca43ca35c36df1419ba9822c0253`.
+- GitHub preview run: `33931354751`; admission, candidate verification, and normal
+  deployment all succeeded for that exact Phase C commit. Deployment completed
+  on 2026-09-05 UTC (2026-09-04 in the owner's local timezone).
+- Worker version: `c615956e-5b69-4a96-aeab-33f972d10296`.
+- Live public checks: root 200, health 200 with `ok`, unauthenticated session 401,
+  and sign-in start 302 to Google's origin. Redirect query/cookie values were
+  neither printed nor followed.
+- The isolated browser tab opened the Vision bootstrapping shell. Follow-up tab
+  lookup using retained IDs failed to resolve that temporary tab; its original
+  handle closed it successfully. No completed browser sign-in or authenticated
+  UI acceptance is claimed from that partial browser probe. This does not
+  invalidate the separate successful HTTP entry checks.
+- An additional synthetic database probe installed row-write rejection triggers
+  on all five recovery tables. Two `not_needed` calls passed; an explicit
+  identical-value UPDATE was rejected by the trigger. This is ad hoc additional
+  no-write evidence, not a new committed trigger regression or concurrency test.
+- Main, production, secrets, and live database records were not manually changed.
+  The existing diagnostic remains pending successful owner sign-in.

@@ -63,11 +63,12 @@ and the existing callback recovery incident and index.
 - [x] Document the new no-mutation exception in both references and link the approved amendment from the original design.
 - [x] Independent read-only review against the approved design, including SQL precedence, every retained guard, and test coverage. Resolve all critical/important findings. Verdict: no critical or important findings; ready for preview.
 - [x] Run `pnpm check`, `pnpm test:e2e`, preview build with `CLOUDFLARE_ENV=preview`, and `pnpm deploy:check:preview`. Unset that environment override, then dry-run Wrangler against `dist/vision/wrangler.json`. Record unavailable live PostgreSQL interleaving evidence separately.
-- [ ] Run `git diff --check`, inspect exact staged paths, and commit the approved repair and evidence. Do not stage ignored scratch SQL or secrets.
+- [x] Run `git diff --check`, inspect exact staged paths, and commit the approved repair and evidence. Do not stage ignored scratch SQL or secrets. Repair commit: `b68f2139c298ca43ca35c36df1419ba9822c0253`.
 
 ### Task 4: Preview release and owner acceptance
 
-- [ ] Fast-forward push to `origin/codex/phase-c-write-pipeline`; do not change main or production.
-- [ ] Dispatch `preview.yml` with operation `none`, budget configuration `false`, reviewed full commit SHA, and validated canonical version-2 acceptance context. Use the exact returned run ID; do not repeat dispatch.
-- [ ] Verify GitHub admission, candidate verification, and deploy jobs all succeed for that SHA. Preserve existing secrets, queues, schedules, and the diagnostic.
-- [ ] Check live health 200, unauthenticated session 401, and OAuth start 302 without exposing cookies or redirect query values. Owner then completes Google sign-in; record only success or the safe diagnostic stage. Keep live acceptance pending until that result arrives.
+- [x] Fast-forward push to `origin/codex/phase-c-write-pipeline`; do not change main or production. Existing clean Phase C worktree also fast-forwarded.
+- [x] Dispatch `preview.yml` with operation `none`, budget configuration `false`, reviewed full commit SHA, and validated canonical version-2 acceptance context. Use the exact returned run ID; do not repeat dispatch. Run: `33931354751`.
+- [x] Verify GitHub admission, candidate verification, and deploy jobs all succeed for that SHA. Preserve existing secrets, queues, schedules, and the diagnostic. Worker version: `c615956e-5b69-4a96-aeab-33f972d10296`.
+- [x] Check live root/health 200, unauthenticated session 401, and OAuth start 302 to Google without exposing cookies or redirect query values.
+- [ ] Owner completes a fresh Google sign-in from the preview root; record only success or the safe diagnostic stage. Keep live acceptance pending until that result arrives.

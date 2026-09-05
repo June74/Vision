@@ -2,7 +2,7 @@
 
 | Incident | Status | Last observed | Phase/task | Title |
 |---|---|---|---|---|
-| [SB-20260904-callback-recovery-failure](incidents/2026-09-04-callback-recovery-failure.md) | open | 2026-09-04 | Phase C live sign-in | Normal sync reproduces the live connected/unmarked checkpoint-version mismatch and login conflict; narrow rule revision proposed |
+| [SB-20260904-callback-recovery-failure](incidents/2026-09-04-callback-recovery-failure.md) | contained | 2026-09-04 | Phase C live sign-in | Guarded connected-lag fix deployed by successful preview run 33931354751; owner sign-in confirmation pending |
 | [SB-20260904-browser-runtime-missing](incidents/2026-09-04-browser-runtime-missing.md) | closed | 2026-09-04 | Phase C browser verification | Missing locked Chromium runtime installed; unchanged suite passed all 47 browser tests |
 | [SB-20260904-preview-build-branch-mismatch](incidents/2026-09-04-preview-build-branch-mismatch.md) | closed | 2026-09-04 | Phase C preview deployment | Existing diagnostic integrated on complete Phase C runtime; GitHub deployment and live diagnostic verification passed |
 | [SB-20260818-175012-phase-c-application-checks-r2-cleanup](incidents/2026-08-18T175012Z-phase-c-application-checks-r2-cleanup.md) | contained | 2026-08-18T17:50:12Z | Phase C application-check CI diagnosis | R2 capability scan exceeded its focused timeout and cleanup inventory omitted the live-acceptance document |
