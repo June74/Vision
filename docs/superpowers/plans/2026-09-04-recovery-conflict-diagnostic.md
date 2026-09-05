@@ -88,6 +88,9 @@ and the existing callback recovery incident/index.
   Run `33941790470` succeeded; Worker `e1d87284-25b7-401e-bae2-903b090f9ebf`.
 - [x] Check live root/health and unauthenticated session without logging cookies
   or redirect query values. Observed root 200, health 200/ok, signed-out session 401.
-- [ ] Receive the owner's fresh sign-in result from the preview root, containing
-  only success or the safe category. Diagnostic deployment is complete, but
-  actual authenticated acceptance is not; do not claim authentication fixed.
+- [x] Receive the owner's fresh sign-in result from the preview root, containing
+  only success or the safe category. The owner returned
+  `callback_authorization_recovery_conflict`, confirming an explicit recovery
+  conflict rather than a thrown query/decoder error. Diagnostic deployment and
+  result collection are complete, but actual authenticated acceptance is not;
+  the precise rejected guard remains unknown. Do not claim authentication fixed.

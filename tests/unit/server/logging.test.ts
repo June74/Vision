@@ -3,6 +3,36 @@ import { logEvent } from "../../../src/server/logging";
 import { AUTH_DIAGNOSTIC_STAGES } from "../../../src/server/auth/diagnostics";
 
 describe("logEvent", () => {
+  it.each([
+    "callback_recovery_token_missing",
+    "callback_recovery_token_subject_mismatch",
+    "callback_recovery_token_version_mismatch",
+    "callback_recovery_token_timestamp_mismatch",
+    "callback_recovery_setup_subject_mismatch",
+    "callback_recovery_connection_missing",
+    "callback_recovery_connection_subject_mismatch",
+    "callback_recovery_connection_summary_mismatch",
+    "callback_recovery_connection_role_mismatch",
+    "callback_recovery_checkpoint_missing",
+    "callback_recovery_maintenance_missing",
+    "callback_recovery_maintenance_setup_version_mismatch",
+    "callback_recovery_maintenance_checkpoint_version_mismatch",
+    "callback_recovery_topology_unclassified",
+    "callback_recovery_connected_marker_present",
+    "callback_recovery_authorization_marker_version_mismatch",
+    "callback_recovery_authorization_marker_category_mismatch",
+    "callback_recovery_authorization_marker_timestamp_mismatch",
+    "callback_recovery_authorization_token_not_newer",
+  ])("admits the approved recovery predicate stage %s", (diagnosticStage) => {
+    const logger = vi.fn();
+    const event = {
+      requestId: "req_1", action: "auth.callback", outcome: "failed",
+      errorCategory: "authorization_recovery_failed", diagnosticStage,
+    };
+    logEvent(logger, event);
+    expect(logger).toHaveBeenCalledExactlyOnceWith(event);
+  });
+
   it.each(AUTH_DIAGNOSTIC_STAGES)("accepts only the authored diagnostic stage %s", (diagnosticStage) => {
     const logger = vi.fn();
     const event = { requestId: "req_1", action: "auth.callback", outcome: "failed", diagnosticStage };
@@ -10,7 +40,11 @@ describe("logEvent", () => {
     expect(logger).toHaveBeenCalledExactlyOnceWith(event);
   });
 
-  it.each(["PRIVATE_PROVIDER_DETAIL", "<script>private</script>", "", null, {}])(
+  it.each([
+    "PRIVATE_PROVIDER_DETAIL", "<script>private</script>", "", null, {},
+    "callback_recovery_unclassified", "callback_recovery_PRIVATE_PROVIDER_DETAIL",
+    "token_missing", "__proto__", "constructor", { reason: "token_missing" },
+  ])(
     "rejects a non-category diagnostic value before emission: %j",
     (diagnosticStage) => {
       const logger = vi.fn();

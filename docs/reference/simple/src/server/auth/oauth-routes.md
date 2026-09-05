@@ -5,14 +5,26 @@ Provides Google sign-in start/callback with guarded authorization recovery, curr
 ## `registerOAuthRoutes`
 
 Adds all authentication routes before the generic API fallback.
+On preview only, recovery can report one fixed reason for refusing sign-in. The callback stores that
+label separately for each request and shows it only if recovery finally returns `conflict`. Unknown
+reasons stay generic. No private details are copied into the header, page, or log.
 
 ## `createProductionAuthDependencies`
 
 Builds database, encryption, Google, session, and token boundaries from validated Worker bindings.
+The actual Worker uses this factory when no test dependencies are supplied. It forwards the optional
+preview reason notification to the same owner-scoped recovery repository, along with the unchanged
+callback inputs; it does not create a second recovery path.
 
 ## `recoverAfterReconnect`
 
 Checks whether Vision may safely clear an older scheduler-owned authorization disconnect after encrypted credentials are saved.
+It accepts an optional second argument for a fixed reason notification. That notification never
+decides sign-in: an accepted result still rotates/creates the session, while a conflict or error
+preserves the old session and issues no new cookie. Errors and invalid results keep the generic
+failure category even if a reason was notified first. Local and production receive no observer and
+retain their generic conflict logs and unchanged pages/headers. Remove this temporary detail together
+with the rest of the OAuth diagnostic only after the owner confirms sign-in.
 
 ## `now`
 

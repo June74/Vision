@@ -27,6 +27,16 @@ any row. This accounts for sync commits advancing independently of maintenance.
 Exact owner/subject/calendar/setup and token version/time guards remain mandatory;
 ahead-of-checkpoint maintenance, any marker, and non-connected lag remain conflicts.
 Actual authorization recovery still requires equal checkpoint versions.
+
+The optional `AuthorizationRecoveryConflictObserver` receives an authored member
+of `AUTHORIZATION_RECOVERY_CONFLICT_REASONS` only after a valid `conflict` result.
+The final SQL projection classifies the first failing token, topology, or marker
+predicate from existing materialized locked CTEs. Admission/update CTEs and the
+outcome decoder are unchanged; there is no additional query or diagnostic write.
+Null-safe comparisons retain missing-marker distinctions. The decoder selects
+only a literal from the tuple, defaulting malformed reasons to `unclassified`.
+Notification exceptions are ignored so an observer cannot affect authorization.
+Only the preview callback opts in; accepted results never notify.
 ## `clearCredentialRetry`
 Returns only an exact scheduler-marked transient or database retry to connected after credential resolution succeeds.
 ## `markCleanupRequired`

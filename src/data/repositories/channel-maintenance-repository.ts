@@ -32,6 +32,38 @@ export type AuthorizationRecoveryOutcome =
   | "not_needed"
   | "conflict";
 
+/** Authored diagnostic reasons, never database identifiers, timestamps, or private values. */
+export const AUTHORIZATION_RECOVERY_CONFLICT_REASONS = [
+  "token_missing",
+  "token_subject_mismatch",
+  "token_version_mismatch",
+  "token_timestamp_mismatch",
+  "setup_subject_mismatch",
+  "connection_missing",
+  "connection_subject_mismatch",
+  "connection_summary_mismatch",
+  "connection_role_mismatch",
+  "checkpoint_missing",
+  "maintenance_missing",
+  "maintenance_setup_version_mismatch",
+  "maintenance_checkpoint_version_mismatch",
+  "topology_unclassified",
+  "connected_marker_present",
+  "authorization_marker_version_mismatch",
+  "authorization_marker_category_mismatch",
+  "authorization_marker_timestamp_mismatch",
+  "authorization_token_not_newer",
+  "unclassified",
+] as const;
+
+/** One fixed category describing the first failed check in the locked recovery snapshot. */
+export type AuthorizationRecoveryConflictReason =
+  (typeof AUTHORIZATION_RECOVERY_CONFLICT_REASONS)[number];
+
+/** Optional diagnostic notification; observers cannot change the recovery result. */
+export type AuthorizationRecoveryConflictObserver =
+  (reason: AuthorizationRecoveryConflictReason) => void;
+
 /** Authoritative token metadata returned by the encrypted token upsert. */
 export interface AuthorizationReconnectInput {
   readonly googleSubject: string;
@@ -636,9 +668,10 @@ export class ChannelMaintenanceRepository
     return result.rows.length === 1;
   }
 
-  /** Recovers exact scheduler markers; connected unmarked snapshot lag needs no write. */
+  /** Recovers exact markers; optional closed diagnostics observe the same locked SQL snapshot. */
   async recoverAuthorizationAfterReconnect(
     input: AuthorizationReconnectInput,
+    onConflict?: AuthorizationRecoveryConflictObserver,
   ): Promise<AuthorizationRecoveryOutcome> {
     const googleSubject = readText(input.googleSubject);
     const tokenVersion = readPositiveInteger(input.tokenVersion);
@@ -823,7 +856,85 @@ export class ChannelMaintenanceRepository
         )::integer as ok
         from decision
       )
-      select decision.outcome
+      select decision.outcome,
+        case
+          when decision.outcome <> 'conflict' then null
+          when not exists (select 1 from locked_token) then 'token_missing'
+          when exists (
+            select 1 from locked_token where google_subject is distinct from ${googleSubject}
+          ) then 'token_subject_mismatch'
+          when exists (
+            select 1 from locked_token where token_version is distinct from ${tokenVersion}
+          ) then 'token_version_mismatch'
+          when exists (
+            select 1 from locked_token where updated_at is distinct from ${tokenUpdatedAt}
+          ) then 'token_timestamp_mismatch'
+          when not exists (select 1 from topology) then
+            case
+              when exists (
+                select 1 from locked_setup, exact_token
+                where locked_setup.google_subject is distinct from exact_token.google_subject
+              ) then 'setup_subject_mismatch'
+              when not exists (select 1 from locked_connection) then 'connection_missing'
+              when exists (
+                select 1 from locked_connection, locked_setup
+                where locked_connection.google_subject is distinct from locked_setup.google_subject
+              ) then 'connection_subject_mismatch'
+              when exists (
+                select 1 from locked_connection where summary is distinct from 'Vision'
+              ) then 'connection_summary_mismatch'
+              when exists (
+                select 1 from locked_connection where ownership_access_role is distinct from 'owner'
+              ) then 'connection_role_mismatch'
+              when not exists (select 1 from locked_checkpoint) then 'checkpoint_missing'
+              when not exists (select 1 from locked_maintenance) then 'maintenance_missing'
+              when exists (
+                select 1 from locked_maintenance, locked_setup
+                where locked_maintenance.connection_version is distinct from locked_setup.setup_version
+              ) then 'maintenance_setup_version_mismatch'
+              when not exists (
+                select 1 from locked_maintenance as maintenance, locked_checkpoint as checkpoint
+                where maintenance.checkpoint_version = checkpoint.version
+                  or (
+                    maintenance.checkpoint_version < checkpoint.version
+                    and checkpoint.status = 'connected'
+                    and maintenance.credential_failure_checkpoint_version is null
+                    and maintenance.credential_failure_category is null
+                    and maintenance.credential_failure_recorded_at is null
+                  )
+              ) then 'maintenance_checkpoint_version_mismatch'
+              else 'topology_unclassified'
+            end
+          when exists (
+            select 1 from topology
+            where checkpoint_status = 'connected'
+              and (
+                marker_version is not null
+                or marker_category is not null
+                or marker_recorded_at is not null
+              )
+          ) then 'connected_marker_present'
+          when exists (
+            select 1 from topology
+            where checkpoint_status = 'disconnected' and checkpoint_category = 'authorization'
+          ) then
+            case
+              when exists (
+                select 1 from topology where marker_version is distinct from checkpoint_version
+              ) then 'authorization_marker_version_mismatch'
+              when exists (
+                select 1 from topology where marker_category is distinct from 'authorization'
+              ) then 'authorization_marker_category_mismatch'
+              when exists (
+                select 1 from topology where marker_recorded_at is distinct from checkpoint_updated_at
+              ) then 'authorization_marker_timestamp_mismatch'
+              when exists (
+                select 1 from topology where (marker_recorded_at < token_updated_at) is not true
+              ) then 'authorization_token_not_newer'
+              else 'unclassified'
+            end
+          else 'unclassified'
+        end as conflict_reason
       from decision
       cross join asserted
       where asserted.ok = 1
@@ -835,6 +946,16 @@ export class ChannelMaintenanceRepository
       outcome !== "conflict"
     ) {
       throw new Error("Invalid authorization recovery row.");
+    }
+    if (outcome === "conflict" && onConflict !== undefined) {
+      const reason = AUTHORIZATION_RECOVERY_CONFLICT_REASONS.find(
+        (candidate) => candidate === result.rows[0]?.conflict_reason,
+      ) ?? "unclassified";
+      try {
+        onConflict(reason);
+      } catch {
+        // Optional diagnostics must never change an authorization outcome.
+      }
     }
     return outcome;
   }

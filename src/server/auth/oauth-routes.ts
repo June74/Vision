@@ -4,6 +4,7 @@ import { createWrappedKeyProvider } from "../../crypto/key-provider";
 import { createDb } from "../../data/db";
 import {
   createChannelMaintenanceRepository,
+  type AuthorizationRecoveryConflictObserver,
   type AuthorizationRecoveryOutcome,
 } from "../../data/repositories/channel-maintenance-repository";
 import {
@@ -40,6 +41,7 @@ import {
   AuthStageError,
   readAuthDiagnosticStage,
   readAuthFailureCause,
+  readAuthorizationRecoveryDiagnosticStage,
   readPreviewDiagnosticStage,
   runAuthStage,
   type AuthDiagnosticStage,
@@ -62,11 +64,12 @@ export type AuthRandomPurpose = "state" | "pkceVerifier" | "nonce" | "sessionId"
 
 /** Narrow owner-scoped synchronization repair boundary used only after reconnect. */
 export interface AuthorizationRecoveryPort {
+  /** Attempts recovery; the optional observer reports only a closed conflict reason, never admission. */
   recoverAfterReconnect(input: {
     readonly googleSubject: string;
     readonly tokenVersion: number;
     readonly tokenUpdatedAt: Date;
-  }): Promise<AuthorizationRecoveryOutcome>;
+  }, onConflict?: AuthorizationRecoveryConflictObserver): Promise<AuthorizationRecoveryOutcome>;
 }
 
 /** Complete injected server boundaries used by authentication routes. */
@@ -278,13 +281,19 @@ export function registerOAuthRoutes(
 
       failureCategory = "authorization_recovery_failed";
       await runAuthStage("callback_authorization_recovery_failed", async () => {
-        const recoveryOutcome = await resolved.authorizationRecovery.recoverAfterReconnect({
-          googleSubject: identity.subject,
-          tokenVersion: retainedTokens.tokenVersion,
-          tokenUpdatedAt: retainedTokens.updatedAt,
-        });
+        let conflictStage: AuthDiagnosticStage = "callback_authorization_recovery_conflict";
+        const recoveryOutcome = await resolved.authorizationRecovery.recoverAfterReconnect(
+          {
+            googleSubject: identity.subject,
+            tokenVersion: retainedTokens.tokenVersion,
+            tokenUpdatedAt: retainedTokens.updatedAt,
+          },
+          resolved.environment === "preview"
+            ? (reason) => { conflictStage = readAuthorizationRecoveryDiagnosticStage(reason); }
+            : undefined,
+        );
         if (recoveryOutcome === "conflict") {
-          throw new AuthStageError("callback_authorization_recovery_conflict");
+          throw new AuthStageError(conflictStage);
         }
         if (recoveryOutcome !== "recovered" && recoveryOutcome !== "not_needed") {
           throw new Error("Authorization recovery did not admit session creation.");
@@ -476,9 +485,9 @@ export async function createProductionAuthDependencies(
     ownerId,
   );
   const authorizationRecovery: AuthorizationRecoveryPort = {
-    /** Delegates the narrow callback port to the owner-scoped repository method. */
-    recoverAfterReconnect: (input) =>
-      maintenance.recoverAuthorizationAfterReconnect(input),
+    /** Forwards callback inputs and the optional preview observer to the same owner-scoped repository. */
+    recoverAfterReconnect: (input, onConflict) =>
+      maintenance.recoverAuthorizationAfterReconnect(input, onConflict),
   };
   const admissionKey = await createAuthAdmissionKeyFactory(
     environment.KEY_ENCRYPTION_KEY,

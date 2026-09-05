@@ -12,6 +12,7 @@ copied, or formatted by any function in this module.
 class AuthStageError extends Error { readonly stage: AuthDiagnosticStage }
 runAuthStage<Result>(stage: AuthDiagnosticStage, operation: () => Result | Promise<Result>): Promise<Result>;
 readAuthDiagnosticStage(error: unknown): AuthDiagnosticStage;
+readAuthorizationRecoveryDiagnosticStage(reason: unknown): AuthDiagnosticStage;
 readAuthFailureCause(error: unknown): unknown;
 readPreviewDiagnosticStage(environment: string | undefined, stage: AuthDiagnosticStage): AuthDiagnosticStage | undefined;
 ```
@@ -23,7 +24,7 @@ which keeps it usable from both the route layer and `src/server/logging.ts` with
 
 ## Inputs and outputs
 
-Accepts a constant stage code, a caller-supplied operation, an arbitrary thrown value, and the
+Accepts a constant stage code, a caller-supplied operation, an arbitrary thrown value or recovery reason, and the
 deployment environment string. Returns the operation's result, a stage code from the closed set, the
 original thrown value, or `undefined` outside preview. It never derives an output from a thrown value.
 
@@ -44,20 +45,26 @@ The module authorizes nothing. Its privacy guarantee is structural: the emitted 
 member of `AUTH_DIAGNOSTIC_STAGES`, the wrapper's message is the constant `AUTH_STAGE_FAILED`, and the
 retained `cause` is never stringified into a response or an audit event. `readPreviewDiagnosticStage`
 is the single gate that keeps categories out of local and production responses.
+The recovery reason mapper uses an explicit switch over unknown input and returns only authored
+literals; it never coerces objects, reads their properties, interpolates input, or uses it as a lookup
+key. The route separately gates the recovery observer to preview, keeping local/production recovery
+conflict logs generic as well.
 
 ## Covering tests
 
 `tests/worker/auth.test.ts` covers preview stage naming for missing state, provider exchange failure,
 rejected scopes, a denied account, and unresolved bindings, plus byte-identical production and local
 failure pages and the absence of state, code, email, subject, and binding text in every output.
-It covers explicit recovery conflicts with
-`callback_authorization_recovery_conflict`, and thrown failures or invalid results
-with `callback_authorization_recovery_failed`. All three environments retain the
+It covers all 20 repository reasons across local, preview, and production; the 19 specific preview
+stages and generic `unclassified` fallback; hostile strings/objects and other malformed values;
+absent notifications; request-local observers including stale notifications; and accepted, thrown,
+or invalid final results after notification. Thrown failures or invalid results retain
+`callback_authorization_recovery_failed`. All three environments retain the
 original audit error category and refuse session issuance or rotation on failure.
 Only preview exposes the stage in the header and page; local/production failure
 HTML remains exact. Actual response bodies, headers, and logs are checked for
 private fixture sentinels. `tests/unit/server/logging.test.ts` verifies the closed
-log enum, including the new literal and rejection of arbitrary strings.
+log enum, including every new literal and rejection of arbitrary strings or reason-shaped objects.
 
 ## `runAuthStage`
 
@@ -67,6 +74,15 @@ An inner tag wins over an outer one, so the reported stage is the deepest one th
 ## `readAuthDiagnosticStage`
 
 Returns the tagged stage, defaulting to `unclassified` for a value thrown outside a wrapped stage.
+
+## `readAuthorizationRecoveryDiagnosticStage`
+
+Maps each of the 19 non-`unclassified` authored repository reasons to its explicit
+`callback_recovery_<reason>` literal. `unclassified` and all unknown/malformed values return
+`callback_authorization_recovery_conflict`. This notation describes the authored names; the function
+does not concatenate strings. It performs no object inspection/coercion or external work and does
+not decide whether recovery succeeded. The caller emits the mapped stage only after final `conflict`.
+The ordered category meanings and evidence limits are in `docs/operations/google-oauth-setup.md`.
 
 ## `readAuthFailureCause`
 

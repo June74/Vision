@@ -12,6 +12,10 @@ registerOAuthRoutes(
   dependenciesOrResolver: AuthRouteDependencies | AuthDependencyResolver,
 ): void;
 createProductionAuthDependencies(environment: Env, logger: SafeLogger): Promise<AuthRouteDependencies>;
+AuthorizationRecoveryPort.recoverAfterReconnect(
+  input: { readonly googleSubject: string; readonly tokenVersion: number; readonly tokenUpdatedAt: Date },
+  onConflict?: AuthorizationRecoveryConflictObserver,
+): Promise<AuthorizationRecoveryOutcome>;
 ```
 
 ## Dependencies
@@ -37,18 +41,42 @@ Session creation requires signed claims, exact issuer/scalar audience/nonce/expi
 ## Covering tests
 
 `tests/worker/auth.test.ts` covers every route, claims, replay, cookies, CSRF, safe 429, rotation, raw/log privacy, per-stage preview categories, and byte-identical production and local failure pages. `tests/unit/server/auth/admission.test.ts` covers admission trust.
+The recovery matrix independently covers every repository reason in all three environments,
+malformed/hostile reasons, omitted notification, request-local/stale observers, exceptions and invalid
+outcomes after notification, and accepted outcomes with unchanged session ordering. Failure checks
+compare exact response bodies and complete headers, preserve the old encrypted session row and its
+usability, reject new cookies/sessions, and exclude private fixture sentinels from all output.
+These injected-port tests do not exercise the production database adapter; its forwarding is separately
+source-traced through `createApp` to this factory and the same owner-scoped maintenance instance.
 
 ## `registerOAuthRoutes`
 
 Accepts static deterministic dependencies for tests or a per-request production resolver. Routes resolve dependencies before use and map configuration/provider failures to safe outcomes.
+After token persistence, the callback initializes a request-local generic conflict stage. Only when
+the resolved environment equals `preview` does it pass an observer that maps an unknown reason through
+`readAuthorizationRecoveryDiagnosticStage`. Only a final result exactly equal to `conflict` emits the
+captured stage. Every other result branch and the audit category stay unchanged. An observer retained
+by an earlier request cannot change a later request's diagnostic stage.
 
 ## `createProductionAuthDependencies`
 
 Validates OAuth bindings, creates the least-privileged Neon client, resolves the protected-field key provider through durable wrapped keys, constructs Drizzle stores, and injects fixed Google endpoints plus the JWKS verifier. It performs no provider call during composition.
+The default `createApp` resolver reaches this factory. It derives the owner once, creates one
+`createChannelMaintenanceRepository(database, ownerId)` instance, and forwards both the recovery input
+and optional observer to that instance's `recoverAuthorizationAfterReconnect(input, onConflict)`.
+No separate repository, owner substitution, diagnostic query, or observer persistence is introduced.
 
 ## `recoverAfterReconnect`
 
 Receives only the verified subject and authoritative token version/update time returned by token persistence. `recovered` and `not_needed` continue; `conflict`, an unknown result, or an exception maps to `authorization_recovery_failed` before any old session is revoked or new session is created.
+The optional second argument is the repository's `AuthorizationRecoveryConflictObserver`, receiving
+only one authored reason. Existing one-argument callers remain valid. Preview conflicts can report
+the mapped predicate stage; absent/unknown/`unclassified` reasons fall back to
+`callback_authorization_recovery_conflict`. Local and production pass no observer and keep this
+generic conflict log. Notification followed by a throw/invalid outcome retains
+`callback_authorization_recovery_failed`; notification followed by an accepted outcome does not
+prevent rotation/creation or add a diagnostic response header. The runbook documents first-mismatch
+precedence, category evidence limits, privacy boundaries, and coordinated removal after owner sign-in.
 
 ## `now`
 

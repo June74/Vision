@@ -219,3 +219,97 @@ deployment and is not claimed fixed.
   conflict; the existing generic category covers throws/invalid outcomes. Neither
   establishes a precise SQL predicate or database error. Real sign-in and Phase C
   live acceptance remain incomplete. Preserve the diagnostic until sign-in works.
+
+## Fresh owner callback: explicit conflict confirmed
+
+The owner returned `callback_authorization_recovery_conflict` after the diagnostic
+release. This category is emitted only after the production recovery port returns
+exactly `conflict`, so the query and result decoder completed; missing-table,
+missing-column, query-exception, or malformed-result explanations do not account
+for this attempt. The callback completed Google verification and token persistence
+but refused session issuance. Exact token metadata, full calendar topology, or
+authorization marker guards remain candidates. Prior SQL screenshots are separate
+snapshots and cannot identify which guard rejected the callback's exact inputs.
+No new authentication relaxation or live database mutation is authorized by this
+finding. Investigation now focuses on the four conflict decision branches.
+
+The first network-disabled driver probe stopped during synthetic fixture setup:
+its checkpoint had a key version but omitted the dummy encrypted sync-token
+bytes, violating the real schema's consistency constraint. No driver request or
+live connection occurred. Correct the fixture to include synthetic bytea before
+using the probe as evidence; this setup failure is not a live auth diagnosis.
+The next bridge attempt encountered PGlite's bytea input serializer because the
+Neon driver already serialized its synthetic bytes as PostgreSQL text. Configure
+the bridge to pass those wire-form bytea parameters through, not serialize them
+twice. Only generated synthetic values appeared in this local failure; no live
+database or credentials were used. Neither bridge error is evidence about the
+live callback conflict.
+
+After correcting only the synthetic fixture and bridge, six network-disabled
+round trips passed through the actual Neon HTTP driver, encrypted token store,
+and recovery repository. UTC and America/Chicago were each exercised with
+millisecond fractions 000, 123, and 999. All six preserved the persisted timestamp
+and returned `not_needed` for a connected, unmarked, older-maintenance fixture;
+12 intercepted HTTP calls were served entirely by PGlite, with zero external
+requests. This does not reproduce a basic timestamp-conversion explanation. It
+is synthetic evidence, not a live Neon/Cloudflare or concurrency acceptance test.
+
+The exact live conflict predicate remains unknown. A further proposed diagnostic
+would classify the rejected guard within the same locked recovery SQL statement,
+using only authored constant categories, while preserving existing outcomes,
+locks, writes, and admission rules. A separate SQL snapshot is less intrusive but
+cannot establish callback-time token inputs or concurrent changes. This further
+diagnostic has not been approved or implemented; no application or deployment
+change was made during this investigation.
+
+## Approved predicate diagnostic implementation
+
+The owner approved the next diagnostic-only change, test-first verification, and
+preview deployment. The existing recovery method retains its three outcomes and
+gains an optional closed-category observer. Its final SQL projection classifies
+only existing locked CTEs; a source comparison confirmed the original lock,
+topology, decision, update, and atomicity-assertion CTEs are byte-identical to
+7503e0c. No recovery predicate, secret, or live database record was changed.
+
+Repository test-first verification produced 26 expected missing-notification
+failures with 69 passing tests. The implementation passed all 95 tests, and
+additional decoder/owner-isolation checks expanded that file to 101 tests. The
+combined recovery/synchronization run passed 112 tests with 5 existing externally
+gated skips; all 16 focused OAuth contracts passed. A new test table argument-shape
+mistake was separately recorded and corrected before continuing.
+
+The network-disabled real Neon HTTP-driver probe passed six normal no-op cases
+and six explicit timestamp-mismatch diagnostic cases across two database time
+zones and three millisecond fractions. All 18 intercepted calls used synthetic
+PGlite data; zero external requests occurred. This verifies transport locally,
+not a live authentication fix or external PostgreSQL concurrency acceptance.
+
+A documentation check was run while the delegated route/reference slice was
+still being written. It correctly reported the two not-yet-added mapper reference
+headings. The missing headings were reported to that worker; integrated checks
+must wait until its matching documentation is complete. No deployment occurred.
+
+The delegated HTTP slice completed with both reference headings and JSDoc. Its
+focused Worker RED run had 43 expected failures and 130 passes, followed by 177
+GREEN passes. Logging RED had 19 failures and 38 passes, followed by 76 GREEN
+passes. A restricted sandbox temp-write attempt was rerun with approved execution;
+a consumed mock Response was replaced with a fresh synthetic response per request.
+Neither local test setup issue changed live state or required a runtime workaround.
+
+Parent integrated verification passed 2,005 unit/integration/security tests,
+199 contracts, 303 Worker tests, and all 47 Chromium tests: 2,554 passing with six
+existing skips. Type checks, complete documentation coverage, build, release
+security scan, preview configuration validation, and no-upload Wrangler dry run
+passed. The earlier in-progress reference warning is resolved. Independent review
+and exact preview release remain the next gates; live sign-in is not claimed fixed.
+
+Independent spec and final code-quality reviews now approve preview deployment
+with no critical, important, or required minor fixes. Both independently confirmed
+the original recovery CTEs and outcome decoder are unchanged. The spec reviewer
+ran 195 focused tests (five external PostgreSQL skips) plus 177 Worker auth tests,
+docs coverage, and diff checks. The final reviewer inspected the code/tests and
+source equality; its optional synthetic probe stopped during test-tool startup
+before application code, so it provides no additional runtime acceptance claim.
+All agents are closed before release; the peak was two concurrent subagents,
+below the hard limit of no more than 20 agents at once. Exact deployment and the
+owner's new callback result remain pending.

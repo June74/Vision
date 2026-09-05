@@ -27,6 +27,25 @@ export const AUTH_DIAGNOSTIC_STAGES = [
   "callback_token_persist_failed",
   "callback_authorization_recovery_failed",
   "callback_authorization_recovery_conflict",
+  "callback_recovery_token_missing",
+  "callback_recovery_token_subject_mismatch",
+  "callback_recovery_token_version_mismatch",
+  "callback_recovery_token_timestamp_mismatch",
+  "callback_recovery_setup_subject_mismatch",
+  "callback_recovery_connection_missing",
+  "callback_recovery_connection_subject_mismatch",
+  "callback_recovery_connection_summary_mismatch",
+  "callback_recovery_connection_role_mismatch",
+  "callback_recovery_checkpoint_missing",
+  "callback_recovery_maintenance_missing",
+  "callback_recovery_maintenance_setup_version_mismatch",
+  "callback_recovery_maintenance_checkpoint_version_mismatch",
+  "callback_recovery_topology_unclassified",
+  "callback_recovery_connected_marker_present",
+  "callback_recovery_authorization_marker_version_mismatch",
+  "callback_recovery_authorization_marker_category_mismatch",
+  "callback_recovery_authorization_marker_timestamp_mismatch",
+  "callback_recovery_authorization_token_not_newer",
   "callback_session_rotation_failed",
   "callback_session_create_failed",
   "unclassified",
@@ -66,6 +85,34 @@ export async function runAuthStage<Result>(
 /** Reads the recorded stage of a failure, defaulting to the unclassified category. */
 export function readAuthDiagnosticStage(error: unknown): AuthDiagnosticStage {
   return error instanceof AuthStageError ? error.stage : "unclassified";
+}
+
+/** Maps an untrusted recovery reason to an authored stage without inspecting or coercing objects. */
+export function readAuthorizationRecoveryDiagnosticStage(
+  reason: unknown,
+): AuthDiagnosticStage {
+  switch (reason) {
+    case "token_missing": return "callback_recovery_token_missing";
+    case "token_subject_mismatch": return "callback_recovery_token_subject_mismatch";
+    case "token_version_mismatch": return "callback_recovery_token_version_mismatch";
+    case "token_timestamp_mismatch": return "callback_recovery_token_timestamp_mismatch";
+    case "setup_subject_mismatch": return "callback_recovery_setup_subject_mismatch";
+    case "connection_missing": return "callback_recovery_connection_missing";
+    case "connection_subject_mismatch": return "callback_recovery_connection_subject_mismatch";
+    case "connection_summary_mismatch": return "callback_recovery_connection_summary_mismatch";
+    case "connection_role_mismatch": return "callback_recovery_connection_role_mismatch";
+    case "checkpoint_missing": return "callback_recovery_checkpoint_missing";
+    case "maintenance_missing": return "callback_recovery_maintenance_missing";
+    case "maintenance_setup_version_mismatch": return "callback_recovery_maintenance_setup_version_mismatch";
+    case "maintenance_checkpoint_version_mismatch": return "callback_recovery_maintenance_checkpoint_version_mismatch";
+    case "topology_unclassified": return "callback_recovery_topology_unclassified";
+    case "connected_marker_present": return "callback_recovery_connected_marker_present";
+    case "authorization_marker_version_mismatch": return "callback_recovery_authorization_marker_version_mismatch";
+    case "authorization_marker_category_mismatch": return "callback_recovery_authorization_marker_category_mismatch";
+    case "authorization_marker_timestamp_mismatch": return "callback_recovery_authorization_marker_timestamp_mismatch";
+    case "authorization_token_not_newer": return "callback_recovery_authorization_token_not_newer";
+    default: return "callback_authorization_recovery_conflict";
+  }
 }
 
 /** Returns the original thrown value behind any stage tag so callers can branch on domain errors. */

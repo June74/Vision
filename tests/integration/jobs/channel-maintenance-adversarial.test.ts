@@ -222,6 +222,179 @@ function renewalDependencies(
   };
 }
 
+describe("same-statement authorization recovery diagnostics", () => {
+  it.each([
+    ["token_missing", `delete from google_oauth_tokens where owner_id = $1`],
+    ["token_subject_mismatch", `update google_oauth_tokens set google_subject = 'other-subject' where owner_id = $1`],
+    ["token_version_mismatch", `update google_oauth_tokens set token_version = 3 where owner_id = $1`],
+    ["token_timestamp_mismatch", `update google_oauth_tokens set updated_at = updated_at + interval '1 millisecond' where owner_id = $1`],
+    ["setup_subject_mismatch", `update calendar_setup_states set google_subject = 'other-subject' where owner_id = $1`],
+    ["connection_missing", `delete from vision_calendar_connections where owner_id = $1`],
+    ["connection_subject_mismatch", `update vision_calendar_connections set google_subject = 'other-subject' where owner_id = $1`],
+    ["checkpoint_missing", `delete from sync_checkpoints where owner_id = $1`],
+    ["maintenance_missing", `delete from calendar_sync_maintenance where owner_id = $1`],
+    ["maintenance_setup_version_mismatch", `update calendar_sync_maintenance set connection_version = 5 where owner_id = $1`],
+    ["maintenance_checkpoint_version_mismatch", `update calendar_sync_maintenance set checkpoint_version = 0 where owner_id = $1`],
+    ["connected_marker_present", `update sync_checkpoints set status = 'connected', last_error_category = null where owner_id = $1`],
+    ["authorization_marker_version_mismatch", `update calendar_sync_maintenance set credential_failure_checkpoint_version = 0 where owner_id = $1`],
+    ["authorization_marker_category_mismatch", `update calendar_sync_maintenance set credential_failure_category = 'transient' where owner_id = $1`],
+    ["authorization_marker_timestamp_mismatch", `update calendar_sync_maintenance set credential_failure_recorded_at = credential_failure_recorded_at - interval '1 millisecond' where owner_id = $1`],
+  ] as const)("reports %s without changing any recovery data", async (reason, statement) => {
+    const repository = await seedSchedulerAuthorizationDisconnect();
+    await postgres.query(statement, [OWNER]);
+    const before = await readCompleteRecoverySnapshot();
+    const observed: unknown[] = [];
+    const execute = vi.spyOn(database, "execute");
+    try {
+      expect(await repository.recoverAuthorizationAfterReconnect({
+        googleSubject: "subject-1", tokenVersion: 2, tokenUpdatedAt: RECONNECT_TOKEN_AT,
+      }, (value: unknown) => { observed.push(value); })).toBe("conflict");
+      expect(execute).toHaveBeenCalledTimes(1);
+      expect(observed).toEqual([reason]);
+      expect(await readCompleteRecoverySnapshot()).toEqual(before);
+    } finally {
+      execute.mockRestore();
+    }
+  });
+
+  it.each([0, 1])("reports an authorization token not newer than its marker at offset %s", async (offset) => {
+    const repository = await seedSchedulerAuthorizationDisconnect();
+    const markerAt = new Date(RECONNECT_TOKEN_AT.getTime() + offset).toISOString();
+    await postgres.query("update sync_checkpoints set updated_at = $1 where owner_id = $2", [markerAt, OWNER]);
+    await postgres.query("update calendar_sync_maintenance set credential_failure_recorded_at = $1 where owner_id = $2", [markerAt, OWNER]);
+    const before = await readCompleteRecoverySnapshot();
+    const observed: unknown[] = [];
+    expect(await repository.recoverAuthorizationAfterReconnect({
+      googleSubject: "subject-1", tokenVersion: 2, tokenUpdatedAt: RECONNECT_TOKEN_AT,
+    }, (value: unknown) => { observed.push(value); })).toBe("conflict");
+    expect(observed).toEqual(["authorization_token_not_newer"]);
+    expect(await readCompleteRecoverySnapshot()).toEqual(before);
+  });
+
+  it.each([
+    ["summary", "vision_calendar_connections_summary_check", "Not Vision", "connection_summary_mismatch"],
+    ["ownership_access_role", "vision_calendar_connections_ownership_access_role_check", "reader", "connection_role_mismatch"],
+  ] as const)("classifies drifted %s only in a rollback-only synthetic fixture", async (column, constraint, value, reason) => {
+    const repository = await seedSchedulerAuthorizationDisconnect();
+    await postgres.exec("begin");
+    try {
+      // Literal fixture identifiers only; all relaxed test constraints roll back.
+      await postgres.exec(`alter table vision_calendar_connections drop constraint ${constraint}`);
+      await postgres.query(`update vision_calendar_connections set ${column} = $1 where owner_id = $2`, [value, OWNER]);
+      const before = await readCompleteRecoverySnapshot();
+      const observed: unknown[] = [];
+      expect(await repository.recoverAuthorizationAfterReconnect({
+        googleSubject: "subject-1", tokenVersion: 2, tokenUpdatedAt: RECONNECT_TOKEN_AT,
+      }, (reason: unknown) => { observed.push(reason); })).toBe("conflict");
+      expect(observed).toEqual([reason]);
+      expect(await readCompleteRecoverySnapshot()).toEqual(before);
+    } finally {
+      await postgres.exec("rollback");
+    }
+  });
+
+  it("uses the first failing token predicate even when later guards also fail", async () => {
+    const repository = await seedSchedulerAuthorizationDisconnect();
+    await postgres.query("update google_oauth_tokens set google_subject = 'other-subject', token_version = 9, updated_at = updated_at + interval '1 second' where owner_id = $1", [OWNER]);
+    await postgres.query("delete from calendar_sync_maintenance where owner_id = $1", [OWNER]);
+    const observed: unknown[] = [];
+    expect(await repository.recoverAuthorizationAfterReconnect({
+      googleSubject: "subject-1", tokenVersion: 2, tokenUpdatedAt: RECONNECT_TOKEN_AT,
+    }, (reason: unknown) => { observed.push(reason); })).toBe("conflict");
+    expect(observed).toEqual(["token_subject_mismatch"]);
+  });
+
+  it("classifies a completely absent authorization marker with null-safe comparison", async () => {
+    const repository = await seedSchedulerAuthorizationDisconnect();
+    await postgres.query("update calendar_sync_maintenance set credential_failure_checkpoint_version = null, credential_failure_category = null, credential_failure_recorded_at = null where owner_id = $1", [OWNER]);
+    const before = await readCompleteRecoverySnapshot();
+    const observed: unknown[] = [];
+    expect(await repository.recoverAuthorizationAfterReconnect({
+      googleSubject: "subject-1", tokenVersion: 2, tokenUpdatedAt: RECONNECT_TOKEN_AT,
+    }, (reason: unknown) => { observed.push(reason); })).toBe("conflict");
+    expect(observed).toEqual(["authorization_marker_version_mismatch"]);
+    expect(await readCompleteRecoverySnapshot()).toEqual(before);
+  });
+
+  it.each(["recovered", "not_needed"] as const)("does not notify for accepted outcome %s", async (outcome) => {
+    const repository = outcome === "recovered"
+      ? await seedSchedulerAuthorizationDisconnect()
+      : await seedConnectedMaintenanceLag();
+    const observer = vi.fn();
+    expect(await repository.recoverAuthorizationAfterReconnect({
+      googleSubject: "subject-1", tokenVersion: 2, tokenUpdatedAt: RECONNECT_TOKEN_AT,
+    }, observer)).toBe(outcome);
+    expect(observer).not.toHaveBeenCalled();
+  });
+
+  it("does not let a throwing observer change an explicit conflict", async () => {
+    const repository = await seedSchedulerAuthorizationDisconnect();
+    const before = await readCompleteRecoverySnapshot();
+    let notifications = 0;
+    expect(await repository.recoverAuthorizationAfterReconnect({
+      googleSubject: "different-subject", tokenVersion: 2, tokenUpdatedAt: RECONNECT_TOKEN_AT,
+    }, () => { notifications++; throw new Error("SYNTHETIC_OBSERVER_PRIVATE_DETAIL"); })).toBe("conflict");
+    expect(notifications).toBe(1);
+    expect(await readCompleteRecoverySnapshot()).toEqual(before);
+  });
+
+  it("cannot reveal another owner's conflict details or mutate their rows", async () => {
+    await seedSchedulerAuthorizationDisconnect();
+    const repository = createChannelMaintenanceRepository(database, "owner-without-token");
+    const before = await readCompleteRecoverySnapshot();
+    const observed: unknown[] = [];
+    expect(await repository.recoverAuthorizationAfterReconnect({
+      googleSubject: "subject-1", tokenVersion: 2, tokenUpdatedAt: RECONNECT_TOKEN_AT,
+    }, (reason: unknown) => { observed.push(reason); })).toBe("conflict");
+    expect(observed).toEqual(["token_missing"]);
+    expect(await readCompleteRecoverySnapshot()).toEqual(before);
+  });
+
+  it.each(["not_needed", "recovered"] as const)(
+    "ignores even a diagnostic conflict reason when the final outcome is %s",
+    async (outcome) => {
+      const execute = vi.fn(async () => ({
+        rows: [{ outcome, conflict_reason: "token_missing" }],
+      }));
+      const repository = createChannelMaintenanceRepository({ execute } as unknown as VisionDatabase, OWNER);
+      const observer = vi.fn();
+      expect(await repository.recoverAuthorizationAfterReconnect({
+        googleSubject: "subject-1", tokenVersion: 2, tokenUpdatedAt: RECONNECT_TOKEN_AT,
+      }, observer)).toBe(outcome);
+      expect(observer).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([{ rows: [] }, { rows: [{ outcome: "unexpected", conflict_reason: "token_missing" }] }, { rows: [
+    { outcome: "conflict", conflict_reason: "token_missing" },
+    { outcome: "conflict", conflict_reason: "token_missing" },
+  ] }])("retains invalid outcome rejection before any notification", async ({ rows }) => {
+    const execute = vi.fn(async () => ({ rows }));
+    const repository = createChannelMaintenanceRepository({ execute } as unknown as VisionDatabase, OWNER);
+    const observer = vi.fn();
+    await expect(repository.recoverAuthorizationAfterReconnect({
+      googleSubject: "subject-1", tokenVersion: 2, tokenUpdatedAt: RECONNECT_TOKEN_AT,
+    }, observer)).rejects.toThrow("Invalid authorization recovery row.");
+    expect(observer).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, null, "PRIVATE_REASON_SENTINEL", { reason: "token_missing" }])(
+    "maps malformed diagnostic rows to a constant without changing outcome",
+    async (conflict_reason) => {
+      // This seam exercises only malformed driver output; all real SQL cases are above.
+      const execute = vi.fn(async () => ({ rows: [{ outcome: "conflict", conflict_reason }] }));
+      const repository = createChannelMaintenanceRepository({ execute } as unknown as VisionDatabase, OWNER);
+      const observed: unknown[] = [];
+      expect(await repository.recoverAuthorizationAfterReconnect({
+        googleSubject: "subject-1", tokenVersion: 2, tokenUpdatedAt: RECONNECT_TOKEN_AT,
+      }, (reason: unknown) => { observed.push(reason); })).toBe("conflict");
+      expect(execute).toHaveBeenCalledTimes(1);
+      expect(observed).toEqual(["unclassified"]);
+    },
+  );
+});
+
+
 describe("adversarial calendar maintenance", () => {
   it("runs projection cleanup before credential-dependent maintenance and does not suppress it on renewal failure", async () => {
     const order: string[] = [];

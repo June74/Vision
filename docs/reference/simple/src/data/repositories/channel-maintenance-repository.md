@@ -26,6 +26,12 @@ is already connected and has no saved credential-failure marker, that older
 maintenance version does not block login and nothing is rewritten. Account,
 calendar, setup, and fresh-token checks still apply. A maintenance version ahead
 of the checkpoint, a saved marker, or a disconnected calendar does not qualify.
+
+An optional diagnostic observer receives one fixed reason when the result is
+`conflict`. It reads the same locked database snapshot as the decision, not a
+second query. Reasons contain no account values, tokens, or timestamps. Unknown
+reasons become `unclassified`; a broken observer cannot change the outcome.
+Successful recovery and `not_needed` never notify the observer.
 ## `clearCredentialRetry`
 Reconnects only a retry that the scheduler marked after a credential problem.
 ## `markCleanupRequired`

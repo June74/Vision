@@ -21,12 +21,58 @@ import {
 } from "../../src/integrations/google/oauth-client";
 import type { Env } from "../../src/server/env";
 import type { AuthorizationRecoveryPort } from "../../src/server/auth/oauth-routes";
+import {
+  AUTHORIZATION_RECOVERY_CONFLICT_REASONS,
+  type AuthorizationRecoveryConflictObserver,
+} from "../../src/data/repositories/channel-maintenance-repository";
 import { createApp } from "../../src/worker";
 
 const now = new Date("2026-07-23T12:00:00.000Z");
 const state = "SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS";
 const verifier = "VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV";
 const nonce = "NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN";
+
+const recoveryDiagnosticCases = [
+  ["token_missing", "callback_recovery_token_missing"],
+  ["token_subject_mismatch", "callback_recovery_token_subject_mismatch"],
+  ["token_version_mismatch", "callback_recovery_token_version_mismatch"],
+  ["token_timestamp_mismatch", "callback_recovery_token_timestamp_mismatch"],
+  ["setup_subject_mismatch", "callback_recovery_setup_subject_mismatch"],
+  ["connection_missing", "callback_recovery_connection_missing"],
+  ["connection_subject_mismatch", "callback_recovery_connection_subject_mismatch"],
+  ["connection_summary_mismatch", "callback_recovery_connection_summary_mismatch"],
+  ["connection_role_mismatch", "callback_recovery_connection_role_mismatch"],
+  ["checkpoint_missing", "callback_recovery_checkpoint_missing"],
+  ["maintenance_missing", "callback_recovery_maintenance_missing"],
+  ["maintenance_setup_version_mismatch", "callback_recovery_maintenance_setup_version_mismatch"],
+  ["maintenance_checkpoint_version_mismatch", "callback_recovery_maintenance_checkpoint_version_mismatch"],
+  ["topology_unclassified", "callback_recovery_topology_unclassified"],
+  ["connected_marker_present", "callback_recovery_connected_marker_present"],
+  ["authorization_marker_version_mismatch", "callback_recovery_authorization_marker_version_mismatch"],
+  ["authorization_marker_category_mismatch", "callback_recovery_authorization_marker_category_mismatch"],
+  ["authorization_marker_timestamp_mismatch", "callback_recovery_authorization_marker_timestamp_mismatch"],
+  ["authorization_token_not_newer", "callback_recovery_authorization_token_not_newer"],
+  ["unclassified", "callback_authorization_recovery_conflict"],
+] as const;
+
+const malformedRecoveryReasons: readonly (readonly [string, unknown])[] = [
+  ["private string", "RECOVERY_REASON_PRIVATE_SENTINEL"],
+  ["markup", "<script>RECOVERY_REASON_PRIVATE_SENTINEL</script>"],
+  ["stage-shaped string", "callback_recovery_token_missing"],
+  ["prototype key", "__proto__"],
+  ["constructor key", "constructor"],
+  ["empty string", ""],
+  ["undefined", undefined],
+  ["null", null],
+  ["number", 42],
+  ["boolean", true],
+  ["array", ["token_missing"]],
+  ["object", { reason: "token_missing", detail: "RECOVERY_REASON_PRIVATE_SENTINEL" }],
+  ["hostile object", {
+    get reason() { throw new Error("RECOVERY_REASON_PRIVATE_SENTINEL"); },
+    toString() { throw new Error("RECOVERY_REASON_PRIVATE_SENTINEL"); },
+  }],
+];
 
 class MemorySessionStore implements SessionStore {
   readonly oauthRows: OAuthTransactionRow[] = [];
@@ -266,7 +312,7 @@ async function createHarness(options: {
     typeof tokenResponseBody === "object" &&
     tokenResponseBody !== null &&
     "error" in tokenResponseBody;
-  const fetcher = vi.fn().mockResolvedValue(
+  const fetcher = vi.fn().mockImplementation(async () =>
     new Response(JSON.stringify(tokenResponseBody), {
       status: simulatesProviderRejection ? 400 : 200,
       headers: { "content-type": "application/json" },
@@ -335,6 +381,10 @@ async function createHarness(options: {
 }
 
 describe("Vision Worker Google authentication", () => {
+  it("covers the complete authored repository reason contract independently of its stage mapper", () => {
+    expect(recoveryDiagnosticCases.map(([reason]) => reason)).toEqual(AUTHORIZATION_RECOVERY_CONFLICT_REASONS);
+  });
+
   it("names the failing callback stage on preview without exposing any request or account value", async () => {
     const { app, logger } = await createHarness({ environment: "preview" });
 
@@ -649,15 +699,23 @@ describe("Vision Worker Google authentication", () => {
 
   it.each(
     (["local", "preview", "production"] as const).flatMap((environment) =>
-      (["recovered", "not_needed"] as const).map((outcome) => ({ environment, outcome })),
+      (["recovered", "not_needed"] as const).flatMap((outcome) =>
+        [false, true].map((notify) => ({ environment, outcome, notify })),
+      ),
     ),
   )(
-    "continues secure callback after $outcome in $environment",
-    async ({ environment, outcome }) => {
+    "continues secure callback after $outcome in $environment (notification: $notify)",
+    async ({ environment, outcome, notify }) => {
       const authorizationRecovery: AuthorizationRecoveryPort = {
-        recoverAfterReconnect: vi.fn(async () => outcome),
+        recoverAfterReconnect: vi.fn(async (
+          _input: Parameters<AuthorizationRecoveryPort["recoverAfterReconnect"]>[0],
+          observer?: AuthorizationRecoveryConflictObserver,
+        ) => {
+          if (notify) observer?.("token_missing");
+          return outcome;
+        }),
       };
-      const { app, sessionStore } = await createHarness({ authorizationRecovery, environment });
+      const { app, logger, sessionStore } = await createHarness({ authorizationRecovery, environment });
       await app.fetch(new Request("https://vision.example.test/api/auth/google/start"), {} as Env);
       const response = await app.fetch(
         new Request(
@@ -669,11 +727,17 @@ describe("Vision Worker Google authentication", () => {
       expect(response.headers.get("location")).toBe("/");
       expect(response.headers.get("x-vision-auth-diagnostic")).toBeNull();
       expect(sessionStore.sessionRows).toHaveLength(1);
-      expect(authorizationRecovery.recoverAfterReconnect).toHaveBeenCalledWith({
+      const recoveryCall = vi.mocked(authorizationRecovery.recoverAfterReconnect).mock.calls[0]!;
+      expect(recoveryCall[0]).toEqual({
         googleSubject: "google-subject",
         tokenVersion: 1,
         tokenUpdatedAt: now,
       });
+      expect(recoveryCall[1]).toEqual(environment === "preview" ? expect.any(Function) : undefined);
+      expect(logger).toHaveBeenCalledWith({
+        requestId: "req_auth", action: "auth.callback", outcome: "succeeded", provider: "google",
+      });
+      expect(JSON.stringify(logger.mock.calls)).not.toContain("callback_recovery_");
       expect(
         Object.keys(
           vi.mocked(authorizationRecovery.recoverAfterReconnect).mock.calls[0]![0],
@@ -682,10 +746,21 @@ describe("Vision Worker Google authentication", () => {
     },
   );
 
-  it("runs recovery after token persistence and before session rotation or creation", async () => {
-    const recovery = vi.fn(async () => "recovered" as const);
-    const { app, sessions, tokens } = await createHarness({
+  it.each(
+    (["local", "preview", "production"] as const).flatMap((environment) =>
+      (["recovered", "not_needed"] as const).map((outcome) => ({ environment, outcome })),
+    ),
+  )("preserves save/recovery/rotation/creation ordering after a notification and $outcome in $environment", async ({ environment, outcome }) => {
+    const recovery = vi.fn(async (
+      _input: Parameters<AuthorizationRecoveryPort["recoverAfterReconnect"]>[0],
+      observer?: AuthorizationRecoveryConflictObserver,
+    ) => {
+      observer?.("token_missing");
+      return outcome;
+    });
+    const { app, sessionStore, sessions, tokens } = await createHarness({
       authorizationRecovery: { recoverAfterReconnect: recovery },
+      environment,
     });
     const save = vi.spyOn(tokens, "saveGoogleTokens");
     const revoke = vi.spyOn(sessions, "revokeSession");
@@ -702,7 +777,7 @@ describe("Vision Worker Google authentication", () => {
     });
     create.mockClear();
     await app.fetch(new Request("https://vision.example.test/api/auth/google/start"), {} as Env);
-    await app.fetch(
+    const response = await app.fetch(
       new Request(
         `https://vision.example.test/api/auth/google/callback?code=authorization-code&state=${state}`,
         { headers: { cookie: `vision_session=${oldSessionId}` } },
@@ -712,10 +787,16 @@ describe("Vision Worker Google authentication", () => {
     expect(save.mock.invocationCallOrder[0]).toBeLessThan(recovery.mock.invocationCallOrder[0]!);
     expect(recovery.mock.invocationCallOrder[0]).toBeLessThan(revoke.mock.invocationCallOrder[0]!);
     expect(revoke.mock.invocationCallOrder[0]).toBeLessThan(create.mock.invocationCallOrder[0]!);
+    expect(response.status).toBe(302);
+    expect(response.headers.get("x-vision-auth-diagnostic")).toBeNull();
+    expect(sessionStore.sessionRows).toHaveLength(2);
+    expect(sessionStore.sessionRows[0]?.revokedAt).toEqual(now);
+    expect(sessionStore.sessionRows[1]?.revokedAt).toBeNull();
   });
 
   describe.each(["local", "preview", "production"] as const)("recovery failure in %s", (environment) => {
     it.each([
+      ...([
       ["conflict", { recoverAfterReconnect: vi.fn(async () => "conflict" as const) }],
       ["throw", { recoverAfterReconnect: vi.fn(async () => {
         throw new Error("RECOVERY_DATABASE_DETAIL_SENTINEL");
@@ -727,7 +808,53 @@ describe("Vision Worker Google authentication", () => {
       ["undefined outcome", { recoverAfterReconnect: vi.fn(async () => undefined as never) }],
       ["null outcome", { recoverAfterReconnect: vi.fn(async () => null as never) }],
       ["object outcome", { recoverAfterReconnect: vi.fn(async () => ({ outcome: "conflict", detail: "RECOVERY_INVALID_OUTCOME_SENTINEL" }) as never) }],
-    ] as const)("fails safely when reconnect recovery returns %s", async (_case, authorizationRecovery) => {
+      ] as const).map(([name, authorizationRecovery]) => ({
+        name,
+        authorizationRecovery: authorizationRecovery as AuthorizationRecoveryPort,
+        stage: name === "conflict"
+          ? "callback_authorization_recovery_conflict"
+          : "callback_authorization_recovery_failed",
+        notifying: false,
+      })),
+      ...[
+        ...recoveryDiagnosticCases.map(([reason, stage]) => ({ name: reason, reason, stage })),
+        ...malformedRecoveryReasons.map(([name, reason]) => ({
+          name: `malformed reason: ${name}`, reason, stage: "callback_authorization_recovery_conflict",
+        })),
+      ].map(({ name, reason, stage }) => ({
+        name,
+        authorizationRecovery: {
+          recoverAfterReconnect: vi.fn(async (
+            _input: Parameters<AuthorizationRecoveryPort["recoverAfterReconnect"]>[0],
+            observer?: AuthorizationRecoveryConflictObserver,
+          ) => {
+            observer?.(reason as never);
+            return "conflict" as const;
+          }),
+        },
+        stage: environment === "preview" ? stage : "callback_authorization_recovery_conflict",
+        notifying: true,
+      })),
+      ...(["throw", "identity-shaped throw", "invalid string", "undefined", "null", "object"] as const).map((name) => ({
+        name: `notification then ${name}`,
+        authorizationRecovery: {
+          recoverAfterReconnect: vi.fn(async (
+            _input: Parameters<AuthorizationRecoveryPort["recoverAfterReconnect"]>[0],
+            observer?: AuthorizationRecoveryConflictObserver,
+          ) => {
+            observer?.("token_missing");
+            if (name === "throw") throw new Error("RECOVERY_DATABASE_DETAIL_SENTINEL");
+            if (name === "identity-shaped throw") throw new IdentityAuthorizationError();
+            if (name === "invalid string") return "RECOVERY_INVALID_OUTCOME_SENTINEL" as never;
+            if (name === "null") return null as never;
+            if (name === "object") return { outcome: "conflict", detail: "RECOVERY_INVALID_OUTCOME_SENTINEL" } as never;
+            return undefined as never;
+          }),
+        },
+        stage: "callback_authorization_recovery_failed",
+        notifying: true,
+      })),
+    ])("fails safely when reconnect recovery returns $name", async ({ authorizationRecovery, stage: expectedStage, notifying }) => {
       const { app, logger, sessionStore, sessions, tokenStore } = await createHarness({
         authorizationRecovery,
         environment,
@@ -742,6 +869,7 @@ describe("Vision Worker Google authentication", () => {
         createdAt: now,
         expiresAt: new Date(now.getTime() + 60_000),
       });
+      const oldSessionRows = structuredClone(sessionStore.sessionRows);
       await app.fetch(new Request("https://vision.example.test/api/auth/google/start"), {} as Env);
       const response = await app.fetch(
         new Request(
@@ -750,9 +878,6 @@ describe("Vision Worker Google authentication", () => {
         ),
         {} as Env,
       );
-      const expectedStage = _case === "conflict"
-        ? "callback_authorization_recovery_conflict"
-        : "callback_authorization_recovery_failed";
       const body = await response.text();
       expect(response.status).toBe(400);
       expect(body).toBe(
@@ -765,15 +890,29 @@ describe("Vision Worker Google authentication", () => {
       );
       expect(response.headers.get("set-cookie")).toBeNull();
       expect(response.headers.get("location")).toBeNull();
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(Object.fromEntries(response.headers)).toEqual({
+        "cache-control": "no-store",
+        "content-type": "text/html; charset=UTF-8",
+        ...(environment === "preview" ? { "x-vision-auth-diagnostic": expectedStage } : {}),
+      });
       expect(tokenStore.rows).toHaveLength(1);
-      expect(sessionStore.sessionRows).toHaveLength(1);
-      expect(sessionStore.sessionRows[0]?.revokedAt).toBeNull();
-      expect(logger).toHaveBeenCalledWith(expect.objectContaining({
+      expect(sessionStore.sessionRows).toEqual(oldSessionRows);
+      expect(await sessions.findSession(oldSessionId, now)).toBeDefined();
+      expect(logger).toHaveBeenCalledWith({
+        requestId: "req_auth",
+        provider: "google",
         action: "auth.callback",
         errorCategory: "authorization_recovery_failed",
         diagnosticStage: expectedStage,
         outcome: "failed",
-      }));
+      });
+      if (notifying) {
+        expect(authorizationRecovery.recoverAfterReconnect).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(authorizationRecovery.recoverAfterReconnect).mock.calls[0]![1]).toEqual(
+          environment === "preview" ? expect.any(Function) : undefined,
+        );
+      }
       const observable = JSON.stringify({
         body,
         headers: [...response.headers],
@@ -782,6 +921,8 @@ describe("Vision Worker Google authentication", () => {
       for (const forbidden of [
         "RECOVERY_DATABASE_DETAIL_SENTINEL",
         "RECOVERY_INVALID_OUTCOME_SENTINEL",
+        "RECOVERY_REASON_PRIVATE_SENTINEL",
+        "SIGNED_ID_TOKEN_SENTINEL",
         "REFRESH_TOKEN_SENTINEL",
         "ACCESS_TOKEN_SENTINEL",
         "CLIENT_SECRET_SENTINEL",
@@ -797,6 +938,50 @@ describe("Vision Worker Google authentication", () => {
       }
     });
   });
+
+  it.each(["local", "preview", "production"] as const)(
+    "keeps recovery observations request-local in %s, including a stale observer notification",
+    async (environment) => {
+      let previousObserver: AuthorizationRecoveryConflictObserver | undefined;
+      let callCount = 0;
+      const recoverAfterReconnect = vi.fn(async (
+        _input: Parameters<AuthorizationRecoveryPort["recoverAfterReconnect"]>[0],
+        observer?: AuthorizationRecoveryConflictObserver,
+      ) => {
+        callCount += 1;
+        if (callCount === 1) {
+          previousObserver = observer;
+          observer?.("token_missing");
+        } else {
+          previousObserver?.("token_subject_mismatch");
+        }
+        return "conflict" as const;
+      });
+      const { app, logger, sessionStore } = await createHarness({
+        environment, authorizationRecovery: { recoverAfterReconnect },
+      });
+      for (const expectedStage of [
+        environment === "preview" ? "callback_recovery_token_missing" : "callback_authorization_recovery_conflict",
+        "callback_authorization_recovery_conflict",
+      ]) {
+        await app.fetch(new Request("https://vision.example.test/api/auth/google/start"), {} as Env);
+        const response = await app.fetch(new Request(
+          `https://vision.example.test/api/auth/google/callback?code=authorization-code&state=${state}`,
+        ), {} as Env);
+        expect(response.status).toBe(400);
+        expect(response.headers.get("set-cookie")).toBeNull();
+        expect(response.headers.get("x-vision-auth-diagnostic")).toBe(environment === "preview" ? expectedStage : null);
+        expect(logger).toHaveBeenLastCalledWith({
+          requestId: "req_auth", action: "auth.callback", outcome: "failed", provider: "google",
+          errorCategory: "authorization_recovery_failed", diagnosticStage: expectedStage,
+        });
+      }
+      expect(sessionStore.sessionRows).toHaveLength(0);
+      if (environment === "preview") {
+        expect(recoverAfterReconnect.mock.calls[0]![1]).not.toBe(recoverAfterReconnect.mock.calls[1]![1]);
+      }
+    },
+  );
 
   it("accepts Google's benign profile identity scopes", async () => {
     const grantedScopes = [
